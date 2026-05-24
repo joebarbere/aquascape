@@ -65,6 +65,7 @@ export type {
   ReshapeObjectCommand,
   MirrorObjectCommand,
   ReorderObjectInLayerCommand,
+  SetObjectGroupIdCommand,
   SetTankDimensionsCommand,
   SetTankStyleCommand,
   CompositeCommand,
@@ -87,6 +88,7 @@ export {
   reshapeObject,
   mirrorObject,
   reorderObjectInLayer,
+  setObjectGroupId,
   setTankDimensions,
   SET_TANK_DIMENSIONS_MAX_MM,
   setTankStyle,
@@ -114,7 +116,6 @@ export {
   setSubstrateRegionProfile,
   validateSubstrateRegion,
 } from './substrate-commands';
-
 
 // ─── History ──────────────────────────────────────────────────────────────
 export { createHistory } from './history';

@@ -1,0 +1,25 @@
+{
+  "catalog": "core",
+  "id": "plant.eleocharis.acicularis",
+  "version": 1,
+  "name": "Hairgrass (Eleocharis acicularis)",
+  "kind": "plant",
+  "zone": "foreground",
+  "lighting": "medium",
+  "co2": "low",
+  "difficulty": "easy",
+  "color": "#5a9b3a",
+  "naturalSize": { "width": 30, "height": 60, "depth": 30 },
+  "description": "Classic Iwagumi carpet. Sends runners across substrate; mow with scissors to keep tight.",
+  "tags": ["carpet", "iwagumi", "foreground"],
+  "silhouette": [
+    { "x": -0.1, "y": -1 },
+    { "x": 0.1, "y": -1 },
+    { "x": 0.5, "y": 0.6 },
+    { "x": 0.2, "y": 1 },
+    { "x": -0.2, "y": 1 },
+    { "x": -0.5, "y": 0.6 }
+  ],
+  "growth": { "weeksToMature": 6, "sizeAtZero": 0.3 },
+  "defaultDensity": 45
+}

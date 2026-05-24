@@ -958,7 +958,10 @@ describe('Canvas2DRenderer.render (substrate)', () => {
 
   // A small fake catalog implementing only what the renderer reads.
   function fakeCatalog(entries: Array<{ catalog: string; id: string; color: string }>) {
-    const lookup = new Map<string, { catalog: string; id: string; color: string; kind: 'substrate' }>();
+    const lookup = new Map<
+      string,
+      { catalog: string; id: string; color: string; kind: 'substrate' }
+    >();
     for (const e of entries) {
       lookup.set(`${e.catalog}|${e.id}`, { ...e, kind: 'substrate' });
     }
@@ -1019,9 +1022,9 @@ describe('Canvas2DRenderer.render (substrate)', () => {
     expect(fills.length).toBeGreaterThanOrEqual(1);
     // fillStyle was set to a string color (not "[[gradient]]") before the fill.
     const styles = only(canvas.context.ops, ['set:fillStyle']);
-    expect(styles.some((op) => typeof op.args[0] === 'string' && op.args[0]!.toString().startsWith('#'))).toBe(
-      true,
-    );
+    expect(
+      styles.some((op) => typeof op.args[0] === 'string' && op.args[0]!.toString().startsWith('#')),
+    ).toBe(true);
   });
 
   it('uses the catalog color when a matching substrate entry is supplied', () => {
@@ -1029,11 +1032,7 @@ describe('Canvas2DRenderer.render (substrate)', () => {
     const r = new Canvas2DRenderer();
     r.attach(surface);
     const catalog = fakeCatalog([{ catalog: 'core', id: 'substrate.sand.x', color: '#abcdef' }]);
-    r.render(
-      sceneWithRegion([{ id: 'r-1', itemId: 'substrate.sand.x' }]),
-      upright,
-      catalog,
-    );
+    r.render(sceneWithRegion([{ id: 'r-1', itemId: 'substrate.sand.x' }]), upright, catalog);
     const styles = only(canvas.context.ops, ['set:fillStyle']);
     expect(styles.some((op) => op.args[0] === '#abcdef')).toBe(true);
   });
@@ -1043,11 +1042,7 @@ describe('Canvas2DRenderer.render (substrate)', () => {
     const r = new Canvas2DRenderer();
     r.attach(surface);
     const catalog = fakeCatalog([{ catalog: 'core', id: 'substrate.OTHER', color: '#abcdef' }]);
-    r.render(
-      sceneWithRegion([{ id: 'r-1', itemId: 'substrate.missing' }]),
-      upright,
-      catalog,
-    );
+    r.render(sceneWithRegion([{ id: 'r-1', itemId: 'substrate.missing' }]), upright, catalog);
     const styles = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
     // Fallback is #6b5a45 per the module constant.
     expect(styles).toContain('#6b5a45');
@@ -1719,14 +1714,12 @@ describe('Canvas2DRenderer.hitTest (handles)', () => {
     const r = new Canvas2DRenderer();
     r.attach(surface);
     expect(
-      r.hitTest({ x: 350, y: 250 }, sceneWithObject(), upright, fakeCatalog, [
-        'obj-1' as never,
-      ])?.handle,
+      r.hitTest({ x: 350, y: 250 }, sceneWithObject(), upright, fakeCatalog, ['obj-1' as never])
+        ?.handle,
     ).toBe('scaleNW');
     expect(
-      r.hitTest({ x: 450, y: 350 }, sceneWithObject(), upright, fakeCatalog, [
-        'obj-1' as never,
-      ])?.handle,
+      r.hitTest({ x: 450, y: 350 }, sceneWithObject(), upright, fakeCatalog, ['obj-1' as never])
+        ?.handle,
     ).toBe('scaleSE');
   });
 
@@ -1767,9 +1760,7 @@ describe('Canvas2DRenderer.hitTest (handles)', () => {
     const r = new Canvas2DRenderer();
     r.attach(surface);
     expect(
-      r.hitTest({ x: 200, y: 300 }, sceneWithObject(), upright, fakeCatalog, [
-        'obj-1' as never,
-      ]),
+      r.hitTest({ x: 200, y: 300 }, sceneWithObject(), upright, fakeCatalog, ['obj-1' as never]),
     ).toBeNull();
   });
 
@@ -1781,9 +1772,7 @@ describe('Canvas2DRenderer.hitTest (handles)', () => {
     // world (180 - 50, 110 + 50) = (130, 160). CSS = (350, 250).
     const scene = sceneWithObject();
     scene.layers[0]!.objects[0]!.transform.rotation = { x: 0, y: 0, z: Math.PI / 2 };
-    const result = r.hitTest({ x: 350, y: 250 }, scene, upright, fakeCatalog, [
-      'obj-1' as never,
-    ]);
+    const result = r.hitTest({ x: 350, y: 250 }, scene, upright, fakeCatalog, ['obj-1' as never]);
     expect(result?.handle).toBe('scaleNE');
   });
 
@@ -1806,5 +1795,452 @@ describe('Canvas2DRenderer.hitTest (handles)', () => {
       'obj-1' as never,
     ]);
     expect(result?.handle).toBe('scaleNE');
+  });
+});
+
+// ─── F4.4 — Plant rendering, growth + scatter, hit-test ──────────────────
+
+describe('Canvas2DRenderer.render (plants)', () => {
+  let fakeWindow: FakeWindow;
+  beforeEach(() => {
+    fakeWindow = installFakeWindow();
+  });
+  afterEach(() => {
+    uninstallFakeWindow();
+    void fakeWindow;
+  });
+
+  const plantEntry = {
+    catalog: 'core',
+    id: 'plant.test',
+    version: 1,
+    name: 'Test plant',
+    kind: 'plant' as const,
+    zone: 'foreground' as const,
+    lighting: 'medium' as const,
+    co2: 'low' as const,
+    difficulty: 'easy' as const,
+    color: '#3a8050',
+    naturalSize: { width: 40, height: 60, depth: 40 },
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 1, y: 1 },
+      { x: -1, y: 1 },
+    ],
+    growth: { weeksToMature: 8, sizeAtZero: 0.3 },
+  };
+  const fakeCatalog = {
+    entries: [plantEntry] as never,
+    get({ catalog, id }: { catalog: string; id: string }) {
+      if (catalog === 'core' && id === 'plant.test') return plantEntry;
+      return null;
+    },
+    byKind() {
+      return [] as never;
+    },
+  } as never;
+
+  function sceneWithPlant(overrides?: {
+    ageWeeks?: number;
+    vigor?: number;
+    refId?: string;
+    scatter?: { polygon: Array<{ x: number; y: number }>; density: number; seed?: number };
+  }) {
+    const base = makeMinimalScene(600, 360, 360);
+    const plant = {
+      kind: 'plant' as const,
+      id: 'p-1' as never,
+      ref: { catalog: 'core', id: overrides?.refId ?? 'plant.test', version: 1 },
+      transform: {
+        position: { x: 300, y: 180, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        flipX: false,
+        flipY: false,
+      },
+      growth: { ageWeeks: overrides?.ageWeeks ?? 8, vigor: overrides?.vigor ?? 1 },
+      ...(overrides?.scatter !== undefined ? { scatter: overrides.scatter } : {}),
+    };
+    return {
+      ...base,
+      layers: [
+        {
+          id: 'layer-1' as never,
+          name: 'L',
+          opacity: 1,
+          visible: true,
+          locked: false,
+          objects: [plant],
+        },
+      ],
+    };
+  }
+
+  it('paints nothing when there are no plant objects (empty scene unchanged)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    canvas.context.ops.length = 0;
+    r.render(makeMinimalScene(), upright, fakeCatalog);
+    // Plant-specific fills only happen on a non-empty plant set.
+    const fills = only(canvas.context.ops, ['fill']);
+    // The base scene paints background + tank ops; no per-plant fills.
+    expect(fills.length).toBeLessThanOrEqual(1);
+  });
+
+  it('paints a single-specimen plant with the catalog fill color', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(sceneWithPlant(), upright, fakeCatalog);
+    // The renderer issues fillStyle assignments for various passes; assert
+    // the plant's color appears at least once.
+    const styles = canvas.context.ops
+      .filter((op) => op.method === 'set:fillStyle')
+      .map((op) => op.args[0]);
+    expect(styles).toContain(plantEntry.color);
+  });
+
+  it('skips plants whose catalog entry is missing (silent, no crash)', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    expect(() =>
+      r.render(sceneWithPlant({ refId: 'plant.MISSING' }), upright, fakeCatalog),
+    ).not.toThrow();
+  });
+
+  it('skips plants entirely when no catalog is supplied', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(sceneWithPlant(), upright);
+    const fills = canvas.context.ops.filter((op) => op.method === 'fillStyle');
+    expect(fills.every((op) => op.args[0] !== plantEntry.color)).toBe(true);
+  });
+
+  it('paints LARGER bbox when previewAgeWeeks is past maturity vs week 0', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(sceneWithPlant({ ageWeeks: 0 }), upright, fakeCatalog, [], 0);
+    const scalesAtZero = canvas.context.ops
+      .filter((op) => op.method === 'scale')
+      .map((op) => Math.abs(op.args[0] as number));
+    canvas.context.ops.length = 0;
+    r.render(sceneWithPlant({ ageWeeks: 0 }), upright, fakeCatalog, [], 24);
+    const scalesAtMature = canvas.context.ops
+      .filter((op) => op.method === 'scale')
+      .map((op) => Math.abs(op.args[0] as number));
+    // The maximum scale recorded for the plant pass should grow with preview age.
+    expect(Math.max(...scalesAtMature)).toBeGreaterThan(Math.max(...scalesAtZero));
+  });
+
+  it('honours layer.opacity by setting globalAlpha before painting plants', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithPlant();
+    scene.layers[0]!.opacity = 0.4;
+    r.render(scene, upright, fakeCatalog);
+    const alphas = canvas.context.ops
+      .filter((op) => op.method === 'set:globalAlpha')
+      .map((op) => op.args[0]);
+    expect(alphas).toContain(0.4);
+  });
+
+  it('skips invisible layers (no plant fills painted)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithPlant();
+    scene.layers[0]!.visible = false;
+    r.render(scene, upright, fakeCatalog);
+    const styles = canvas.context.ops
+      .filter((op) => op.method === 'set:fillStyle')
+      .map((op) => op.args[0]);
+    expect(styles).not.toContain(plantEntry.color);
+  });
+
+  it('skips a single-specimen plant with zero transform scale', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithPlant();
+    scene.layers[0]!.objects[0]!.transform.scale = { x: 0, y: 0, z: 0 };
+    r.render(scene, upright, fakeCatalog);
+    const styles = canvas.context.ops
+      .filter((op) => op.method === 'set:fillStyle')
+      .map((op) => op.args[0]);
+    expect(styles).not.toContain(plantEntry.color);
+  });
+
+  it('paints multiple instances for a scatter patch', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithPlant({
+      scatter: {
+        polygon: [
+          { x: 200, y: 100 },
+          { x: 400, y: 100 },
+          { x: 400, y: 260 },
+          { x: 200, y: 260 },
+        ],
+        density: 40,
+        seed: 123,
+      },
+    });
+    r.render(scene, upright, fakeCatalog);
+    // One `fill` per instance silhouette + outline strokes. Count fills with
+    // the plant color set as the current fillStyle.
+    const fillOps = canvas.context.ops.filter((op) => op.method === 'fill').length;
+    expect(fillOps).toBeGreaterThan(5);
+  });
+
+  it('scatter is deterministic across consecutive renders (same op stream)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithPlant({
+      scatter: {
+        polygon: [
+          { x: 200, y: 100 },
+          { x: 400, y: 100 },
+          { x: 400, y: 260 },
+          { x: 200, y: 260 },
+        ],
+        density: 30,
+        seed: 7,
+      },
+    });
+    r.render(scene, upright, fakeCatalog);
+    const first = canvas.context.ops.slice();
+    canvas.context.ops.length = 0;
+    r.render(scene, upright, fakeCatalog);
+    expect(canvas.context.ops).toEqual(first);
+  });
+
+  it('scatter renders nothing when the brush polygon is empty / degenerate', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithPlant({
+      scatter: {
+        polygon: [{ x: 0, y: 0 }],
+        density: 30,
+        seed: 1,
+      },
+    });
+    r.render(scene, upright, fakeCatalog);
+    const styles = canvas.context.ops
+      .filter((op) => op.method === 'set:fillStyle')
+      .map((op) => op.args[0]);
+    expect(styles).not.toContain(plantEntry.color);
+  });
+});
+
+describe('Canvas2DRenderer.hitTest (plants)', () => {
+  let fakeWindow: FakeWindow;
+  beforeEach(() => {
+    fakeWindow = installFakeWindow();
+  });
+  afterEach(() => {
+    uninstallFakeWindow();
+    void fakeWindow;
+  });
+
+  const plantEntry = {
+    catalog: 'core',
+    id: 'plant.test',
+    version: 1,
+    name: 'Test plant',
+    kind: 'plant' as const,
+    zone: 'foreground' as const,
+    lighting: 'medium' as const,
+    co2: 'low' as const,
+    difficulty: 'easy' as const,
+    color: '#3a8050',
+    naturalSize: { width: 100, height: 100, depth: 100 },
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 1, y: 1 },
+      { x: -1, y: 1 },
+    ],
+    growth: { weeksToMature: 8, sizeAtZero: 0.3 },
+  };
+  const fakeCatalog = {
+    entries: [plantEntry] as never,
+    get({ catalog, id }: { catalog: string; id: string }) {
+      if (catalog === 'core' && id === 'plant.test') return plantEntry;
+      return null;
+    },
+    byKind() {
+      return [] as never;
+    },
+  } as never;
+
+  function sceneWithPlant(overrides?: {
+    ageWeeks?: number;
+    scatter?: { polygon: Array<{ x: number; y: number }>; density: number; seed?: number };
+  }) {
+    return {
+      ...makeMinimalScene(600, 360, 360),
+      layers: [
+        {
+          id: 'layer-1' as never,
+          name: 'L',
+          opacity: 1,
+          visible: true,
+          locked: false,
+          objects: [
+            {
+              kind: 'plant' as const,
+              id: 'p-1' as never,
+              ref: { catalog: 'core', id: 'plant.test', version: 1 },
+              transform: {
+                position: { x: 180, y: 110, z: 0 },
+                rotation: { x: 0, y: 0, z: 0 },
+                scale: { x: 1, y: 1, z: 1 },
+                flipX: false,
+                flipY: false,
+              },
+              growth: { ageWeeks: overrides?.ageWeeks ?? 8, vigor: 1 },
+              ...(overrides?.scatter !== undefined ? { scatter: overrides.scatter } : {}),
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  it('hits a mature single-specimen plant at the canvas centre', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const result = r.hitTest({ x: 400, y: 300 }, sceneWithPlant(), upright, fakeCatalog);
+    expect(result?.objectId).toBe('p-1');
+  });
+
+  it('misses a tiny week-0 plant at a click far from its centre', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    // At week 0 the plant is ~30% of mature; a click 45 mm from centre is
+    // outside the shrunk silhouette but inside the mature one.
+    const result = r.hitTest(
+      { x: 445, y: 300 },
+      sceneWithPlant({ ageWeeks: 0 }),
+      upright,
+      fakeCatalog,
+    );
+    expect(result).toBeNull();
+  });
+
+  it('previewAgeWeeks expands the hit-test bbox to match the rendered growth', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithPlant({ ageWeeks: 0 });
+    // Same click as above, now previewing at maturity — should hit.
+    const result = r.hitTest({ x: 445, y: 300 }, scene, upright, fakeCatalog, undefined, 24);
+    expect(result?.objectId).toBe('p-1');
+  });
+
+  it('hits a scatter patch via point-in-polygon against the brush outline', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithPlant({
+      scatter: {
+        polygon: [
+          { x: 150, y: 80 },
+          { x: 250, y: 80 },
+          { x: 250, y: 160 },
+          { x: 150, y: 160 },
+        ],
+        density: 20,
+        seed: 1,
+      },
+    });
+    // World (200, 120) → CSS (420, 360) for the upright viewport at zoom=1.
+    // Centre of brush polygon (200, 120): canvas-x = 400 + (200-180) = 420;
+    // canvas-y = 300 - (120-110) = 290. Inside the polygon.
+    const result = r.hitTest({ x: 420, y: 290 }, scene, upright, fakeCatalog);
+    expect(result?.objectId).toBe('p-1');
+  });
+
+  it('misses a scatter patch when the click is outside the brush polygon', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithPlant({
+      scatter: {
+        polygon: [
+          { x: 150, y: 80 },
+          { x: 250, y: 80 },
+          { x: 250, y: 160 },
+          { x: 150, y: 160 },
+        ],
+        density: 20,
+        seed: 1,
+      },
+    });
+    const result = r.hitTest({ x: 100, y: 100 }, scene, upright, fakeCatalog);
+    expect(result).toBeNull();
+  });
+
+  it('returns null when the plant catalog entry is missing', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithPlant();
+    scene.layers[0]!.objects[0]!.ref = { catalog: 'core', id: 'plant.MISSING', version: 1 };
+    expect(r.hitTest({ x: 400, y: 300 }, scene, upright, fakeCatalog)).toBeNull();
+  });
+
+  it('returns null for a single-specimen plant with zero scale', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithPlant();
+    scene.layers[0]!.objects[0]!.transform.scale = { x: 0, y: 0, z: 0 };
+    expect(r.hitTest({ x: 400, y: 300 }, scene, upright, fakeCatalog)).toBeNull();
+  });
+
+  it('single-specimen plant participates in handle hit-test when selected', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    // Mature plant centered at (180, 110); silhouette extends ±50mm
+    // (naturalSize 100 × growthScale ~0.99 ≈ 99 mm). Top-right corner at
+    // world ≈ (229, 159); CSS (449, 251).
+    const result = r.hitTest({ x: 449, y: 251 }, sceneWithPlant(), upright, fakeCatalog, [
+      'p-1' as never,
+    ]);
+    expect(result?.handle).toBe('scaleNE');
+  });
+
+  it('scatter plants do NOT show selection handles (no handle hit from inside polygon)', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithPlant({
+      scatter: {
+        polygon: [
+          { x: 150, y: 80 },
+          { x: 250, y: 80 },
+          { x: 250, y: 160 },
+          { x: 150, y: 160 },
+        ],
+        density: 20,
+        seed: 1,
+      },
+    });
+    const result = r.hitTest({ x: 420, y: 290 }, scene, upright, fakeCatalog, ['p-1' as never]);
+    expect(result?.objectId).toBe('p-1');
+    expect(result?.handle).toBeUndefined();
   });
 });

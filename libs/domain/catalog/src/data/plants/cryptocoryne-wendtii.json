@@ -1,0 +1,27 @@
+{
+  "catalog": "core",
+  "id": "plant.cryptocoryne.wendtii",
+  "version": 1,
+  "name": "Cryptocoryne wendtii (green)",
+  "kind": "plant",
+  "zone": "midground",
+  "lighting": "low",
+  "co2": "none",
+  "difficulty": "easy",
+  "color": "#3d6b2a",
+  "naturalSize": { "width": 140, "height": 150, "depth": 140 },
+  "description": "Hardy rosette plant. Tolerates a wide range of conditions; may melt on transplant then re-emerge.",
+  "tags": ["rosette", "midground", "low-tech"],
+  "silhouette": [
+    { "x": 0, "y": -1 },
+    { "x": 0.6, "y": -0.6 },
+    { "x": 0.95, "y": 0 },
+    { "x": 0.7, "y": 0.6 },
+    { "x": 0.2, "y": 0.95 },
+    { "x": -0.2, "y": 0.95 },
+    { "x": -0.7, "y": 0.6 },
+    { "x": -0.95, "y": 0 },
+    { "x": -0.6, "y": -0.6 }
+  ],
+  "growth": { "weeksToMature": 10, "sizeAtZero": 0.45 }
+}

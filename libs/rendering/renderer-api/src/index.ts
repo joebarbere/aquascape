@@ -111,12 +111,17 @@ export interface SceneRenderer {
    * meshes, etc.). When omitted, the renderer paints with implementation-
    * defined fallback colors so tests + headless smoke runs stay simple —
    * the production app always passes a catalog.
+   *
+   * The optional `previewAgeWeeks` parameter (F4.4) overrides every plant's
+   * stored `growth.ageWeeks` so the time slider can preview a future age
+   * without mutating the document. Has no effect on hardscape or substrate.
    */
   render(
     scene: Scene,
     viewport: Viewport,
     catalog?: Catalog,
     selection?: ReadonlyArray<ObjectId>,
+    previewAgeWeeks?: number,
   ): void;
 
   /**
@@ -139,6 +144,12 @@ export interface SceneRenderer {
    * under the cursor. Without `selection`, handles aren't hit-tested at all
    * (handles only paint for selected objects, and the renderer doesn't
    * track selection between `render` calls).
+   *
+   * The optional `previewAgeWeeks` parameter (F4.4) overrides every plant's
+   * stored `growth.ageWeeks` for hit-test purposes — so when the time slider
+   * is at week 12, clicks land on plants at their week-12 size, matching
+   * what's painted. Single-specimen plants only; scatter patches always
+   * hit-test against the brush polygon.
    */
   hitTest(
     point: Vec2,
@@ -146,6 +157,7 @@ export interface SceneRenderer {
     viewport: Viewport,
     catalog?: Catalog,
     selection?: ReadonlyArray<ObjectId>,
+    previewAgeWeeks?: number,
   ): HitResult | null;
 
   /**

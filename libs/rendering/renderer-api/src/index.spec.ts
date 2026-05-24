@@ -54,4 +54,26 @@ describe('@aquascape/rendering/renderer-api', () => {
     expect(typeof fake.hitTest).toBe('function');
     expect(typeof fake.dispose).toBe('function');
   });
+
+  it('accepts previewAgeWeeks as the trailing render() and hitTest() arg (F4.4)', () => {
+    // Type-only assertion: a callable matching the new signature must accept
+    // an optional `previewAgeWeeks` number. If the interface changes shape,
+    // these assignments stop compiling.
+    const stub: SceneRenderer = {
+      attach: () => undefined,
+      render: () => undefined,
+      hitTest: () => null,
+      dispose: () => undefined,
+    };
+    stub.render({} as Scene, {} as Viewport, undefined, undefined, 12);
+    const hit = stub.hitTest(
+      { x: 0, y: 0 } as Vec2,
+      {} as Scene,
+      {} as Viewport,
+      undefined,
+      undefined,
+      12,
+    );
+    expect(hit).toBeNull();
+  });
 });

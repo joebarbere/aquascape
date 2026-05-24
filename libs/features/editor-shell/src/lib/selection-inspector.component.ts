@@ -23,6 +23,7 @@ import {
   DestroyRef,
   HostListener,
   inject,
+  signal,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 
@@ -33,6 +34,7 @@ import {
   removeObject,
   reorderObjectInLayer,
   addObject,
+  setObjectGroupId,
   type LayerId,
   type ObjectId,
   type Scene,
@@ -80,6 +82,24 @@ const DUPLICATE_OFFSET_MM = 20;
           title="Duplicate (Cmd/Ctrl+D)"
         >
           ⎘
+        </button>
+        <button
+          type="button"
+          (click)="onGroup()"
+          [disabled]="selectionCount() < 2"
+          aria-label="Group selected (Cmd/Ctrl+G)"
+          title="Group selected (Cmd/Ctrl+G)"
+        >
+          ⊞
+        </button>
+        <button
+          type="button"
+          (click)="onUngroup()"
+          [disabled]="!anySelectedGrouped()"
+          aria-label="Ungroup selected (Cmd/Ctrl+Shift+G)"
+          title="Ungroup selected (Cmd/Ctrl+Shift+G)"
+        >
+          ⊟
         </button>
         <button
           type="button"
@@ -162,13 +182,34 @@ export class SelectionInspectorComponent {
     initialValue: false,
   });
 
-  // Hold live copies of the store values in private fields rather than
-  // signals: the action handlers need synchronous reads, and signals from
-  // observables go through a microtask that interferes with the test
-  // configure-fixture-click-assert flow. The subscriptions tear down on
+  // Hold live copies of the store values in private fields. The action
+  // handlers need synchronous reads. The subscriptions tear down on
   // component destroy via DestroyRef.
+  //
+  // For the Group / Ungroup `[disabled]` bindings to re-evaluate under
+  // OnPush change detection we ALSO need signal-shaped reads (plain RxJS
+  // subscriptions don't notify the change detector). We feed both from the
+  // same store subscriptions so the field write and signal write stay in
+  // lockstep — no risk of the keyboard handler and the disabled state
+  // disagreeing about whether the selection is grouped.
+  private readonly selectedIdsState = signal<readonly ObjectId[]>([]);
+  private readonly sceneState = signal<Scene | null>(null);
   private currentSelectedIds: readonly ObjectId[] = [];
   private currentScene: Scene | null = null;
+
+  readonly selectionCount = (): number => this.selectedIdsState().length;
+  readonly anySelectedGrouped = (): boolean => {
+    const scene = this.sceneState();
+    if (scene === null) return false;
+    const ids = new Set<ObjectId>(this.selectedIdsState());
+    if (ids.size === 0) return false;
+    for (const layer of scene.layers) {
+      for (const obj of layer.objects) {
+        if (ids.has(obj.id) && obj.groupId !== undefined) return true;
+      }
+    }
+    return false;
+  };
 
   constructor() {
     this.store
@@ -176,12 +217,14 @@ export class SelectionInspectorComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((ids) => {
         this.currentSelectedIds = ids;
+        this.selectedIdsState.set(ids);
       });
     this.store
       .select(selectScene)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((scene) => {
         this.currentScene = scene;
+        this.sceneState.set(scene);
       });
   }
 
@@ -231,6 +274,19 @@ export class SelectionInspectorComponent {
         SelectionActions.replaceSelection({ ids: newlySelected.map((s) => asObjectId(s)) }),
       );
     }
+  }
+
+  onGroup(): void {
+    const ids = this.selectedIds();
+    if (ids.length < 2) return; // a single object can't form a group
+    const groupId = asObjectId(newUuid());
+    this.store.dispatch(SceneActions.dispatchCommand({ command: setObjectGroupId(ids, groupId) }));
+  }
+
+  onUngroup(): void {
+    const ids = this.selectedIds();
+    if (ids.length === 0) return;
+    this.store.dispatch(SceneActions.dispatchCommand({ command: setObjectGroupId(ids, null) }));
   }
 
   onZUp(): void {
@@ -287,6 +343,12 @@ export class SelectionInspectorComponent {
     } else if (mod && event.key.toLowerCase() === 'd') {
       event.preventDefault();
       this.onDuplicate();
+    } else if (mod && event.shiftKey && event.key.toLowerCase() === 'g') {
+      event.preventDefault();
+      this.onUngroup();
+    } else if (mod && event.key.toLowerCase() === 'g') {
+      event.preventDefault();
+      this.onGroup();
     } else if (event.key === ']') {
       event.preventDefault();
       this.onZUp();
@@ -299,10 +361,7 @@ export class SelectionInspectorComponent {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
-function findObject(
-  scene: Scene,
-  id: ObjectId,
-): { object: SceneObject; layerId: LayerId } | null {
+function findObject(scene: Scene, id: ObjectId): { object: SceneObject; layerId: LayerId } | null {
   for (const layer of scene.layers) {
     for (const obj of layer.objects) {
       if (obj.id === id) return { object: obj, layerId: layer.id };
@@ -342,4 +401,3 @@ function newUuid(): string {
     return v.toString(16);
   });
 }
-

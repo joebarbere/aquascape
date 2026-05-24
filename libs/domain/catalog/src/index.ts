@@ -16,6 +16,7 @@ export type {
   HardscapeEntry,
   HexColor,
   Millimetres,
+  PlantEntry,
   SubstrateEntry,
 } from './types';
 
@@ -37,8 +38,4 @@ export {
 } from './loader';
 
 // ─── Core catalog (bundled) ───────────────────────────────────────────────
-export {
-  CORE_CATALOG_MANIFESTS,
-  CORE_CATALOG_RESULT,
-  coreCatalog,
-} from './core-catalog';
+export { CORE_CATALOG_MANIFESTS, CORE_CATALOG_RESULT, coreCatalog } from './core-catalog';

@@ -97,13 +97,53 @@ export interface HardscapeEntry extends CatalogEntryBase {
   silhouette: ReadonlyArray<{ x: number; y: number }>;
 }
 
+// ─── Plant (Stage 4 F4.1) ─────────────────────────────────────────────────
+
+/**
+ * A plant species — anything green that grows in the tank. Carries the
+ * planning metadata users care about (lighting, CO2, difficulty) plus the
+ * growth params the F4.4 simulation reads.
+ *
+ * - `zone` drives which planting-tool tab the plant appears under.
+ * - `lighting` / `co2` / `difficulty` are advisory metadata shown in the
+ *   inspector; Stage 7 livestock/equipment compatibility checks may
+ *   eventually cross-reference them.
+ * - `naturalSize` is the mature footprint at `vigor = 1`. The renderer
+ *   scales the silhouette by `naturalSize × 0.5 × transform.scale ×
+ *   growthScale` so a freshly-planted specimen is small and grows.
+ * - `silhouette` is a closed polygon in `[-1, 1]` (same convention as
+ *   hardscape).
+ * - `growth.weeksToMature` + `growth.sizeAtZero` parameterise the linear
+ *   growth model in `@aquascape/domain/growth-sim`.
+ * - `defaultDensity` is the planting-tool's "carpet brush" default for
+ *   carpets; not meaningful for specimens.
+ */
+export interface PlantEntry extends CatalogEntryBase {
+  kind: 'plant';
+  zone: 'foreground' | 'midground' | 'background';
+  lighting: 'low' | 'medium' | 'high';
+  co2: 'none' | 'low' | 'high';
+  difficulty: 'easy' | 'moderate' | 'advanced';
+  color: HexColor;
+  naturalSize: { width: Millimetres; height: Millimetres; depth: Millimetres };
+  silhouette: ReadonlyArray<{ x: number; y: number }>;
+  growth: {
+    /** Wall-clock weeks from a fresh trim to mature size at vigor = 1. */
+    weeksToMature: number;
+    /** Scale at week 0, in [0, 1]. Plugs ~0.3, rosettes ~0.5, specimens ~0.7. */
+    sizeAtZero: number;
+  };
+  /** Suggested carpet-brush density (instances per 100 cm²); carpets only. */
+  defaultDensity?: number;
+}
+
 // ─── Placeholders for later stages ────────────────────────────────────────
 //
 // Each future kind adds a branch here AND a matching schema branch. Until
 // then the loader rejects unknown kinds (verifiable via tests) so a typo'd
 // manifest doesn't silently slip through.
 
-export type CatalogEntry = SubstrateEntry | HardscapeEntry;
+export type CatalogEntry = SubstrateEntry | HardscapeEntry | PlantEntry;
 
 /**
  * Lookup table built from a validated catalog: `(catalog, id) -> entry`.
@@ -124,7 +164,5 @@ export interface Catalog {
   /**
    * Filter entries by `kind`. Returns a fresh array; safe to sort in-place.
    */
-  byKind<K extends CatalogKind>(
-    kind: K,
-  ): readonly Extract<CatalogEntry, { kind: K }>[];
+  byKind<K extends CatalogKind>(kind: K): readonly Extract<CatalogEntry, { kind: K }>[];
 }

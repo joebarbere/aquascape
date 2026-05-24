@@ -335,6 +335,47 @@ export interface SetTankStyleCommand {
 }
 
 /**
+ * Set `groupId` on a list of objects in a single command. Stage 4 F4.3.
+ *
+ * Why one batch command instead of a Composite of N single-object commands?
+ *  - Group / Ungroup is the user action; we want a single entry on the undo
+ *    stack regardless of how many objects participate.
+ *  - Inversion needs per-object pre-apply state (each object may already
+ *    belong to a different group, including none). A batch makes that
+ *    inverse envelope a single record.
+ *
+ * APPLY SEMANTICS
+ *  - Validates that every object in `objectIds` exists. Rejects with
+ *    `'not-found'` on the first miss.
+ *  - Validates that no affected layer is locked. Rejects with `'locked'`.
+ *  - Sets `groupId` on every listed object. When `groupId === null`, the
+ *    `groupId` property is REMOVED (so a structural-equality check between
+ *    "never grouped" and "ungrouped" matches — important for round-trip).
+ *  - When `inverse.previousGroupIds` is present, per-object restoration
+ *    takes precedence over the uniform `groupId`. This is how Undo can
+ *    re-spread objects across multiple original groups in one shot.
+ *
+ * INVERT SEMANTICS
+ *  - Captures every listed object's pre-apply `groupId` (or `null` when
+ *    absent) into `inverse.previousGroupIds`. The inverse command's
+ *    `groupId` is meaningless once `inverse` is present; we keep the field
+ *    populated with `null` so the schema stays simple.
+ */
+export interface SetObjectGroupIdCommand {
+  kind: 'SetObjectGroupId';
+  objectIds: ObjectId[];
+  /** New groupId. `null` removes the property entirely. */
+  groupId: ObjectId | null;
+  inverse?: {
+    /**
+     * Pre-apply `groupId` per object id. `null` means the property was
+     * absent and should be removed on restore.
+     */
+    previousGroupIds: Record<string, string | null>;
+  };
+}
+
+/**
  * Composite command: apply children in order on `apply`, invert children
  * in reverse on `invert`. Treated as a single user action by undo/redo.
  *
@@ -361,6 +402,7 @@ export type Command =
   | ReshapeObjectCommand
   | MirrorObjectCommand
   | ReorderObjectInLayerCommand
+  | SetObjectGroupIdCommand
   | SetTankDimensionsCommand
   | SetTankStyleCommand
   | SubstrateCommand
@@ -385,6 +427,23 @@ function resolveInsertIndex(index: number | null, length: number): number {
     return length;
   }
   return index;
+}
+
+/**
+ * Return a copy of `obj` with `groupId` set to `next`, or with the property
+ * deleted when `next === null`. Round-tripping through the document format
+ * requires the property to be absent (not `undefined`, not `null`) when an
+ * object is ungrouped — JSON.stringify drops `undefined` but not `null`, and
+ * the schema's `additionalProperties: false` would reject a literal `null`.
+ */
+function withGroupId<T extends SceneObject>(obj: T, next: ObjectId | string | null): T {
+  if (next === null) {
+    if (obj.groupId === undefined) return obj;
+    const { groupId: _gid, ...rest } = obj;
+    return rest as T;
+  }
+  if (obj.groupId === next) return obj;
+  return { ...obj, groupId: next as ObjectId };
 }
 
 // ─── TankStyle validation ─────────────────────────────────────────────────
@@ -653,7 +712,10 @@ export function applyCommand(scene: Scene, command: Command): CommandResult {
     case 'ReorderObjectInLayer': {
       const found = getObjectWithLayer(scene, command.objectId);
       if (found === null) {
-        return rejected('not-found', `ReorderObjectInLayer: object "${command.objectId}" not found`);
+        return rejected(
+          'not-found',
+          `ReorderObjectInLayer: object "${command.objectId}" not found`,
+        );
       }
       if (found.layer.locked) {
         return rejected('locked', `ReorderObjectInLayer: layer "${found.layer.id}" is locked`);
@@ -673,6 +735,61 @@ export function applyCommand(scene: Scene, command: Command): CommandResult {
       const [moved] = objects.splice(fromIndex, 1);
       objects.splice(command.toIndex, 0, moved!);
       return ok(replaceLayer(scene, found.layer.id, { ...found.layer, objects }));
+    }
+
+    case 'SetObjectGroupId': {
+      // Resolve targets + lock + existence check. Done in a first pass so a
+      // partial failure leaves the scene untouched (atomic).
+      const ids = command.objectIds;
+      if (ids.length === 0) return ok(scene);
+      const found: Array<{ layerIndex: number; objectIndex: number }> = [];
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i] as ObjectId;
+        let layerIndex = -1;
+        let objectIndex = -1;
+        for (let li = 0; li < scene.layers.length; li++) {
+          const layer = scene.layers[li] as Layer;
+          const oi = layer.objects.findIndex((o) => o.id === id);
+          if (oi >= 0) {
+            layerIndex = li;
+            objectIndex = oi;
+            break;
+          }
+        }
+        if (layerIndex < 0) {
+          return rejected('not-found', `SetObjectGroupId: object "${id}" not found`);
+        }
+        const layer = scene.layers[layerIndex] as Layer;
+        if (layer.locked) {
+          return rejected('locked', `SetObjectGroupId: layer "${layer.id}" is locked`);
+        }
+        found.push({ layerIndex, objectIndex });
+      }
+
+      // Build the per-object groupId map we'll write. Restoration envelope
+      // takes precedence; otherwise everything maps to `command.groupId`.
+      const restorations = command.inverse?.previousGroupIds;
+      const layers = scene.layers.slice();
+      const layerObjectsDirty = new Map<number, SceneObject[]>();
+      for (let i = 0; i < found.length; i++) {
+        const slot = found[i] as { layerIndex: number; objectIndex: number };
+        const id = ids[i] as ObjectId;
+        const layer = layers[slot.layerIndex] as Layer;
+        const objects = layerObjectsDirty.get(slot.layerIndex) ?? layer.objects.slice();
+        layerObjectsDirty.set(slot.layerIndex, objects);
+        const oldObj = objects[slot.objectIndex] as SceneObject;
+        const target =
+          restorations !== undefined && Object.prototype.hasOwnProperty.call(restorations, id)
+            ? (restorations[id] ?? null)
+            : command.groupId;
+        const nextObj: SceneObject = withGroupId(oldObj, target);
+        objects[slot.objectIndex] = nextObj;
+      }
+      for (const [li, objects] of layerObjectsDirty) {
+        const layer = layers[li] as Layer;
+        layers[li] = { ...layer, objects };
+      }
+      return ok({ ...scene, layers });
     }
 
     case 'SetTankDimensions': {
@@ -930,6 +1047,33 @@ export function invertCommand(scene: Scene, command: Command): Command {
       };
     }
 
+    case 'SetObjectGroupId': {
+      const ids = command.objectIds;
+      if (ids.length === 0) return { kind: 'Noop' };
+      const previousGroupIds: Record<string, string | null> = {};
+      let anyMissing = false;
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i] as ObjectId;
+        const found = getObjectWithLayer(scene, id);
+        if (found === null) {
+          anyMissing = true;
+          break;
+        }
+        const current = (found.object as SceneObject).groupId;
+        previousGroupIds[id] = current ?? null;
+      }
+      if (anyMissing) {
+        // Apply would have rejected; replay-safe inverse is Noop.
+        return { kind: 'Noop' };
+      }
+      return {
+        kind: 'SetObjectGroupId',
+        objectIds: ids.slice(),
+        groupId: null,
+        inverse: { previousGroupIds },
+      };
+    }
+
     case 'SetTankDimensions': {
       // Capture pre-apply state. We populate `restoredPositions` for EVERY
       // object, not just those that would be clamped — simple + correct
@@ -1089,6 +1233,21 @@ export const reorderObjectInLayer = (
   kind: 'ReorderObjectInLayer',
   objectId,
   toIndex,
+});
+
+/**
+ * Build a {@link SetObjectGroupIdCommand}. Pass `groupId: null` to ungroup.
+ * `objectIds` may be a single id (the constructor wraps it) or an array.
+ * The `inverse` envelope is omitted; {@link invertCommand} populates it
+ * when undo is built.
+ */
+export const setObjectGroupId = (
+  objectIds: ObjectId | ReadonlyArray<ObjectId>,
+  groupId: ObjectId | null,
+): SetObjectGroupIdCommand => ({
+  kind: 'SetObjectGroupId',
+  objectIds: Array.isArray(objectIds) ? objectIds.slice() : [objectIds as ObjectId],
+  groupId,
 });
 
 /**

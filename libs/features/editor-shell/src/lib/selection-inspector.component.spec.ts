@@ -46,10 +46,7 @@ function sceneWithObject(id: string) {
   };
 }
 
-function configure(
-  selectedIds: readonly string[] = [],
-  scene = defaultScene(),
-) {
+function configure(selectedIds: readonly string[] = [], scene = defaultScene()) {
   TestBed.configureTestingModule({
     imports: [SelectionInspectorComponent],
     providers: [
@@ -58,10 +55,12 @@ function configure(
           scene: { scene, history: { past: [], future: [], limit: 200 } },
           selection: { ...initialSelectionState(), ids: selectedIds.map((s) => asObjectId(s)) },
         },
-        // Override the derived selectors that the inspector reads. The
-        // `selectScene` selector reads from initialState via createFeature,
-        // so it doesn't need an override.
+        // Override every selector the inspector reads. `selectScene` MUST
+        // be explicitly overridden — the "Z Up no-ops when the scene has
+        // not loaded" test below overrides it to `null`, and NgRx selector
+        // overrides leak across TestBed resets unless re-set.
         selectors: [
+          { selector: selectScene, value: scene },
           { selector: selectHasSelection, value: selectedIds.length > 0 },
           { selector: selectSelectedIds, value: selectedIds.map((s) => asObjectId(s)) },
         ],
@@ -75,7 +74,10 @@ function configure(
   return { fixture, store, dispatched: () => spy.mock.calls.map((c) => c[0]) };
 }
 
-function buttonByLabel(fixture: { nativeElement: HTMLElement }, label: string): HTMLButtonElement | null {
+function buttonByLabel(
+  fixture: { nativeElement: HTMLElement },
+  label: string,
+): HTMLButtonElement | null {
   return fixture.nativeElement.querySelector(`button[aria-label^="${label}"]`);
 }
 
@@ -121,7 +123,9 @@ describe('SelectionInspectorComponent', () => {
     const actions = dispatched();
     const addCmd = actions[0]! as ReturnType<typeof SceneActions.dispatchCommand>;
     expect(addCmd.command.kind).toBe('AddObject');
-    const reselect = actions[actions.length - 1]! as ReturnType<typeof SelectionActions.replaceSelection>;
+    const reselect = actions[actions.length - 1]! as ReturnType<
+      typeof SelectionActions.replaceSelection
+    >;
     expect(reselect.type).toBe('[Selection] Replace Selection');
     expect(reselect.ids.length).toBe(1);
     expect(reselect.ids[0]).not.toEqual(asObjectId('a'));
@@ -176,7 +180,8 @@ describe('SelectionInspectorComponent', () => {
     const { fixture, dispatched } = configure(['a'], scene);
     buttonByLabel(fixture, 'Send backward')!.click();
     const cmd = dispatched()[0]! as ReturnType<typeof SceneActions.dispatchCommand>;
-    if (cmd.command.kind !== 'ReorderObjectInLayer') throw new Error('expected ReorderObjectInLayer');
+    if (cmd.command.kind !== 'ReorderObjectInLayer')
+      throw new Error('expected ReorderObjectInLayer');
     expect(cmd.command.toIndex).toBe(0);
   });
 
@@ -299,6 +304,101 @@ describe('SelectionInspectorComponent', () => {
   it('Duplicate of a missing object id is a no-op (no AddObject dispatched)', () => {
     const { fixture, dispatched } = configure(['ghost'], defaultScene());
     buttonByLabel(fixture, 'Duplicate')!.click();
+    expect(dispatched()).toEqual([]);
+  });
+
+  // ── F4.3 — Group / Ungroup ───────────────────────────────────────────
+
+  function sceneWithTwoObjects(): ReturnType<typeof sceneWithObject> {
+    const scene = sceneWithObject('a');
+    scene.layers[0]!.objects.push({
+      kind: 'hardscape' as const,
+      id: asObjectId('b'),
+      ref: { catalog: 'core', id: 'rock.x', version: 1 },
+      transform: {
+        position: { x: 100, y: 100, z: 100 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        flipX: false,
+        flipY: false,
+      },
+    });
+    return scene;
+  }
+
+  it('Group button is disabled when fewer than two objects are selected', () => {
+    const { fixture } = configure(['a'], sceneWithObject('a'));
+    const btn = buttonByLabel(fixture, 'Group selected')!;
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('Group dispatches SetObjectGroupId with a fresh groupId for the selection', () => {
+    const { fixture, dispatched } = configure(['a', 'b'], sceneWithTwoObjects());
+    buttonByLabel(fixture, 'Group selected')!.click();
+    const cmd = dispatched()[0]! as ReturnType<typeof SceneActions.dispatchCommand>;
+    expect(cmd.command.kind).toBe('SetObjectGroupId');
+    if (cmd.command.kind !== 'SetObjectGroupId') return;
+    expect(cmd.command.objectIds.map(String).sort()).toEqual(['a', 'b']);
+    expect(typeof cmd.command.groupId).toBe('string');
+    expect(cmd.command.groupId).not.toBeNull();
+  });
+
+  it('Ungroup is disabled when no selected object has a groupId', () => {
+    const { fixture } = configure(['a', 'b'], sceneWithTwoObjects());
+    const btn = buttonByLabel(fixture, 'Ungroup selected')!;
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('Ungroup is enabled when any selected object already has a groupId', () => {
+    const scene = sceneWithTwoObjects();
+    (scene.layers[0]!.objects[0] as { groupId?: string }).groupId = 'gid-1';
+    const { fixture } = configure(['a', 'b'], scene);
+    const btn = buttonByLabel(fixture, 'Ungroup selected')!;
+    expect(btn.disabled).toBe(false);
+  });
+
+  it('Ungroup dispatches SetObjectGroupId with groupId=null', () => {
+    const scene = sceneWithTwoObjects();
+    (scene.layers[0]!.objects[0] as { groupId?: string }).groupId = 'gid-1';
+    (scene.layers[0]!.objects[1] as { groupId?: string }).groupId = 'gid-1';
+    const { fixture, dispatched } = configure(['a', 'b'], scene);
+    buttonByLabel(fixture, 'Ungroup selected')!.click();
+    const cmd = dispatched()[0]! as ReturnType<typeof SceneActions.dispatchCommand>;
+    if (cmd.command.kind !== 'SetObjectGroupId') throw new Error('expected SetObjectGroupId');
+    expect(cmd.command.groupId).toBeNull();
+  });
+
+  it('Cmd+G triggers Group when ≥2 objects are selected', () => {
+    const { dispatched } = configure(['a', 'b'], sceneWithTwoObjects());
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', metaKey: true }));
+    const cmds = dispatched().filter(
+      (a): a is ReturnType<typeof SceneActions.dispatchCommand> =>
+        a.type === '[Scene] Dispatch Command',
+    );
+    expect(cmds.length).toBeGreaterThan(0);
+    expect(cmds[0]!.command.kind).toBe('SetObjectGroupId');
+  });
+
+  it('Cmd+Shift+G triggers Ungroup', () => {
+    const scene = sceneWithTwoObjects();
+    (scene.layers[0]!.objects[0] as { groupId?: string }).groupId = 'gid-1';
+    const { dispatched } = configure(['a', 'b'], scene);
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'g', metaKey: true, shiftKey: true }),
+    );
+    const cmd = dispatched().find(
+      (a): a is ReturnType<typeof SceneActions.dispatchCommand> =>
+        a.type === '[Scene] Dispatch Command',
+    )!;
+    if (cmd.command.kind !== 'SetObjectGroupId') throw new Error('expected SetObjectGroupId');
+    expect(cmd.command.groupId).toBeNull();
+  });
+
+  it('Ungroup keyboard shortcut is a no-op when nothing is selected (guarded earlier)', () => {
+    const { dispatched } = configure([], defaultScene());
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'g', metaKey: true, shiftKey: true }),
+    );
     expect(dispatched()).toEqual([]);
   });
 });

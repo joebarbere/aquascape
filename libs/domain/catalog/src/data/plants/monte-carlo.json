@@ -1,0 +1,25 @@
+{
+  "catalog": "core",
+  "id": "plant.micranthemum.monte-carlo",
+  "version": 1,
+  "name": "Monte Carlo (Micranthemum tweediei)",
+  "kind": "plant",
+  "zone": "foreground",
+  "lighting": "high",
+  "co2": "high",
+  "difficulty": "moderate",
+  "color": "#7ec84a",
+  "naturalSize": { "width": 25, "height": 30, "depth": 25 },
+  "description": "Small bright-green carpet with rounded leaves. Demands light + CO2 to stay tight; otherwise grows leggy.",
+  "tags": ["carpet", "foreground"],
+  "silhouette": [
+    { "x": -0.6, "y": -0.8 },
+    { "x": 0.6, "y": -0.8 },
+    { "x": 0.9, "y": 0.1 },
+    { "x": 0.5, "y": 0.8 },
+    { "x": -0.5, "y": 0.8 },
+    { "x": -0.9, "y": 0.1 }
+  ],
+  "growth": { "weeksToMature": 8, "sizeAtZero": 0.25 },
+  "defaultDensity": 35
+}

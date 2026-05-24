@@ -1,0 +1,26 @@
+{
+  "catalog": "core",
+  "id": "plant.rotala.rotundifolia",
+  "version": 1,
+  "name": "Rotala rotundifolia (red)",
+  "kind": "plant",
+  "zone": "background",
+  "lighting": "high",
+  "co2": "high",
+  "difficulty": "moderate",
+  "color": "#b04a35",
+  "naturalSize": { "width": 80, "height": 220, "depth": 60 },
+  "description": "Stem plant that develops red/pink crowns under strong light and CO2. Top-trim regularly to encourage side shoots.",
+  "tags": ["background", "stem", "red"],
+  "silhouette": [
+    { "x": -0.3, "y": -1 },
+    { "x": 0.3, "y": -1 },
+    { "x": 0.7, "y": -0.2 },
+    { "x": 0.5, "y": 0.7 },
+    { "x": 0.1, "y": 1 },
+    { "x": -0.1, "y": 1 },
+    { "x": -0.5, "y": 0.7 },
+    { "x": -0.7, "y": -0.2 }
+  ],
+  "growth": { "weeksToMature": 5, "sizeAtZero": 0.4 }
+}

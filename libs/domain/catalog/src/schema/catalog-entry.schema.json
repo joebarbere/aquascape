@@ -2,10 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aquascape.dev/schemas/catalog-entry-v1.json",
   "title": "CatalogEntry",
-  "description": "A single catalog entry. Stage 2 shipped `substrate`; Stage 3 adds `hardscape`. Future stages add tank / plant / equipment / livestock under the same oneOf.",
+  "description": "A single catalog entry. Stages 2 + 3 + 4 ship `substrate` + `hardscape` + `plant`. Future stages add tank / equipment / livestock under the same oneOf.",
   "oneOf": [
     { "$ref": "#/$defs/SubstrateEntry" },
-    { "$ref": "#/$defs/HardscapeEntry" }
+    { "$ref": "#/$defs/HardscapeEntry" },
+    { "$ref": "#/$defs/PlantEntry" }
   ],
   "$defs": {
     "HexColor": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" },
@@ -80,6 +81,74 @@
           "minItems": 3,
           "items": { "$ref": "#/$defs/Vec2" },
           "description": "Convex-ish closed polygon outline in normalized [-1, 1] space. The renderer scales each point by (naturalSize × transform.scale × 0.5) so the silhouette spans the natural footprint at scale 1."
+        }
+      }
+    },
+    "PlantEntry": {
+      "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }],
+      "type": "object",
+      "required": [
+        "kind",
+        "zone",
+        "lighting",
+        "co2",
+        "difficulty",
+        "color",
+        "naturalSize",
+        "silhouette",
+        "growth"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "catalog": true,
+        "id": true,
+        "version": true,
+        "name": true,
+        "description": true,
+        "tags": true,
+        "kind": { "const": "plant" },
+        "zone": { "enum": ["foreground", "midground", "background"] },
+        "lighting": { "enum": ["low", "medium", "high"] },
+        "co2": { "enum": ["none", "low", "high"] },
+        "difficulty": { "enum": ["easy", "moderate", "advanced"] },
+        "color": { "$ref": "#/$defs/HexColor" },
+        "naturalSize": {
+          "type": "object",
+          "required": ["width", "height", "depth"],
+          "additionalProperties": false,
+          "properties": {
+            "width": { "type": "number", "exclusiveMinimum": 0 },
+            "height": { "type": "number", "exclusiveMinimum": 0 },
+            "depth": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        "silhouette": {
+          "type": "array",
+          "minItems": 3,
+          "items": { "$ref": "#/$defs/Vec2" }
+        },
+        "growth": {
+          "type": "object",
+          "required": ["weeksToMature", "sizeAtZero"],
+          "additionalProperties": false,
+          "properties": {
+            "weeksToMature": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Wall-clock weeks from a fresh trim to mature size for an average specimen at vigor = 1."
+            },
+            "sizeAtZero": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Scale (relative to mature) at week 0. Carpet plants typically start as plugs at ~0.3; rosettes at ~0.5."
+            }
+          }
+        },
+        "defaultDensity": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Suggested scatter density (instances per 100 cm²) when the planting tool's carpet brush drops this plant. Only meaningful for carpet-zone species."
         }
       }
     }

@@ -1,0 +1,24 @@
+{
+  "catalog": "core",
+  "id": "plant.vallisneria.nana",
+  "version": 1,
+  "name": "Vallisneria nana",
+  "kind": "plant",
+  "zone": "background",
+  "lighting": "medium",
+  "co2": "none",
+  "difficulty": "easy",
+  "color": "#4a8a3c",
+  "naturalSize": { "width": 50, "height": 250, "depth": 50 },
+  "description": "Narrow-leaved Val. Tall and graceful; propagates via runners. Background staple for biotopes + Iwagumi.",
+  "tags": ["background", "tall", "biotope"],
+  "silhouette": [
+    { "x": -0.15, "y": -1 },
+    { "x": 0.15, "y": -1 },
+    { "x": 0.4, "y": 0.4 },
+    { "x": 0.1, "y": 1 },
+    { "x": -0.1, "y": 1 },
+    { "x": -0.4, "y": 0.4 }
+  ],
+  "growth": { "weeksToMature": 8, "sizeAtZero": 0.35 }
+}

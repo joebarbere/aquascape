@@ -111,15 +111,13 @@ describe('validateCatalogEntry (hardscape, Stage 3 F3.5)', () => {
   });
 
   it('accepts an optional subcategory field', () => {
-    expect(
-      validateCatalogEntry({ ...validHardscape, subcategory: 'seiryu' }),
-    ).toEqual({ ok: true });
+    expect(validateCatalogEntry({ ...validHardscape, subcategory: 'seiryu' })).toEqual({
+      ok: true,
+    });
   });
 
   it('rejects an unknown category enum value', () => {
-    expect(
-      validateCatalogEntry({ ...validHardscape, category: 'shrub' }).ok,
-    ).toBe(false);
+    expect(validateCatalogEntry({ ...validHardscape, category: 'shrub' }).ok).toBe(false);
   });
 
   it('rejects a silhouette with fewer than 3 points', () => {
@@ -144,9 +142,97 @@ describe('validateCatalogEntry (hardscape, Stage 3 F3.5)', () => {
   });
 
   it('rejects extraneous properties (additionalProperties: false)', () => {
+    expect(validateCatalogEntry({ ...validHardscape, surprise: true }).ok).toBe(false);
+  });
+});
+
+describe('validateCatalogEntry (plant, Stage 4 F4.1)', () => {
+  const validPlant = {
+    catalog: 'core',
+    id: 'plant.test',
+    version: 1,
+    name: 'Test plant',
+    kind: 'plant',
+    zone: 'foreground',
+    lighting: 'medium',
+    co2: 'low',
+    difficulty: 'easy',
+    color: '#abcdef',
+    naturalSize: { width: 50, height: 50, depth: 50 },
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 0, y: 1 },
+    ],
+    growth: { weeksToMature: 6, sizeAtZero: 0.3 },
+  };
+
+  it('accepts a well-formed plant entry', () => {
+    expect(validateCatalogEntry(validPlant)).toEqual({ ok: true });
+  });
+
+  it('accepts an optional defaultDensity for carpet-style plants', () => {
+    expect(validateCatalogEntry({ ...validPlant, defaultDensity: 40 })).toEqual({ ok: true });
+  });
+
+  it('rejects an unknown zone enum value', () => {
+    expect(validateCatalogEntry({ ...validPlant, zone: 'middle' }).ok).toBe(false);
+  });
+
+  it('rejects an unknown lighting enum value', () => {
+    expect(validateCatalogEntry({ ...validPlant, lighting: 'blazing' }).ok).toBe(false);
+  });
+
+  it('rejects an unknown co2 enum value', () => {
+    expect(validateCatalogEntry({ ...validPlant, co2: 'occasional' }).ok).toBe(false);
+  });
+
+  it('rejects an unknown difficulty enum value', () => {
+    expect(validateCatalogEntry({ ...validPlant, difficulty: 'expert' }).ok).toBe(false);
+  });
+
+  it('rejects weeksToMature <= 0', () => {
     expect(
-      validateCatalogEntry({ ...validHardscape, surprise: true }).ok,
+      validateCatalogEntry({
+        ...validPlant,
+        growth: { weeksToMature: 0, sizeAtZero: 0.3 },
+      }).ok,
     ).toBe(false);
+  });
+
+  it('rejects sizeAtZero outside [0, 1]', () => {
+    expect(
+      validateCatalogEntry({
+        ...validPlant,
+        growth: { weeksToMature: 6, sizeAtZero: 1.5 },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateCatalogEntry({
+        ...validPlant,
+        growth: { weeksToMature: 6, sizeAtZero: -0.1 },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects defaultDensity <= 0', () => {
+    expect(validateCatalogEntry({ ...validPlant, defaultDensity: 0 }).ok).toBe(false);
+  });
+
+  it('rejects a silhouette with fewer than 3 points', () => {
+    expect(
+      validateCatalogEntry({
+        ...validPlant,
+        silhouette: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ],
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects extraneous properties (additionalProperties: false)', () => {
+    expect(validateCatalogEntry({ ...validPlant, surprise: true }).ok).toBe(false);
   });
 });
 

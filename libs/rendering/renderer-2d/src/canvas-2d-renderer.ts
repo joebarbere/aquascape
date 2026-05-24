@@ -30,19 +30,26 @@
 // "convert" it into canvas space. There is one coordinate space; the 3D
 // renderer (Stage 10) consumes the same numbers.
 
-import type { Catalog, HardscapeEntry, SubstrateEntry } from '@aquascape/domain/catalog';
+import type {
+  Catalog,
+  HardscapeEntry,
+  PlantEntry,
+  SubstrateEntry,
+} from '@aquascape/domain/catalog';
 import {
   pointInPolygon,
   project2D,
   sampleCatmullRom,
   seededHash01,
 } from '@aquascape/domain/geometry';
-import type { Vec2 } from '@aquascape/domain/geometry';
+import type { Transform, Vec2 } from '@aquascape/domain/geometry';
+import { plantScale, scatterInPolygon } from '@aquascape/domain/growth-sim';
 import type {
   CatalogRef,
   HardscapeObject,
   LayerId,
   ObjectId,
+  PlantObject,
   Scene,
   SceneObject,
   SubstrateRegion,
@@ -206,6 +213,7 @@ export class Canvas2DRenderer implements SceneRenderer {
     viewport: Viewport,
     catalog?: Catalog,
     selection?: ReadonlyArray<ObjectId>,
+    previewAgeWeeks?: number,
   ): void {
     const s = this.surface;
     const ctx = this.ctx;
@@ -270,16 +278,15 @@ export class Canvas2DRenderer implements SceneRenderer {
     this.drawFrame(ctx, tankCorner0, tankCornerW, scene.tank.style);
 
     // F3.3 — paint hardscape silhouettes back-to-front (layers low→high,
-    // objects within a layer low→high). Selection handles render LAST so
-    // they sit visually on top of every object, even when selecting a
-    // back-layer item.
+    // objects within a layer low→high). F4.4 — plants over hardscape.
+    // Selection handles render LAST so they sit visually on top of every
+    // object, even when selecting a back-layer item.
     const selectedSet = selection !== undefined && selection.length > 0 ? new Set(selection) : null;
     this.drawHardscape(ctx, scene, catalog, oneCssPxInMm);
+    this.drawPlants(ctx, scene, catalog, oneCssPxInMm, previewAgeWeeks, scene.seed);
     if (selectedSet !== null) {
       this.drawSelectionHandles(ctx, scene, catalog, oneCssPxInMm, selectedSet);
     }
-
-    // F4.x will add plant rendering here (over hardscape, under handles).
   }
 
   // ─── F1.2 Phase C — tank-styling helpers ──────────────────────────────
@@ -475,6 +482,7 @@ export class Canvas2DRenderer implements SceneRenderer {
     viewport: Viewport,
     catalog?: Catalog,
     selection?: ReadonlyArray<ObjectId>,
+    previewAgeWeeks?: number,
   ): HitResult | null {
     // The surface is the source of truth for canvas dimensions. Without an
     // attach we have no frame of reference — return null.
@@ -499,9 +507,10 @@ export class Canvas2DRenderer implements SceneRenderer {
         if (!layer.visible) continue;
         for (let oi = layer.objects.length - 1; oi >= 0; oi--) {
           const obj = layer.objects[oi]!;
-          if (obj.kind !== 'hardscape') continue;
           if (!selectedSet.has(obj.id)) continue;
-          const handle = handleAtPoint(obj as HardscapeObject, world, catalog, oneCssPxInMm);
+          const extents = resolveSelectableExtents(obj, catalog, previewAgeWeeks);
+          if (extents === null) continue;
+          const handle = handleAtPointGeneric(obj.transform, extents, world, oneCssPxInMm);
           if (handle !== null) {
             return { objectId: obj.id, layerId: layer.id, handle };
           }
@@ -509,15 +518,21 @@ export class Canvas2DRenderer implements SceneRenderer {
       }
     }
 
-    // 2) Body hit-test — same front-to-back walk as before.
+    // 2) Body hit-test — same front-to-back walk as before. Plants beat
+    //    hardscape within a layer when their (front-to-back) index is higher.
     for (let li = scene.layers.length - 1; li >= 0; li--) {
       const layer = scene.layers[li]!;
       if (!layer.visible) continue;
       for (let oi = layer.objects.length - 1; oi >= 0; oi--) {
         const obj = layer.objects[oi]!;
-        if (obj.kind !== 'hardscape') continue;
-        if (objectContainsWorldPoint(obj, world, catalog)) {
-          return { objectId: obj.id, layerId: layer.id };
+        if (obj.kind === 'hardscape') {
+          if (objectContainsWorldPoint(obj, world, catalog)) {
+            return { objectId: obj.id, layerId: layer.id };
+          }
+        } else if (obj.kind === 'plant') {
+          if (plantContainsWorldPoint(obj, world, catalog, previewAgeWeeks)) {
+            return { objectId: obj.id, layerId: layer.id };
+          }
         }
       }
     }
@@ -723,8 +738,10 @@ export class Canvas2DRenderer implements SceneRenderer {
     if (obj.transform.rotation.z !== 0) {
       ctx.rotate(obj.transform.rotation.z);
     }
-    const sx = obj.transform.scale.x * (obj.transform.flipX ? -1 : 1) * entry.naturalSize.width * 0.5;
-    const sy = obj.transform.scale.y * (obj.transform.flipY ? -1 : 1) * entry.naturalSize.height * 0.5;
+    const sx =
+      obj.transform.scale.x * (obj.transform.flipX ? -1 : 1) * entry.naturalSize.width * 0.5;
+    const sy =
+      obj.transform.scale.y * (obj.transform.flipY ? -1 : 1) * entry.naturalSize.height * 0.5;
     if (sx === 0 || sy === 0) {
       ctx.restore();
       return;
@@ -765,37 +782,35 @@ export class Canvas2DRenderer implements SceneRenderer {
     for (const layer of scene.layers) {
       if (!layer.visible) continue;
       for (const obj of layer.objects) {
-        if (obj.kind !== 'hardscape') continue;
         if (!selected.has(obj.id)) continue;
-        const entry = resolveHardscapeEntry(obj.ref, catalog);
-        if (entry === null) continue;
-        this.paintSelectionHandles(ctx, obj as HardscapeObject, entry, oneCssPxInMm);
+        // Scatter-patch plants don't get handles — reshaping a brush polygon
+        // is a different gesture than scaling/rotating a sprite.
+        const extents = resolveSelectableExtents(obj, catalog, undefined);
+        if (extents === null) continue;
+        this.paintSelectionHandlesGeneric(ctx, obj.transform, extents, oneCssPxInMm);
       }
     }
   }
 
-  private paintSelectionHandles(
+  private paintSelectionHandlesGeneric(
     ctx: CanvasRenderingContext2D,
-    obj: HardscapeObject,
-    entry: HardscapeEntry,
+    transform: Transform,
+    extents: { halfW: number; halfH: number },
     oneCssPxInMm: number,
   ): void {
-    const halfW = obj.transform.scale.x * entry.naturalSize.width * 0.5;
-    const halfH = obj.transform.scale.y * entry.naturalSize.height * 0.5;
+    const { halfW, halfH } = extents;
     if (halfW === 0 || halfH === 0) return;
 
     ctx.save();
-    ctx.translate(obj.transform.position.x, obj.transform.position.y);
-    if (obj.transform.rotation.z !== 0) {
-      ctx.rotate(obj.transform.rotation.z);
+    ctx.translate(transform.position.x, transform.position.y);
+    if (transform.rotation.z !== 0) {
+      ctx.rotate(transform.rotation.z);
     }
 
     ctx.lineWidth = SELECTION_LINE_WIDTH_PX * oneCssPxInMm;
     ctx.strokeStyle = SELECTION_COLOR;
-    // Bounding box.
     ctx.strokeRect(-halfW, -halfH, 2 * halfW, 2 * halfH);
 
-    // Four corner scale handles — square fills.
     const handleSizeMm = SELECTION_HANDLE_PX * oneCssPxInMm;
     ctx.fillStyle = '#fff';
     for (const [hx, hy] of [
@@ -808,7 +823,6 @@ export class Canvas2DRenderer implements SceneRenderer {
       ctx.strokeRect(hx - handleSizeMm / 2, hy - handleSizeMm / 2, handleSizeMm, handleSizeMm);
     }
 
-    // Rotate handle: small circle above the bbox, connected by a stalk.
     const stalkLengthMm = SELECTION_ROTATE_STALK_PX * oneCssPxInMm;
     ctx.beginPath();
     ctx.moveTo(0, halfH);
@@ -818,6 +832,136 @@ export class Canvas2DRenderer implements SceneRenderer {
     ctx.arc(0, halfH + stalkLengthMm, handleSizeMm / 2, 0, Math.PI * 2);
     ctx.fillStyle = SELECTION_COLOR;
     ctx.fill();
+    ctx.restore();
+  }
+
+  // ─── F4.4 — Plant rendering ───────────────────────────────────────────
+  //
+  // Two plant render paths:
+  //   - Single-specimen (no `scatter` field): one silhouette painted at the
+  //     plant's transform.position, scaled by transform × naturalSize ×
+  //     growthScale.
+  //   - Scatter patch: `scatterInPolygon(scatter.polygon, scatter.density,
+  //     scatter.seed ?? scene.seed)` produces a deterministic point list.
+  //     Each instance is one silhouette at world position, scaled by
+  //     naturalSize × growthScale × per-instance jitter, rotated by the
+  //     per-instance rotation. The brush polygon itself is NOT outlined
+  //     (that would draw a visible patch boundary that the user can't see
+  //     in the real planted carpet).
+  //
+  // Both branches use `plantScale(entry.growth, plant.growth, previewAgeWeeks)`
+  // — the time slider's preview age is honoured without mutating the doc.
+
+  private drawPlants(
+    ctx: CanvasRenderingContext2D,
+    scene: Scene,
+    catalog: Catalog | undefined,
+    oneCssPxInMm: number,
+    previewAgeWeeks: number | undefined,
+    sceneSeed: number,
+  ): void {
+    for (const layer of scene.layers) {
+      if (!layer.visible) continue;
+      const layerAlpha = clampOpacity(layer.opacity);
+      for (const obj of layer.objects) {
+        if (obj.kind !== 'plant') continue;
+        const entry = resolvePlantEntry(obj.ref, catalog);
+        if (entry === null) continue;
+        const scale = plantScale(entry.growth, obj.growth, previewAgeWeeks);
+        if (obj.scatter !== undefined) {
+          this.paintScatterPlant(ctx, obj, entry, scale, layerAlpha, sceneSeed, oneCssPxInMm);
+        } else {
+          this.paintSinglePlant(ctx, obj, entry, scale, layerAlpha, oneCssPxInMm);
+        }
+      }
+    }
+  }
+
+  private paintSinglePlant(
+    ctx: CanvasRenderingContext2D,
+    obj: PlantObject,
+    entry: PlantEntry,
+    growthScale: number,
+    layerAlpha: number,
+    oneCssPxInMm: number,
+  ): void {
+    ctx.save();
+    ctx.globalAlpha = layerAlpha;
+    ctx.translate(obj.transform.position.x, obj.transform.position.y);
+    if (obj.transform.rotation.z !== 0) {
+      ctx.rotate(obj.transform.rotation.z);
+    }
+    const sx =
+      obj.transform.scale.x *
+      (obj.transform.flipX ? -1 : 1) *
+      entry.naturalSize.width *
+      0.5 *
+      growthScale;
+    const sy =
+      obj.transform.scale.y *
+      (obj.transform.flipY ? -1 : 1) *
+      entry.naturalSize.height *
+      0.5 *
+      growthScale;
+    if (sx === 0 || sy === 0) {
+      ctx.restore();
+      return;
+    }
+    ctx.scale(sx, sy);
+    pathPolygon(ctx, entry.silhouette);
+    ctx.fillStyle = entry.color;
+    ctx.fill();
+    // Thin outline at one CSS px, scaled into world-mm. Same stroke-scaling
+    // logic as hardscape so plants read cleanly at any zoom.
+    const meanScale = (Math.abs(sx) + Math.abs(sy)) * 0.5;
+    if (meanScale > 0) {
+      ctx.lineWidth = oneCssPxInMm / meanScale;
+      ctx.strokeStyle = darken(entry.color, 0.25);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  private paintScatterPlant(
+    ctx: CanvasRenderingContext2D,
+    obj: PlantObject,
+    entry: PlantEntry,
+    growthScale: number,
+    layerAlpha: number,
+    sceneSeed: number,
+    oneCssPxInMm: number,
+  ): void {
+    const scatter = obj.scatter;
+    if (scatter === undefined) return;
+    const seed = scatter.seed ?? sceneSeed;
+    const points = scatterInPolygon(scatter.polygon, scatter.density, seed);
+    if (points.length === 0) return;
+
+    ctx.save();
+    ctx.globalAlpha = layerAlpha;
+    ctx.fillStyle = entry.color;
+    const strokeColor = darken(entry.color, 0.25);
+    for (const p of points) {
+      ctx.save();
+      ctx.translate(p.position.x, p.position.y);
+      if (p.rotation !== 0) ctx.rotate(p.rotation);
+      const instanceSx = entry.naturalSize.width * 0.5 * growthScale * p.jitter;
+      const instanceSy = entry.naturalSize.height * 0.5 * growthScale * p.jitter;
+      if (instanceSx === 0 || instanceSy === 0) {
+        ctx.restore();
+        continue;
+      }
+      ctx.scale(instanceSx, instanceSy);
+      pathPolygon(ctx, entry.silhouette);
+      ctx.fill();
+      const meanScale = (instanceSx + instanceSy) * 0.5;
+      if (meanScale > 0) {
+        ctx.lineWidth = oneCssPxInMm / meanScale;
+        ctx.strokeStyle = strokeColor;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
     ctx.restore();
   }
 }
@@ -937,8 +1081,8 @@ function objectContainsWorldPoint(
   const naturalH = entry?.naturalSize.height ?? HARDSCAPE_FALLBACK_NATURAL_MM;
   const sxRaw = hardscape.transform.scale.x * (hardscape.transform.flipX ? -1 : 1);
   const syRaw = hardscape.transform.scale.y * (hardscape.transform.flipY ? -1 : 1);
-  const halfW = (naturalW * 0.5) * sxRaw;
-  const halfH = (naturalH * 0.5) * syRaw;
+  const halfW = naturalW * 0.5 * sxRaw;
+  const halfH = naturalH * 0.5 * syRaw;
   if (halfW === 0 || halfH === 0) return false;
 
   const lx = rx / halfW;
@@ -961,8 +1105,88 @@ function resolveHardscapeEntry(
   return entry;
 }
 
+function resolvePlantEntry(ref: CatalogRef, catalog: Catalog | undefined): PlantEntry | null {
+  if (catalog === undefined) return null;
+  const entry = catalog.get({ catalog: ref.catalog, id: ref.id });
+  if (entry === null || entry.kind !== 'plant') return null;
+  return entry;
+}
+
 /** Fallback hardscape footprint when no catalog is provided to hit-test. */
 const HARDSCAPE_FALLBACK_NATURAL_MM = 100;
+
+/**
+ * Hit-test a plant. Single-specimen: same silhouette test as hardscape,
+ * but with the catalog silhouette scaled by the plant's growth scale at the
+ * given previewAgeWeeks (so click targets match what's painted). Scatter:
+ * point-in-polygon against the brush polygon — the patch IS the selection
+ * surface; individual instances aren't independently selectable.
+ */
+function plantContainsWorldPoint(
+  obj: PlantObject,
+  worldPoint: Vec2,
+  catalog: Catalog | undefined,
+  previewAgeWeeks: number | undefined,
+): boolean {
+  if (obj.scatter !== undefined) {
+    return pointInPolygon(worldPoint, obj.scatter.polygon);
+  }
+  const entry = resolvePlantEntry(obj.ref, catalog);
+  if (entry === null) return false;
+  const growth = plantScale(entry.growth, obj.growth, previewAgeWeeks);
+  // Inverse transform into the object's local frame, accounting for growth.
+  const dx = worldPoint.x - obj.transform.position.x;
+  const dy = worldPoint.y - obj.transform.position.y;
+  const theta = obj.transform.rotation.z;
+  const cos = Math.cos(theta);
+  const sin = Math.sin(theta);
+  const rx = dx * cos + dy * sin;
+  const ry = -dx * sin + dy * cos;
+  const sxRaw = obj.transform.scale.x * (obj.transform.flipX ? -1 : 1);
+  const syRaw = obj.transform.scale.y * (obj.transform.flipY ? -1 : 1);
+  const halfW = entry.naturalSize.width * 0.5 * sxRaw * growth;
+  const halfH = entry.naturalSize.height * 0.5 * syRaw * growth;
+  if (halfW === 0 || halfH === 0) return false;
+  const lx = rx / halfW;
+  const ly = ry / halfH;
+  return pointInPolygon({ x: lx, y: ly }, entry.silhouette);
+}
+
+/**
+ * Resolve the local-frame half-extents (in world mm) for the selection-handle
+ * geometry of an object. Returns `null` when the object can't show handles —
+ * either because we can't resolve its catalog entry, or because it's a kind
+ * that doesn't use bbox handles (scatter plants, decor sprites, etc.).
+ *
+ * Plants honour `previewAgeWeeks` so the bbox follows the painted growth
+ * state; hardscape is unaffected.
+ */
+function resolveSelectableExtents(
+  obj: SceneObject,
+  catalog: Catalog | undefined,
+  previewAgeWeeks: number | undefined,
+): { halfW: number; halfH: number } | null {
+  if (obj.kind === 'hardscape') {
+    const entry = resolveHardscapeEntry(obj.ref, catalog);
+    const naturalW = entry?.naturalSize.width ?? HARDSCAPE_FALLBACK_NATURAL_MM;
+    const naturalH = entry?.naturalSize.height ?? HARDSCAPE_FALLBACK_NATURAL_MM;
+    const halfW = obj.transform.scale.x * naturalW * 0.5;
+    const halfH = obj.transform.scale.y * naturalH * 0.5;
+    if (halfW <= 0 || halfH <= 0) return null;
+    return { halfW, halfH };
+  }
+  if (obj.kind === 'plant') {
+    if (obj.scatter !== undefined) return null;
+    const entry = resolvePlantEntry(obj.ref, catalog);
+    if (entry === null) return null;
+    const growth = plantScale(entry.growth, obj.growth, previewAgeWeeks);
+    const halfW = obj.transform.scale.x * entry.naturalSize.width * 0.5 * growth;
+    const halfH = obj.transform.scale.y * entry.naturalSize.height * 0.5 * growth;
+    if (halfW <= 0 || halfH <= 0) return null;
+    return { halfW, halfH };
+  }
+  return null;
+}
 
 /**
  * Test `worldPoint` against the painted selection handles of a hardscape
@@ -978,42 +1202,34 @@ const HARDSCAPE_FALLBACK_NATURAL_MM = 100;
  * whole object body acts as the translate handle. This helper deliberately
  * skips 'translate'; the caller falls through to body hit-test for that.
  */
-function handleAtPoint(
-  obj: HardscapeObject,
+/**
+ * Generic handle hit-test against a `(transform, extents)` pair. Used for
+ * hardscape AND single-specimen plants — both place handles at the corners
+ * and a rotate stalk above the local-frame bbox `(±halfW, ±halfH)`.
+ */
+function handleAtPointGeneric(
+  transform: Transform,
+  extents: { halfW: number; halfH: number },
   worldPoint: Vec2,
-  catalog: Catalog | undefined,
   oneCssPxInMm: number,
 ): NonNullable<HitResult['handle']> | null {
-  const entry = resolveHardscapeEntry(obj.ref, catalog);
-  // Use catalog naturalSize when available, otherwise the fallback (same
-  // policy as the body hit-test).
-  const naturalW = entry?.naturalSize.width ?? HARDSCAPE_FALLBACK_NATURAL_MM;
-  const naturalH = entry?.naturalSize.height ?? HARDSCAPE_FALLBACK_NATURAL_MM;
-  const halfW = obj.transform.scale.x * naturalW * 0.5;
-  const halfH = obj.transform.scale.y * naturalH * 0.5;
+  const { halfW, halfH } = extents;
   if (halfW <= 0 || halfH <= 0) return null;
 
   // Transform the world point into the object's local frame (translate
   // by -position, rotate by -theta).
-  const dx = worldPoint.x - obj.transform.position.x;
-  const dy = worldPoint.y - obj.transform.position.y;
-  const theta = obj.transform.rotation.z;
+  const dx = worldPoint.x - transform.position.x;
+  const dy = worldPoint.y - transform.position.y;
+  const theta = transform.rotation.z;
   const cos = Math.cos(theta);
   const sin = Math.sin(theta);
   const lx = dx * cos + dy * sin;
   const ly = -dx * sin + dy * cos;
 
-  // Slop = the painted handle radius in world mm. Equal to the renderer's
-  // SELECTION_HANDLE_PX / 2 in CSS pixels → world mm.
-  const handleHalfMm = (SELECTION_HANDLE_PX * 0.5) * oneCssPxInMm;
-  const rotateRadiusMm = (SELECTION_HANDLE_PX * 0.5) * oneCssPxInMm;
+  const handleHalfMm = SELECTION_HANDLE_PX * 0.5 * oneCssPxInMm;
+  const rotateRadiusMm = SELECTION_HANDLE_PX * 0.5 * oneCssPxInMm;
   const stalkLengthMm = SELECTION_ROTATE_STALK_PX * oneCssPxInMm;
 
-  // Corner scale handles. Test rotated-into-local point against each
-  // corner's painted bbox. Names match the on-screen positions: NW = top-
-  // left in world coords (low x, HIGH y after the y-flip — but local
-  // coordinates are post-rotation; the renderer paints corners at
-  // `(±halfW, ±halfH)`, so the visual mapping is +y = up in world).
   const corners: Array<[number, number, NonNullable<HitResult['handle']>]> = [
     [-halfW, -halfH, 'scaleSW'],
     [halfW, -halfH, 'scaleSE'],
@@ -1031,7 +1247,6 @@ function handleAtPoint(
     }
   }
 
-  // Rotate handle: circle centred at (0, halfH + stalk) in the local frame.
   const rcx = 0;
   const rcy = halfH + stalkLengthMm;
   const rdx = lx - rcx;
@@ -1041,6 +1256,26 @@ function handleAtPoint(
   }
 
   return null;
+}
+
+/**
+ * Darken a `#rrggbb` (or `#rrggbbaa`) hex by `amount` ∈ [0, 1]. amount = 0.25
+ * means each channel is scaled to 75% of its value. Used for plant outline
+ * strokes that need to read against the fill at any zoom. If the input isn't
+ * a recognized hex, returns the input unchanged — the renderer just uses the
+ * fill color for the stroke and the plant becomes a flat shape (fine fallback).
+ */
+function darken(hex: string, amount: number): string {
+  const m = /^#([0-9a-fA-F]{6})([0-9a-fA-F]{2})?$/.exec(hex);
+  if (m === null) return hex;
+  const rgb = m[1]!;
+  const alpha = m[2] ?? '';
+  const factor = Math.max(0, 1 - amount);
+  const r = Math.round(parseInt(rgb.slice(0, 2), 16) * factor);
+  const g = Math.round(parseInt(rgb.slice(2, 4), 16) * factor);
+  const b = Math.round(parseInt(rgb.slice(4, 6), 16) * factor);
+  const hex2 = (n: number): string => n.toString(16).padStart(2, '0');
+  return `#${hex2(r)}${hex2(g)}${hex2(b)}${alpha}`;
 }
 
 // Suppress "unused" warnings for types reserved for future use here.

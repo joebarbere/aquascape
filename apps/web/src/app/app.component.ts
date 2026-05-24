@@ -43,6 +43,7 @@ import {
   NgZone,
   OnDestroy,
   ViewChild,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -50,7 +51,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { combineLatest } from 'rxjs';
 
 import { coreCatalog } from '@aquascape/domain/catalog';
-import type { HardscapeEntry } from '@aquascape/domain/catalog';
+import type { HardscapeEntry, PlantEntry } from '@aquascape/domain/catalog';
 import type { Transform } from '@aquascape/domain/geometry';
 import {
   addLayer,
@@ -64,17 +65,19 @@ import {
   type LayerId,
   type Layer,
   type ObjectId,
+  type PlantObject,
   type Scene,
   type SceneObject,
 } from '@aquascape/domain/scene-model';
 import {
   EditorShellComponent,
+  PreviewTimeService,
   SelectionInspectorComponent,
+  TimeSliderComponent,
 } from '@aquascape/features/editor-shell';
-import {
-  HardscapeDragService,
-  HardscapeToolComponent,
-} from '@aquascape/features/hardscape-tool';
+import { HardscapeDragService, HardscapeToolComponent } from '@aquascape/features/hardscape-tool';
+import { LayersPanelComponent } from '@aquascape/features/layers-panel';
+import { PlantDragService, PlantingToolComponent } from '@aquascape/features/planting-tool';
 import { SubstrateToolComponent } from '@aquascape/features/substrate-tool';
 import { TankSetupComponent } from '@aquascape/features/tank-setup';
 import {
@@ -95,12 +98,7 @@ import type {
   SceneRenderer,
   Viewport,
 } from '@aquascape/rendering/renderer-api';
-import {
-  SceneActions,
-  SelectionActions,
-  selectScene,
-  selectSelectedIds,
-} from '@aquascape/state';
+import { SceneActions, SelectionActions, selectScene, selectSelectedIds } from '@aquascape/state';
 import { Store } from '@ngrx/store';
 
 import { defaultViewport } from './default-viewport';
@@ -152,9 +150,12 @@ type DragState =
     CommonModule,
     EditorShellComponent,
     HardscapeToolComponent,
+    LayersPanelComponent,
+    PlantingToolComponent,
     SelectionInspectorComponent,
     SubstrateToolComponent,
     TankSetupComponent,
+    TimeSliderComponent,
   ],
   template: `
     <div class="app-shell">
@@ -164,6 +165,7 @@ type DragState =
           <aquascape-tank-setup></aquascape-tank-setup>
           <aquascape-substrate-tool></aquascape-substrate-tool>
           <aquascape-hardscape-tool></aquascape-hardscape-tool>
+          <aquascape-planting-tool></aquascape-planting-tool>
         </aside>
         <main class="app-canvas-host">
           <canvas
@@ -184,7 +186,13 @@ type DragState =
             ></div>
           }
           <aquascape-selection-inspector></aquascape-selection-inspector>
+          <div class="app-timeslider">
+            <aquascape-time-slider></aquascape-time-slider>
+          </div>
         </main>
+        <aside class="app-rail" aria-label="Layers">
+          <aquascape-layers-panel></aquascape-layers-panel>
+        </aside>
       </div>
     </div>
   `,
@@ -202,7 +210,7 @@ type DragState =
       }
       .app-grid {
         display: grid;
-        grid-template-columns: minmax(280px, 360px) 1fr;
+        grid-template-columns: minmax(280px, 360px) 1fr minmax(240px, 320px);
         min-height: 0;
       }
       .app-sidebar {
@@ -210,9 +218,22 @@ type DragState =
         border-right: 1px solid #e0e0e0;
         background: #fafafa;
       }
+      .app-rail {
+        overflow-y: auto;
+        border-left: 1px solid #e0e0e0;
+        background: #fafafa;
+        padding: 8px;
+      }
       .app-canvas-host {
         position: relative;
         overflow: hidden;
+      }
+      .app-timeslider {
+        position: absolute;
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        pointer-events: auto;
       }
       .scene-canvas {
         display: block;
@@ -237,6 +258,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
   private readonly store = inject(Store);
   private readonly dragService = inject(HardscapeDragService);
+  private readonly plantDragService = inject(PlantDragService);
+  private readonly previewTime = inject(PreviewTimeService);
   private readonly cdr = inject(ChangeDetectorRef);
 
   private readonly fileService: FileService = inject(FILE_SERVICE);
@@ -259,7 +282,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private documentUpHandler: ((e: PointerEvent) => void) | null = null;
 
   /** Marquee rect in canvas-CSS coords for the template overlay (signal so OnPush picks it up). */
-  readonly marqueeRect = signal<{ left: number; top: number; width: number; height: number } | null>(null);
+  readonly marqueeRect = signal<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
   ngAfterViewInit(): void {
     void this.fileService;
@@ -269,10 +297,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
     this.ngZone.runOutsideAngular(() => {
       this.installResizeObserver();
-      combineLatest([
-        this.store.select(selectScene),
-        this.store.select(selectSelectedIds),
-      ])
+      combineLatest([this.store.select(selectScene), this.store.select(selectSelectedIds)])
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(([scene, ids]) => {
           this.currentScene = scene;
@@ -283,8 +308,37 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.dragService.dropped$
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe((evt) => this.onHardscapeDropped(evt.entry, evt.clientX, evt.clientY));
+
+      this.plantDragService.dropped$
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((evt) => this.onPlantDropped(evt.entry, evt.clientX, evt.clientY));
     });
   }
+
+  // F4.4 — re-render when the preview-age signal changes so plant scales
+  // update interactively while the user scrubs the time slider. The signal
+  // lives outside the NgRx store (transient UI state), so we react via an
+  // Angular effect rather than rolling it into the combineLatest above.
+  //
+  // The first effect invocation only registers the dependency (no scene
+  // yet — combineLatest fires the initial render). After that, every
+  // signal change calls `renderCurrent()`, which re-reads the signal and
+  // passes the new value to `renderer.render`.
+  private previewTimePrevious: number | null = null;
+  private previewTimeFirstRun = true;
+  private readonly previewTimeEffect = effect(() => {
+    const value = this.previewTime.previewAgeWeeks();
+    if (this.previewTimeFirstRun) {
+      this.previewTimeFirstRun = false;
+      this.previewTimePrevious = value;
+      return;
+    }
+    if (value === this.previewTimePrevious) return;
+    this.previewTimePrevious = value;
+    if (this.currentScene !== null) {
+      this.renderCurrent();
+    }
+  });
 
   ngOnDestroy(): void {
     this.teardown();
@@ -309,6 +363,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       viewport,
       coreCatalog,
       this.currentSelection,
+      this.previewTime.previewAgeWeeks() ?? undefined,
     );
 
     // Common: convert the pointer position to world coords.
@@ -597,9 +652,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         position: { x: world.x, y: world.y, z },
       },
     };
-    this.store.dispatch(
-      SceneActions.dispatchCommand({ command: addObject(layerId, newObject) }),
-    );
+    this.store.dispatch(SceneActions.dispatchCommand({ command: addObject(layerId, newObject) }));
     this.store.dispatch(SelectionActions.replaceSelection({ ids: [newObject.id] }));
   }
 
@@ -620,6 +673,68 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       }),
     );
     return id;
+  }
+
+  /**
+   * Plant drop — F4.1 / F4.5. Same screen→world plumbing as hardscape, but
+   * branches on `entry.defaultDensity`: a non-zero density turns the drop
+   * into a circular **scatter patch** at the cursor (a v1 "implicit carpet
+   * brush" — the polygon UI for free-hand brushing is deferred). Without a
+   * density, it's a single specimen.
+   *
+   * The patch polygon is a 16-sided regular polygon centred on the drop,
+   * radius `SCATTER_PATCH_RADIUS_MM`. Density comes from the catalog.
+   */
+  private onPlantDropped(entry: PlantEntry, clientX: number, clientY: number): void {
+    const scene = this.currentScene;
+    const viewport = this.currentViewport;
+    if (scene === null || viewport === null) return;
+    const canvas = this.canvasRef.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+    if (
+      clientX < rect.left ||
+      clientX > rect.right ||
+      clientY < rect.top ||
+      clientY > rect.bottom
+    ) {
+      return;
+    }
+    const cssX = clientX - rect.left;
+    const cssY = clientY - rect.top;
+    const world = canvasCssToWorld({ x: cssX, y: cssY }, viewport, {
+      width: rect.width,
+      height: rect.height,
+    });
+    const z = scene.tank.depth / 2;
+    const layerId = this.ensureLayerExists(scene);
+    const id = newObjectId();
+
+    const isCarpet = (entry.defaultDensity ?? 0) > 0;
+    const baseObject: PlantObject = {
+      kind: 'plant',
+      id,
+      ref: { catalog: entry.catalog, id: entry.id, version: entry.version },
+      zone: entry.zone,
+      transform: {
+        ...identityTransform(),
+        position: { x: world.x, y: world.y, z },
+      },
+      growth: { ageWeeks: 0, vigor: 1 },
+    };
+
+    const newObject: PlantObject = isCarpet
+      ? {
+          ...baseObject,
+          scatter: {
+            polygon: scatterPatchPolygon(world.x, world.y, SCATTER_PATCH_RADIUS_MM),
+            density: entry.defaultDensity ?? 30,
+            seed: scene.seed,
+          },
+        }
+      : baseObject;
+
+    this.store.dispatch(SceneActions.dispatchCommand({ command: addObject(layerId, newObject) }));
+    this.store.dispatch(SelectionActions.replaceSelection({ ids: [id] }));
   }
 
   // ── Render lifecycle ───────────────────────────────────────────────────
@@ -643,7 +758,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     // and leave the rest of the scene untouched. Marquee doesn't change
     // any object — the overlay is its only visual.
     const scenePassed = this.buildPreviewScene(scene);
-    this.renderer.render(scenePassed, viewport, coreCatalog, this.currentSelection);
+    const previewAge = this.previewTime.previewAgeWeeks();
+    this.renderer.render(
+      scenePassed,
+      viewport,
+      coreCatalog,
+      this.currentSelection,
+      previewAge ?? undefined,
+    );
   }
 
   private buildPreviewScene(scene: Scene): Scene {
@@ -698,6 +820,33 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 // ─── Pure helpers ─────────────────────────────────────────────────────────
 
 const EPSILON_MM = 0.01;
+
+/**
+ * Default radius (mm) for the implicit carpet brush that fires when the user
+ * drops a plant whose catalog entry carries `defaultDensity`. Small enough
+ * to read as a "patch" at typical tank sizes (≈30 cm of substrate width);
+ * the user can edit the polygon later through the inspector.
+ */
+const SCATTER_PATCH_RADIUS_MM = 60;
+const SCATTER_PATCH_VERTICES = 16;
+
+/**
+ * Build a regular 16-sided polygon centred at `(cx, cy)` with the given
+ * radius. Returned in scene-space mm; consumed by the renderer's scatter
+ * path via `scatterInPolygon`.
+ */
+function scatterPatchPolygon(
+  cx: number,
+  cy: number,
+  radius: number,
+): Array<{ x: number; y: number }> {
+  const out: Array<{ x: number; y: number }> = [];
+  for (let i = 0; i < SCATTER_PATCH_VERTICES; i++) {
+    const a = (i / SCATTER_PATCH_VERTICES) * Math.PI * 2;
+    out.push({ x: cx + Math.cos(a) * radius, y: cy + Math.sin(a) * radius });
+  }
+  return out;
+}
 
 /**
  * Invert the viewport's world-to-canvas projection. Mirrors the helper

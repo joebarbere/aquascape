@@ -6,3 +6,5 @@
 
 export { EditorShellComponent } from './lib/editor-shell.component';
 export { SelectionInspectorComponent } from './lib/selection-inspector.component';
+export { TimeSliderComponent } from './lib/time-slider.component';
+export { PreviewTimeService } from './lib/preview-time.service';

@@ -1,0 +1,26 @@
+{
+  "catalog": "core",
+  "id": "plant.bucephalandra.kedagang",
+  "version": 1,
+  "name": "Bucephalandra Kedagang",
+  "kind": "plant",
+  "zone": "midground",
+  "lighting": "low",
+  "co2": "low",
+  "difficulty": "easy",
+  "color": "#2e5c2a",
+  "naturalSize": { "width": 80, "height": 60, "depth": 60 },
+  "description": "Slow-growing rhizome plant — attach to wood/rock, never bury the rhizome. Iridescent leaves under good light.",
+  "tags": ["rhizome", "midground", "epiphyte"],
+  "silhouette": [
+    { "x": -0.9, "y": -0.5 },
+    { "x": -0.3, "y": -0.9 },
+    { "x": 0.4, "y": -0.85 },
+    { "x": 0.9, "y": -0.2 },
+    { "x": 0.7, "y": 0.5 },
+    { "x": 0.15, "y": 0.95 },
+    { "x": -0.4, "y": 0.85 },
+    { "x": -0.95, "y": 0.3 }
+  ],
+  "growth": { "weeksToMature": 16, "sizeAtZero": 0.6 }
+}

@@ -26,6 +26,12 @@ import rockSeiryuMedium from './data/hardscape/rock-seiryu-medium.json';
 import woodMalaysian from './data/hardscape/wood-malaysian.json';
 import woodManzanita from './data/hardscape/wood-manzanita.json';
 import woodSpiderwood from './data/hardscape/wood-spiderwood.json';
+import plantBucephalandra from './data/plants/bucephalandra.json';
+import plantCryptocoryne from './data/plants/cryptocoryne-wendtii.json';
+import plantEleocharis from './data/plants/eleocharis-acicularis.json';
+import plantMonteCarlo from './data/plants/monte-carlo.json';
+import plantRotala from './data/plants/rotala-rotundifolia.json';
+import plantVallisneria from './data/plants/vallisneria-nana.json';
 import aquaSoilAmazonia from './data/substrates/aqua-soil-amazonia.json';
 import blackPeaGravel from './data/substrates/black-pea-gravel.json';
 import fluorite from './data/substrates/fluorite.json';
@@ -50,6 +56,13 @@ export const CORE_CATALOG_MANIFESTS: readonly unknown[] = [
   woodSpiderwood,
   woodManzanita,
   woodMalaysian,
+  // Plants (Stage 4 F4.1)
+  plantEleocharis,
+  plantMonteCarlo,
+  plantCryptocoryne,
+  plantBucephalandra,
+  plantVallisneria,
+  plantRotala,
 ];
 
 /**
