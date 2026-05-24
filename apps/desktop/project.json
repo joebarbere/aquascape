@@ -1,0 +1,70 @@
+{
+  "name": "desktop",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/desktop/src",
+  "projectType": "application",
+  "tags": ["scope:app", "type:app", "platform:electron"],
+  "targets": {
+    "build-main": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/apps/desktop/main",
+        "main": "apps/desktop/src/main/main.ts",
+        "tsConfig": "apps/desktop/tsconfig.main.json",
+        "assets": []
+      }
+    },
+    "build-preload": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/apps/desktop/preload",
+        "main": "apps/desktop/src/preload/preload.ts",
+        "tsConfig": "apps/desktop/tsconfig.preload.json",
+        "assets": []
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": [
+        "{workspaceRoot}/dist/apps/desktop/main",
+        "{workspaceRoot}/dist/apps/desktop/preload"
+      ],
+      "dependsOn": [{ "target": "build", "projects": ["web"] }, "build-main", "build-preload"],
+      "options": {
+        "command": "node -e \"console.log('desktop build composed: main + preload + web bundle')\""
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build-main", "build-preload"],
+      "options": {
+        "commands": [
+          "nx serve web",
+          "DEV_SERVER_URL=http://localhost:4200 electron dist/apps/desktop/main/src/main/main.js"
+        ],
+        "parallel": true,
+        "_comment": "Runs the Angular dev server and Electron concurrently. Electron will retry-load until the dev server is up (or fail to load and reload manually). For a serialised flow, run `nx serve web` in one shell and `nx run desktop:serve-electron` in another."
+      }
+    },
+    "serve-electron": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build-main", "build-preload"],
+      "options": {
+        "command": "DEV_SERVER_URL=http://localhost:4200 electron dist/apps/desktop/main/src/main/main.js",
+        "_comment": "Run this AFTER `nx serve web` is already up. Useful when you want to control the two processes independently."
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": {
+        "jestConfig": "apps/desktop/jest.config.ts"
+      }
+    }
+  }
+}

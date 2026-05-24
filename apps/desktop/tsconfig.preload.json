@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../dist/apps/desktop/preload",
+    "rootDir": "./src",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "types": [],
+    "declaration": false,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/preload/**/*.ts", "src/shared/**/*.ts"],
+  "exclude": [
+    "src/preload/**/*.spec.ts",
+    "src/preload/**/*.test.ts",
+    "src/preload/global.d.ts",
+    "src/shared/**/*.spec.ts",
+    "src/shared/**/*.test.ts"
+  ]
+}
