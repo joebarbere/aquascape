@@ -1,15 +1,20 @@
-// Component test for AppComponent. Stage 0 F0.6.
+// Component test for AppComponent. Stage 0 F0.6 + F1.1 Phase B.
 //
 // Asserts:
-//   1. The renderer is `attach`ed and `render`ed once after view init.
+//   1. The renderer is `attach`ed and `render`ed once after the first scene
+//      emission from the store.
 //   2. A ResizeObserver callback re-attaches and re-renders.
 //   3. `dispose` is called on component destruction.
+//   4. Updating the store's `Scene` triggers a new render with the new
+//      tank dimensions.
 //
 // The Canvas2DRenderer is swapped out via the SCENE_RENDERER token so the
-// spec runs entirely against an in-memory mock — no real canvas / DOM 2D
-// context dependency.
+// spec runs entirely against an in-memory mock. The NgRx store is replaced
+// with `provideMockStore` + an override of `selectScene` so we control the
+// emitted scenes deterministically.
 
 import { TestBed } from '@angular/core/testing';
+import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import type { Scene } from '@aquascape/domain/scene-model';
 import {
   DIALOG_SERVICE,
@@ -24,6 +29,7 @@ import type {
   SceneRenderer,
   Viewport,
 } from '@aquascape/rendering/renderer-api';
+import { defaultScene, selectScene } from '@aquascape/state';
 
 import { AppComponent } from './app.component';
 import { SCENE_RENDERER } from './renderer.token';
@@ -39,7 +45,7 @@ class MockSceneRenderer implements SceneRenderer {
   readonly dispose = jest.fn<void, []>();
 }
 
-function configure(mockRenderer: MockSceneRenderer): void {
+function configure(mockRenderer: MockSceneRenderer, initialScene = defaultScene()) {
   const platform = createWebPlatform();
   TestBed.configureTestingModule({
     imports: [AppComponent],
@@ -49,12 +55,15 @@ function configure(mockRenderer: MockSceneRenderer): void {
       { provide: DIALOG_SERVICE, useValue: platform.dialogService },
       { provide: STORAGE_SERVICE, useValue: platform.storageService },
       { provide: RENDER_EXPORT_SERVICE, useValue: platform.renderExportService },
+      provideMockStore({
+        selectors: [{ selector: selectScene, value: initialScene }],
+      }),
     ],
   });
 }
 
 describe('AppComponent', () => {
-  it('attaches the renderer and renders once on view init', () => {
+  it('attaches the renderer and renders once when the store emits', () => {
     const renderer = new MockSceneRenderer();
     configure(renderer);
     const fixture = TestBed.createComponent(AppComponent);
@@ -63,7 +72,6 @@ describe('AppComponent', () => {
     expect(renderer.attach).toHaveBeenCalledTimes(1);
     expect(renderer.render).toHaveBeenCalledTimes(1);
 
-    // The attached surface points at the same canvas the template rendered.
     const surface = renderer.attach.mock.calls[0]?.[0];
     expect(surface).toBeDefined();
     expect(surface!.canvas).toBe(
@@ -71,7 +79,6 @@ describe('AppComponent', () => {
     );
     expect(surface!.devicePixelRatio).toBeGreaterThan(0);
 
-    // The viewport is centered on the default 600x360 mm tank.
     const viewport = renderer.render.mock.calls[0]?.[1];
     expect(viewport).toBeDefined();
     expect(viewport!.center).toEqual({ x: 300, y: 180 });
@@ -108,22 +115,25 @@ describe('AppComponent', () => {
     expect(renderer.dispose).toHaveBeenCalled();
   });
 
-  it('does not mutate the scene between renders', () => {
+  it('re-renders with new tank dimensions when the scene updates', () => {
     const renderer = new MockSceneRenderer();
     configure(renderer);
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
 
-    const sceneOnFirstRender = renderer.render.mock.calls[0]?.[0];
-    expect(sceneOnFirstRender).toBeDefined();
-    const sceneSnapshot = JSON.parse(JSON.stringify(sceneOnFirstRender));
+    const store = TestBed.inject(MockStore);
+    const grown: Scene = {
+      ...defaultScene(),
+      tank: { ...defaultScene().tank, width: 1200, height: 450, depth: 450 },
+    };
+    store.overrideSelector(selectScene, grown);
+    store.refreshState();
 
-    const shimClass = (globalThis as unknown as { __ResizeObserverShim__: MockResizeObserverClass })
-      .__ResizeObserverShim__;
-    shimClass.lastInstance!.trigger();
-
-    const sceneOnSecondRender = renderer.render.mock.calls[1]?.[0];
-    expect(sceneOnSecondRender).toBe(sceneOnFirstRender);
-    expect(sceneOnSecondRender).toEqual(sceneSnapshot);
+    const lastCall = renderer.render.mock.calls.at(-1);
+    expect(lastCall).toBeDefined();
+    const [emittedScene, viewport] = lastCall!;
+    expect(emittedScene.tank.width).toBe(1200);
+    // Viewport centre moves with the larger tank.
+    expect(viewport.center).toEqual({ x: 600, y: 225 });
   });
 });

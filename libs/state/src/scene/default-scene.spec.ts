@@ -1,4 +1,4 @@
-// Unit tests for the default scene factory. Stage 0 F0.6.
+// Tests for the default scene factory (moved from apps/web in F1.1 Phase B).
 
 import {
   DEFAULT_TANK_DEPTH_MM,

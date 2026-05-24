@@ -1,11 +1,12 @@
-// Default scene used by the web shell on boot. Stage 0 / F0.6.
+// Default scene factory — moved out of apps/web in F1.1 Phase B so the NgRx
+// scene store owns its initial state. Re-exported from `@aquascape/state` so
+// the app shell (and Stage 1+ feature code) can still read the canonical
+// startup tank.
 //
-// An empty tank with the typical ADA-style 60 cm dimensions. The renderer
-// paints the tank outline + mm grid; substrate / layers / objects are all
-// added by feature work in Stage 1+. The scene is **immutable** — the shell
-// holds the reference produced here and never mutates it; subsequent renders
-// (resize, future state changes) hand the same or a new `Scene` to the
-// renderer.
+// Pure: no I/O, no mutation, deterministic output (seed = 0). The shape
+// mirrors the eventual `.aqua` v1 document body minus the
+// `format` / `schemaVersion` / `meta` envelope, which the document lib
+// (F1.3) wraps/unwraps.
 
 import type { Scene } from '@aquascape/domain/scene-model';
 
@@ -16,11 +17,7 @@ export const DEFAULT_TANK_DEPTH_MM = 360;
 
 /**
  * Return a fresh, empty `Scene` for first-boot. Pure function — no I/O, no
- * mutation, deterministic output (seed = 0).
- *
- * The shape mirrors the eventual `.aqua` v1 document body (without the
- * `format` / `schemaVersion` / `meta` envelope, which is the document lib's
- * job in F1.3).
+ * mutation, deterministic output.
  */
 export function defaultScene(): Scene {
   return {

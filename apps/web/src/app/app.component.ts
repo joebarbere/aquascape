@@ -1,19 +1,19 @@
-// Root component for apps/web — Stage 0 F0.6.
+// Root component for apps/web — Stage 0 F0.6 + F1.1 Phase B.
 //
-// Responsibilities (intentionally minimal):
-//   1. Host a full-window `<canvas>`.
-//   2. On view init, build the default scene + viewport, attach a
-//      SceneRenderer, and render once.
-//   3. On host resize (ResizeObserver — preferred over window.resize for
-//      accuracy across embedded surfaces), recompute the viewport and
-//      re-render.
+// Responsibilities:
+//   1. Host a CSS-grid layout: a sidebar with the tank-setup feature on the
+//      left, the full-height scene canvas on the right.
+//   2. Subscribe to the NgRx scene store; re-render the canvas whenever the
+//      scene changes.
+//   3. On host resize (ResizeObserver), recompute the viewport against the
+//      current scene's tank dimensions and re-render.
 //   4. On destroy, dispose the renderer and disconnect the observer.
 //
-// The component never mutates the `Scene`. The scene reference produced by
-// `defaultScene()` is held read-only and passed to `render` on every
-// invocation; subsequent stages will replace it with state-store-driven
-// scenes but the immutability contract remains.
+// The component never mutates the `Scene`. The feature component dispatches
+// actions; the effect turns them into Commands; the reducer commits a new
+// `Scene`; the selector here emits, and the canvas redraws.
 
+import { CommonModule } from '@angular/common';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -22,11 +22,12 @@ import {
   ElementRef,
   NgZone,
   OnDestroy,
-  OnInit,
   ViewChild,
   inject,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import type { Scene } from '@aquascape/domain/scene-model';
+import { TankSetupComponent } from '@aquascape/features/tank-setup';
 import {
   DIALOG_SERVICE,
   FILE_SERVICE,
@@ -40,8 +41,9 @@ import type {
   StorageService,
 } from '@aquascape/platform/platform-api';
 import type { RenderSurface, SceneRenderer, Viewport } from '@aquascape/rendering/renderer-api';
+import { selectScene } from '@aquascape/state';
+import { Store } from '@ngrx/store';
 
-import { defaultScene } from './default-scene';
 import { defaultViewport } from './default-viewport';
 import { SCENE_RENDERER } from './renderer.token';
 
@@ -49,19 +51,42 @@ import { SCENE_RENDERER } from './renderer.token';
   selector: 'aquascape-root',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<canvas
-    #canvas
-    class="scene-canvas"
-    aria-label="Aquascape design canvas"
-    role="img"
-  ></canvas>`,
+  imports: [CommonModule, TankSetupComponent],
+  template: `
+    <div class="app-grid">
+      <aside class="app-sidebar" aria-label="Tools">
+        <aquascape-tank-setup></aquascape-tank-setup>
+      </aside>
+      <main class="app-canvas-host">
+        <canvas
+          #canvas
+          class="scene-canvas"
+          aria-label="Aquascape design canvas"
+          role="img"
+        ></canvas>
+      </main>
+    </div>
+  `,
   styles: [
     `
       :host {
         display: block;
         width: 100%;
         height: 100%;
+      }
+      .app-grid {
+        display: grid;
+        grid-template-columns: minmax(280px, 360px) 1fr;
+        height: 100%;
+      }
+      .app-sidebar {
+        overflow-y: auto;
+        border-right: 1px solid #e0e0e0;
+        background: #fafafa;
+      }
+      .app-canvas-host {
         position: relative;
+        overflow: hidden;
       }
       .scene-canvas {
         display: block;
@@ -71,49 +96,50 @@ import { SCENE_RENDERER } from './renderer.token';
     `,
   ],
 })
-export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
-  // ── DI (inject() idiom, Angular 18) ────────────────────────────────────
+export class AppComponent implements AfterViewInit, OnDestroy {
+  // ── DI ──────────────────────────────────────────────────────────────────
   private readonly renderer = inject<SceneRenderer>(SCENE_RENDERER);
   private readonly ngZone = inject(NgZone);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly store = inject(Store);
 
-  // Platform services aren't consumed in Stage 0 — injecting them here
-  // proves the composition-root binding works. The references are kept as
-  // private fields rather than `void inject(...)` so the compiler keeps the
-  // DI nodes (TypeScript erases unused `void` expressions in some builds).
+  // Platform services kept on the component so the DI graph fails loudly at
+  // boot if a binding is missing. Feature libs consume them by token, not by
+  // reaching through AppComponent.
   private readonly fileService: FileService = inject(FILE_SERVICE);
   private readonly dialogService: DialogService = inject(DIALOG_SERVICE);
   private readonly storageService: StorageService = inject(STORAGE_SERVICE);
   private readonly renderExportService: RenderExportService = inject(RENDER_EXPORT_SERVICE);
 
-  // ── View refs ──────────────────────────────────────────────────────────
+  // ── View refs ───────────────────────────────────────────────────────────
   @ViewChild('canvas', { static: true })
   private canvasRef!: ElementRef<HTMLCanvasElement>;
 
-  // ── Internal state ─────────────────────────────────────────────────────
-  /** Immutable scene reference. Stage 1+ replaces this with store-driven scenes. */
-  private scene: Scene = defaultScene();
+  // ── Internal state ──────────────────────────────────────────────────────
+  /** Latest scene from the store. Held read-only — never mutated. */
+  private currentScene: Scene | null = null;
   private resizeObserver: ResizeObserver | null = null;
+  private attached = false;
 
-  // ── Lifecycle ──────────────────────────────────────────────────────────
-  ngOnInit(): void {
-    // Reference the platform services so they aren't tree-shaken away and
-    // so a missing provider would fail loudly at boot. TODO(stage-1): wire
-    // these into feature libs through the state layer.
+  // ── Lifecycle ───────────────────────────────────────────────────────────
+  ngAfterViewInit(): void {
     void this.fileService;
     void this.dialogService;
     void this.storageService;
     void this.renderExportService;
-  }
 
-  ngAfterViewInit(): void {
-    // Build the surface from the current canvas client rect. We run the
-    // attach + render outside Angular's zone — the renderer does its own
-    // DPR / resize bookkeeping and we don't want it to trigger Angular
-    // change detection cycles on every frame.
     this.ngZone.runOutsideAngular(() => {
-      this.attachAndRender();
       this.installResizeObserver();
+      // Subscribe to the store outside Angular's zone so each scene change
+      // doesn't trigger a redundant CD cycle. The canvas is independent of
+      // change detection.
+      this.store
+        .select(selectScene)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((scene) => {
+          this.currentScene = scene;
+          this.renderCurrent();
+        });
     });
   }
 
@@ -121,28 +147,32 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.teardown();
   }
 
-  // ── Internals ──────────────────────────────────────────────────────────
-  private attachAndRender(): void {
+  // ── Internals ───────────────────────────────────────────────────────────
+  private renderCurrent(): void {
+    const scene = this.currentScene;
+    if (scene === null) return;
     const canvas = this.canvasRef.nativeElement;
     const surface = this.buildSurface(canvas);
-    this.renderer.attach(surface);
-    this.renderer.render(this.scene, this.computeViewport(surface));
+    if (!this.attached) {
+      this.renderer.attach(surface);
+      this.attached = true;
+    } else {
+      // Re-attach for surface size changes — the renderer's `attach` is
+      // idempotent and the source of truth for backing-store sizing.
+      this.renderer.attach(surface);
+    }
+    this.renderer.render(scene, this.computeViewport(surface, scene));
   }
 
   private installResizeObserver(): void {
-    // Skip in environments without ResizeObserver (older browsers, some test
-    // contexts). The shell still works; resize just won't auto-render.
     const Observer = (globalThis as { ResizeObserver?: typeof ResizeObserver }).ResizeObserver;
     if (typeof Observer !== 'function') return;
 
     const observer = new Observer(() => {
-      this.attachAndRender();
+      this.renderCurrent();
     });
     observer.observe(this.canvasRef.nativeElement);
     this.resizeObserver = observer;
-
-    // Belt-and-braces: also clean up via DestroyRef so the observer is
-    // released even if ngOnDestroy is skipped (e.g. during test teardown).
     this.destroyRef.onDestroy(() => this.teardown());
   }
 
@@ -151,14 +181,14 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
     }
-    this.renderer.dispose();
+    if (this.attached) {
+      this.renderer.dispose();
+      this.attached = false;
+    }
   }
 
   private buildSurface(canvas: HTMLCanvasElement): RenderSurface {
     const rect = canvas.getBoundingClientRect();
-    // Fall back to layout-default sizes if the element has zero size (which
-    // can happen during the very first AfterViewInit on some browsers). The
-    // ResizeObserver will fire again once layout settles.
     const width = rect.width > 0 ? rect.width : canvas.clientWidth || 1;
     const height = rect.height > 0 ? rect.height : canvas.clientHeight || 1;
     const dpr =
@@ -168,10 +198,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     return { canvas, devicePixelRatio: dpr, width, height };
   }
 
-  private computeViewport(surface: RenderSurface): Viewport {
+  private computeViewport(surface: RenderSurface, scene: Scene): Viewport {
     return defaultViewport(
       { width: surface.width, height: surface.height },
-      { width: this.scene.tank.width, height: this.scene.tank.height },
+      { width: scene.tank.width, height: scene.tank.height },
     );
   }
 }

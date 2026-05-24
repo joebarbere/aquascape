@@ -1,27 +1,26 @@
-// Web app bootstrap — Stage 0 F0.6.
+// Web app bootstrap — Stage 0 F0.6 + F1.1 Phase B (NgRx scene store).
 //
 // Composition root for `apps/web`. Wires:
-//   1. Zone-based change detection with event coalescing (Angular 18 default
-//      idiom; `provideExperimentalZonelessChangeDetection` remains
-//      experimental in 18 and would change the rendering loop semantics).
-//   2. Platform-api tokens → either platform-web OR platform-electron,
-//      chosen at runtime by detecting the typed preload bridge
-//      (`window.aquascape`) injected by the Electron shell. The same web
-//      bundle runs in both a normal browser and inside Electron — when
-//      Electron-only features land that need a different bootstrap, we'll
-//      ship a separate renderer entry under `apps/desktop/src/renderer/`.
-//
-// The runtime check is intentionally tiny and one-shot — it does NOT change
-// the rest of the application's behaviour, only the platform binding.
+//   1. Zone-based change detection with event coalescing.
+//   2. Platform-api tokens (FILE/DIALOG/STORAGE/RENDER_EXPORT) bound to the
+//      platform the app boots into (web vs Electron).
+//   3. The NgRx store + effects runtime, plus the scene feature via
+//      `provideSceneStore()`.
+//   4. Store devtools in non-prod (best-effort: silent if the browser
+//      extension isn't installed).
 
 import { bootstrapApplication } from '@angular/platform-browser';
-import { provideZoneChangeDetection } from '@angular/core';
+import { isDevMode, provideZoneChangeDetection } from '@angular/core';
 import {
   DIALOG_SERVICE,
   FILE_SERVICE,
   RENDER_EXPORT_SERVICE,
   STORAGE_SERVICE,
 } from '@aquascape/platform/platform-api/angular';
+import { provideSceneStore } from '@aquascape/state';
+import { provideEffects } from '@ngrx/effects';
+import { provideStore } from '@ngrx/store';
+import { provideStoreDevtools } from '@ngrx/store-devtools';
 
 import { AppComponent } from './app/app.component';
 import { selectPlatform } from './select-platform';
@@ -35,6 +34,15 @@ bootstrapApplication(AppComponent, {
     { provide: DIALOG_SERVICE, useValue: platform.dialogService },
     { provide: STORAGE_SERVICE, useValue: platform.storageService },
     { provide: RENDER_EXPORT_SERVICE, useValue: platform.renderExportService },
+    // NgRx runtime: store + effects, then the scene feature on top.
+    provideStore(),
+    provideEffects(),
+    provideSceneStore(),
+    provideStoreDevtools({
+      maxAge: 25,
+      logOnly: !isDevMode(),
+      autoPause: true,
+    }),
   ],
 }).catch((err: unknown) => {
   // Surface bootstrap failures to the host. Using console.error here is
