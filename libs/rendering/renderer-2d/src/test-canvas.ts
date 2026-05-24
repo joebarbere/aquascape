@@ -136,6 +136,19 @@ export class FakeContext2D {
   closePath(): void {
     this.ops.push({ method: 'closePath', args: [] });
   }
+  arc(
+    x: number,
+    y: number,
+    radius: number,
+    startAngle: number,
+    endAngle: number,
+    counterclockwise = false,
+  ): void {
+    this.ops.push({
+      method: 'arc',
+      args: [x, y, radius, startAngle, endAngle, counterclockwise],
+    });
+  }
   clearRect(x: number, y: number, w: number, h: number): void {
     this.ops.push({ method: 'clearRect', args: [x, y, w, h] });
   }

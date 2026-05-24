@@ -10,6 +10,7 @@ import { provideState } from '@ngrx/store';
 
 import { documentFeature, DocumentEffects } from './document';
 import { sceneFeature, SceneEffects } from './scene';
+import { selectionFeature, SelectionEffects } from './selection';
 
 /**
  * Compose the scene-feature providers (state slice + effects) for a
@@ -51,6 +52,16 @@ export function provideSceneStore(): Array<Provider | EnvironmentProviders> {
  */
 export function provideDocumentStore(): Array<Provider | EnvironmentProviders> {
   return [provideState(documentFeature), provideEffects(DocumentEffects)];
+}
+
+/**
+ * Compose the selection-feature providers. The selection slice is transient
+ * editor state (NOT persisted in the `.aqua` document). Always provide
+ * alongside `provideSceneStore()` so the `setScene` → `selectionWasReset`
+ * effect can fire.
+ */
+export function provideSelectionStore(): Array<Provider | EnvironmentProviders> {
+  return [provideState(selectionFeature), provideEffects(SelectionEffects)];
 }
 
 // Feature surface — actions, selectors, and the default-scene factory.
@@ -107,3 +118,19 @@ export {
   selectStatus,
 } from './document';
 export type { DocumentState, DocumentStatus, PendingDraft, RecentFileEntry } from './document';
+
+// Selection feature (Stage 3 F3.3).
+export {
+  SELECTION_FEATURE_KEY,
+  SelectionActions,
+  SelectionEffects,
+  initialSelectionState,
+  selectFirstSelected,
+  selectHasSelection,
+  selectIsSelected,
+  selectSelectedIds,
+  selectSelectionCount,
+  selectSelectionState,
+  selectionFeature,
+} from './selection';
+export type { SelectionState } from './selection';

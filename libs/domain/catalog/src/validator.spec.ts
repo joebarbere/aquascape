@@ -89,6 +89,67 @@ describe('validateCatalogEntry', () => {
   });
 });
 
+describe('validateCatalogEntry (hardscape, Stage 3 F3.5)', () => {
+  const validHardscape = {
+    catalog: 'core',
+    id: 'rock.test',
+    version: 1,
+    name: 'Test rock',
+    kind: 'hardscape',
+    category: 'rock',
+    naturalSize: { width: 100, height: 80, depth: 60 },
+    color: '#abcdef',
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 0, y: 1 },
+    ],
+  };
+
+  it('accepts a well-formed hardscape entry', () => {
+    expect(validateCatalogEntry(validHardscape)).toEqual({ ok: true });
+  });
+
+  it('accepts an optional subcategory field', () => {
+    expect(
+      validateCatalogEntry({ ...validHardscape, subcategory: 'seiryu' }),
+    ).toEqual({ ok: true });
+  });
+
+  it('rejects an unknown category enum value', () => {
+    expect(
+      validateCatalogEntry({ ...validHardscape, category: 'shrub' }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects a silhouette with fewer than 3 points', () => {
+    expect(
+      validateCatalogEntry({
+        ...validHardscape,
+        silhouette: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ],
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects naturalSize with a zero dimension', () => {
+    expect(
+      validateCatalogEntry({
+        ...validHardscape,
+        naturalSize: { width: 0, height: 80, depth: 60 },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects extraneous properties (additionalProperties: false)', () => {
+    expect(
+      validateCatalogEntry({ ...validHardscape, surprise: true }).ok,
+    ).toBe(false);
+  });
+});
+
 describe('formatError (defensive fallbacks)', () => {
   it('falls back to "invalid" when an AJV error lacks a message field', () => {
     const out = formatError({

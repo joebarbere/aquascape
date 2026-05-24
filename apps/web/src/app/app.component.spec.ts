@@ -32,12 +32,15 @@ import type {
 import {
   defaultScene,
   initialDocumentState,
+  initialSelectionState,
   selectDisplayTitle,
   selectHasPendingDraft,
+  selectHasSelection,
   selectLastError,
   selectPendingDraft,
   selectRecentFiles,
   selectScene,
+  selectSelectedIds,
   selectStatus,
 } from '@aquascape/state';
 
@@ -66,11 +69,15 @@ function configure(mockRenderer: MockSceneRenderer, initialScene = defaultScene(
       { provide: STORAGE_SERVICE, useValue: platform.storageService },
       { provide: RENDER_EXPORT_SERVICE, useValue: platform.renderExportService },
       provideMockStore({
-        // Both feature slices have to be in initialState so child components
-        // (EditorShellComponent reads selectors from `document`) don't crash
-        // before the test overrides anything. selectScene + selectStatus etc.
-        // are still preset for direct assertion.
-        initialState: { document: initialDocumentState() },
+        // Every feature slice the composed children read from has to be in
+        // initialState so child components (EditorShellComponent reads
+        // `document`, SelectionInspectorComponent reads `selection`, etc.)
+        // don't crash before the test overrides anything. Selector values
+        // are preset for direct assertion.
+        initialState: {
+          document: initialDocumentState(),
+          selection: initialSelectionState(),
+        },
         selectors: [
           { selector: selectScene, value: initialScene },
           { selector: selectDisplayTitle, value: 'Untitled' },
@@ -79,6 +86,8 @@ function configure(mockRenderer: MockSceneRenderer, initialScene = defaultScene(
           { selector: selectHasPendingDraft, value: false },
           { selector: selectPendingDraft, value: null },
           { selector: selectLastError, value: null },
+          { selector: selectSelectedIds, value: [] },
+          { selector: selectHasSelection, value: false },
         ],
       }),
     ],

@@ -30,12 +30,21 @@
 // "convert" it into canvas space. There is one coordinate space; the 3D
 // renderer (Stage 10) consumes the same numbers.
 
-import type { Catalog, SubstrateEntry } from '@aquascape/domain/catalog';
-import { project2D, sampleCatmullRom, seededHash01 } from '@aquascape/domain/geometry';
+import type { Catalog, HardscapeEntry, SubstrateEntry } from '@aquascape/domain/catalog';
+import {
+  pointInPolygon,
+  project2D,
+  sampleCatmullRom,
+  seededHash01,
+} from '@aquascape/domain/geometry';
 import type { Vec2 } from '@aquascape/domain/geometry';
 import type {
   CatalogRef,
+  HardscapeObject,
+  LayerId,
+  ObjectId,
   Scene,
+  SceneObject,
   SubstrateRegion,
   TankStyle,
 } from '@aquascape/domain/scene-model';
@@ -192,7 +201,12 @@ export class Canvas2DRenderer implements SceneRenderer {
 
   // ─── render ─────────────────────────────────────────────────────────────
 
-  render(scene: Scene, viewport: Viewport, catalog?: Catalog): void {
+  render(
+    scene: Scene,
+    viewport: Viewport,
+    catalog?: Catalog,
+    selection?: ReadonlyArray<ObjectId>,
+  ): void {
     const s = this.surface;
     const ctx = this.ctx;
     if (s === null || ctx === null) return;
@@ -255,10 +269,17 @@ export class Canvas2DRenderer implements SceneRenderer {
     this.drawWaterTint(ctx, tankCorner0, tankCornerW, scene.tank.style);
     this.drawFrame(ctx, tankCorner0, tankCornerW, scene.tank.style);
 
-    // F3.x will add hardscape sprite + selection-handle rendering here.
-    // F4.x will add plant rendering here.
-    // Layers / objects exist on `scene` but Stage 0–2 don't iterate them
-    // for object rendering yet — the goal is tank + substrate baseline.
+    // F3.3 — paint hardscape silhouettes back-to-front (layers low→high,
+    // objects within a layer low→high). Selection handles render LAST so
+    // they sit visually on top of every object, even when selecting a
+    // back-layer item.
+    const selectedSet = selection !== undefined && selection.length > 0 ? new Set(selection) : null;
+    this.drawHardscape(ctx, scene, catalog, oneCssPxInMm);
+    if (selectedSet !== null) {
+      this.drawSelectionHandles(ctx, scene, catalog, oneCssPxInMm, selectedSet);
+    }
+
+    // F4.x will add plant rendering here (over hardscape, under handles).
   }
 
   // ─── F1.2 Phase C — tank-styling helpers ──────────────────────────────
@@ -448,12 +469,33 @@ export class Canvas2DRenderer implements SceneRenderer {
 
   // ─── hitTest ────────────────────────────────────────────────────────────
 
-  hitTest(_point: Vec2, _scene: Scene, _viewport: Viewport): HitResult | null {
-    // Stage 0 has no objects to hit — the renderer only paints tank +
-    // grid. F3.3 lands real hit-testing (rotated-rect tests against object
-    // bounds, selection-handle ring at the current zoom). Until then we
-    // return null deterministically so consumers can wire selection state
-    // through the editor shell without a stub.
+  hitTest(
+    point: Vec2,
+    scene: Scene,
+    viewport: Viewport,
+    catalog?: Catalog,
+  ): HitResult | null {
+    // The surface is the source of truth for canvas dimensions. Without an
+    // attach we have no frame of reference — return null.
+    const s = this.surface;
+    if (s === null) return null;
+
+    const world = canvasCssToWorld(point, viewport, { width: s.width, height: s.height });
+
+    // Iterate **front-to-back** so the visually-topmost object wins:
+    // layers are stored back-to-front (index 0 furthest back), and within
+    // a layer objects are stored back-to-front too. Reverse both.
+    for (let li = scene.layers.length - 1; li >= 0; li--) {
+      const layer = scene.layers[li]!;
+      if (!layer.visible) continue;
+      for (let oi = layer.objects.length - 1; oi >= 0; oi--) {
+        const obj = layer.objects[oi]!;
+        if (obj.kind !== 'hardscape') continue; // Stage 3 hit-tests hardscape only.
+        if (objectContainsWorldPoint(obj, world, catalog)) {
+          return { objectId: obj.id, layerId: layer.id };
+        }
+      }
+    }
     return null;
   }
 
@@ -613,6 +655,173 @@ export class Canvas2DRenderer implements SceneRenderer {
 
     ctx.restore();
   }
+
+  // ─── F3.3 / F3.5 — Hardscape rendering ────────────────────────────────
+  //
+  // Iterate scene.layers (back-to-front) and within each layer iterate
+  // objects (back-to-front). Per HardscapeObject: resolve the catalog
+  // entry, apply the world transform, then path the silhouette polygon
+  // and fill with the catalog material color. Wood gets a darker outline
+  // stroke; rock gets a subtle highlight band hint. No catalog → skip
+  // (the hit-test fallback is for testing, but visual rendering needs
+  // the silhouette).
+
+  private drawHardscape(
+    ctx: CanvasRenderingContext2D,
+    scene: Scene,
+    catalog: Catalog | undefined,
+    oneCssPxInMm: number,
+  ): void {
+    for (const layer of scene.layers) {
+      if (!layer.visible) continue;
+      const layerAlpha = clampOpacity(layer.opacity);
+      for (const obj of layer.objects) {
+        if (obj.kind !== 'hardscape') continue;
+        const entry = resolveHardscapeEntry(obj.ref, catalog);
+        if (entry === null) continue; // No silhouette to draw — silently skip.
+        this.paintHardscape(ctx, obj as HardscapeObject, entry, oneCssPxInMm, layerAlpha);
+      }
+    }
+  }
+
+  private paintHardscape(
+    ctx: CanvasRenderingContext2D,
+    obj: HardscapeObject,
+    entry: HardscapeEntry,
+    oneCssPxInMm: number,
+    layerAlpha: number,
+  ): void {
+    ctx.save();
+    ctx.globalAlpha = layerAlpha;
+    // Apply the object transform: translate, rotate, scale.
+    ctx.translate(obj.transform.position.x, obj.transform.position.y);
+    if (obj.transform.rotation.z !== 0) {
+      ctx.rotate(obj.transform.rotation.z);
+    }
+    const sx = obj.transform.scale.x * (obj.transform.flipX ? -1 : 1) * entry.naturalSize.width * 0.5;
+    const sy = obj.transform.scale.y * (obj.transform.flipY ? -1 : 1) * entry.naturalSize.height * 0.5;
+    if (sx === 0 || sy === 0) {
+      ctx.restore();
+      return;
+    }
+    ctx.scale(sx, sy);
+    // Silhouette is in normalized [-1, 1]; after the scale above, lives
+    // at the object's natural footprint.
+    pathPolygon(ctx, entry.silhouette);
+    ctx.fillStyle = entry.color;
+    ctx.fill();
+
+    // Outline at 1 CSS px equivalent — needs to invert the per-axis scale
+    // so the line width stays 1 px regardless of object size. Use the
+    // mean of |sx|, |sy| as a single-line-width proxy; non-uniform scale
+    // produces slightly anisotropic strokes, which is acceptable.
+    const meanScale = (Math.abs(sx) + Math.abs(sy)) * 0.5;
+    if (meanScale > 0) {
+      ctx.lineWidth = oneCssPxInMm / meanScale;
+      ctx.strokeStyle = entry.category === 'wood' ? '#2a1a0e' : '#222';
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // ─── F3.3 — Selection handles ─────────────────────────────────────────
+  //
+  // Per selected object: draw an axis-aligned bounding box in screen-px
+  // line width + four corner scale handles + one rotate handle above. The
+  // handles are drawn AFTER all hardscape so they always sit on top.
+
+  private drawSelectionHandles(
+    ctx: CanvasRenderingContext2D,
+    scene: Scene,
+    catalog: Catalog | undefined,
+    oneCssPxInMm: number,
+    selected: Set<ObjectId>,
+  ): void {
+    for (const layer of scene.layers) {
+      if (!layer.visible) continue;
+      for (const obj of layer.objects) {
+        if (obj.kind !== 'hardscape') continue;
+        if (!selected.has(obj.id)) continue;
+        const entry = resolveHardscapeEntry(obj.ref, catalog);
+        if (entry === null) continue;
+        this.paintSelectionHandles(ctx, obj as HardscapeObject, entry, oneCssPxInMm);
+      }
+    }
+  }
+
+  private paintSelectionHandles(
+    ctx: CanvasRenderingContext2D,
+    obj: HardscapeObject,
+    entry: HardscapeEntry,
+    oneCssPxInMm: number,
+  ): void {
+    const halfW = obj.transform.scale.x * entry.naturalSize.width * 0.5;
+    const halfH = obj.transform.scale.y * entry.naturalSize.height * 0.5;
+    if (halfW === 0 || halfH === 0) return;
+
+    ctx.save();
+    ctx.translate(obj.transform.position.x, obj.transform.position.y);
+    if (obj.transform.rotation.z !== 0) {
+      ctx.rotate(obj.transform.rotation.z);
+    }
+
+    ctx.lineWidth = SELECTION_LINE_WIDTH_PX * oneCssPxInMm;
+    ctx.strokeStyle = SELECTION_COLOR;
+    // Bounding box.
+    ctx.strokeRect(-halfW, -halfH, 2 * halfW, 2 * halfH);
+
+    // Four corner scale handles — square fills.
+    const handleSizeMm = SELECTION_HANDLE_PX * oneCssPxInMm;
+    ctx.fillStyle = '#fff';
+    for (const [hx, hy] of [
+      [-halfW, -halfH],
+      [halfW, -halfH],
+      [halfW, halfH],
+      [-halfW, halfH],
+    ] as const) {
+      ctx.fillRect(hx - handleSizeMm / 2, hy - handleSizeMm / 2, handleSizeMm, handleSizeMm);
+      ctx.strokeRect(hx - handleSizeMm / 2, hy - handleSizeMm / 2, handleSizeMm, handleSizeMm);
+    }
+
+    // Rotate handle: small circle above the bbox, connected by a stalk.
+    const stalkLengthMm = SELECTION_ROTATE_STALK_PX * oneCssPxInMm;
+    ctx.beginPath();
+    ctx.moveTo(0, halfH);
+    ctx.lineTo(0, halfH + stalkLengthMm);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, halfH + stalkLengthMm, handleSizeMm / 2, 0, Math.PI * 2);
+    ctx.fillStyle = SELECTION_COLOR;
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ─── F3.3 / F3.5 — Hardscape render helpers (module-level pure) ───────────
+
+const SELECTION_COLOR = '#3a8eff';
+const SELECTION_LINE_WIDTH_PX = 1.5;
+const SELECTION_HANDLE_PX = 8;
+const SELECTION_ROTATE_STALK_PX = 18;
+
+function pathPolygon(
+  ctx: CanvasRenderingContext2D,
+  points: ReadonlyArray<{ x: number; y: number }>,
+): void {
+  if (points.length === 0) return;
+  ctx.beginPath();
+  ctx.moveTo(points[0]!.x, points[0]!.y);
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineTo(points[i]!.x, points[i]!.y);
+  }
+  ctx.closePath();
+}
+
+function clampOpacity(v: number): number {
+  if (!Number.isFinite(v)) return 1;
+  if (v < 0) return 0;
+  if (v > 1) return 1;
+  return v;
 }
 
 // ─── Substrate render helpers (module-level pure) ─────────────────────────
@@ -639,3 +848,97 @@ function stringSeed(id: string): number {
   }
   return h | 0;
 }
+
+// ─── F3.3 — hit-test helpers (pure, no DOM access) ────────────────────────
+
+/**
+ * Invert the viewport's world-to-canvas transform applied in `render`.
+ * Returns world mm coords. Mirrors the forward transform in `render` step-
+ * by-step: subtract canvas-center, scale by 1/zoom with the canvas y-flip,
+ * rotate by +viewport.rotation, add viewport.center.
+ */
+function canvasCssToWorld(
+  pointCss: Vec2,
+  viewport: Viewport,
+  canvas: { width: number; height: number },
+): Vec2 {
+  // 1) Relative to canvas centre.
+  const dxPx = pointCss.x - canvas.width / 2;
+  const dyPx = pointCss.y - canvas.height / 2;
+  // 2) Pixels → world mm, including the canvas-y-flip.
+  const dxMm = dxPx / viewport.zoom;
+  const dyMm = -dyPx / viewport.zoom;
+  // 3) Inverse of the world-space `rotate(-viewport.rotation)`: rotate by
+  //    +viewport.rotation.
+  const cos = Math.cos(viewport.rotation);
+  const sin = Math.sin(viewport.rotation);
+  const rxMm = dxMm * cos - dyMm * sin;
+  const ryMm = dxMm * sin + dyMm * cos;
+  // 4) Offset by the centre to land in world coords.
+  return { x: viewport.center.x + rxMm, y: viewport.center.y + ryMm };
+}
+
+/**
+ * True if `worldPoint` falls inside the object's silhouette (catalog-aware)
+ * or its naturalSize-scaled axis-aligned bbox (catalog-omitted fallback).
+ *
+ * The object's transform is inverted: translate by -position, rotate by
+ * -rotation.z, then divide by `(scale.x × naturalSize.width × 0.5)` and
+ * `(scale.y × naturalSize.height × 0.5)` so the point lands in the
+ * silhouette's normalized [-1, 1] space. flipX / flipY are absorbed by
+ * flipping the sign of the scale divisor.
+ */
+function objectContainsWorldPoint(
+  obj: SceneObject,
+  worldPoint: Vec2,
+  catalog: Catalog | undefined,
+): boolean {
+  if (obj.kind !== 'hardscape') return false;
+  const hardscape = obj as HardscapeObject;
+  const entry = resolveHardscapeEntry(hardscape.ref, catalog);
+
+  // Translate to object-relative.
+  const dx = worldPoint.x - hardscape.transform.position.x;
+  const dy = worldPoint.y - hardscape.transform.position.y;
+  // Inverse-rotate by transform.rotation.z (rotate by -theta).
+  const theta = hardscape.transform.rotation.z;
+  const cos = Math.cos(theta);
+  const sin = Math.sin(theta);
+  const rx = dx * cos + dy * sin;
+  const ry = -dx * sin + dy * cos;
+
+  // Compute half-extents in world mm, signed by flip.
+  const naturalW = entry?.naturalSize.width ?? HARDSCAPE_FALLBACK_NATURAL_MM;
+  const naturalH = entry?.naturalSize.height ?? HARDSCAPE_FALLBACK_NATURAL_MM;
+  const sxRaw = hardscape.transform.scale.x * (hardscape.transform.flipX ? -1 : 1);
+  const syRaw = hardscape.transform.scale.y * (hardscape.transform.flipY ? -1 : 1);
+  const halfW = (naturalW * 0.5) * sxRaw;
+  const halfH = (naturalH * 0.5) * syRaw;
+  if (halfW === 0 || halfH === 0) return false;
+
+  const lx = rx / halfW;
+  const ly = ry / halfH;
+
+  // Fallback: AABB in normalized space when no catalog silhouette is available.
+  if (entry === null) {
+    return lx >= -1 && lx <= 1 && ly >= -1 && ly <= 1;
+  }
+  return pointInPolygon({ x: lx, y: ly }, entry.silhouette);
+}
+
+function resolveHardscapeEntry(
+  ref: CatalogRef,
+  catalog: Catalog | undefined,
+): HardscapeEntry | null {
+  if (catalog === undefined) return null;
+  const entry = catalog.get({ catalog: ref.catalog, id: ref.id });
+  if (entry === null || entry.kind !== 'hardscape') return null;
+  return entry;
+}
+
+/** Fallback hardscape footprint when no catalog is provided to hit-test. */
+const HARDSCAPE_FALLBACK_NATURAL_MM = 100;
+
+// Suppress "unused" warnings for types reserved for future use here.
+void ((): LayerId | undefined => undefined);
+void ((): ObjectId | undefined => undefined);

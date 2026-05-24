@@ -1,11 +1,11 @@
-// Public API for @aquascape/domain/catalog. Stage 2 F2.4.
+// Public API for @aquascape/domain/catalog. Stage 2 F2.4 + Stage 3 F3.5.
 //
 // Content catalogs (substrate / tank / hardscape / plant / equipment /
-// livestock) that the editor references via `CatalogRef`. Stage 2 ships the
-// substrate kind + a content-type-agnostic loader/validator. Future stages
-// (3 hardscape, 4 plant, 7 livestock + equipment, 8 community) add manifest
-// branches under the same `oneOf` and per-kind manifests under
-// `./data/<kind>/`.
+// livestock) that the editor references via `CatalogRef`. Stages 2 + 3
+// ship `substrate` + `hardscape` kinds plus a content-type-agnostic
+// loader/validator. Future stages (4 plant, 7 livestock + equipment,
+// 8 community) add manifest branches under the same `oneOf` and per-kind
+// manifests under `./data/<kind>/`.
 
 // ─── Types ────────────────────────────────────────────────────────────────
 export type {
@@ -13,6 +13,7 @@ export type {
   CatalogEntry,
   CatalogEntryBase,
   CatalogKind,
+  HardscapeEntry,
   HexColor,
   Millimetres,
   SubstrateEntry,

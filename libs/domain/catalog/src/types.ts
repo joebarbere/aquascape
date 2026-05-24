@@ -65,13 +65,45 @@ export interface SubstrateEntry extends CatalogEntryBase {
   grainSize?: Millimetres;
 }
 
+// ─── Hardscape (Stage 3 F3.5) ─────────────────────────────────────────────
+
+/**
+ * A rock / driftwood / decorative hardscape item. Renders as a closed
+ * polygon silhouette filled with `color`; future stages may attach 3D
+ * meshes (Stage 10) or photorealistic textures, but the silhouette path
+ * stays the deterministic, offline-rendable baseline.
+ *
+ * - `category` drives the palette's filter tabs in the hardscape-tool UI.
+ * - `subcategory` is a free string (e.g. 'seiryu', 'manzanita') used as a
+ *   secondary filter pill.
+ * - `naturalSize` is the world-space footprint at `transform.scale = 1`.
+ *   The renderer scales the normalized silhouette by `naturalSize × 0.5`
+ *   then by `transform.scale`, so the silhouette spans `naturalSize`
+ *   when the user hasn't resized the object.
+ * - `silhouette` is a closed convex-ish polygon in normalized `[-1, 1]`
+ *   space (origin = object center). At least 3 points; the renderer
+ *   implicitly closes the path back to point[0].
+ */
+export interface HardscapeEntry extends CatalogEntryBase {
+  kind: 'hardscape';
+  category: 'rock' | 'wood' | 'other';
+  /** Secondary filter pill: 'seiryu' / 'manzanita' / etc. Free-form. */
+  subcategory?: string;
+  /** World-space footprint at `transform.scale = 1`. */
+  naturalSize: { width: Millimetres; height: Millimetres; depth: Millimetres };
+  /** Base fill color (sRGB hex). Stage 10's 3D renderer ignores this. */
+  color: HexColor;
+  /** Closed polygon in normalized `[-1, 1]` space. ≥ 3 points. */
+  silhouette: ReadonlyArray<{ x: number; y: number }>;
+}
+
 // ─── Placeholders for later stages ────────────────────────────────────────
 //
 // Each future kind adds a branch here AND a matching schema branch. Until
 // then the loader rejects unknown kinds (verifiable via tests) so a typo'd
 // manifest doesn't silently slip through.
 
-export type CatalogEntry = SubstrateEntry;
+export type CatalogEntry = SubstrateEntry | HardscapeEntry;
 
 /**
  * Lookup table built from a validated catalog: `(catalog, id) -> entry`.

@@ -1,0 +1,25 @@
+{
+  "catalog": "core",
+  "id": "rock.ohko.medium",
+  "version": 1,
+  "name": "Ohko Stone (Dragon Stone)",
+  "kind": "hardscape",
+  "category": "rock",
+  "subcategory": "ohko",
+  "naturalSize": { "width": 160, "height": 130, "depth": 110 },
+  "color": "#9c8159",
+  "description": "Tan-brown porous stone with deep pits and crevices. Inert chemistry — safe for planted tanks of any pH.",
+  "tags": ["rock", "ohko", "dragon-stone", "planted"],
+  "silhouette": [
+    { "x": -0.85, "y": -0.9 },
+    { "x": -0.15, "y": -0.95 },
+    { "x": 0.5, "y": -0.8 },
+    { "x": 0.95, "y": -0.4 },
+    { "x": 0.85, "y": 0.15 },
+    { "x": 0.95, "y": 0.6 },
+    { "x": 0.3, "y": 0.9 },
+    { "x": -0.4, "y": 0.95 },
+    { "x": -0.9, "y": 0.55 },
+    { "x": -0.95, "y": -0.1 }
+  ]
+}

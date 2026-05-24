@@ -160,6 +160,41 @@ export interface ReshapeObjectCommand {
 }
 
 /**
+ * Flip an object about its local x- or y-axis (`flipX` or `flipY` on the
+ * transform). Self-inverse — applying twice returns to the original state,
+ * so `invertCommand` returns the same command back. Stage 3 F3.3.
+ *
+ * Locked layers block this (it's an object-level edit, unlike `SetTank
+ * Dimensions`).
+ */
+export interface MirrorObjectCommand {
+  kind: 'MirrorObject';
+  objectId: ObjectId;
+  axis: 'x' | 'y';
+}
+
+/**
+ * Move an object to a new index within its current layer's `objects` array.
+ * Within-layer z-position is just the index — the renderer paints
+ * objects[0] first (back) and objects[length-1] last (front). Stage 3 F3.4.
+ *
+ * APPLY SEMANTICS
+ *  - Validates `toIndex` ∈ [0, layer.objects.length). Out-of-range rejects
+ *    with `'invalid'`.
+ *  - Removes the object from its current index and re-inserts at `toIndex`.
+ *  - No-op when the object is already at `toIndex`.
+ *  - Blocked by `layer.locked` (object-level edit).
+ *
+ * INVERT
+ *  - Inverse restores the object to its previous index. Symmetric.
+ */
+export interface ReorderObjectInLayerCommand {
+  kind: 'ReorderObjectInLayer';
+  objectId: ObjectId;
+  toIndex: number;
+}
+
+/**
  * Set the tank's interior dimensions (mm). Structural / global operation;
  * NOT blocked by `locked` on any layer — `SetTankDimensions` is treated like
  * `RemoveLayer` and `ReorderLayers`.
@@ -324,6 +359,8 @@ export type Command =
   | RemoveObjectCommand
   | MoveObjectCommand
   | ReshapeObjectCommand
+  | MirrorObjectCommand
+  | ReorderObjectInLayerCommand
   | SetTankDimensionsCommand
   | SetTankStyleCommand
   | SubstrateCommand
@@ -596,6 +633,48 @@ export function applyCommand(scene: Scene, command: Command): CommandResult {
       return ok(replaceLayer(scene, found.layer.id, { ...found.layer, objects }));
     }
 
+    case 'MirrorObject': {
+      const found = getObjectWithLayer(scene, command.objectId);
+      if (found === null) {
+        return rejected('not-found', `MirrorObject: object "${command.objectId}" not found`);
+      }
+      if (found.layer.locked) {
+        return rejected('locked', `MirrorObject: layer "${found.layer.id}" is locked`);
+      }
+      const transform: Transform =
+        command.axis === 'x'
+          ? { ...found.object.transform, flipX: !found.object.transform.flipX }
+          : { ...found.object.transform, flipY: !found.object.transform.flipY };
+      const nextObject: SceneObject = { ...found.object, transform };
+      const objects = found.layer.objects.map((o) => (o.id === command.objectId ? nextObject : o));
+      return ok(replaceLayer(scene, found.layer.id, { ...found.layer, objects }));
+    }
+
+    case 'ReorderObjectInLayer': {
+      const found = getObjectWithLayer(scene, command.objectId);
+      if (found === null) {
+        return rejected('not-found', `ReorderObjectInLayer: object "${command.objectId}" not found`);
+      }
+      if (found.layer.locked) {
+        return rejected('locked', `ReorderObjectInLayer: layer "${found.layer.id}" is locked`);
+      }
+      const fromIndex = found.layer.objects.findIndex((o) => o.id === command.objectId);
+      const len = found.layer.objects.length;
+      if (command.toIndex < 0 || command.toIndex >= len) {
+        return rejected(
+          'invalid',
+          `ReorderObjectInLayer: toIndex ${command.toIndex} is out of range [0, ${len - 1}]`,
+        );
+      }
+      if (fromIndex === command.toIndex) {
+        return ok(scene); // No-op, identity result.
+      }
+      const objects = found.layer.objects.slice();
+      const [moved] = objects.splice(fromIndex, 1);
+      objects.splice(command.toIndex, 0, moved!);
+      return ok(replaceLayer(scene, found.layer.id, { ...found.layer, objects }));
+    }
+
     case 'SetTankDimensions': {
       const { width, height, depth } = command.dimensions;
       const validDim = (n: number): boolean =>
@@ -828,6 +907,29 @@ export function invertCommand(scene: Scene, command: Command): Command {
       };
     }
 
+    case 'MirrorObject': {
+      // Self-inverse: applying MirrorObject twice returns to the original.
+      // Same command works as its own inverse — but only when the target
+      // object actually exists; for a missing id (which apply would reject)
+      // the inverse is a Noop so undo-stack replays stay clean.
+      const found = getObjectWithLayer(scene, command.objectId);
+      if (found === null) return { kind: 'Noop' };
+      return { kind: 'MirrorObject', objectId: command.objectId, axis: command.axis };
+    }
+
+    case 'ReorderObjectInLayer': {
+      const found = getObjectWithLayer(scene, command.objectId);
+      if (found === null) {
+        return { kind: 'Noop' };
+      }
+      const previousIndex = found.layer.objects.findIndex((o) => o.id === command.objectId);
+      return {
+        kind: 'ReorderObjectInLayer',
+        objectId: command.objectId,
+        toIndex: previousIndex,
+      };
+    }
+
     case 'SetTankDimensions': {
       // Capture pre-apply state. We populate `restoredPositions` for EVERY
       // object, not just those that would be clamped — simple + correct
@@ -970,6 +1072,23 @@ export const reshapeObject = (objectId: ObjectId, transform: Transform): Reshape
   kind: 'ReshapeObject',
   objectId,
   transform,
+});
+
+/** Build a {@link MirrorObjectCommand}. Self-inverse — applying twice is identity. */
+export const mirrorObject = (objectId: ObjectId, axis: 'x' | 'y'): MirrorObjectCommand => ({
+  kind: 'MirrorObject',
+  objectId,
+  axis,
+});
+
+/** Build a {@link ReorderObjectInLayerCommand}. `toIndex` ∈ [0, layer.objects.length). */
+export const reorderObjectInLayer = (
+  objectId: ObjectId,
+  toIndex: number,
+): ReorderObjectInLayerCommand => ({
+  kind: 'ReorderObjectInLayer',
+  objectId,
+  toIndex,
 });
 
 /**

@@ -1,0 +1,345 @@
+// Floating selection inspector. Stage 3 F3.4.
+//
+// Compact toolbar that appears at the top-right when at least one object
+// is selected. Buttons:
+//   - Mirror H / Mirror V: dispatch MirrorObject for every selected id.
+//   - Duplicate: AddObject of a deep-cloned object with a new id, offset
+//     by 20 mm so the clone is visually distinct from its source.
+//   - Delete: RemoveObject for every selected id.
+//   - Z up / Z down: ReorderObjectInLayer ±1 within the object's layer
+//     (clamped to layer bounds).
+//
+// Keyboard shortcuts (Stage 3 F3.4):
+//   - Delete / Backspace → Delete
+//   - Cmd/Ctrl+D → Duplicate
+//   - ] / [ → Z up / Z down
+// These are bound at the document level via @HostListener so the user
+// doesn't need to focus the toolbar to use them.
+
+import { CommonModule } from '@angular/common';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  HostListener,
+  inject,
+} from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+
+import {
+  asObjectId,
+  identityTransform,
+  mirrorObject,
+  removeObject,
+  reorderObjectInLayer,
+  addObject,
+  type LayerId,
+  type ObjectId,
+  type Scene,
+  type SceneObject,
+} from '@aquascape/domain/scene-model';
+import {
+  SceneActions,
+  SelectionActions,
+  selectHasSelection,
+  selectScene,
+  selectSelectedIds,
+} from '@aquascape/state';
+import { Store } from '@ngrx/store';
+
+const DUPLICATE_OFFSET_MM = 20;
+
+@Component({
+  selector: 'aquascape-selection-inspector',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [CommonModule],
+  template: `
+    @if (hasSelection()) {
+      <aside class="selection-inspector" role="toolbar" aria-label="Selection actions">
+        <button
+          type="button"
+          (click)="onMirrorH()"
+          aria-label="Mirror horizontal"
+          title="Mirror horizontal"
+        >
+          ⇋
+        </button>
+        <button
+          type="button"
+          (click)="onMirrorV()"
+          aria-label="Mirror vertical"
+          title="Mirror vertical"
+        >
+          ⥯
+        </button>
+        <button
+          type="button"
+          (click)="onDuplicate()"
+          aria-label="Duplicate (Cmd/Ctrl+D)"
+          title="Duplicate (Cmd/Ctrl+D)"
+        >
+          ⎘
+        </button>
+        <button
+          type="button"
+          (click)="onZUp()"
+          aria-label="Bring forward (])"
+          title="Bring forward (])"
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          (click)="onZDown()"
+          aria-label="Send backward ([)"
+          title="Send backward ([)"
+        >
+          ↓
+        </button>
+        <button
+          type="button"
+          class="danger"
+          (click)="onDelete()"
+          aria-label="Delete (Del)"
+          title="Delete (Del)"
+        >
+          ✕
+        </button>
+      </aside>
+    }
+  `,
+  styles: [
+    `
+      :host {
+        display: contents;
+      }
+      .selection-inspector {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: flex;
+        gap: 4px;
+        padding: 6px;
+        background: #20232a;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        z-index: 5;
+      }
+      button {
+        min-width: 32px;
+        height: 32px;
+        padding: 0 8px;
+        background: #2c3038;
+        color: #fff;
+        border: 1px solid #3a3f48;
+        border-radius: 4px;
+        cursor: pointer;
+        font: inherit;
+        font-size: 16px;
+        line-height: 1;
+      }
+      button:hover,
+      button:focus-visible {
+        background: #3a3f48;
+        outline: none;
+      }
+      button.danger {
+        background: #7a1f1a;
+        border-color: #a32d26;
+      }
+      button.danger:hover {
+        background: #a32d26;
+      }
+    `,
+  ],
+})
+export class SelectionInspectorComponent {
+  private readonly store = inject(Store);
+  private readonly destroyRef = inject(DestroyRef);
+
+  readonly hasSelection = toSignal(this.store.select(selectHasSelection), {
+    initialValue: false,
+  });
+
+  // Hold live copies of the store values in private fields rather than
+  // signals: the action handlers need synchronous reads, and signals from
+  // observables go through a microtask that interferes with the test
+  // configure-fixture-click-assert flow. The subscriptions tear down on
+  // component destroy via DestroyRef.
+  private currentSelectedIds: readonly ObjectId[] = [];
+  private currentScene: Scene | null = null;
+
+  constructor() {
+    this.store
+      .select(selectSelectedIds)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((ids) => {
+        this.currentSelectedIds = ids;
+      });
+    this.store
+      .select(selectScene)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((scene) => {
+        this.currentScene = scene;
+      });
+  }
+
+  private selectedIds(): readonly ObjectId[] {
+    return this.currentSelectedIds;
+  }
+  private scene(): Scene | null {
+    return this.currentScene;
+  }
+
+  // ── Actions ────────────────────────────────────────────────────────────
+
+  onMirrorH(): void {
+    for (const id of this.selectedIds()) {
+      this.store.dispatch(SceneActions.dispatchCommand({ command: mirrorObject(id, 'x') }));
+    }
+  }
+
+  onMirrorV(): void {
+    for (const id of this.selectedIds()) {
+      this.store.dispatch(SceneActions.dispatchCommand({ command: mirrorObject(id, 'y') }));
+    }
+  }
+
+  onDelete(): void {
+    for (const id of this.selectedIds()) {
+      this.store.dispatch(SceneActions.dispatchCommand({ command: removeObject(id) }));
+    }
+    this.store.dispatch(SelectionActions.clearSelection());
+  }
+
+  onDuplicate(): void {
+    const scene = this.scene();
+    if (scene === null) return;
+    const newlySelected: string[] = [];
+    for (const id of this.selectedIds()) {
+      const found = findObject(scene, id);
+      if (found === null) continue;
+      const clone = cloneObjectWithOffset(found.object, DUPLICATE_OFFSET_MM);
+      this.store.dispatch(
+        SceneActions.dispatchCommand({ command: addObject(found.layerId, clone) }),
+      );
+      newlySelected.push(clone.id);
+    }
+    if (newlySelected.length > 0) {
+      this.store.dispatch(
+        SelectionActions.replaceSelection({ ids: newlySelected.map((s) => asObjectId(s)) }),
+      );
+    }
+  }
+
+  onZUp(): void {
+    const scene = this.scene();
+    if (scene === null) return;
+    for (const id of this.selectedIds()) {
+      const found = findObject(scene, id);
+      if (found === null) continue;
+      const layer = scene.layers.find((l) => l.id === found.layerId);
+      if (layer === undefined) continue;
+      const idx = layer.objects.findIndex((o) => o.id === id);
+      if (idx < layer.objects.length - 1) {
+        this.store.dispatch(
+          SceneActions.dispatchCommand({ command: reorderObjectInLayer(id, idx + 1) }),
+        );
+      }
+    }
+  }
+
+  onZDown(): void {
+    const scene = this.scene();
+    if (scene === null) return;
+    for (const id of this.selectedIds()) {
+      const found = findObject(scene, id);
+      if (found === null) continue;
+      const layer = scene.layers.find((l) => l.id === found.layerId);
+      if (layer === undefined) continue;
+      const idx = layer.objects.findIndex((o) => o.id === id);
+      if (idx > 0) {
+        this.store.dispatch(
+          SceneActions.dispatchCommand({ command: reorderObjectInLayer(id, idx - 1) }),
+        );
+      }
+    }
+  }
+
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────
+
+  @HostListener('document:keydown', ['$event'])
+  onKeydown(event: KeyboardEvent): void {
+    if (!this.hasSelection()) return;
+    const target = event.target as HTMLElement | null;
+    // Ignore shortcuts when typing in form fields.
+    if (
+      target !== null &&
+      (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')
+    ) {
+      return;
+    }
+    const mod = event.ctrlKey || event.metaKey;
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      event.preventDefault();
+      this.onDelete();
+    } else if (mod && event.key.toLowerCase() === 'd') {
+      event.preventDefault();
+      this.onDuplicate();
+    } else if (event.key === ']') {
+      event.preventDefault();
+      this.onZUp();
+    } else if (event.key === '[') {
+      event.preventDefault();
+      this.onZDown();
+    }
+  }
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────
+
+function findObject(
+  scene: Scene,
+  id: ObjectId,
+): { object: SceneObject; layerId: LayerId } | null {
+  for (const layer of scene.layers) {
+    for (const obj of layer.objects) {
+      if (obj.id === id) return { object: obj, layerId: layer.id };
+    }
+  }
+  return null;
+}
+
+/**
+ * Clone a SceneObject with a new id and a position offset along (x, y).
+ * Used by the duplicate flow so the clone doesn't overlap its source.
+ */
+function cloneObjectWithOffset(obj: SceneObject, offsetMm: number): SceneObject {
+  // SceneObject is plain JSON-serializable data (no class instances), so a
+  // JSON round-trip is a safe deep clone. Avoids the `structuredClone`
+  // global which jsdom does not currently polyfill.
+  const fresh = JSON.parse(JSON.stringify(obj)) as SceneObject;
+  fresh.id = asObjectId(newUuid());
+  fresh.transform = {
+    ...identityTransform(),
+    ...fresh.transform,
+    position: {
+      x: fresh.transform.position.x + offsetMm,
+      y: fresh.transform.position.y + offsetMm,
+      z: fresh.transform.position.z,
+    },
+  };
+  return fresh;
+}
+
+function newUuid(): string {
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
+    const r = Math.floor(Math.random() * 16);
+    const v = ch === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+

@@ -1172,3 +1172,449 @@ describe('Canvas2DRenderer.render (substrate)', () => {
     expect(only(canvas.context.ops, ['fill']).length).toBe(0);
   });
 });
+
+// ─── F3.3 — hitTest ───────────────────────────────────────────────────────
+
+describe('Canvas2DRenderer.hitTest', () => {
+  let fakeWindow: FakeWindow;
+  beforeEach(() => {
+    fakeWindow = installFakeWindow();
+  });
+  afterEach(() => {
+    uninstallFakeWindow();
+    void fakeWindow;
+  });
+
+  // Square hardscape entry centered around the origin with naturalSize 100×100
+  // so a transform at (300, 180) with scale = 1 hits a square from
+  // (250..350, 130..230) in world mm.
+  const squareEntry = {
+    catalog: 'core',
+    id: 'rock.test',
+    version: 1,
+    name: 'Test',
+    kind: 'hardscape' as const,
+    category: 'rock' as const,
+    naturalSize: { width: 100, height: 100, depth: 100 },
+    color: '#888888',
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 1, y: 1 },
+      { x: -1, y: 1 },
+    ],
+  };
+  const fakeCatalog = {
+    entries: [squareEntry] as never,
+    get({ catalog, id }: { catalog: string; id: string }) {
+      if (catalog === 'core' && id === 'rock.test') return squareEntry;
+      return null;
+    },
+    byKind() {
+      return [] as never;
+    },
+  } as never;
+
+  // Position the object exactly at the `upright` viewport's center so a
+  // click at the canvas centre maps to the object's origin.
+  function sceneWithObject(transformPosition = { x: 180, y: 110, z: 0 }) {
+    const base = makeMinimalScene(600, 360, 360);
+    return {
+      ...base,
+      layers: [
+        {
+          id: 'layer-1' as never,
+          name: 'L',
+          opacity: 1,
+          visible: true,
+          locked: false,
+          objects: [
+            {
+              kind: 'hardscape' as const,
+              id: 'obj-1' as never,
+              ref: { catalog: 'core', id: 'rock.test', version: 1 },
+              transform: {
+                position: transformPosition,
+                rotation: { x: 0, y: 0, z: 0 },
+                scale: { x: 1, y: 1, z: 1 },
+                flipX: false,
+                flipY: false,
+              },
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  // The default upright viewport centers world (300, 180) at canvas center,
+  // zoom = 1 (1 mm per CSS pixel).
+  it('returns null when no surface is attached', () => {
+    const r = new Canvas2DRenderer();
+    expect(r.hitTest({ x: 0, y: 0 }, sceneWithObject(), upright, fakeCatalog)).toBeNull();
+  });
+
+  it('hits an object at the canvas centre when transform.position is at viewport.center', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    // Canvas centre is (400, 300) in CSS pixels.
+    const result = r.hitTest({ x: 400, y: 300 }, sceneWithObject(), upright, fakeCatalog);
+    expect(result).not.toBeNull();
+    expect(result?.objectId).toBe('obj-1');
+    expect(result?.layerId).toBe('layer-1');
+  });
+
+  it('misses when the click is outside the silhouette', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    // 200 pixels right of centre → 200 mm right of viewport.center = (380, 110),
+    // far outside the 100×100 silhouette around (180, 110).
+    expect(r.hitTest({ x: 600, y: 300 }, sceneWithObject(), upright, fakeCatalog)).toBeNull();
+  });
+
+  it('falls back to AABB hit-test when no catalog is supplied', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const result = r.hitTest({ x: 400, y: 300 }, sceneWithObject(), upright);
+    expect(result).not.toBeNull();
+  });
+
+  it('returns the front-most object when two overlap at the click point', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const back = sceneWithObject();
+    const front = {
+      ...back,
+      layers: [
+        {
+          ...back.layers[0]!,
+          objects: [
+            { ...back.layers[0]!.objects[0]!, id: 'obj-back' as never },
+            { ...back.layers[0]!.objects[0]!, id: 'obj-front' as never },
+          ],
+        },
+      ],
+    };
+    const result = r.hitTest({ x: 400, y: 300 }, front, upright, fakeCatalog);
+    expect(result?.objectId).toBe('obj-front');
+  });
+
+  it('skips invisible layers', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithObject();
+    const hidden = {
+      ...scene,
+      layers: [{ ...scene.layers[0]!, visible: false }],
+    };
+    expect(r.hitTest({ x: 400, y: 300 }, hidden, upright, fakeCatalog)).toBeNull();
+  });
+
+  it('honours object rotation when transforming the click point', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    // Rotate 45° and shrink so the silhouette covers a small diamond.
+    // A point along the rotated axis still inside the diamond should hit.
+    const scene = sceneWithObject();
+    scene.layers[0]!.objects[0]!.transform.rotation = { x: 0, y: 0, z: Math.PI / 4 };
+    scene.layers[0]!.objects[0]!.transform.scale = { x: 0.5, y: 0.5, z: 0.5 };
+    // Canvas centre is the object centre — definitely inside.
+    expect(r.hitTest({ x: 400, y: 300 }, scene, upright, fakeCatalog)).not.toBeNull();
+  });
+
+  it('returns null for a non-hardscape object (substrate ignored)', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = {
+      ...makeMinimalScene(600, 360, 360),
+      layers: [
+        {
+          id: 'l' as never,
+          name: '',
+          opacity: 1,
+          visible: true,
+          locked: false,
+          objects: [
+            {
+              kind: 'plant' as const,
+              id: 'p-1' as never,
+              ref: { catalog: 'core', id: 'plant.x', version: 1 },
+              transform: {
+                position: { x: 300, y: 180, z: 0 },
+                rotation: { x: 0, y: 0, z: 0 },
+                scale: { x: 1, y: 1, z: 1 },
+                flipX: false,
+                flipY: false,
+              },
+              growth: { ageWeeks: 0, vigor: 1 },
+            },
+          ],
+        },
+      ],
+    };
+    expect(r.hitTest({ x: 400, y: 300 }, scene, upright, fakeCatalog)).toBeNull();
+  });
+
+  it('honours flipX without changing the hit-test result for a symmetric silhouette', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithObject();
+    scene.layers[0]!.objects[0]!.transform.flipX = true;
+    expect(r.hitTest({ x: 400, y: 300 }, scene, upright, fakeCatalog)).not.toBeNull();
+  });
+
+  it('returns null when transform.scale collapses the silhouette to zero area', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithObject();
+    scene.layers[0]!.objects[0]!.transform.scale = { x: 0, y: 0, z: 0 };
+    expect(r.hitTest({ x: 400, y: 300 }, scene, upright, fakeCatalog)).toBeNull();
+  });
+});
+
+// ─── F3.3 / F3.5 — Hardscape rendering + selection handles ──────────────
+
+describe('Canvas2DRenderer.render (hardscape)', () => {
+  let fakeWindow: FakeWindow;
+  beforeEach(() => {
+    fakeWindow = installFakeWindow();
+  });
+  afterEach(() => {
+    uninstallFakeWindow();
+    void fakeWindow;
+  });
+
+  const triangleEntry = {
+    catalog: 'core',
+    id: 'rock.tri',
+    version: 1,
+    name: 'Tri',
+    kind: 'hardscape' as const,
+    category: 'rock' as const,
+    naturalSize: { width: 100, height: 100, depth: 100 },
+    color: '#444444',
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 0, y: 1 },
+    ],
+  };
+  const woodEntry = {
+    ...triangleEntry,
+    id: 'wood.tri',
+    category: 'wood' as const,
+    color: '#7a4422',
+  };
+  const fakeCatalog = {
+    entries: [triangleEntry, woodEntry] as never,
+    get({ catalog, id }: { catalog: string; id: string }) {
+      if (catalog === 'core' && id === 'rock.tri') return triangleEntry;
+      if (catalog === 'core' && id === 'wood.tri') return woodEntry;
+      return null;
+    },
+    byKind() {
+      return [] as never;
+    },
+  } as never;
+
+  function sceneWithHardscape(items: Array<{ id: string; refId?: string }>) {
+    const base = makeMinimalScene(600, 360, 360);
+    return {
+      ...base,
+      layers: [
+        {
+          id: 'layer-1' as never,
+          name: 'L',
+          opacity: 1,
+          visible: true,
+          locked: false,
+          objects: items.map((o) => ({
+            kind: 'hardscape' as const,
+            id: o.id as never,
+            ref: { catalog: 'core', id: o.refId ?? 'rock.tri', version: 1 },
+            transform: {
+              position: { x: 180, y: 110, z: 0 },
+              rotation: { x: 0, y: 0, z: 0 },
+              scale: { x: 1, y: 1, z: 1 },
+              flipX: false,
+              flipY: false,
+            },
+          })),
+        },
+      ],
+    };
+  }
+
+  it('paints nothing when there are no hardscape objects', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(makeMinimalScene(), upright, fakeCatalog);
+    const fillStyles = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
+    expect(fillStyles).not.toContain('#444444');
+  });
+
+  it('paints a filled silhouette per hardscape object with the catalog color', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(sceneWithHardscape([{ id: 'a' }]), upright, fakeCatalog);
+    const fillStyles = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
+    expect(fillStyles).toContain('#444444');
+  });
+
+  it('skips an object whose catalog entry is missing', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(sceneWithHardscape([{ id: 'a', refId: 'rock.missing' }]), upright, fakeCatalog);
+    const fillStyles = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
+    expect(fillStyles).not.toContain('#444444');
+  });
+
+  it('paints in object order (back-to-front)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(
+      sceneWithHardscape([
+        { id: 'a', refId: 'rock.tri' },
+        { id: 'b', refId: 'wood.tri' },
+      ]),
+      upright,
+      fakeCatalog,
+    );
+    const fillStyles = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
+    const idxA = fillStyles.indexOf('#444444');
+    const idxB = fillStyles.indexOf('#7a4422');
+    expect(idxA).toBeGreaterThan(0);
+    expect(idxB).toBeGreaterThan(idxA);
+  });
+
+  it('paints handles only for selected objects', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(sceneWithHardscape([{ id: 'a' }]), upright, fakeCatalog);
+    const noSelStrokes = only(canvas.context.ops, ['set:strokeStyle']).map((o) => o.args[0]);
+    expect(noSelStrokes).not.toContain('#3a8eff');
+
+    canvas.context.ops.length = 0;
+    canvas.context.gradients.length = 0;
+    r.render(sceneWithHardscape([{ id: 'a' }]), upright, fakeCatalog, ['a'] as never);
+    const selStrokes = only(canvas.context.ops, ['set:strokeStyle']).map((o) => o.args[0]);
+    expect(selStrokes).toContain('#3a8eff');
+  });
+
+  it('honours layer.opacity by setting globalAlpha', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithHardscape([{ id: 'a' }]);
+    scene.layers[0]!.opacity = 0.5;
+    r.render(scene, upright, fakeCatalog);
+    const alphaSets = only(canvas.context.ops, ['set:globalAlpha']).map((o) => o.args[0]);
+    expect(alphaSets).toContain(0.5);
+  });
+
+  it('skips invisible layers entirely', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithHardscape([{ id: 'a' }]);
+    scene.layers[0]!.visible = false;
+    r.render(scene, upright, fakeCatalog);
+    const fillStyles = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
+    expect(fillStyles).not.toContain('#444444');
+  });
+
+  it('skips zero-scale objects (degenerate)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithHardscape([{ id: 'a' }]);
+    scene.layers[0]!.objects[0]!.transform.scale = { x: 0, y: 0, z: 0 };
+    r.render(scene, upright, fakeCatalog);
+    const fillStyles = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
+    expect(fillStyles).not.toContain('#444444');
+  });
+
+  it('skips selection handles for objects with no catalog entry or zero size', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithHardscape([{ id: 'a' }]);
+    scene.layers[0]!.objects[0]!.transform.scale = { x: 0, y: 0, z: 0 };
+    r.render(scene, upright, fakeCatalog, ['a'] as never);
+    // No handle stroke because the bbox is degenerate.
+    const selStrokes = only(canvas.context.ops, ['set:strokeStyle']).map((o) => o.args[0]);
+    expect(selStrokes).not.toContain('#3a8eff');
+  });
+
+  it('applies object rotation (paints + handles both rotate the world transform)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithHardscape([{ id: 'a' }]);
+    scene.layers[0]!.objects[0]!.transform.rotation = { x: 0, y: 0, z: Math.PI / 6 };
+    r.render(scene, upright, fakeCatalog, ['a'] as never);
+    const rotateOps = only(canvas.context.ops, ['rotate']).map((o) => o.args[0]);
+    // The rotation should appear at least twice: once for the object body
+    // and once for its selection-handle paint.
+    const matches = rotateOps.filter((a) => a === Math.PI / 6);
+    expect(matches.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('clamps non-finite / out-of-range layer.opacity safely', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const sceneNaN = sceneWithHardscape([{ id: 'a' }]);
+    sceneNaN.layers[0]!.opacity = Number.NaN;
+    r.render(sceneNaN, upright, fakeCatalog);
+    // NaN → 1, so globalAlpha is 1 (which appears at multiple points; just
+    // assert the render didn't crash and the silhouette painted).
+    const fills = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
+    expect(fills).toContain('#444444');
+
+    // Negative opacity → 0.
+    canvas.context.ops.length = 0;
+    canvas.context.gradients.length = 0;
+    const sceneNeg = sceneWithHardscape([{ id: 'a' }]);
+    sceneNeg.layers[0]!.opacity = -0.5;
+    r.render(sceneNeg, upright, fakeCatalog);
+    const alphaSetsNeg = only(canvas.context.ops, ['set:globalAlpha']).map((o) => o.args[0]);
+    expect(alphaSetsNeg).toContain(0);
+
+    // > 1 → 1.
+    canvas.context.ops.length = 0;
+    canvas.context.gradients.length = 0;
+    const sceneHigh = sceneWithHardscape([{ id: 'a' }]);
+    sceneHigh.layers[0]!.opacity = 2;
+    r.render(sceneHigh, upright, fakeCatalog);
+    const alphaSetsHi = only(canvas.context.ops, ['set:globalAlpha']).map((o) => o.args[0]);
+    expect(alphaSetsHi).toContain(1);
+  });
+
+  it('renders are idempotent in the hardscape path', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithHardscape([{ id: 'a' }]);
+    r.render(scene, upright, fakeCatalog, ['a'] as never);
+    const first = canvas.context.ops.slice();
+    canvas.context.ops.length = 0;
+    canvas.context.gradients.length = 0;
+    r.render(scene, upright, fakeCatalog, ['a'] as never);
+    expect(canvas.context.ops).toEqual(first);
+  });
+});

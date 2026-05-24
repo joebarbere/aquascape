@@ -5,3 +5,4 @@
 // Composed into apps/web as the page header above the canvas.
 
 export { EditorShellComponent } from './lib/editor-shell.component';
+export { SelectionInspectorComponent } from './lib/selection-inspector.component';

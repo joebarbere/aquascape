@@ -112,15 +112,31 @@ export interface SceneRenderer {
    * defined fallback colors so tests + headless smoke runs stay simple —
    * the production app always passes a catalog.
    */
-  render(scene: Scene, viewport: Viewport, catalog?: Catalog): void;
+  render(
+    scene: Scene,
+    viewport: Viewport,
+    catalog?: Catalog,
+    selection?: ReadonlyArray<ObjectId>,
+  ): void;
 
   /**
    * Return the topmost object hit at `point` (canvas CSS pixels) under the
    * given `viewport`, or `null` if the point hit empty space. `viewport`
    * must match the one passed to the most recent `render` call for the
    * result to be consistent with what's on screen.
+   *
+   * The optional `catalog` parameter is consulted for object silhouettes
+   * (hardscape entries carry a per-entry polygon in normalized space). When
+   * omitted, the renderer falls back to an axis-aligned-bounding-box test
+   * derived from `transform.scale × naturalSize`-defaults — adequate for
+   * headless smoke tests but visibly looser than the rendered shape.
    */
-  hitTest(point: Vec2, scene: Scene, viewport: Viewport): HitResult | null;
+  hitTest(
+    point: Vec2,
+    scene: Scene,
+    viewport: Viewport,
+    catalog?: Catalog,
+  ): HitResult | null;
 
   /**
    * Release every resource the renderer attached. After `dispose`, the

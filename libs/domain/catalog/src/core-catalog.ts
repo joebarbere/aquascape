@@ -20,6 +20,12 @@
  * with `catalog: 'community:<slug>'` namespacing.
  */
 
+import rockOhko from './data/hardscape/rock-ohko.json';
+import rockSeiryuLarge from './data/hardscape/rock-seiryu-large.json';
+import rockSeiryuMedium from './data/hardscape/rock-seiryu-medium.json';
+import woodMalaysian from './data/hardscape/wood-malaysian.json';
+import woodManzanita from './data/hardscape/wood-manzanita.json';
+import woodSpiderwood from './data/hardscape/wood-spiderwood.json';
 import aquaSoilAmazonia from './data/substrates/aqua-soil-amazonia.json';
 import blackPeaGravel from './data/substrates/black-pea-gravel.json';
 import fluorite from './data/substrates/fluorite.json';
@@ -30,12 +36,20 @@ import { loadCatalog, type CatalogLoadResult } from './loader';
 
 /** Raw manifest array — exposed so tests + tools can re-load it deliberately. */
 export const CORE_CATALOG_MANIFESTS: readonly unknown[] = [
+  // Substrates (Stage 2 F2.1)
   aquaSoilAmazonia,
   tropicaAquasoil,
   silicaSand,
   whiteSand,
   blackPeaGravel,
   fluorite,
+  // Hardscape (Stage 3 F3.5)
+  rockSeiryuLarge,
+  rockSeiryuMedium,
+  rockOhko,
+  woodSpiderwood,
+  woodManzanita,
+  woodMalaysian,
 ];
 
 /**

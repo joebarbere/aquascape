@@ -1,0 +1,29 @@
+{
+  "catalog": "core",
+  "id": "rock.seiryu.large",
+  "version": 1,
+  "name": "Seiryu Stone (large)",
+  "kind": "hardscape",
+  "category": "rock",
+  "subcategory": "seiryu",
+  "naturalSize": { "width": 220, "height": 140, "depth": 120 },
+  "color": "#5a5b56",
+  "description": "Grey-blue calcareous stone with sharp ridged texture. Iwagumi staple. Raises pH and hardness — pair with hard-water-tolerant species.",
+  "tags": ["rock", "seiryu", "iwagumi"],
+  "silhouette": [
+    { "x": -0.95, "y": -0.85 },
+    { "x": -0.6, "y": -0.95 },
+    { "x": -0.15, "y": -0.9 },
+    { "x": 0.4, "y": -0.95 },
+    { "x": 0.85, "y": -0.75 },
+    { "x": 0.95, "y": -0.3 },
+    { "x": 0.7, "y": 0.2 },
+    { "x": 0.5, "y": 0.55 },
+    { "x": 0.15, "y": 0.85 },
+    { "x": -0.2, "y": 0.95 },
+    { "x": -0.55, "y": 0.75 },
+    { "x": -0.85, "y": 0.45 },
+    { "x": -0.95, "y": 0.05 },
+    { "x": -0.9, "y": -0.4 }
+  ]
+}
