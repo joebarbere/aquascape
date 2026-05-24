@@ -123,11 +123,13 @@ jobs:
 
       # Per-lib jest.config.ts enforces 90% on every lib that ships
       # production logic (domain/*, rendering/renderer-2d, platform/{web,
-      # electron}). `--configuration=ci` is wired in nx.json to pass
-      # `--coverage --ci` to the inferred jest target, so the threshold
-      # check fires here and the workflow fails the PR on regression.
+      # electron}, state, features/*). `--configuration=ci` is wired in
+      # nx.json to pass `--coverage --ci` to the inferred jest target, so
+      # the threshold check fires here and the workflow fails the PR on
+      # regression. Features are added as their bodies land — Stage 0
+      # ships zero, F1.1 added `features-tank-setup`.
       - name: Run coverage gate
-        run: pnpm exec nx run-many -t test --projects='tag:scope:domain,tag:scope:rendering,tag:scope:platform-web,tag:scope:platform-electron' --configuration=ci --parallel=3
+        run: pnpm exec nx run-many -t test --projects='tag:scope:domain,tag:scope:rendering,tag:scope:platform-web,tag:scope:platform-electron,tag:scope:state,features-tank-setup' --configuration=ci --parallel=3
 
       - name: Upload coverage artifacts
         if: always()
