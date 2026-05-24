@@ -4,18 +4,19 @@
     <meta charset="utf-8" />
     <title>Aquascape</title>
     <!--
-      Stage 0 baseline CSP. F0.6 / plan §3.
-      - script-src 'self' so we only execute scripts we shipped. No 'unsafe-inline' / 'unsafe-eval'.
-      - style-src includes 'unsafe-inline' because Angular emits component styles as inline
-        <style> elements by default. F6.4 will revisit this (extract styles + nonce).
-      - img-src allows data: and blob: for canvas / asset exports.
-      - connect-src 'self' covers HMR / livereload (dev server) and file:// (Electron prod).
-      - The Electron shell composes additional file:///data: allowances on top of this base.
+      CSP is set at the transport layer, NOT via <meta http-equiv> here.
+      Why: browsers AND multiple CSP sources, taking the most restrictive
+      directive from each. The Electron shell's dev-only CSP needs
+      `'unsafe-eval'` in `script-src` so AJV's runtime schema compile works
+      (see apps/desktop/src/main/csp.ts + plans/stage-4-followup-precompile-ajv.md).
+      A meta CSP with `script-src 'self'` would silently override that
+      relaxation and break the renderer. The meta tag is also a duplicate of
+      what the Electron shell sets via `session.webRequest.onHeadersReceived`.
+
+      Production web deploys MUST set the CSP via server response headers.
+      A `script-src 'self'` baseline is the right default — see the strict
+      ELECTRON_CSP constant for the desktop counterpart.
     -->
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'"
-    />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="data:," />

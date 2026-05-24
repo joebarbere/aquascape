@@ -11,15 +11,32 @@
 //   * Only structured-cloneable data crosses `exposeInMainWorld` — Electron
 //     warns / errors on non-plain values.
 //
-// Keep this file minimal — wrap, expose, done. All wrapping logic lives in
-// `build-bridge.ts` so it can be unit-tested without `contextBridge`.
+// SANDBOX CAVEAT (load-bearing): with `sandbox: true`, the preload runs in
+// a restricted CommonJS environment whose `require` only resolves an
+// Electron-allowlisted set of modules (`electron`, `events`, `timers`,
+// `url`). It CANNOT `require` sibling files in its own output directory.
+// So every IPC wrapper below is inlined directly here — moving them into
+// a helper module produces a `module not found: ./helper` error at
+// preload load time. The same wrapping shape lives in `./build-bridge.ts`
+// for unit tests, but that file is **not loaded by Electron**; it exists
+// solely so the channel mapping has a non-sandboxed home that Jest can
+// exercise.
 
 import { contextBridge, ipcRenderer } from 'electron';
 
-import { buildBridge } from './build-bridge';
+import type { IpcContract } from '../shared/ipc-contract';
 
-const ipc = buildBridge({
-  invoke: (channel, payload) => ipcRenderer.invoke(channel, payload),
-});
+const ipc: IpcContract = {
+  ping: (payload) => ipcRenderer.invoke('ping', payload),
+  'file.open': () => ipcRenderer.invoke('file.open'),
+  'file.save': (payload) => ipcRenderer.invoke('file.save', payload),
+  'file.saveAs': (payload) => ipcRenderer.invoke('file.saveAs', payload),
+  'dialog.confirm': (payload) => ipcRenderer.invoke('dialog.confirm', payload),
+  'dialog.alert': (payload) => ipcRenderer.invoke('dialog.alert', payload),
+  'storage.get': (payload) => ipcRenderer.invoke('storage.get', payload),
+  'storage.set': (payload) => ipcRenderer.invoke('storage.set', payload),
+  'storage.remove': (payload) => ipcRenderer.invoke('storage.remove', payload),
+  'export.png': (payload) => ipcRenderer.invoke('export.png', payload),
+};
 
 contextBridge.exposeInMainWorld('aquascape', { ipc });

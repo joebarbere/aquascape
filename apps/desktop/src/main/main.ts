@@ -25,7 +25,7 @@ import {
   createFileBackend,
   createStorageBackend,
 } from './backends';
-import { ELECTRON_CSP } from './csp';
+import { cspForEnvironment } from './csp';
 import { registerIpcHandlers } from './ipc-handlers';
 import { resolveIndexPath, resolvePreloadPath } from './paths';
 import { buildWebPreferences } from './web-preferences';
@@ -33,14 +33,54 @@ import { buildWebPreferences } from './web-preferences';
 const DEV_SERVER_ENV = 'DEV_SERVER_URL';
 
 /**
- * Install the CSP via an HTTP response header. We compose with (rather than
- * replace) the meta-tag CSP shipped in `apps/web/src/index.html` — the
- * stricter of the two wins.
+ * Swallow EPIPE on stdout / stderr.
+ *
+ * Why: Node 20 throws an uncaught exception when a write to stdout/stderr
+ * fails (e.g. because the parent shell that owned the pipe has gone away —
+ * the dev workflow does this any time the user kills the `nx serve desktop`
+ * wrapper but leaves Electron running). Any future Node deprecation warning
+ * or Electron internal `console.warn` then crashes the main process with
+ * `Error: write EPIPE`. Silently dropping writes to a dead pipe is the
+ * standard Electron-on-macOS workaround.
+ *
+ * We also install a top-level `uncaughtException` filter that ignores
+ * EPIPE from console.* / process.stdout — so even if a write slips past
+ * the per-stream handler (e.g. through `process.emitWarning`), the app
+ * doesn't die. Every other uncaught exception is re-thrown so we don't
+ * mask real bugs.
+ */
+function installPipeGuards(): void {
+  const ignoreEpipe = (err: NodeJS.ErrnoException): void => {
+    if (err && err.code === 'EPIPE') return;
+    // Re-throw asynchronously so the default Node handler runs (which logs
+    // + exits). We can't `throw` synchronously inside an 'error' listener.
+    setImmediate(() => {
+      throw err;
+    });
+  };
+  process.stdout.on('error', ignoreEpipe);
+  process.stderr.on('error', ignoreEpipe);
+
+  process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
+    if (err && err.code === 'EPIPE') return;
+    // Preserve the original Node behaviour for everything that isn't a
+    // dead-pipe write: log, exit non-zero. Done synchronously here because
+    // Electron's own handler would otherwise show its native error dialog.
+    console.error('Aquascape desktop uncaught exception:', err);
+    app.exit(1);
+  });
+}
+
+/**
+ * Install the CSP via an HTTP response header. Packaged builds get the
+ * strict policy; unpackaged dev builds get the `'unsafe-eval'`-relaxed
+ * variant so AJV's runtime compile works. See csp.ts for the dev caveat.
  */
 function installCsp(): void {
+  const policy = cspForEnvironment({ isPackaged: app.isPackaged });
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const headers = { ...details.responseHeaders };
-    headers['Content-Security-Policy'] = [ELECTRON_CSP];
+    headers['Content-Security-Policy'] = [policy];
     callback({ responseHeaders: headers });
   });
 }
@@ -110,6 +150,8 @@ app.on('web-contents-created', (_event, contents) => {
     event.preventDefault();
   });
 });
+
+installPipeGuards();
 
 app
   .whenReady()

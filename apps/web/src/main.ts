@@ -21,6 +21,7 @@ import {
   DocumentEffects,
   provideDocumentStore,
   provideSceneStore,
+  provideSelectionStore,
 } from '@aquascape/state';
 import { provideEffects } from '@ngrx/effects';
 import { provideStore } from '@ngrx/store';
@@ -38,11 +39,16 @@ bootstrapApplication(AppComponent, {
     { provide: DIALOG_SERVICE, useValue: platform.dialogService },
     { provide: STORAGE_SERVICE, useValue: platform.storageService },
     { provide: RENDER_EXPORT_SERVICE, useValue: platform.renderExportService },
-    // NgRx runtime: store + effects, then the scene + document features.
+    // NgRx runtime: store + effects, then the scene + document + selection
+    // features. `provideSelectionStore` is required for the F3.3 selection
+    // slice the canvas + inspector + layers-panel read from; without it,
+    // `selectSelectedIds` returns `undefined` and every derived selector
+    // crashes with "Cannot read properties of undefined (reading 'length')".
     provideStore(),
     provideEffects(),
     provideSceneStore(),
     provideDocumentStore(),
+    provideSelectionStore(),
     provideStoreDevtools({
       maxAge: 25,
       logOnly: !isDevMode(),

@@ -44,16 +44,14 @@
           "nx serve web",
           "DEV_SERVER_URL=http://localhost:4200 electron dist/apps/desktop/main/src/main/main.js"
         ],
-        "parallel": true,
-        "_comment": "Runs the Angular dev server and Electron concurrently. Electron will retry-load until the dev server is up (or fail to load and reload manually). For a serialised flow, run `nx serve web` in one shell and `nx run desktop:serve-electron` in another."
+        "parallel": true
       }
     },
     "serve-electron": {
       "executor": "nx:run-commands",
       "dependsOn": ["build-main", "build-preload"],
       "options": {
-        "command": "DEV_SERVER_URL=http://localhost:4200 electron dist/apps/desktop/main/src/main/main.js",
-        "_comment": "Run this AFTER `nx serve web` is already up. Useful when you want to control the two processes independently."
+        "command": "DEV_SERVER_URL=http://localhost:4200 electron dist/apps/desktop/main/src/main/main.js"
       }
     },
     "lint": {

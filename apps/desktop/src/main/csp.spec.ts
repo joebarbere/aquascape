@@ -1,9 +1,9 @@
 // The Electron CSP is a security-relevant constant — any change must be
-// deliberate. This test pins the exact string so silent drift fails CI.
+// deliberate. These tests pin the exact strings so silent drift fails CI.
 
-import { ELECTRON_CSP } from './csp';
+import { cspForEnvironment, DEV_CSP, ELECTRON_CSP } from './csp';
 
-describe('ELECTRON_CSP', () => {
+describe('ELECTRON_CSP (production / packaged)', () => {
   it('matches the documented policy exactly', () => {
     expect(ELECTRON_CSP).toBe(
       "default-src 'self' file:; " +
@@ -18,7 +18,7 @@ describe('ELECTRON_CSP', () => {
     );
   });
 
-  it('forbids unsafe-eval anywhere', () => {
+  it('forbids unsafe-eval', () => {
     expect(ELECTRON_CSP).not.toContain("'unsafe-eval'");
   });
 
@@ -38,5 +38,41 @@ describe('ELECTRON_CSP', () => {
 
   it('locks base-uri to none', () => {
     expect(ELECTRON_CSP).toContain("base-uri 'none'");
+  });
+});
+
+describe('DEV_CSP (unpackaged / `nx serve desktop` only)', () => {
+  it('matches the documented dev policy exactly', () => {
+    expect(DEV_CSP).toBe(
+      "default-src 'self' file: http://localhost:* ws://localhost:*; " +
+        "script-src 'self' 'unsafe-eval' file: http://localhost:*; " +
+        "style-src 'self' 'unsafe-inline' http://localhost:*; " +
+        "img-src 'self' data: blob: file: http://localhost:*; " +
+        "connect-src 'self' file: http://localhost:* ws://localhost:*; " +
+        "font-src 'self' file: http://localhost:*; " +
+        "object-src 'none'; " +
+        "frame-src 'none'; " +
+        "base-uri 'none'",
+    );
+  });
+
+  it('allows unsafe-eval in script-src — needed for AJV runtime compile (dev only)', () => {
+    expect(DEV_CSP).toContain("'unsafe-eval'");
+  });
+
+  it('still locks object-src, frame-src, and base-uri to none', () => {
+    expect(DEV_CSP).toContain("object-src 'none'");
+    expect(DEV_CSP).toContain("frame-src 'none'");
+    expect(DEV_CSP).toContain("base-uri 'none'");
+  });
+});
+
+describe('cspForEnvironment', () => {
+  it('returns the strict ELECTRON_CSP when packaged', () => {
+    expect(cspForEnvironment({ isPackaged: true })).toBe(ELECTRON_CSP);
+  });
+
+  it('returns the relaxed DEV_CSP when not packaged', () => {
+    expect(cspForEnvironment({ isPackaged: false })).toBe(DEV_CSP);
   });
 });
