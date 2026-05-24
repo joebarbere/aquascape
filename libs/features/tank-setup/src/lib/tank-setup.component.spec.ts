@@ -15,9 +15,7 @@
 //   - Enter on a focused preset selects it (keyboard operability).
 
 import { TestBed } from '@angular/core/testing';
-import {
-  STORAGE_SERVICE,
-} from '@aquascape/platform/platform-api/angular';
+import { STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
 import type { StorageService } from '@aquascape/platform/platform-api';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 
@@ -77,9 +75,10 @@ describe('TankSetupComponent', () => {
 
   it('groups presets by brand under role=radiogroup', () => {
     const { fixture } = setup();
-    const groups = (fixture.nativeElement as HTMLElement).querySelectorAll(
-      '[role="radiogroup"]',
-    );
+    // Scope the query to the .presets fieldset so the styling subpanel's
+    // frame radiogroup (F1.2 Phase D) doesn't get picked up by the count.
+    const presets = (fixture.nativeElement as HTMLElement).querySelector('.presets') as HTMLElement;
+    const groups = presets.querySelectorAll('[role="radiogroup"]');
     expect(groups.length).toBe(2);
     expect(groups[0]!.getAttribute('aria-label')).toBe('ADA tanks');
     expect(groups[1]!.getAttribute('aria-label')).toBe('Standard tanks');
@@ -97,10 +96,7 @@ describe('TankSetupComponent', () => {
     expect(dispatchSpy).toHaveBeenCalledTimes(2);
     const calls = dispatchSpy.mock.calls.map((c) => c[0]);
     const types = calls.map((a) => (a as { type: string }).type);
-    expect(types).toEqual([
-      '[Scene] Dispatch Command',
-      '[Scene] Set Tank Preset Ref',
-    ]);
+    expect(types).toEqual(['[Scene] Dispatch Command', '[Scene] Set Tank Preset Ref']);
 
     const dispatchAction = calls[0] as {
       command: { kind: string; dimensions: { width: number; height: number; depth: number } };
@@ -129,9 +125,7 @@ describe('TankSetupComponent', () => {
       '[data-testid="preset-ada.60-p"]',
     ) as HTMLButtonElement;
     btn.focus();
-    btn.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
-    );
+    btn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     fixture.detectChanges();
     expect(dispatchSpy).toHaveBeenCalled();
   });
@@ -226,16 +220,12 @@ describe('TankSetupComponent', () => {
       component.setUnit('in');
       fixture.detectChanges();
       const root = fixture.nativeElement as HTMLElement;
-      expect(
-        root
-          .querySelector('[data-testid="unit-in"]')
-          ?.getAttribute('aria-pressed'),
-      ).toBe('true');
-      expect(
-        root
-          .querySelector('[data-testid="unit-cm"]')
-          ?.getAttribute('aria-pressed'),
-      ).toBe('false');
+      expect(root.querySelector('[data-testid="unit-in"]')?.getAttribute('aria-pressed')).toBe(
+        'true',
+      );
+      expect(root.querySelector('[data-testid="unit-cm"]')?.getAttribute('aria-pressed')).toBe(
+        'false',
+      );
     });
   });
 
@@ -280,15 +270,9 @@ describe('TankSetupComponent', () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(2);
       const calls = dispatchSpy.mock.calls.map((c) => c[0]);
-      expect((calls[0] as { type: string }).type).toBe(
-        '[Scene] Dispatch Command',
-      );
-      expect((calls[1] as { type: string }).type).toBe(
-        '[Scene] Set Tank Preset Ref',
-      );
-      expect(
-        (calls[1] as { presetRef: unknown | null }).presetRef,
-      ).toBeNull();
+      expect((calls[0] as { type: string }).type).toBe('[Scene] Dispatch Command');
+      expect((calls[1] as { type: string }).type).toBe('[Scene] Set Tank Preset Ref');
+      expect((calls[1] as { presetRef: unknown | null }).presetRef).toBeNull();
     });
 
     it('does not dispatch when the form is invalid', () => {

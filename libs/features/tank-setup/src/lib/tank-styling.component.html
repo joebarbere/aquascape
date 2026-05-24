@@ -1,0 +1,371 @@
+<section class="styling" aria-labelledby="styling-heading">
+  <h3 id="styling-heading">Styling</h3>
+
+  <!-- Frame picker ────────────────────────────────────────────────────── -->
+  <fieldset class="styling__group">
+    <legend id="frame-label">Frame</legend>
+    <div role="radiogroup" aria-labelledby="frame-label" class="styling__frame">
+      @for (option of FRAME_OPTIONS; track option.value) {
+        <button
+          type="button"
+          role="radio"
+          [attr.aria-checked]="isFrameSelected(option.value)"
+          [class.is-active]="isFrameSelected(option.value)"
+          [attr.data-testid]="'frame-' + option.value"
+          (click)="selectFrame(option.value)"
+          (keydown.enter)="selectFrame(option.value)"
+        >
+          {{ option.label }}
+        </button>
+      }
+    </div>
+
+    @if (style().frame !== 'rimless') {
+      <div class="styling__frame-color">
+        <label for="frame-color-native">Frame color</label>
+        <input
+          id="frame-color-native"
+          data-testid="frame-color-native"
+          type="color"
+          [value]="
+            style().frameColor !== undefined
+              ? (style().frameColor | slice: 0 : 7)
+              : DEFAULT_FRAME_COLOR
+          "
+          (input)="setFrameColor($any($event.target).value)"
+          aria-label="Frame color picker"
+        />
+        <input
+          data-testid="frame-color-hex"
+          type="text"
+          inputmode="text"
+          spellcheck="false"
+          autocomplete="off"
+          [value]="style().frameColor ?? DEFAULT_FRAME_COLOR"
+          (input)="setFrameColor($any($event.target).value)"
+          aria-label="Frame color hex value"
+        />
+      </div>
+    }
+  </fieldset>
+
+  <!-- Water tint ──────────────────────────────────────────────────────── -->
+  <fieldset class="styling__group">
+    <legend id="water-tint-label">Water tint</legend>
+
+    <div class="styling__chips" role="group" aria-labelledby="water-tint-label">
+      @for (preset of WATER_TINT_PRESETS; track preset.label) {
+        <button
+          type="button"
+          [attr.data-testid]="'water-tint-preset-' + preset.label.toLowerCase().replace(' ', '-')"
+          (click)="selectWaterTintPreset(preset.hex)"
+          [attr.aria-pressed]="
+            (preset.hex === null && style().waterTint === undefined) ||
+            (preset.hex !== null && style().waterTint === preset.hex)
+          "
+          [class.is-active]="
+            (preset.hex === null && style().waterTint === undefined) ||
+            (preset.hex !== null && style().waterTint === preset.hex)
+          "
+        >
+          <span
+            class="styling__chip-swatch"
+            [style.background]="preset.hex !== null ? preset.hex : 'transparent'"
+            [class.is-transparent]="preset.hex === null"
+            aria-hidden="true"
+          ></span>
+          {{ preset.label }}
+        </button>
+      }
+    </div>
+
+    <div class="styling__hex">
+      <label for="water-tint-native">Pick a color</label>
+      <input
+        id="water-tint-native"
+        data-testid="water-tint-native"
+        type="color"
+        [value]="style().waterTint !== undefined ? (style().waterTint | slice: 0 : 7) : '#ffffff'"
+        (input)="onWaterTintNative($any($event.target).value)"
+        aria-label="Water tint color picker"
+      />
+      <label for="water-tint-hex" class="visually-hidden"> Water tint hex value </label>
+      <input
+        id="water-tint-hex"
+        data-testid="water-tint-hex"
+        type="text"
+        inputmode="text"
+        spellcheck="false"
+        autocomplete="off"
+        placeholder="#RRGGBB or #RRGGBBAA"
+        [value]="waterTintInput()"
+        (input)="onWaterTintInput($any($event.target).value)"
+        [attr.aria-invalid]="waterTintError() !== null"
+        aria-describedby="water-tint-error water-tint-announced"
+      />
+      <span id="water-tint-announced" class="visually-hidden" aria-live="polite">
+        Current water tint:
+        {{ style().waterTint !== undefined ? style().waterTint : 'clear' }}
+      </span>
+      <p
+        id="water-tint-error"
+        class="styling__error"
+        role="alert"
+        [hidden]="waterTintError() === null"
+        data-testid="water-tint-error"
+      >
+        {{ waterTintError() }}
+      </p>
+    </div>
+  </fieldset>
+
+  <!-- Background ──────────────────────────────────────────────────────── -->
+  <fieldset class="styling__group">
+    <legend id="background-label">Background</legend>
+
+    <div role="tablist" aria-labelledby="background-label" class="styling__tablist">
+      <button
+        type="button"
+        role="tab"
+        data-testid="bg-tab-none"
+        [attr.aria-selected]="isBackgroundTab('none')"
+        [class.is-active]="isBackgroundTab('none')"
+        (click)="selectBackgroundTab('none')"
+        id="bg-tab-none"
+      >
+        None
+      </button>
+      <button
+        type="button"
+        role="tab"
+        data-testid="bg-tab-color"
+        [attr.aria-selected]="isBackgroundTab('color')"
+        [class.is-active]="isBackgroundTab('color')"
+        (click)="selectBackgroundTab('color')"
+        id="bg-tab-color"
+      >
+        Solid
+      </button>
+      <button
+        type="button"
+        role="tab"
+        data-testid="bg-tab-gradient"
+        [attr.aria-selected]="isBackgroundTab('gradient')"
+        [class.is-active]="isBackgroundTab('gradient')"
+        (click)="selectBackgroundTab('gradient')"
+        id="bg-tab-gradient"
+      >
+        Gradient
+      </button>
+      <button
+        type="button"
+        role="tab"
+        data-testid="bg-tab-image"
+        [attr.aria-selected]="isBackgroundTab('image')"
+        [attr.aria-disabled]="true"
+        [class.is-disabled]="true"
+        (click)="selectBackgroundTab('image')"
+        id="bg-tab-image"
+      >
+        Image
+      </button>
+    </div>
+
+    @if (isBackgroundTab('none')) {
+      <div role="tabpanel" aria-labelledby="bg-tab-none" class="styling__tabpanel">
+        <p data-testid="bg-none-help">No background — the tank renders against the canvas color.</p>
+      </div>
+    }
+
+    @if (isBackgroundTab('color')) {
+      <div role="tabpanel" aria-labelledby="bg-tab-color" class="styling__tabpanel">
+        <div class="styling__chips">
+          @for (preset of BACKGROUND_COLOR_PRESETS; track preset.hex) {
+            <button
+              type="button"
+              [attr.data-testid]="'bg-color-preset-' + preset.label.toLowerCase().replace(' ', '-')"
+              (click)="selectBgSolidPreset(preset.hex)"
+              [attr.aria-pressed]="
+                style().background.kind === 'color' && $any(style().background).color === preset.hex
+              "
+              [class.is-active]="
+                style().background.kind === 'color' && $any(style().background).color === preset.hex
+              "
+            >
+              <span
+                class="styling__chip-swatch"
+                [style.background]="preset.hex"
+                aria-hidden="true"
+              ></span>
+              {{ preset.label }}
+            </button>
+          }
+        </div>
+        <div class="styling__hex">
+          <label for="bg-color-native">Pick a color</label>
+          <input
+            id="bg-color-native"
+            data-testid="bg-color-native"
+            type="color"
+            [value]="
+              style().background.kind === 'color'
+                ? ($any(style().background).color | slice: 0 : 7)
+                : '#000000'
+            "
+            (input)="onBgSolidNative($any($event.target).value)"
+            aria-label="Background color picker"
+          />
+          <label for="bg-color-hex" class="visually-hidden"> Background color hex value </label>
+          <input
+            id="bg-color-hex"
+            data-testid="bg-color-hex"
+            type="text"
+            inputmode="text"
+            spellcheck="false"
+            autocomplete="off"
+            placeholder="#RRGGBB"
+            [value]="bgSolidInput()"
+            (input)="onBgSolidInput($any($event.target).value)"
+            [attr.aria-invalid]="bgSolidError() !== null"
+            aria-describedby="bg-color-error"
+          />
+          <p
+            id="bg-color-error"
+            class="styling__error"
+            role="alert"
+            [hidden]="bgSolidError() === null"
+            data-testid="bg-color-error"
+          >
+            {{ bgSolidError() }}
+          </p>
+        </div>
+      </div>
+    }
+
+    @if (isBackgroundTab('gradient')) {
+      <div role="tabpanel" aria-labelledby="bg-tab-gradient" class="styling__tabpanel">
+        <div class="styling__field">
+          <label for="gradient-angle">Angle (degrees)</label>
+          <input
+            id="gradient-angle"
+            data-testid="gradient-angle"
+            type="range"
+            min="0"
+            max="360"
+            step="1"
+            [value]="gradientAngleDeg()"
+            (input)="onGradientAngleInput(+$any($event.target).value)"
+            aria-describedby="gradient-angle-readout"
+          />
+          <span
+            id="gradient-angle-readout"
+            class="styling__readout"
+            data-testid="gradient-angle-readout"
+            aria-live="polite"
+          >
+            {{ gradientAngleDeg() }}°
+          </span>
+        </div>
+        <div class="styling__angle-presets" role="group" aria-label="Snap angle">
+          @for (deg of GRADIENT_ANGLE_PRESETS_DEG; track deg) {
+            <button
+              type="button"
+              [attr.data-testid]="'gradient-angle-' + deg"
+              (click)="setGradientAnglePreset(deg)"
+              [attr.aria-pressed]="gradientAngleDeg() === deg"
+              [class.is-active]="gradientAngleDeg() === deg"
+            >
+              {{ deg }}°
+            </button>
+          }
+        </div>
+
+        <ol class="styling__stops" aria-label="Gradient stops">
+          @for (stop of gradientStops(); track $index; let i = $index) {
+            <li class="styling__stop">
+              <label [attr.for]="'gradient-stop-color-' + i" class="visually-hidden">
+                Stop {{ i + 1 }} color
+              </label>
+              <input
+                [id]="'gradient-stop-color-' + i"
+                [attr.data-testid]="'gradient-stop-color-' + i"
+                type="text"
+                inputmode="text"
+                spellcheck="false"
+                autocomplete="off"
+                [value]="stop.color"
+                (input)="onGradientStopColorInput(i, $any($event.target).value)"
+                [attr.aria-invalid]="gradientStopErrors()[i] !== null"
+                [attr.aria-describedby]="'gradient-stop-error-' + i"
+              />
+              <label [attr.for]="'gradient-stop-at-' + i" class="visually-hidden">
+                Stop {{ i + 1 }} position
+              </label>
+              <input
+                [id]="'gradient-stop-at-' + i"
+                [attr.data-testid]="'gradient-stop-at-' + i"
+                type="number"
+                min="0"
+                max="1"
+                step="0.01"
+                [value]="stop.at"
+                (input)="onGradientStopAtInput(i, +$any($event.target).value)"
+                aria-label="Stop position (0 to 1)"
+              />
+              <button
+                type="button"
+                [attr.data-testid]="'gradient-stop-remove-' + i"
+                (click)="removeGradientStop(i)"
+                [disabled]="gradientStops().length <= MIN_GRADIENT_STOPS"
+                [attr.aria-label]="'Remove stop ' + (i + 1)"
+              >
+                Remove
+              </button>
+              <p
+                [id]="'gradient-stop-error-' + i"
+                class="styling__error"
+                role="alert"
+                [hidden]="gradientStopErrors()[i] === null"
+                [attr.data-testid]="'gradient-stop-error-' + i"
+              >
+                {{ gradientStopErrors()[i] }}
+              </p>
+            </li>
+          }
+        </ol>
+        <button
+          type="button"
+          data-testid="gradient-stop-add"
+          (click)="addGradientStop()"
+          [disabled]="gradientStops().length >= MAX_GRADIENT_STOPS"
+        >
+          Add stop
+        </button>
+      </div>
+    }
+
+    @if (isBackgroundTab('image')) {
+      <div
+        role="tabpanel"
+        aria-labelledby="bg-tab-image"
+        class="styling__tabpanel"
+        data-testid="bg-image-panel"
+      >
+        <p>Image backgrounds coming in F6.3.</p>
+        <button type="button" data-testid="bg-image-upload" [disabled]="true" aria-disabled="true">
+          Upload image
+        </button>
+      </div>
+    }
+  </fieldset>
+
+  <p
+    class="styling__rejection"
+    role="alert"
+    aria-live="assertive"
+    data-testid="styling-rejection"
+    [hidden]="rejectionMessage() === null"
+  >
+    {{ rejectionMessage() }}
+  </p>
+</section>

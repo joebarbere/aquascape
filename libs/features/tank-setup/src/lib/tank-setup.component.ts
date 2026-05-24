@@ -23,43 +23,19 @@
 //   - aria-describedby links errors + the warning to the inputs
 
 import { CommonModule } from '@angular/common';
-import {
-  ChangeDetectionStrategy,
-  Component,
-  DestroyRef,
-  inject,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import {
-  FormBuilder,
-  FormGroup,
-  ReactiveFormsModule,
-  Validators,
-} from '@angular/forms';
+import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { setTankDimensions } from '@aquascape/domain/scene-model';
-import {
-  STORAGE_SERVICE,
-} from '@aquascape/platform/platform-api/angular';
+import { STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
 import type { StorageService } from '@aquascape/platform/platform-api';
-import {
-  SceneActions,
-  selectTank,
-  selectTankPresetRef,
-} from '@aquascape/state';
+import { SceneActions, selectTank, selectTankPresetRef } from '@aquascape/state';
 import { Store } from '@ngrx/store';
 
-import {
-  TANK_PRESET_CATALOG,
-  TANK_PRESET_VERSION,
-  tankPresets,
-} from './tank-presets';
+import { TANK_PRESET_CATALOG, TANK_PRESET_VERSION, tankPresets } from './tank-presets';
 import type { TankPreset } from './tank-presets';
-import {
-  DISPLAY_UNIT_STORAGE_KEY,
-  formatForDisplay,
-  parseToMm,
-} from './units';
+import { TankStylingComponent } from './tank-styling.component';
+import { DISPLAY_UNIT_STORAGE_KEY, formatForDisplay, parseToMm } from './units';
 import type { DisplayUnit } from './units';
 
 /** UI-layer dimension floor (mm). The domain layer allows down to > 0. */
@@ -107,7 +83,7 @@ function displayBand(unit: DisplayUnit): DisplayBand {
   selector: 'aquascape-tank-setup',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, TankStylingComponent],
   templateUrl: './tank-setup.component.html',
   styleUrls: ['./tank-setup.component.css'],
 })
@@ -303,25 +279,17 @@ export class TankSetupComponent {
 
   private updateAspectWarning(): void {
     const value = this.customForm.value as CustomFormShape;
-    if (
-      value.width === null ||
-      value.height === null ||
-      value.width <= 0 ||
-      value.height <= 0
-    ) {
+    if (value.width === null || value.height === null || value.width <= 0 || value.height <= 0) {
       this.aspectWarning.set(null);
       return;
     }
     const ratio = value.width / value.height;
     if (ratio < ASPECT_MIN || ratio > ASPECT_MAX) {
       this.aspectWarning.set(
-        `Unusual width-to-height ratio (${ratio.toFixed(
-          2,
-        )}). The tank can still be applied.`,
+        `Unusual width-to-height ratio (${ratio.toFixed(2)}). The tank can still be applied.`,
       );
     } else {
       this.aspectWarning.set(null);
     }
   }
-
 }

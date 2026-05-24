@@ -2,11 +2,7 @@
   <h2 id="tank-setup-heading">Tank</h2>
 
   <!-- Unit toggle ───────────────────────────────────────────────────────── -->
-  <div
-    role="group"
-    aria-labelledby="unit-toggle-label"
-    class="unit-toggle"
-  >
+  <div role="group" aria-labelledby="unit-toggle-label" class="unit-toggle">
     <span id="unit-toggle-label" class="unit-toggle__label">Units</span>
     <button
       type="button"
@@ -41,11 +37,7 @@
   <fieldset class="presets">
     <legend>Presets</legend>
     @for (group of presetGroups; track group.brand) {
-      <div
-        class="presets__group"
-        role="radiogroup"
-        [attr.aria-label]="group.brand + ' tanks'"
-      >
+      <div class="presets__group" role="radiogroup" [attr.aria-label]="group.brand + ' tanks'">
         <h3 class="presets__group-heading">{{ group.brand }}</h3>
         <ul class="presets__list">
           @for (preset of group.items; track preset.id) {
@@ -93,9 +85,7 @@
         [attr.max]="band().max"
         [value]="display(customForm.value.width)"
         (input)="onAxisInput('width', $any($event.target).value)"
-        [attr.aria-invalid]="
-          customForm.get('width')?.invalid && customForm.get('width')?.touched
-        "
+        [attr.aria-invalid]="customForm.get('width')?.invalid && customForm.get('width')?.touched"
         aria-describedby="width-error custom-help aspect-warning"
       />
       <span class="custom__unit">{{ displayUnit() }}</span>
@@ -103,12 +93,7 @@
         id="width-error"
         class="custom__error"
         role="alert"
-        [hidden]="
-          !(
-            customForm.get('width')?.invalid &&
-            customForm.get('width')?.touched
-          )
-        "
+        [hidden]="!(customForm.get('width')?.invalid && customForm.get('width')?.touched)"
       >
         Width must be between {{ band().min }} and {{ band().max }} {{ displayUnit() }}.
       </p>
@@ -125,9 +110,7 @@
         [attr.max]="band().max"
         [value]="display(customForm.value.height)"
         (input)="onAxisInput('height', $any($event.target).value)"
-        [attr.aria-invalid]="
-          customForm.get('height')?.invalid && customForm.get('height')?.touched
-        "
+        [attr.aria-invalid]="customForm.get('height')?.invalid && customForm.get('height')?.touched"
         aria-describedby="height-error custom-help aspect-warning"
       />
       <span class="custom__unit">{{ displayUnit() }}</span>
@@ -135,12 +118,7 @@
         id="height-error"
         class="custom__error"
         role="alert"
-        [hidden]="
-          !(
-            customForm.get('height')?.invalid &&
-            customForm.get('height')?.touched
-          )
-        "
+        [hidden]="!(customForm.get('height')?.invalid && customForm.get('height')?.touched)"
       >
         Height must be between {{ band().min }} and {{ band().max }} {{ displayUnit() }}.
       </p>
@@ -157,9 +135,7 @@
         [attr.max]="band().max"
         [value]="display(customForm.value.depth)"
         (input)="onAxisInput('depth', $any($event.target).value)"
-        [attr.aria-invalid]="
-          customForm.get('depth')?.invalid && customForm.get('depth')?.touched
-        "
+        [attr.aria-invalid]="customForm.get('depth')?.invalid && customForm.get('depth')?.touched"
         aria-describedby="depth-error custom-help aspect-warning"
       />
       <span class="custom__unit">{{ displayUnit() }}</span>
@@ -167,12 +143,7 @@
         id="depth-error"
         class="custom__error"
         role="alert"
-        [hidden]="
-          !(
-            customForm.get('depth')?.invalid &&
-            customForm.get('depth')?.touched
-          )
-        "
+        [hidden]="!(customForm.get('depth')?.invalid && customForm.get('depth')?.touched)"
       >
         Depth must be between {{ band().min }} and {{ band().max }} {{ displayUnit() }}.
       </p>
@@ -192,12 +163,11 @@
       {{ aspectWarning() }}
     </p>
 
-    <button
-      type="submit"
-      data-testid="apply-custom"
-      [disabled]="customForm.invalid"
-    >
+    <button type="submit" data-testid="apply-custom" [disabled]="customForm.invalid">
       Apply custom dimensions
     </button>
   </form>
+
+  <!-- Styling subpanel (F1.2 Phase D) ───────────────────────────────────── -->
+  <aquascape-tank-styling></aquascape-tank-styling>
 </section>
