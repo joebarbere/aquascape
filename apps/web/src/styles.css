@@ -1,23 +1,128 @@
 /*
- * Global styles for apps/web. Stage 0 baseline + a v1 polish pass for
- * cross-component button text inheritance.
+ * Global styles for apps/web.
  *
- * The `<meta name="color-scheme" content="light dark">` tag in index.html
- * advertises both schemes to the UA, which makes UA system colors (e.g.
- * `ButtonText`) flip to white when the OS is in dark mode. Per-component
- * buttons set `background: #fff` explicitly but inherit color from the UA
- * cascade — so white-on-white. The `button, input, select, textarea`
- * `color: inherit` rule below pins form-control text to the explicit body
- * color so they read correctly regardless of OS scheme. Dark-mode theming
- * (Stage 4 follow-up) will switch the body color via CSS custom properties.
+ * THEME TOKENS — load-bearing.
+ *
+ * Every component reads its surface, text, border, and accent colors from
+ * the custom properties below. The `:root` block defines the LIGHT theme;
+ * `prefers-color-scheme: dark` overrides those for users whose OS is in
+ * dark mode. The `[data-theme="light"]` / `[data-theme="dark"]` blocks on
+ * `<html>` let `PreferencesService` force a specific theme regardless of
+ * OS preference. Components that hard-code colors (`background: #fff`,
+ * `color: #111`) break dark mode silently — pin every color to a token.
+ *
+ * The 2D canvas renderer is currently left in light-theme mode for design
+ * clarity (a real aquascape is visualised against a light substrate, and
+ * inverting the tank-interior palette confuses the aesthetic). The
+ * AROUND-the-tank chrome (page background, sidebars, panels, toolbars,
+ * overlays, drag pills) follows the theme tokens here.
+ *
+ * BUTTON COLOR INHERITANCE: the `<meta name="color-scheme" content="light
+ * dark">` tag in index.html makes UA system colors (e.g. `ButtonText`)
+ * flip white under OS dark mode. Per-component buttons set explicit
+ * backgrounds but inherit `color` from the UA cascade → invisible labels.
+ * The `button, input, select, textarea { color: inherit; }` rule below
+ * pins form-control text to the explicit `--text` token regardless of OS
+ * scheme.
  */
+
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #fafafa;
+  --surface-2: #ffffff;
+  --surface-hover: #f0f0f0;
+  --text: #111111;
+  --text-muted: #555555;
+  --text-inverse: #ffffff;
+  --border: #e0e0e0;
+  --border-strong: #c0c0c0;
+  --accent: #1e88e5;
+  --accent-hover: #1565c0;
+  --accent-text: #ffffff;
+  --danger: #7a1f1a;
+  --danger-hover: #a32d26;
+  --danger-text: #ffffff;
+  --warning-bg: #fff7d6;
+  --warning-text: #6b4f00;
+  --carpet-bg: #f4faf2;
+  --carpet-border: #c6e0ba;
+  --carpet-badge: #3a8050;
+  --inspector-bg: #20232a;
+  --inspector-text: #ffffff;
+  --inspector-button-bg: #2c3038;
+  --inspector-button-hover: #3a3f48;
+  --inspector-border: #3a3f48;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #14171c;
+    --surface: #1c1f25;
+    --surface-2: #242830;
+    --surface-hover: #2e333d;
+    --text: #e6e8eb;
+    --text-muted: #9aa1ab;
+    --text-inverse: #14171c;
+    --border: #2e333d;
+    --border-strong: #3d434e;
+    --accent: #3a8eff;
+    --accent-hover: #6caaff;
+    --accent-text: #14171c;
+    --danger: #b73a32;
+    --danger-hover: #cc4f47;
+    --danger-text: #ffffff;
+    --warning-bg: #3b2f00;
+    --warning-text: #ffe69c;
+    --carpet-bg: #1f2a22;
+    --carpet-border: #2f4a34;
+    --carpet-badge: #5fb077;
+    --inspector-bg: #0f1116;
+    --inspector-text: #e6e8eb;
+    --inspector-button-bg: #1c1f25;
+    --inspector-button-hover: #2e333d;
+    --inspector-border: #2e333d;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #14171c;
+  --surface: #1c1f25;
+  --surface-2: #242830;
+  --surface-hover: #2e333d;
+  --text: #e6e8eb;
+  --text-muted: #9aa1ab;
+  --text-inverse: #14171c;
+  --border: #2e333d;
+  --border-strong: #3d434e;
+  --accent: #3a8eff;
+  --accent-hover: #6caaff;
+  --accent-text: #14171c;
+  --danger: #b73a32;
+  --danger-hover: #cc4f47;
+  --danger-text: #ffffff;
+  --warning-bg: #3b2f00;
+  --warning-text: #ffe69c;
+  --carpet-bg: #1f2a22;
+  --carpet-border: #2f4a34;
+  --carpet-badge: #5fb077;
+  --inspector-bg: #0f1116;
+  --inspector-text: #e6e8eb;
+  --inspector-button-bg: #1c1f25;
+  --inspector-button-hover: #2e333d;
+  --inspector-border: #2e333d;
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: #ffffff;
-  color: #111111;
+  background: var(--bg);
+  color: var(--text);
   font-family:
     system-ui,
     -apple-system,

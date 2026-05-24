@@ -29,11 +29,13 @@ import {
 } from '@aquascape/state';
 import { Store } from '@ngrx/store';
 
+import { ThemeToggleComponent } from './theme-toggle.component';
+
 @Component({
   selector: 'aquascape-editor-shell',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule],
+  imports: [CommonModule, ThemeToggleComponent],
   template: `
     <header class="editor-shell" role="banner">
       <div class="title-block">
@@ -97,6 +99,8 @@ import { Store } from '@ngrx/store';
             </ul>
           </details>
         }
+
+        <aquascape-theme-toggle></aquascape-theme-toggle>
       </nav>
     </header>
 
@@ -218,14 +222,14 @@ import { Store } from '@ngrx/store';
         font-size: 13px;
       }
       .recovery-banner {
-        background: #fff7d6;
-        color: #5a4500;
-        border-bottom: 1px solid #f0e2a0;
+        background: var(--warning-bg, #fff7d6);
+        color: var(--warning-text, #5a4500);
+        border-bottom: 1px solid var(--border, #f0e2a0);
       }
       .error-banner {
-        background: #ffe3e0;
-        color: #7a1f1a;
-        border-bottom: 1px solid #f4b5af;
+        background: var(--danger, #ffe3e0);
+        color: var(--danger-text, #7a1f1a);
+        border-bottom: 1px solid var(--border, #f4b5af);
       }
       .recovery-actions button {
         margin-left: 8px;

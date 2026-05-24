@@ -226,13 +226,13 @@ type DragState =
       }
       .app-sidebar {
         overflow-y: auto;
-        border-right: 1px solid #e0e0e0;
-        background: #fafafa;
+        border-right: 1px solid var(--border);
+        background: var(--surface);
       }
       .app-rail {
         overflow-y: auto;
-        border-left: 1px solid #e0e0e0;
-        background: #fafafa;
+        border-left: 1px solid var(--border);
+        background: var(--surface);
         padding: 8px;
       }
       .app-canvas-host {

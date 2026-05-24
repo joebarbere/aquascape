@@ -201,16 +201,17 @@ import { Store } from '@ngrx/store';
       .substrate-tool__empty {
         margin: 0;
         padding: 12px;
-        color: #777;
+        color: var(--text-muted, #777);
         font-style: italic;
-        background: #f4f4f6;
+        background: var(--surface, #f4f4f6);
         border-radius: 4px;
       }
       .substrate-tool__region {
         margin-top: 8px;
         padding: 8px;
-        background: #fff;
-        border: 1px solid #e0e0e0;
+        background: var(--surface-2, #fff);
+        color: inherit;
+        border: 1px solid var(--border, #e0e0e0);
         border-radius: 4px;
       }
       .substrate-tool__region-header {
@@ -230,13 +231,15 @@ import { Store } from '@ngrx/store';
       }
       .substrate-tool__field span {
         font-size: 11px;
-        color: #555;
+        color: var(--text-muted, #555);
       }
       .substrate-tool__field input,
       .substrate-tool__field select {
         font: inherit;
         padding: 4px 6px;
-        border: 1px solid #ccc;
+        background: var(--surface-2, #fff);
+        color: inherit;
+        border: 1px solid var(--border-strong, #ccc);
         border-radius: 3px;
       }
       .substrate-tool__row {
@@ -245,14 +248,14 @@ import { Store } from '@ngrx/store';
         gap: 6px;
       }
       .substrate-tool__profile {
-        border: 1px solid #e0e0e0;
+        border: 1px solid var(--border, #e0e0e0);
         border-radius: 4px;
         padding: 6px;
         margin: 6px 0 0;
       }
       .substrate-tool__profile legend {
         font-size: 11px;
-        color: #555;
+        color: var(--text-muted, #555);
         padding: 0 4px;
       }
       .substrate-tool__profile-row {
@@ -271,8 +274,8 @@ import { Store } from '@ngrx/store';
       button {
         font: inherit;
         cursor: pointer;
-        background: #20232a;
-        color: #fff;
+        background: var(--accent, #20232a);
+        color: var(--accent-text, #fff);
         border: none;
         border-radius: 4px;
         padding: 4px 10px;
@@ -283,7 +286,8 @@ import { Store } from '@ngrx/store';
       }
       .substrate-tool__remove-region,
       .substrate-tool__remove-point {
-        background: #c0392b;
+        background: var(--danger, #c0392b);
+        color: var(--danger-text, #fff);
       }
     `,
   ],

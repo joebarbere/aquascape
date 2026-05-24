@@ -5,6 +5,7 @@
     -apple-system,
     'Segoe UI',
     sans-serif;
+  color: var(--text);
 }
 .styling {
   display: flex;
@@ -12,14 +13,14 @@
   gap: 0.75rem;
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border, #e0e0e0);
 }
 .styling h3 {
   margin: 0;
   font-size: 1rem;
 }
 .styling__group {
-  border: 1px solid #ddd;
+  border: 1px solid var(--border, #ddd);
   border-radius: 6px;
   padding: 0.6rem;
   margin: 0;
@@ -40,8 +41,9 @@
   gap: 0.3rem;
 }
 .styling__group button {
-  border: 1px solid #c0c0c0;
-  background: #fff;
+  border: 1px solid var(--border-strong, #c0c0c0);
+  background: var(--surface-2, #fff);
+  color: inherit;
   padding: 0.3rem 0.6rem;
   cursor: pointer;
   border-radius: 4px;
@@ -50,14 +52,14 @@
 .styling__group button[aria-checked='true'],
 .styling__group button[aria-pressed='true'],
 .styling__group button[aria-selected='true'] {
-  background: #1e88e5;
-  color: #fff;
-  border-color: #1565c0;
+  background: var(--accent, #1e88e5);
+  color: var(--accent-text, #fff);
+  border-color: var(--accent-hover, #1565c0);
 }
 .styling__tablist button[aria-disabled='true'] {
-  color: #888;
+  color: var(--text-muted, #888);
   cursor: not-allowed;
-  background: #f0f0f0;
+  background: var(--surface-hover, #f0f0f0);
 }
 .styling__chip-swatch {
   display: inline-block;
@@ -84,13 +86,15 @@
 .styling__frame-color input[type='text'] {
   flex: 1;
   padding: 0.25rem 0.4rem;
-  border: 1px solid #c0c0c0;
+  background: var(--surface-2, #fff);
+  color: inherit;
+  border: 1px solid var(--border-strong, #c0c0c0);
   border-radius: 4px;
   font: inherit;
   font-variant-numeric: tabular-nums;
 }
 .styling__hex input[aria-invalid='true'] {
-  border-color: #c62828;
+  border-color: var(--danger, #c62828);
 }
 .styling__stops {
   list-style: none;
@@ -109,7 +113,9 @@
 .styling__stop input {
   width: 100%;
   padding: 0.25rem 0.4rem;
-  border: 1px solid #c0c0c0;
+  background: var(--surface-2, #fff);
+  color: inherit;
+  border: 1px solid var(--border-strong, #c0c0c0);
   border-radius: 4px;
   font: inherit;
   font-variant-numeric: tabular-nums;
@@ -128,12 +134,12 @@
 }
 .styling__error {
   grid-column: 1 / -1;
-  color: #c62828;
+  color: var(--danger, #c62828);
   font-size: 0.8rem;
   margin: 0;
 }
 .styling__rejection {
-  color: #c62828;
+  color: var(--danger, #c62828);
   font-size: 0.85rem;
   margin: 0;
 }
@@ -150,7 +156,7 @@
 }
 .styling__group button:focus-visible,
 .styling__group input:focus-visible {
-  outline: 2px solid #1565c0;
+  outline: 2px solid var(--accent-hover, #1565c0);
   outline-offset: 1px;
 }
 @media (prefers-reduced-motion: reduce) {

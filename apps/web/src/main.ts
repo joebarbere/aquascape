@@ -27,6 +27,8 @@ import { provideEffects } from '@ngrx/effects';
 import { provideStore } from '@ngrx/store';
 import { provideStoreDevtools } from '@ngrx/store-devtools';
 
+import { ThemeService } from '@aquascape/features/editor-shell';
+
 import { AppComponent } from './app/app.component';
 import { selectPlatform } from './select-platform';
 
@@ -63,6 +65,13 @@ bootstrapApplication(AppComponent, {
     // UI is fully usable in the empty/clean state until storage replies.
     const docEffects = ref.injector.get(DocumentEffects);
     void docEffects.bootstrap();
+
+    // v1 polish: touch ThemeService at boot so its constructor primes the
+    // persisted preference from storage and registers the OS-scheme media
+    // query listener BEFORE the user has a chance to interact. Without this
+    // the service stays uninstantiated until the toggle is opened, and the
+    // page renders one frame in the default theme.
+    ref.injector.get(ThemeService);
   })
   .catch((err: unknown) => {
     // Surface bootstrap failures to the host. Using console.error here is

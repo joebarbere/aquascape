@@ -116,15 +116,15 @@ type CategoryFilter = 'all' | 'rock' | 'wood' | 'other';
         padding: 4px 10px;
         background: transparent;
         color: inherit;
-        border: 1px solid #ccc;
+        border: 1px solid var(--border-strong, #ccc);
         border-radius: 4px;
         cursor: pointer;
         font: inherit;
       }
       .filter.active {
-        background: #20232a;
-        color: #fff;
-        border-color: #20232a;
+        background: var(--accent, #20232a);
+        color: var(--accent-text, #fff);
+        border-color: var(--accent, #20232a);
       }
       .hardscape-tool__grid {
         display: grid;
@@ -136,12 +136,18 @@ type CategoryFilter = 'all' | 'rock' | 'wood' | 'other';
         flex-direction: column;
         align-items: center;
         padding: 6px;
-        background: #fff;
-        border: 1px solid #e0e0e0;
+        background: var(--surface-2, #fff);
+        color: inherit;
+        border: 1px solid var(--border, #e0e0e0);
         border-radius: 4px;
         cursor: grab;
         font: inherit;
         touch-action: none;
+      }
+      .tile:hover,
+      .tile:focus-visible {
+        background: var(--surface-hover, #f0f0f0);
+        outline: none;
       }
       .tile:active {
         cursor: grabbing;
@@ -158,7 +164,7 @@ type CategoryFilter = 'all' | 'rock' | 'wood' | 'other';
       }
       .hardscape-tool__empty {
         margin: 8px 0 0;
-        color: #777;
+        color: var(--text-muted, #777);
         font-style: italic;
       }
     `,

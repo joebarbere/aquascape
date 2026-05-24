@@ -118,15 +118,15 @@ type ZoneFilter = 'all' | 'foreground' | 'midground' | 'background';
         padding: 4px 10px;
         background: transparent;
         color: inherit;
-        border: 1px solid #ccc;
+        border: 1px solid var(--border-strong, #ccc);
         border-radius: 4px;
         cursor: pointer;
         font: inherit;
       }
       .filter.active {
-        background: #20232a;
-        color: #fff;
-        border-color: #20232a;
+        background: var(--accent, #20232a);
+        color: var(--accent-text, #fff);
+        border-color: var(--accent, #20232a);
       }
       .planting-tool__grid {
         display: grid;
@@ -139,19 +139,25 @@ type ZoneFilter = 'all' | 'foreground' | 'midground' | 'background';
         flex-direction: column;
         align-items: center;
         padding: 6px;
-        background: #fff;
-        border: 1px solid #e0e0e0;
+        background: var(--surface-2, #fff);
+        color: inherit;
+        border: 1px solid var(--border, #e0e0e0);
         border-radius: 4px;
         cursor: grab;
         font: inherit;
         touch-action: none;
       }
+      .tile:hover,
+      .tile:focus-visible {
+        background: var(--surface-hover, #f0f0f0);
+        outline: none;
+      }
       .tile:active {
         cursor: grabbing;
       }
       .tile.carpet {
-        background: #f4faf2;
-        border-color: #c6e0ba;
+        background: var(--carpet-bg, #f4faf2);
+        border-color: var(--carpet-border, #c6e0ba);
       }
       .tile__silhouette {
         width: 64px;
@@ -167,7 +173,7 @@ type ZoneFilter = 'all' | 'foreground' | 'midground' | 'background';
         position: absolute;
         top: 4px;
         right: 4px;
-        background: #3a8050;
+        background: var(--carpet-badge, #3a8050);
         color: #fff;
         font-size: 10px;
         line-height: 1;
@@ -176,7 +182,7 @@ type ZoneFilter = 'all' | 'foreground' | 'midground' | 'background';
       }
       .planting-tool__empty {
         margin: 8px 0 0;
-        color: #777;
+        color: var(--text-muted, #777);
         font-style: italic;
       }
     `,

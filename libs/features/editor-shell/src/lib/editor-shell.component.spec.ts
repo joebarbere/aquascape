@@ -15,14 +15,37 @@ import {
   selectRecentFiles,
   selectStatus,
 } from '@aquascape/state';
+import type { StorageService } from '@aquascape/platform/platform-api';
+import { STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 
 import { EditorShellComponent } from './editor-shell.component';
+
+/**
+ * In-memory StorageService stub for the embedded ThemeToggleComponent /
+ * ThemeService. Most tests don't care about theme persistence; the stub
+ * keeps the injector graph satisfiable without pulling in platform-web.
+ */
+function makeStubStorage(): StorageService {
+  const store = new Map<string, unknown>();
+  return {
+    get: <T>(key: string) => Promise.resolve(store.get(key) as T | null),
+    set: <T>(key: string, value: T) => {
+      store.set(key, value);
+      return Promise.resolve();
+    },
+    remove: (key: string) => {
+      store.delete(key);
+      return Promise.resolve();
+    },
+  };
+}
 
 function configure(initial?: ReturnType<typeof initialDocumentState>) {
   TestBed.configureTestingModule({
     imports: [EditorShellComponent],
     providers: [
+      { provide: STORAGE_SERVICE, useValue: makeStubStorage() },
       provideMockStore({
         initialState: { [documentFeature.name]: initial ?? initialDocumentState() },
         selectors: [

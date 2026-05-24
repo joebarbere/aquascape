@@ -1,6 +1,7 @@
 :host {
   display: block;
   font: 14px system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--text);
 }
 .tank-setup {
   display: flex;
@@ -20,34 +21,31 @@
 .unit-toggle__label {
   margin-right: 0.5rem;
   font-size: 0.85rem;
-  color: #555;
+  color: var(--text-muted, #555);
 }
 .unit-toggle button {
-  border: 1px solid #c0c0c0;
-  background: #fff;
-  /* Explicit text color — `color-scheme: light dark` in index.html turns the
-     inherited UA color white under OS dark mode, which makes white-on-white
-     buttons invisible. */
-  color: #222;
+  border: 1px solid var(--border-strong, #c0c0c0);
+  background: var(--surface-2, #fff);
+  color: var(--text, #222);
   padding: 0.25rem 0.5rem;
   cursor: pointer;
   border-radius: 4px;
   font: inherit;
 }
 .unit-toggle button[aria-pressed='true'] {
-  background: #1e88e5;
-  color: #fff;
-  border-color: #1565c0;
+  background: var(--accent, #1e88e5);
+  color: var(--accent-text, #fff);
+  border-color: var(--accent-hover, #1565c0);
 }
 .unit-toggle button:focus-visible,
 .presets__list button:focus-visible,
 .custom__field input:focus-visible,
 .custom button[type='submit']:focus-visible {
-  outline: 2px solid #1565c0;
+  outline: 2px solid var(--accent-hover, #1565c0);
   outline-offset: 1px;
 }
 .presets {
-  border: 1px solid #ddd;
+  border: 1px solid var(--border, #ddd);
   border-radius: 6px;
   padding: 0.75rem;
   margin: 0;
@@ -62,7 +60,7 @@
 .presets__group-heading {
   font-size: 0.85rem;
   text-transform: uppercase;
-  color: #555;
+  color: var(--text-muted, #555);
   margin: 0 0 0.25rem;
 }
 .presets__list {
@@ -76,8 +74,9 @@
 .presets__list button {
   width: 100%;
   text-align: left;
-  border: 1px solid #d0d0d0;
-  background: #fff;
+  border: 1px solid var(--border-strong, #d0d0d0);
+  background: var(--surface-2, #fff);
+  color: inherit;
   padding: 0.4rem 0.6rem;
   border-radius: 4px;
   cursor: pointer;
@@ -86,12 +85,16 @@
   justify-content: space-between;
   gap: 0.5rem;
 }
+.presets__list button:hover,
+.presets__list button:focus-visible {
+  background: var(--surface-hover, #f0f0f0);
+}
 .presets__list button[aria-checked='true'] {
-  background: #e3f2fd;
-  border-color: #1e88e5;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+  border-color: var(--accent, #1e88e5);
 }
 .presets__dims {
-  color: #555;
+  color: var(--text-muted, #555);
   font-variant-numeric: tabular-nums;
 }
 .custom {
@@ -108,46 +111,48 @@
 .custom__field input {
   width: 100%;
   padding: 0.25rem 0.4rem;
-  border: 1px solid #c0c0c0;
+  background: var(--surface-2, #fff);
+  color: inherit;
+  border: 1px solid var(--border-strong, #c0c0c0);
   border-radius: 4px;
   font: inherit;
   font-variant-numeric: tabular-nums;
 }
 .custom__field input[aria-invalid='true'] {
-  border-color: #c62828;
+  border-color: var(--danger, #c62828);
 }
 .custom__unit {
-  color: #555;
+  color: var(--text-muted, #555);
 }
 .custom__error {
   grid-column: 1 / -1;
-  color: #c62828;
+  color: var(--danger, #c62828);
   font-size: 0.8rem;
   margin: 0;
 }
 .custom__help {
-  color: #555;
+  color: var(--text-muted, #555);
   font-size: 0.8rem;
   margin: 0;
 }
 .custom__warning {
-  color: #b76e00;
+  color: var(--warning-text, #b76e00);
   font-size: 0.85rem;
   margin: 0;
 }
 .custom button[type='submit'] {
   margin-top: 0.4rem;
   padding: 0.4rem 0.75rem;
-  border: 1px solid #1565c0;
-  background: #1e88e5;
-  color: #fff;
+  border: 1px solid var(--accent-hover, #1565c0);
+  background: var(--accent, #1e88e5);
+  color: var(--accent-text, #fff);
   border-radius: 4px;
   cursor: pointer;
   font: inherit;
 }
 .custom button[type='submit']:disabled {
-  background: #b0bec5;
-  border-color: #90a4ae;
+  background: var(--border-strong, #b0bec5);
+  border-color: var(--border, #90a4ae);
   cursor: not-allowed;
 }
 @media (prefers-reduced-motion: reduce) {
