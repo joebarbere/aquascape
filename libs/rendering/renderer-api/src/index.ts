@@ -130,12 +130,22 @@ export interface SceneRenderer {
    * omitted, the renderer falls back to an axis-aligned-bounding-box test
    * derived from `transform.scale × naturalSize`-defaults — adequate for
    * headless smoke tests but visibly looser than the rendered shape.
+   *
+   * The optional `selection` parameter enables **handle hit-testing**: when
+   * the point lands on a painted selection handle of a currently-selected
+   * object, the result's `handle` field is populated (`'translate'`,
+   * `'rotate'`, `'scaleNW'`, etc.). Handle hits BEAT body hits — clicking
+   * the top-right scale square returns `'scaleNE'` even when the body is
+   * under the cursor. Without `selection`, handles aren't hit-tested at all
+   * (handles only paint for selected objects, and the renderer doesn't
+   * track selection between `render` calls).
    */
   hitTest(
     point: Vec2,
     scene: Scene,
     viewport: Viewport,
     catalog?: Catalog,
+    selection?: ReadonlyArray<ObjectId>,
   ): HitResult | null;
 
   /**

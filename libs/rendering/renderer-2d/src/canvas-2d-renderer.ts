@@ -474,6 +474,7 @@ export class Canvas2DRenderer implements SceneRenderer {
     scene: Scene,
     viewport: Viewport,
     catalog?: Catalog,
+    selection?: ReadonlyArray<ObjectId>,
   ): HitResult | null {
     // The surface is the source of truth for canvas dimensions. Without an
     // attach we have no frame of reference — return null.
@@ -481,16 +482,40 @@ export class Canvas2DRenderer implements SceneRenderer {
     if (s === null) return null;
 
     const world = canvasCssToWorld(point, viewport, { width: s.width, height: s.height });
+    // Pixel-equivalent slack in world mm so the user doesn't have to land
+    // on the exact handle pixel — same `oneCssPxInMm` the renderer uses.
+    const oneCssPxInMm = 1 / viewport.zoom;
 
-    // Iterate **front-to-back** so the visually-topmost object wins:
-    // layers are stored back-to-front (index 0 furthest back), and within
-    // a layer objects are stored back-to-front too. Reverse both.
+    // 1) Handle hit-test FIRST — handles only paint for selected objects,
+    //    and a click that lands on a handle should win over the body
+    //    underneath (otherwise the user could never grab a handle that
+    //    sits inside the object's bounds, which all of them do).
+    if (selection !== undefined && selection.length > 0) {
+      const selectedSet = new Set<ObjectId>(selection);
+      // Iterate selection in the same front-to-back order as bodies — the
+      // visually-topmost selected object's handles win if multiple overlap.
+      for (let li = scene.layers.length - 1; li >= 0; li--) {
+        const layer = scene.layers[li]!;
+        if (!layer.visible) continue;
+        for (let oi = layer.objects.length - 1; oi >= 0; oi--) {
+          const obj = layer.objects[oi]!;
+          if (obj.kind !== 'hardscape') continue;
+          if (!selectedSet.has(obj.id)) continue;
+          const handle = handleAtPoint(obj as HardscapeObject, world, catalog, oneCssPxInMm);
+          if (handle !== null) {
+            return { objectId: obj.id, layerId: layer.id, handle };
+          }
+        }
+      }
+    }
+
+    // 2) Body hit-test — same front-to-back walk as before.
     for (let li = scene.layers.length - 1; li >= 0; li--) {
       const layer = scene.layers[li]!;
       if (!layer.visible) continue;
       for (let oi = layer.objects.length - 1; oi >= 0; oi--) {
         const obj = layer.objects[oi]!;
-        if (obj.kind !== 'hardscape') continue; // Stage 3 hit-tests hardscape only.
+        if (obj.kind !== 'hardscape') continue;
         if (objectContainsWorldPoint(obj, world, catalog)) {
           return { objectId: obj.id, layerId: layer.id };
         }
@@ -939,6 +964,84 @@ function resolveHardscapeEntry(
 /** Fallback hardscape footprint when no catalog is provided to hit-test. */
 const HARDSCAPE_FALLBACK_NATURAL_MM = 100;
 
+/**
+ * Test `worldPoint` against the painted selection handles of a hardscape
+ * object. Returns the handle name (matches `HitResult.handle`) or `null`.
+ * Mirrors the geometry the renderer uses in `paintSelectionHandles`:
+ *   - 4 corner scale handles at `(±halfW, ±halfH)` in the object's local frame,
+ *     each a `SELECTION_HANDLE_PX × SELECTION_HANDLE_PX` square (world-mm
+ *     sized so the visual hit slop matches what the user sees).
+ *   - 1 rotate handle at `(0, halfH + SELECTION_ROTATE_STALK_PX * 1mm)`,
+ *     a circle of radius `SELECTION_HANDLE_PX / 2` world-mm.
+ *
+ * The renderer doesn't paint a 'translate' handle as a discrete dot — the
+ * whole object body acts as the translate handle. This helper deliberately
+ * skips 'translate'; the caller falls through to body hit-test for that.
+ */
+function handleAtPoint(
+  obj: HardscapeObject,
+  worldPoint: Vec2,
+  catalog: Catalog | undefined,
+  oneCssPxInMm: number,
+): NonNullable<HitResult['handle']> | null {
+  const entry = resolveHardscapeEntry(obj.ref, catalog);
+  // Use catalog naturalSize when available, otherwise the fallback (same
+  // policy as the body hit-test).
+  const naturalW = entry?.naturalSize.width ?? HARDSCAPE_FALLBACK_NATURAL_MM;
+  const naturalH = entry?.naturalSize.height ?? HARDSCAPE_FALLBACK_NATURAL_MM;
+  const halfW = obj.transform.scale.x * naturalW * 0.5;
+  const halfH = obj.transform.scale.y * naturalH * 0.5;
+  if (halfW <= 0 || halfH <= 0) return null;
+
+  // Transform the world point into the object's local frame (translate
+  // by -position, rotate by -theta).
+  const dx = worldPoint.x - obj.transform.position.x;
+  const dy = worldPoint.y - obj.transform.position.y;
+  const theta = obj.transform.rotation.z;
+  const cos = Math.cos(theta);
+  const sin = Math.sin(theta);
+  const lx = dx * cos + dy * sin;
+  const ly = -dx * sin + dy * cos;
+
+  // Slop = the painted handle radius in world mm. Equal to the renderer's
+  // SELECTION_HANDLE_PX / 2 in CSS pixels → world mm.
+  const handleHalfMm = (SELECTION_HANDLE_PX * 0.5) * oneCssPxInMm;
+  const rotateRadiusMm = (SELECTION_HANDLE_PX * 0.5) * oneCssPxInMm;
+  const stalkLengthMm = SELECTION_ROTATE_STALK_PX * oneCssPxInMm;
+
+  // Corner scale handles. Test rotated-into-local point against each
+  // corner's painted bbox. Names match the on-screen positions: NW = top-
+  // left in world coords (low x, HIGH y after the y-flip — but local
+  // coordinates are post-rotation; the renderer paints corners at
+  // `(±halfW, ±halfH)`, so the visual mapping is +y = up in world).
+  const corners: Array<[number, number, NonNullable<HitResult['handle']>]> = [
+    [-halfW, -halfH, 'scaleSW'],
+    [halfW, -halfH, 'scaleSE'],
+    [halfW, halfH, 'scaleNE'],
+    [-halfW, halfH, 'scaleNW'],
+  ];
+  for (const [cx, cy, name] of corners) {
+    if (
+      lx >= cx - handleHalfMm &&
+      lx <= cx + handleHalfMm &&
+      ly >= cy - handleHalfMm &&
+      ly <= cy + handleHalfMm
+    ) {
+      return name;
+    }
+  }
+
+  // Rotate handle: circle centred at (0, halfH + stalk) in the local frame.
+  const rcx = 0;
+  const rcy = halfH + stalkLengthMm;
+  const rdx = lx - rcx;
+  const rdy = ly - rcy;
+  if (rdx * rdx + rdy * rdy <= rotateRadiusMm * rotateRadiusMm) {
+    return 'rotate';
+  }
+
+  return null;
+}
+
 // Suppress "unused" warnings for types reserved for future use here.
 void ((): LayerId | undefined => undefined);
-void ((): ObjectId | undefined => undefined);

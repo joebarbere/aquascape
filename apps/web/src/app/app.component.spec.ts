@@ -169,3 +169,261 @@ describe('AppComponent', () => {
     expect(viewport.center).toEqual({ x: 600, y: 225 });
   });
 });
+
+// ─── Stage 3.x — pointer-drag flows ──────────────────────────────────────
+
+import { SceneActions, SelectionActions } from '@aquascape/state';
+import { asLayerId, asObjectId } from '@aquascape/domain/scene-model';
+import type { ObjectId } from '@aquascape/domain/scene-model';
+
+// jsdom doesn't ship PointerEvent natively — same polyfill as the
+// hardscape-tool spec.
+if (typeof (globalThis as { PointerEvent?: unknown }).PointerEvent === 'undefined') {
+  class PointerEventPolyfill extends MouseEvent {
+    readonly pointerId: number;
+    readonly pointerType: string;
+    constructor(type: string, init: MouseEventInit & { pointerId?: number; pointerType?: string } = {}) {
+      super(type, init);
+      this.pointerId = init.pointerId ?? 1;
+      this.pointerType = init.pointerType ?? 'mouse';
+    }
+  }
+  (globalThis as { PointerEvent: unknown }).PointerEvent = PointerEventPolyfill;
+}
+
+function sceneWithObject(id: string, position = { x: 180, y: 110, z: 0 }): Scene {
+  const base = defaultScene();
+  return {
+    ...base,
+    layers: [
+      {
+        id: asLayerId('layer-1'),
+        name: 'L',
+        opacity: 1,
+        visible: true,
+        locked: false,
+        objects: [
+          {
+            kind: 'hardscape' as const,
+            id: asObjectId(id),
+            ref: { catalog: 'core', id: 'rock.seiryu.large', version: 1 },
+            transform: {
+              position,
+              rotation: { x: 0, y: 0, z: 0 },
+              scale: { x: 1, y: 1, z: 1 },
+              flipX: false,
+              flipY: false,
+            },
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function dispatchSpy() {
+  const store = TestBed.inject(MockStore);
+  return jest.spyOn(store, 'dispatch');
+}
+
+describe('AppComponent — Stage 3.x pointer drags', () => {
+  it('pointerdown on a body of an unselected object dispatches replaceSelection', () => {
+    const renderer = new MockSceneRenderer();
+    const scene = sceneWithObject('a');
+    configure(renderer, scene);
+    renderer.hitTest.mockReturnValue({ objectId: asObjectId('a'), layerId: asLayerId('layer-1') });
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const spy = dispatchSpy();
+    const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 400, clientY: 300 }));
+    const actions = spy.mock.calls.map((c) => c[0]);
+    expect(actions[0]).toEqual(SelectionActions.replaceSelection({ ids: [asObjectId('a')] }));
+  });
+
+  it('move drag dispatches a single MoveObject on pointerup', () => {
+    const renderer = new MockSceneRenderer();
+    const scene = sceneWithObject('a');
+    const store = TestBed;
+    configure(renderer, scene);
+    // Pre-select the object so the click doesn't dispatch replaceSelection too.
+    store
+      .inject(MockStore)
+      .overrideSelector(selectSelectedIds, [asObjectId('a')] as readonly ObjectId[]);
+    renderer.hitTest.mockReturnValue({ objectId: asObjectId('a'), layerId: asLayerId('layer-1') });
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const spy = dispatchSpy();
+    const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 400, clientY: 300 }));
+    document.dispatchEvent(new PointerEvent('pointermove', { clientX: 500, clientY: 300 }));
+    document.dispatchEvent(new PointerEvent('pointerup', { clientX: 500, clientY: 300 }));
+    const dispatched = spy.mock.calls.map((c) => c[0]);
+    const moveActions = dispatched.filter(
+      (a) =>
+        (a as ReturnType<typeof SceneActions.dispatchCommand>).type ===
+        '[Scene] Dispatch Command' &&
+        (a as ReturnType<typeof SceneActions.dispatchCommand>).command.kind === 'MoveObject',
+    );
+    expect(moveActions.length).toBe(1);
+  });
+
+  it('handle: scaleNE → drag dispatches a single ReshapeObject', () => {
+    const renderer = new MockSceneRenderer();
+    const scene = sceneWithObject('a');
+    configure(renderer, scene);
+    TestBed.inject(MockStore).overrideSelector(
+      selectSelectedIds,
+      [asObjectId('a')] as readonly ObjectId[],
+    );
+    renderer.hitTest.mockReturnValue({
+      objectId: asObjectId('a'),
+      layerId: asLayerId('layer-1'),
+      handle: 'scaleNE',
+    });
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const spy = dispatchSpy();
+    const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 450, clientY: 250 }));
+    document.dispatchEvent(new PointerEvent('pointermove', { clientX: 480, clientY: 220 }));
+    document.dispatchEvent(new PointerEvent('pointerup', { clientX: 480, clientY: 220 }));
+    const dispatched = spy.mock.calls.map((c) => c[0]);
+    const reshapes = dispatched.filter(
+      (a) =>
+        (a as ReturnType<typeof SceneActions.dispatchCommand>).type ===
+        '[Scene] Dispatch Command' &&
+        (a as ReturnType<typeof SceneActions.dispatchCommand>).command.kind === 'ReshapeObject',
+    );
+    expect(reshapes.length).toBe(1);
+  });
+
+  it('handle: rotate → drag dispatches a single ReshapeObject with updated rotation.z', () => {
+    const renderer = new MockSceneRenderer();
+    const scene = sceneWithObject('a');
+    configure(renderer, scene);
+    TestBed.inject(MockStore).overrideSelector(
+      selectSelectedIds,
+      [asObjectId('a')] as readonly ObjectId[],
+    );
+    renderer.hitTest.mockReturnValue({
+      objectId: asObjectId('a'),
+      layerId: asLayerId('layer-1'),
+      handle: 'rotate',
+    });
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const spy = dispatchSpy();
+    const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 500, clientY: 300 }));
+    document.dispatchEvent(new PointerEvent('pointermove', { clientX: 400, clientY: 200 }));
+    document.dispatchEvent(new PointerEvent('pointerup', { clientX: 400, clientY: 200 }));
+    const dispatched = spy.mock.calls.map((c) => c[0]);
+    const reshape = dispatched.find(
+      (a) =>
+        (a as ReturnType<typeof SceneActions.dispatchCommand>).type ===
+          '[Scene] Dispatch Command' &&
+        (a as ReturnType<typeof SceneActions.dispatchCommand>).command.kind === 'ReshapeObject',
+    );
+    expect(reshape).toBeDefined();
+  });
+
+  it('Esc during a drag cancels without dispatching the would-be command', () => {
+    const renderer = new MockSceneRenderer();
+    const scene = sceneWithObject('a');
+    configure(renderer, scene);
+    TestBed.inject(MockStore).overrideSelector(
+      selectSelectedIds,
+      [asObjectId('a')] as readonly ObjectId[],
+    );
+    renderer.hitTest.mockReturnValue({ objectId: asObjectId('a'), layerId: asLayerId('layer-1') });
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const spy = dispatchSpy();
+    const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 400, clientY: 300 }));
+    document.dispatchEvent(new PointerEvent('pointermove', { clientX: 500, clientY: 300 }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    // Pointer-up after cancel should now be a no-op (document listeners removed).
+    document.dispatchEvent(new PointerEvent('pointerup', { clientX: 500, clientY: 300 }));
+    const dispatched = spy.mock.calls.map((c) => c[0]);
+    expect(
+      dispatched.some(
+        (a) =>
+          (a as ReturnType<typeof SceneActions.dispatchCommand>).type ===
+          '[Scene] Dispatch Command' &&
+          (a as ReturnType<typeof SceneActions.dispatchCommand>).command.kind === 'MoveObject',
+      ),
+    ).toBe(false);
+  });
+
+  it('pointerdown on empty space starts a marquee drag (overlay div appears)', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer, sceneWithObject('a'));
+    renderer.hitTest.mockReturnValue(null);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 100, clientY: 100 }));
+    document.dispatchEvent(new PointerEvent('pointermove', { clientX: 200, clientY: 200 }));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.marquee-overlay')).not.toBeNull();
+    // Clean up.
+    document.dispatchEvent(new PointerEvent('pointerup', { clientX: 200, clientY: 200 }));
+  });
+
+  it('marquee dispatches selectByMarquee with objects whose centre is inside', () => {
+    const renderer = new MockSceneRenderer();
+    // Place the object at the viewport centre — picking a marquee that
+    // covers the centre of the canvas should include it.
+    const scene = sceneWithObject('a', { x: 180, y: 110, z: 0 });
+    configure(renderer, scene);
+    renderer.hitTest.mockReturnValue(null);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    // jsdom's getBoundingClientRect returns zeros by default — stub it to
+    // return the canvas layout we expect for an 800×600 host.
+    const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
+    canvas.getBoundingClientRect = (): DOMRect =>
+      ({ left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600, x: 0, y: 0 }) as DOMRect;
+    const spy = dispatchSpy();
+    // Marquee from (300, 200) to (500, 400) in CSS — straddles the canvas
+    // centre (400, 300) which projects back to world (180, 110).
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 300, clientY: 200 }));
+    document.dispatchEvent(new PointerEvent('pointermove', { clientX: 500, clientY: 400 }));
+    document.dispatchEvent(new PointerEvent('pointerup', { clientX: 500, clientY: 400 }));
+    const dispatched = spy.mock.calls.map((c) => c[0]);
+    const marqueeAction = dispatched.find(
+      (a): a is ReturnType<typeof SelectionActions.selectByMarquee> =>
+        (a as ReturnType<typeof SelectionActions.selectByMarquee>).type ===
+        '[Selection] Select By Marquee',
+    );
+    expect(marqueeAction).toBeDefined();
+    expect(marqueeAction!.ids).toContain(asObjectId('a'));
+  });
+
+  it('zero-area marquee with no shift clears selection (matches empty click)', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    renderer.hitTest.mockReturnValue(null);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const spy = dispatchSpy();
+    const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 100, clientY: 100 }));
+    document.dispatchEvent(new PointerEvent('pointerup', { clientX: 100, clientY: 100 }));
+    const dispatched = spy.mock.calls.map((c) => c[0]);
+    expect(dispatched).toContainEqual(SelectionActions.clearSelection());
+  });
+
+  it('ignores non-primary-button pointerdowns', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const spy = dispatchSpy();
+    const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 2, clientX: 100, clientY: 100 }));
+    expect(spy).not.toHaveBeenCalled();
+  });
+});

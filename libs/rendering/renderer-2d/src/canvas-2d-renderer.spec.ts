@@ -1618,3 +1618,193 @@ describe('Canvas2DRenderer.render (hardscape)', () => {
     expect(canvas.context.ops).toEqual(first);
   });
 });
+
+// ─── Stage 3.x — handle hit-testing ──────────────────────────────────────
+
+describe('Canvas2DRenderer.hitTest (handles)', () => {
+  let fakeWindow: FakeWindow;
+  beforeEach(() => {
+    fakeWindow = installFakeWindow();
+  });
+  afterEach(() => {
+    uninstallFakeWindow();
+    void fakeWindow;
+  });
+
+  const squareEntry = {
+    catalog: 'core',
+    id: 'rock.test',
+    version: 1,
+    name: 'Test',
+    kind: 'hardscape' as const,
+    category: 'rock' as const,
+    naturalSize: { width: 100, height: 100, depth: 100 },
+    color: '#888888',
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 1, y: 1 },
+      { x: -1, y: 1 },
+    ],
+  };
+  const fakeCatalog = {
+    entries: [squareEntry] as never,
+    get({ catalog, id }: { catalog: string; id: string }) {
+      if (catalog === 'core' && id === 'rock.test') return squareEntry;
+      return null;
+    },
+    byKind() {
+      return [] as never;
+    },
+  } as never;
+
+  function sceneWithObject() {
+    const base = makeMinimalScene(600, 360, 360);
+    return {
+      ...base,
+      layers: [
+        {
+          id: 'layer-1' as never,
+          name: 'L',
+          opacity: 1,
+          visible: true,
+          locked: false,
+          objects: [
+            {
+              kind: 'hardscape' as const,
+              id: 'obj-1' as never,
+              ref: { catalog: 'core', id: 'rock.test', version: 1 },
+              transform: {
+                position: { x: 180, y: 110, z: 0 },
+                rotation: { x: 0, y: 0, z: 0 },
+                scale: { x: 1, y: 1, z: 1 },
+                flipX: false,
+                flipY: false,
+              },
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  // 100mm × 100mm object centred at viewport center (180, 110) at zoom=1.
+  // Canvas size 800×600 → canvas center (400, 300).
+  // World ±50 → CSS ±50. y is flipped: world +y up → CSS −y.
+  // Corners (world):  NE=(230,160), NW=(130,160), SE=(230,60), SW=(130,60).
+  // Corners (CSS):    NE=(450,250), NW=(350,250), SE=(450,350), SW=(350,350).
+
+  it('returns handle: scaleNE when the click is on the top-right scale handle', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const result = r.hitTest({ x: 450, y: 250 }, sceneWithObject(), upright, fakeCatalog, [
+      'obj-1' as never,
+    ]);
+    expect(result?.handle).toBe('scaleNE');
+  });
+
+  it('returns handle: scaleSW for the bottom-left corner', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const result = r.hitTest({ x: 350, y: 350 }, sceneWithObject(), upright, fakeCatalog, [
+      'obj-1' as never,
+    ]);
+    expect(result?.handle).toBe('scaleSW');
+  });
+
+  it('returns handle: scaleNW and scaleSE for the remaining two corners', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    expect(
+      r.hitTest({ x: 350, y: 250 }, sceneWithObject(), upright, fakeCatalog, [
+        'obj-1' as never,
+      ])?.handle,
+    ).toBe('scaleNW');
+    expect(
+      r.hitTest({ x: 450, y: 350 }, sceneWithObject(), upright, fakeCatalog, [
+        'obj-1' as never,
+      ])?.handle,
+    ).toBe('scaleSE');
+  });
+
+  it('returns handle: rotate when the click is on the rotate dot above the bbox', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    // Rotate dot at local (0, halfH + stalk) = (0, 50 + 18) = (0, 68).
+    // World (180, 178). CSS y = 300 - 68 = 232.
+    const result = r.hitTest({ x: 400, y: 232 }, sceneWithObject(), upright, fakeCatalog, [
+      'obj-1' as never,
+    ]);
+    expect(result?.handle).toBe('rotate');
+  });
+
+  it('returns body hit (no handle field) when selection list is empty', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const result = r.hitTest({ x: 450, y: 250 }, sceneWithObject(), upright, fakeCatalog, []);
+    expect(result?.objectId).toBe('obj-1');
+    expect(result?.handle).toBeUndefined();
+  });
+
+  it('skips handle hit-test when the object is not in the selection list', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const result = r.hitTest({ x: 450, y: 250 }, sceneWithObject(), upright, fakeCatalog, [
+      'unrelated' as never,
+    ]);
+    expect(result?.handle).toBeUndefined();
+    expect(result?.objectId).toBe('obj-1');
+  });
+
+  it('returns null when the cursor is well outside the bbox + handles', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    expect(
+      r.hitTest({ x: 200, y: 300 }, sceneWithObject(), upright, fakeCatalog, [
+        'obj-1' as never,
+      ]),
+    ).toBeNull();
+  });
+
+  it('honours object rotation for handle positions', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    // Rotate 90° CCW. The painted NE corner (local (50,50)) ends up at
+    // world (180 - 50, 110 + 50) = (130, 160). CSS = (350, 250).
+    const scene = sceneWithObject();
+    scene.layers[0]!.objects[0]!.transform.rotation = { x: 0, y: 0, z: Math.PI / 2 };
+    const result = r.hitTest({ x: 350, y: 250 }, scene, upright, fakeCatalog, [
+      'obj-1' as never,
+    ]);
+    expect(result?.handle).toBe('scaleNE');
+  });
+
+  it('skips handle hit-test for objects with zero scale', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithObject();
+    scene.layers[0]!.objects[0]!.transform.scale = { x: 0, y: 0, z: 0 };
+    expect(
+      r.hitTest({ x: 400, y: 300 }, scene, upright, fakeCatalog, ['obj-1' as never]),
+    ).toBeNull();
+  });
+
+  it('uses fallback naturalSize when no catalog is provided (still hits handles)', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const result = r.hitTest({ x: 450, y: 250 }, sceneWithObject(), upright, undefined, [
+      'obj-1' as never,
+    ]);
+    expect(result?.handle).toBe('scaleNE');
+  });
+});

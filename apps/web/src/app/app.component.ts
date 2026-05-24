@@ -1,29 +1,41 @@
-// Root component for apps/web — Stage 0 F0.6 + F1.1 Phase B + Stage 3 F3.3.
+// Root component for apps/web — Stages 0–3 + 3.x.
 //
 // Responsibilities:
 //   1. Host a CSS-grid layout: a sidebar with tank-setup + substrate-tool +
 //      hardscape-tool panels on the left, the full-height scene canvas on
-//      the right.
+//      the right + the floating selection inspector overlaying the canvas.
 //   2. Subscribe to the NgRx scene + selection stores; re-render the canvas
-//      whenever either changes.
+//      whenever either (or the in-progress drag preview) changes.
 //   3. On host resize (ResizeObserver), recompute the viewport against the
 //      current scene's tank dimensions and re-render.
-//   4. Pointer events on the canvas: click → hitTest → dispatch select
-//      (shift-click toggles). Click on empty space clears selection.
+//   4. **Pointer interactions on the canvas (Stage 3.x).** Single pointer
+//      down does click-or-drag based on the renderer's hit result:
+//        - handle: 'rotate'       → rotate drag
+//        - handle: 'scale*'       → scale drag
+//        - body of a selected obj → move drag
+//        - body of an unselected  → select then move drag
+//        - empty space            → marquee drag (shift = additive)
+//      Every drag is committed on `pointerup` as a single command, so the
+//      undo stack sees one entry per gesture (intermediate pointer-move
+//      ticks are LOCAL preview state — they never dispatch).
 //   5. Receive hardscape drops from the palette via HardscapeDragService:
 //      convert screen → world coords, mint a new ObjectId, dispatch
 //      AddObject. The first hardscape drop also creates a default
 //      "Hardscape" layer if no layer exists yet.
 //   6. On destroy, dispose the renderer and disconnect the observer.
 //
-// The component never mutates the `Scene`. It dispatches actions; the
-// effect turns them into Commands; the reducer commits a new `Scene`;
-// the selector here emits, and the canvas redraws.
+// The component never mutates the store's `Scene`. During a drag, a
+// **transient previewScene** is built (the live scene with the dragged
+// object's transform overridden) and handed to the renderer; the store
+// only sees the final transform on pointer-up. This keeps undo clean
+// (one history entry per drag) and means a Cmd+Z lands the user back at
+// the pre-drag state, not at some intermediate frame.
 
 import { CommonModule } from '@angular/common';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   DestroyRef,
   ElementRef,
@@ -32,22 +44,28 @@ import {
   OnDestroy,
   ViewChild,
   inject,
+  signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { combineLatest } from 'rxjs';
 
 import { coreCatalog } from '@aquascape/domain/catalog';
 import type { HardscapeEntry } from '@aquascape/domain/catalog';
+import type { Transform } from '@aquascape/domain/geometry';
 import {
   addLayer,
   addObject,
   asLayerId,
   asObjectId,
   identityTransform,
+  moveObject,
+  reshapeObject,
   type HardscapeObject,
   type LayerId,
+  type Layer,
   type ObjectId,
   type Scene,
+  type SceneObject,
 } from '@aquascape/domain/scene-model';
 import {
   EditorShellComponent,
@@ -71,7 +89,12 @@ import type {
   RenderExportService,
   StorageService,
 } from '@aquascape/platform/platform-api';
-import type { RenderSurface, SceneRenderer, Viewport } from '@aquascape/rendering/renderer-api';
+import type {
+  HitResult,
+  RenderSurface,
+  SceneRenderer,
+  Viewport,
+} from '@aquascape/rendering/renderer-api';
 import {
   SceneActions,
   SelectionActions,
@@ -81,7 +104,45 @@ import {
 import { Store } from '@ngrx/store';
 
 import { defaultViewport } from './default-viewport';
+import { applyMoveDrag, applyRotateDrag, applyScaleDrag } from './drag-math';
 import { SCENE_RENDERER } from './renderer.token';
+
+// ─── Drag state shape ────────────────────────────────────────────────────
+
+interface Vec2 {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** Discriminated state for an in-flight pointer drag. Null when idle. */
+type DragState =
+  | {
+      readonly kind: 'move';
+      readonly objectId: ObjectId;
+      readonly originalTransform: Transform;
+      readonly startWorld: Vec2;
+      readonly currentWorld: Vec2;
+    }
+  | {
+      readonly kind: 'scale';
+      readonly objectId: ObjectId;
+      readonly originalTransform: Transform;
+      readonly startWorld: Vec2;
+      readonly currentWorld: Vec2;
+    }
+  | {
+      readonly kind: 'rotate';
+      readonly objectId: ObjectId;
+      readonly originalTransform: Transform;
+      readonly startWorld: Vec2;
+      readonly currentWorld: Vec2;
+    }
+  | {
+      readonly kind: 'marquee';
+      readonly startCss: Vec2;
+      readonly currentCss: Vec2;
+      readonly shift: boolean;
+    };
 
 @Component({
   selector: 'aquascape-root',
@@ -112,6 +173,16 @@ import { SCENE_RENDERER } from './renderer.token';
             role="img"
             (pointerdown)="onCanvasPointerDown($event)"
           ></canvas>
+          @if (marqueeRect(); as r) {
+            <div
+              class="marquee-overlay"
+              [style.left.px]="r.left"
+              [style.top.px]="r.top"
+              [style.width.px]="r.width"
+              [style.height.px]="r.height"
+              aria-hidden="true"
+            ></div>
+          }
           <aquascape-selection-inspector></aquascape-selection-inspector>
         </main>
       </div>
@@ -148,6 +219,14 @@ import { SCENE_RENDERER } from './renderer.token';
         width: 100%;
         height: 100%;
         cursor: crosshair;
+        touch-action: none;
+      }
+      .marquee-overlay {
+        position: absolute;
+        background: rgba(58, 142, 255, 0.12);
+        border: 1px dashed rgba(58, 142, 255, 0.8);
+        pointer-events: none;
+        z-index: 4;
       }
     `,
   ],
@@ -158,6 +237,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
   private readonly store = inject(Store);
   private readonly dragService = inject(HardscapeDragService);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   private readonly fileService: FileService = inject(FILE_SERVICE);
   private readonly dialogService: DialogService = inject(DIALOG_SERVICE);
@@ -173,6 +253,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private resizeObserver: ResizeObserver | null = null;
   private attached = false;
 
+  private dragState: DragState | null = null;
+  /** Document-level move/up handlers held so we can remove on cancel/end. */
+  private documentMoveHandler: ((e: PointerEvent) => void) | null = null;
+  private documentUpHandler: ((e: PointerEvent) => void) | null = null;
+
+  /** Marquee rect in canvas-CSS coords for the template overlay (signal so OnPush picks it up). */
+  readonly marqueeRect = signal<{ left: number; top: number; width: number; height: number } | null>(null);
+
   ngAfterViewInit(): void {
     void this.fileService;
     void this.dialogService;
@@ -181,8 +269,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
     this.ngZone.runOutsideAngular(() => {
       this.installResizeObserver();
-      // Combine scene + selection so a change in either triggers a single
-      // re-render. takeUntilDestroyed tears down on component destroy.
       combineLatest([
         this.store.select(selectScene),
         this.store.select(selectSelectedIds),
@@ -194,9 +280,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           this.renderCurrent();
         });
 
-      // Receive palette drops: convert screen → world coords and dispatch
-      // AddObject. If the scene has no layers yet, prepend a default
-      // "Hardscape" layer first so AddObject has a target.
       this.dragService.dropped$
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe((evt) => this.onHardscapeDropped(evt.entry, evt.clientX, evt.clientY));
@@ -205,40 +288,279 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.teardown();
+    this.cancelDrag(); // detach any in-flight document listeners
   }
 
-  // ── Pointer interactions on the canvas ────────────────────────────────
+  // ── Pointer down on the canvas: classify the gesture ─────────────────
 
   onCanvasPointerDown(event: PointerEvent): void {
     if (event.button !== 0) return;
     const scene = this.currentScene;
     const viewport = this.currentViewport;
     if (scene === null || viewport === null) return;
+
     const canvas = this.canvasRef.nativeElement;
     const rect = canvas.getBoundingClientRect();
-    const cssX = event.clientX - rect.left;
-    const cssY = event.clientY - rect.top;
-    const hit = this.renderer.hitTest({ x: cssX, y: cssY }, scene, viewport, coreCatalog);
-    if (hit === null) {
-      // Clicked empty space — clear unless shift held (preserve selection
-      // for shift-click-on-object multi-select that follows on subsequent
-      // clicks).
-      if (!event.shiftKey) {
-        this.store.dispatch(SelectionActions.clearSelection());
-      }
+    const cssPoint: Vec2 = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+
+    const hit = this.renderer.hitTest(
+      cssPoint,
+      scene,
+      viewport,
+      coreCatalog,
+      this.currentSelection,
+    );
+
+    // Common: convert the pointer position to world coords.
+    const startWorld = canvasCssToWorld(cssPoint, viewport, {
+      width: rect.width,
+      height: rect.height,
+    });
+
+    if (hit !== null && hit.handle !== undefined && hit.handle !== 'translate') {
+      // Handle drag (scale / rotate). The handle implies the object is
+      // selected; no selection mutation needed.
+      const obj = findObjectById(scene, hit.objectId);
+      if (obj === null) return; // defensive — selection out of sync with scene
+      const dragKind: 'scale' | 'rotate' = hit.handle === 'rotate' ? 'rotate' : 'scale';
+      this.startDrag({
+        kind: dragKind,
+        objectId: hit.objectId,
+        originalTransform: obj.transform,
+        startWorld,
+        currentWorld: startWorld,
+      });
+      event.preventDefault();
       return;
     }
-    if (event.shiftKey) {
-      this.store.dispatch(SelectionActions.toggleInSelection({ id: hit.objectId }));
-    } else {
-      this.store.dispatch(SelectionActions.replaceSelection({ ids: [hit.objectId] }));
+
+    if (hit !== null) {
+      // Body hit. If the object isn't already selected, replace selection
+      // first — then start a move drag with the (now-selected) object.
+      const alreadySelected = this.currentSelection.includes(hit.objectId);
+      if (!alreadySelected) {
+        if (event.shiftKey) {
+          this.store.dispatch(SelectionActions.toggleInSelection({ id: hit.objectId }));
+        } else {
+          this.store.dispatch(SelectionActions.replaceSelection({ ids: [hit.objectId] }));
+        }
+      }
+      const obj = findObjectById(scene, hit.objectId);
+      if (obj === null) return;
+      this.startDrag({
+        kind: 'move',
+        objectId: hit.objectId,
+        originalTransform: obj.transform,
+        startWorld,
+        currentWorld: startWorld,
+      });
+      event.preventDefault();
+      return;
+    }
+
+    // Empty space: marquee drag (shift = additive, no shift = replace).
+    this.startDrag({
+      kind: 'marquee',
+      startCss: cssPoint,
+      currentCss: cssPoint,
+      shift: event.shiftKey,
+    });
+    event.preventDefault();
+  }
+
+  /** Esc clears selection OR cancels an in-flight drag. */
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.dragState !== null) {
+      this.cancelDrag();
+      // Re-render so the preview transform reverts to the store's state.
+      this.renderCurrent();
+      return;
+    }
+    this.store.dispatch(SelectionActions.clearSelection());
+  }
+
+  // ── Drag lifecycle ────────────────────────────────────────────────────
+
+  private startDrag(state: DragState): void {
+    this.dragState = state;
+    // Bind document-level handlers so a drag that leaves the canvas
+    // doesn't get lost. We pass `this` via arrow wrappers; the listeners
+    // are removed on end/cancel.
+    const move = (e: PointerEvent): void => this.onDocumentPointerMove(e);
+    const up = (e: PointerEvent): void => this.onDocumentPointerUp(e);
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    this.documentMoveHandler = move;
+    this.documentUpHandler = up;
+    if (state.kind === 'marquee') {
+      this.updateMarqueeRect(state.startCss, state.currentCss);
     }
   }
 
-  /** Esc clears the selection — matches every desktop design tool. */
-  @HostListener('document:keydown.escape')
-  onEscape(): void {
-    this.store.dispatch(SelectionActions.clearSelection());
+  private onDocumentPointerMove(event: PointerEvent): void {
+    if (this.dragState === null) return;
+    const canvas = this.canvasRef.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+    const cssPoint: Vec2 = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+
+    if (this.dragState.kind === 'marquee') {
+      this.dragState = { ...this.dragState, currentCss: cssPoint };
+      this.updateMarqueeRect(this.dragState.startCss, cssPoint);
+      return;
+    }
+    const viewport = this.currentViewport;
+    if (viewport === null) return;
+    const currentWorld = canvasCssToWorld(cssPoint, viewport, {
+      width: rect.width,
+      height: rect.height,
+    });
+    this.dragState = { ...this.dragState, currentWorld };
+    this.renderCurrent();
+  }
+
+  private onDocumentPointerUp(event: PointerEvent): void {
+    if (this.dragState === null) return;
+    const state = this.dragState;
+    // Detach listeners first so a re-render that triggers a synchronous
+    // pointer event doesn't recurse.
+    this.detachDocumentListeners();
+
+    if (state.kind === 'marquee') {
+      this.commitMarquee(state, event);
+      this.dragState = null;
+      this.marqueeRect.set(null);
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const finalTransform = this.computeFinalTransform(state);
+    this.dragState = null;
+    // Dispatch ONE command per gesture so undo restores the pre-drag state.
+    if (state.kind === 'move') {
+      this.store.dispatch(
+        SceneActions.dispatchCommand({
+          command: moveObject(state.objectId, finalTransform.position),
+        }),
+      );
+    } else {
+      this.store.dispatch(
+        SceneActions.dispatchCommand({
+          command: reshapeObject(state.objectId, finalTransform),
+        }),
+      );
+    }
+  }
+
+  private cancelDrag(): void {
+    if (this.dragState === null) return;
+    this.detachDocumentListeners();
+    this.dragState = null;
+    this.marqueeRect.set(null);
+    this.cdr.markForCheck();
+  }
+
+  private detachDocumentListeners(): void {
+    if (this.documentMoveHandler !== null) {
+      document.removeEventListener('pointermove', this.documentMoveHandler);
+      this.documentMoveHandler = null;
+    }
+    if (this.documentUpHandler !== null) {
+      document.removeEventListener('pointerup', this.documentUpHandler);
+      this.documentUpHandler = null;
+    }
+  }
+
+  /** Drag → final Transform. Pure dispatch over the drag kind. */
+  private computeFinalTransform(
+    state: Extract<DragState, { kind: 'move' | 'scale' | 'rotate' }>,
+  ): Transform {
+    const delta: Vec2 = {
+      x: state.currentWorld.x - state.startWorld.x,
+      y: state.currentWorld.y - state.startWorld.y,
+    };
+    switch (state.kind) {
+      case 'move':
+        return applyMoveDrag(state.originalTransform, delta);
+      case 'scale':
+        return applyScaleDrag({
+          original: state.originalTransform,
+          cursorWorld: state.currentWorld,
+          startWorld: state.startWorld,
+        });
+      case 'rotate':
+        return applyRotateDrag({
+          original: state.originalTransform,
+          cursorWorld: state.currentWorld,
+          startWorld: state.startWorld,
+        });
+    }
+  }
+
+  private updateMarqueeRect(start: Vec2, current: Vec2): void {
+    const left = Math.min(start.x, current.x);
+    const top = Math.min(start.y, current.y);
+    const width = Math.abs(current.x - start.x);
+    const height = Math.abs(current.y - start.y);
+    this.marqueeRect.set({ left, top, width, height });
+    this.cdr.markForCheck();
+  }
+
+  private commitMarquee(
+    state: Extract<DragState, { kind: 'marquee' }>,
+    _event: PointerEvent,
+  ): void {
+    const scene = this.currentScene;
+    const viewport = this.currentViewport;
+    if (scene === null || viewport === null) return;
+    const canvas = this.canvasRef.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+
+    // Convert the marquee corners to world. y-flip means the canvas-top
+    // corner maps to the world-MAX y, so we normalize after conversion.
+    const p1 = canvasCssToWorld(state.startCss, viewport, {
+      width: rect.width,
+      height: rect.height,
+    });
+    const p2 = canvasCssToWorld(state.currentCss, viewport, {
+      width: rect.width,
+      height: rect.height,
+    });
+    const minX = Math.min(p1.x, p2.x);
+    const maxX = Math.max(p1.x, p2.x);
+    const minY = Math.min(p1.y, p2.y);
+    const maxY = Math.max(p1.y, p2.y);
+
+    // Degenerate marquee (zero-area) → if shift held, no change; otherwise
+    // clear selection (matches click-on-empty).
+    if (maxX - minX < EPSILON_MM || maxY - minY < EPSILON_MM) {
+      if (!state.shift) this.store.dispatch(SelectionActions.clearSelection());
+      return;
+    }
+
+    const hits: ObjectId[] = [];
+    for (const layer of scene.layers) {
+      if (!layer.visible) continue;
+      for (const obj of layer.objects) {
+        if (obj.kind !== 'hardscape') continue;
+        // bbox-centre-in-marquee — the standard Sketch-style criterion.
+        // Centre is the object's position (pre-rotation; centring doesn't
+        // change with rotation around the object's own origin).
+        const cx = obj.transform.position.x;
+        const cy = obj.transform.position.y;
+        if (cx >= minX && cx <= maxX && cy >= minY && cy <= maxY) {
+          hits.push(obj.id);
+        }
+      }
+    }
+
+    if (state.shift) {
+      // Additive: union with existing selection (already-selected stay).
+      const union = Array.from(new Set([...this.currentSelection, ...hits]));
+      this.store.dispatch(SelectionActions.selectByMarquee({ ids: union }));
+    } else {
+      this.store.dispatch(SelectionActions.selectByMarquee({ ids: hits }));
+    }
   }
 
   // ── Drop receive (palette → canvas) ────────────────────────────────────
@@ -249,7 +571,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (scene === null || viewport === null) return;
     const canvas = this.canvasRef.nativeElement;
     const rect = canvas.getBoundingClientRect();
-    // Drops outside the canvas are no-ops.
     if (
       clientX < rect.left ||
       clientX > rect.right ||
@@ -264,10 +585,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       width: rect.width,
       height: rect.height,
     });
-    // Z defaults to half tank depth (centered front-to-back). The user
-    // can edit later via the inspector (or future Stage 10 3D drag).
     const z = scene.tank.depth / 2;
-
     const layerId = this.ensureLayerExists(scene);
     const newObject: HardscapeObject = {
       kind: 'hardscape',
@@ -282,17 +600,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.store.dispatch(
       SceneActions.dispatchCommand({ command: addObject(layerId, newObject) }),
     );
-    // Auto-select the newly-dropped object so the user immediately sees
-    // its selection handles.
     this.store.dispatch(SelectionActions.replaceSelection({ ids: [newObject.id] }));
   }
 
-  /**
-   * Find a layer to drop the new hardscape into. If the scene is empty,
-   * create a "Hardscape" layer first. Returns the id of the target layer.
-   * Always picks the topmost (front-most) layer so subsequent drops land
-   * visually on top of earlier ones.
-   */
   private ensureLayerExists(scene: Scene): LayerId {
     const top = scene.layers[scene.layers.length - 1];
     if (top !== undefined) return top.id;
@@ -327,7 +637,20 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     const viewport = this.computeViewport(surface, scene);
     this.currentViewport = viewport;
-    this.renderer.render(scene, viewport, coreCatalog, this.currentSelection);
+
+    // Build a preview scene if a transform drag is in flight. Move / scale /
+    // rotate all mutate ONE object's transform; we substitute it in place
+    // and leave the rest of the scene untouched. Marquee doesn't change
+    // any object — the overlay is its only visual.
+    const scenePassed = this.buildPreviewScene(scene);
+    this.renderer.render(scenePassed, viewport, coreCatalog, this.currentSelection);
+  }
+
+  private buildPreviewScene(scene: Scene): Scene {
+    if (this.dragState === null || this.dragState.kind === 'marquee') return scene;
+    const state = this.dragState;
+    const preview = this.computeFinalTransform(state);
+    return mapObjectTransform(scene, state.objectId, preview);
   }
 
   private installResizeObserver(): void {
@@ -372,7 +695,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 }
 
-// ─── Local pure helpers ───────────────────────────────────────────────────
+// ─── Pure helpers ─────────────────────────────────────────────────────────
+
+const EPSILON_MM = 0.01;
 
 /**
  * Invert the viewport's world-to-canvas projection. Mirrors the helper
@@ -380,10 +705,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
  * need to import a renderer-internal utility.
  */
 function canvasCssToWorld(
-  pointCss: { x: number; y: number },
+  pointCss: Vec2,
   viewport: Viewport,
   canvas: { width: number; height: number },
-): { x: number; y: number } {
+): Vec2 {
   const dxPx = pointCss.x - canvas.width / 2;
   const dyPx = pointCss.y - canvas.height / 2;
   const dxMm = dxPx / viewport.zoom;
@@ -395,7 +720,29 @@ function canvasCssToWorld(
   return { x: viewport.center.x + rxMm, y: viewport.center.y + ryMm };
 }
 
-/** UUID v4 with a `Math.random` fallback for jsdom test environments. */
+function findObjectById(scene: Scene, id: ObjectId): SceneObject | null {
+  for (const layer of scene.layers) {
+    for (const obj of layer.objects) {
+      if (obj.id === id) return obj;
+    }
+  }
+  return null;
+}
+
+/** Return a copy of `scene` where `objectId`'s transform is replaced. */
+function mapObjectTransform(scene: Scene, objectId: ObjectId, transform: Transform): Scene {
+  const layers: Layer[] = scene.layers.map((layer) => {
+    if (!layer.objects.some((o) => o.id === objectId)) return layer;
+    return {
+      ...layer,
+      objects: layer.objects.map((o) =>
+        o.id === objectId ? ({ ...o, transform } as SceneObject) : o,
+      ),
+    };
+  });
+  return { ...scene, layers };
+}
+
 function newUuid(): string {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
   if (c && typeof c.randomUUID === 'function') return c.randomUUID();
@@ -409,3 +756,6 @@ function newUuid(): string {
 function newObjectId(): ObjectId {
   return asObjectId(newUuid());
 }
+
+// Suppress an "imported type only used in signatures" lint warning.
+void ((): HitResult | undefined => undefined);
