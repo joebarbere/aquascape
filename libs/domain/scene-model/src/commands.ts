@@ -155,6 +155,82 @@ export interface ReshapeObjectCommand {
 }
 
 /**
+ * Set the tank's interior dimensions (mm). Structural / global operation;
+ * NOT blocked by `locked` on any layer — `SetTankDimensions` is treated like
+ * `RemoveLayer` and `ReorderLayers`.
+ *
+ * APPLY SEMANTICS
+ *  1. Validates `width`, `height`, `depth`: must be finite, > 0, and
+ *     ≤ {@link SET_TANK_DIMENSIONS_MAX_MM} (10 000 mm). Rejects with
+ *     `reason: 'invalid'` otherwise. This is the **domain-layer floor**:
+ *     the UI in F1.1 phase B applies the tighter 100–3000 mm range check.
+ *  2. Updates `scene.tank.{width,height,depth}` to the new values.
+ *     `scene.tank.style`, `scene.tank.glassThickness` and
+ *     `scene.tank.presetRef` are NOT touched.
+ *  3. **`presetRef` is intentionally left alone** even when new dimensions
+ *     would no longer match the preset's stored dimensions. Stage 0 has no
+ *     catalog loader, so the command cannot resolve the preset. The UI in
+ *     F1.1 phase B knows whether a dim change came from picking a preset
+ *     vs. editing a number and dispatches a separate operation to clear
+ *     `presetRef` when needed.
+ *  4. Every `SceneObject.transform.position` is clamped per-axis into the
+ *     new tank's interior AABB:
+ *      - x ∈ [0, width]
+ *      - y ∈ [0, height]
+ *      - z ∈ [0, depth]
+ *     **Nothing is deleted.** Even an object whose center lands exactly on a
+ *     face of the new tank stays in the scene. Clamping runs regardless of
+ *     `layer.locked` — `SetTankDimensions` is a structural global op, not an
+ *     object-level edit.
+ *  5. Substrate regions are not clamped. `SubstrateRegion.fromX` / `toX` are
+ *     normalised fractions of tank width so they reinterpret automatically.
+ *     Profile y-values (mm from tank floor) that exceed the new `height`
+ *     are LEFT untouched for now — see the `TODO(F2.x)` in the apply
+ *     handler. There is no substrate-editing UI yet, and clamping profile
+ *     points would expand the `inverse` envelope; defer until F2.x adds the
+ *     UI that can produce a profile point taller than the tank.
+ *
+ * INVERT SEMANTICS
+ * `invertCommand(scene, cmd)` returns a fresh `SetTankDimensionsCommand`
+ * whose `dimensions` are the pre-apply scene's tank dimensions, and whose
+ * `inverse` envelope carries:
+ *   - `previousDimensions`: the dimensions to restore (== pre-apply dims).
+ *   - `restoredPositions`: a map of every objectId → its pre-apply
+ *     position. This is populated for ALL objects, not just clamped ones
+ *     (simple + correct over clever + sparse). When `applyCommand` runs a
+ *     command whose `inverse.restoredPositions` is present, it uses those
+ *     positions for the listed objects instead of clamping — this is what
+ *     makes `apply ∘ invert = id` work even after shrinking and undoing.
+ *
+ * A `SetTankDimensionsCommand` built freshly from the UI omits `inverse`;
+ * one built by `invertCommand` carries it. Both are JSON-serializable.
+ */
+export interface SetTankDimensionsCommand {
+  kind: 'SetTankDimensions';
+  /** New tank dimensions in mm. All three required. */
+  dimensions: { width: number; height: number; depth: number };
+  /**
+   * Pre-apply state captured for inversion. Populated by `invertCommand`;
+   * typically omitted on a freshly-built command from the UI.
+   *  - `previousDimensions`: the dimensions to restore on invert.
+   *  - `restoredPositions`: map of objectId → previous position. When
+   *    present, `applyCommand` uses these positions for listed objects
+   *    instead of clamping into the new AABB.
+   */
+  inverse?: {
+    previousDimensions: { width: number; height: number; depth: number };
+    restoredPositions: Record<string, { x: number; y: number; z: number }>;
+  };
+}
+
+/**
+ * Upper-bound on a single tank dimension (mm). Loose physical sanity. The
+ * UI in F1.1 phase B applies a tighter 100–3000 mm range; this is the
+ * domain-layer floor protecting against absurd inputs from any caller.
+ */
+export const SET_TANK_DIMENSIONS_MAX_MM = 10_000;
+
+/**
  * Composite command: apply children in order on `apply`, invert children
  * in reverse on `invert`. Treated as a single user action by undo/redo.
  *
@@ -179,6 +255,7 @@ export type Command =
   | RemoveObjectCommand
   | MoveObjectCommand
   | ReshapeObjectCommand
+  | SetTankDimensionsCommand
   | CompositeCommand;
 
 // ─── Internal helpers ─────────────────────────────────────────────────────
@@ -367,6 +444,72 @@ export function applyCommand(scene: Scene, command: Command): CommandResult {
       return ok(replaceLayer(scene, found.layer.id, { ...found.layer, objects }));
     }
 
+    case 'SetTankDimensions': {
+      const { width, height, depth } = command.dimensions;
+      const validDim = (n: number): boolean =>
+        Number.isFinite(n) && n > 0 && n <= SET_TANK_DIMENSIONS_MAX_MM;
+      if (!validDim(width) || !validDim(height) || !validDim(depth)) {
+        return rejected(
+          'invalid',
+          `SetTankDimensions: each of width/height/depth must be finite, > 0, and ` +
+            `≤ ${SET_TANK_DIMENSIONS_MAX_MM} mm`,
+        );
+      }
+
+      // `presetRef` is intentionally left untouched — see JSDoc on
+      // SetTankDimensionsCommand. `style` and `glassThickness` likewise.
+      const nextTank: Scene['tank'] = {
+        ...scene.tank,
+        width,
+        height,
+        depth,
+      };
+
+      // TODO(F2.x): clamp substrate region profile y-values that exceed the
+      // new `height`. Deferred until substrate-editing UI lands; until then,
+      // no caller can produce a profile point taller than the tank.
+
+      // Per-object position clamp. If the inverse envelope carries a
+      // restoration map, use those positions for listed objects instead.
+      const restorations = command.inverse?.restoredPositions;
+      const layers: Layer[] = scene.layers.map((layer) => {
+        const objects = layer.objects.map((object) => {
+          const restored = restorations ? restorations[object.id] : undefined;
+          const nextPosition = restored
+            ? { ...restored }
+            : {
+                x: Math.max(0, Math.min(width, object.transform.position.x)),
+                y: Math.max(0, Math.min(height, object.transform.position.y)),
+                z: Math.max(0, Math.min(depth, object.transform.position.z)),
+              };
+          // If nothing changed, keep the original object reference — saves
+          // an allocation per untouched object.
+          if (
+            nextPosition.x === object.transform.position.x &&
+            nextPosition.y === object.transform.position.y &&
+            nextPosition.z === object.transform.position.z
+          ) {
+            return object;
+          }
+          const nextObject: SceneObject = {
+            ...object,
+            transform: {
+              ...object.transform,
+              position: nextPosition,
+            },
+          };
+          return nextObject;
+        });
+        // Reuse layer reference if no object changed.
+        if (objects.every((o, i) => o === layer.objects[i])) {
+          return layer;
+        }
+        return { ...layer, objects };
+      });
+
+      return ok({ ...scene, tank: nextTank, layers });
+    }
+
     case 'Composite': {
       let current = scene;
       for (const child of command.children) {
@@ -503,6 +646,35 @@ export function invertCommand(scene: Scene, command: Command): Command {
       };
     }
 
+    case 'SetTankDimensions': {
+      // Capture pre-apply state. We populate `restoredPositions` for EVERY
+      // object, not just those that would be clamped — simple + correct
+      // over clever + sparse. (Slight bloat, fine for v1.)
+      const previousDimensions = {
+        width: scene.tank.width,
+        height: scene.tank.height,
+        depth: scene.tank.depth,
+      };
+      const restoredPositions: Record<string, { x: number; y: number; z: number }> = {};
+      for (const layer of scene.layers) {
+        for (const object of layer.objects) {
+          restoredPositions[object.id] = { ...object.transform.position };
+        }
+      }
+      // Likewise, the inverse-of-inverse needs the original (post-apply)
+      // dimensions in `inverse.previousDimensions` so a second round-trip
+      // also restores cleanly. Those are the `command.dimensions` we just
+      // received.
+      return {
+        kind: 'SetTankDimensions',
+        dimensions: { ...previousDimensions },
+        inverse: {
+          previousDimensions: { ...command.dimensions },
+          restoredPositions,
+        },
+      };
+    }
+
     case 'Composite': {
       // Invert children in reverse, each against the scene state they would
       // see at undo time. That state isn't `scene` directly; it's the result
@@ -596,6 +768,19 @@ export const reshapeObject = (objectId: ObjectId, transform: Transform): Reshape
   kind: 'ReshapeObject',
   objectId,
   transform,
+});
+
+/**
+ * Build a {@link SetTankDimensionsCommand} from new dimensions. The `inverse`
+ * envelope is omitted (populated by {@link invertCommand} when undo is built).
+ */
+export const setTankDimensions = (dimensions: {
+  width: number;
+  height: number;
+  depth: number;
+}): SetTankDimensionsCommand => ({
+  kind: 'SetTankDimensions',
+  dimensions: { ...dimensions },
 });
 
 export const composite = (children: Command[]): CompositeCommand => ({

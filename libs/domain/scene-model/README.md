@@ -27,7 +27,8 @@ undo/redo history. Plan §2.3 / Stage 0 F0.3.
   `invertCommand(scene, command)` free functions.
 - Concrete commands: `Noop`, `AddLayer`, `RemoveLayer`, `RenameLayer`,
   `SetLayerOpacity`, `SetLayerVisibility`, `SetLayerLocked`, `ReorderLayers`,
-  `AddObject`, `RemoveObject`, `MoveObject`, `ReshapeObject`, `Composite`.
+  `AddObject`, `RemoveObject`, `MoveObject`, `ReshapeObject`,
+  `SetTankDimensions`, `Composite`.
 - Builder functions (`addLayer`, `moveObject`, …) — pure ergonomics over the
   union members. Hand-rolled records work identically.
 - `History` (`createHistory({ bound? })`) with `push` / `undo` / `redo`.
@@ -77,6 +78,60 @@ and inversion trivially captures the previous full ordering.
 `MoveObjectCommand` carries the **absolute** target world position, not a
 delta. Inversion is trivial (capture the previous absolute position from
 the scene), and absolute commands are idempotent if replayed.
+
+### `SetTankDimensions` — structural with clamp + inverse envelope
+
+`SetTankDimensionsCommand` updates `scene.tank.{width,height,depth}` and
+clamps every `SceneObject.transform.position` per-axis into the new
+interior AABB (`x ∈ [0,width]`, `y ∈ [0,height]`, `z ∈ [0,depth]`).
+**Nothing is deleted** — even objects whose centre lands exactly on a face
+of the new tank stay in the scene; the clamp keeps them tangent.
+
+It is treated as a **structural global operation**, alongside `RemoveLayer`
+and `ReorderLayers`: the locked-layer guard does NOT apply, so an object
+on a locked layer still gets clamped when the tank shrinks around it.
+
+`scene.tank.style`, `scene.tank.glassThickness` and `scene.tank.presetRef`
+are intentionally untouched. The UI layer (F1.1 phase B) clears `presetRef`
+explicitly when a user types custom dimensions, because Stage 0 has no
+catalog loader to verify whether the new dimensions still match the
+preset.
+
+The domain layer applies a loose physical-sanity range only: each
+dimension must be finite, > 0, and ≤ 10 000 mm
+(`SET_TANK_DIMENSIONS_MAX_MM`). The Angular form in F1.1 phase B applies
+the tighter 100–3000 mm product range.
+
+#### The `inverse` envelope
+
+`SetTankDimensionsCommand` carries an optional `inverse` field that
+`invertCommand` populates:
+
+```ts
+inverse?: {
+  previousDimensions: { width: number; height: number; depth: number };
+  restoredPositions: Record<string, { x: number; y: number; z: number }>;
+};
+```
+
+A command built freshly from the UI omits `inverse`. A command built by
+`invertCommand` carries it, and `applyCommand` uses `restoredPositions`
+to write back original object positions instead of clamping them. This
+is the mechanism that makes `apply ∘ invert = id` work even when
+shrinking and then undoing — without it, undo would re-clamp the
+already-clamped positions and lose the originals.
+
+`restoredPositions` is populated for **every** object in the scene, not
+just those that would be clamped. Simple + correct beats clever +
+sparse for v1; the cost is a small map keyed by object id.
+
+#### Substrate profile points
+
+`SubstrateRegion.profile` uses normalised x (fraction of region width),
+so it adapts to width changes automatically. Profile-point `y` (mm from
+tank floor) that exceeds the new `height` is **not yet clamped** —
+there's a `TODO(F2.x)` in the apply handler. No substrate-editing UI
+exists today that could produce a profile point taller than the tank.
 
 ### Mutation discipline
 

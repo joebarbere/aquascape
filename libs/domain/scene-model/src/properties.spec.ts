@@ -28,6 +28,7 @@ import {
   setLayerLocked,
   setLayerOpacity,
   setLayerVisibility,
+  setTankDimensions,
 } from './commands';
 import type { Command } from './commands';
 import { createHistory } from './history';
@@ -159,6 +160,18 @@ describe('Command JSON round-trip', () => {
           .map(({ id, t }) => reshapeObject(id, t)),
       );
     }
+
+    // SetTankDimensions is always valid against any scene; include it
+    // unconditionally so the round-trip coverage exercises every command kind.
+    choices.push(
+      fc
+        .record({
+          width: fc.integer({ min: 100, max: 3000 }),
+          height: fc.integer({ min: 100, max: 3000 }),
+          depth: fc.integer({ min: 100, max: 3000 }),
+        })
+        .map((dims) => setTankDimensions(dims)),
+    );
 
     return fc.oneof(...choices);
   };
@@ -347,6 +360,25 @@ describe('apply ∘ invert = id (per-command, on unlocked scenes)', () => {
         if (!obj) return;
         checkRoundTrip(reshapeObject(obj.id, t), scene);
       }),
+    );
+  });
+
+  it('SetTankDimensions', () => {
+    fc.assert(
+      fc.property(
+        arbScene(),
+        fc.record({
+          width: fc.integer({ min: 100, max: 3000 }),
+          height: fc.integer({ min: 100, max: 3000 }),
+          depth: fc.integer({ min: 100, max: 3000 }),
+        }),
+        (sceneIn, dims) => {
+          // SetTankDimensions is a structural op; layer.locked is irrelevant
+          // but unlocking keeps the test consistent with the suite.
+          const scene = unlockAll(sceneIn);
+          checkRoundTrip(setTankDimensions(dims), scene);
+        },
+      ),
     );
   });
 

@@ -63,6 +63,7 @@ export type {
   RemoveObjectCommand,
   MoveObjectCommand,
   ReshapeObjectCommand,
+  SetTankDimensionsCommand,
   CompositeCommand,
 } from './commands';
 
@@ -81,6 +82,8 @@ export {
   removeObject,
   moveObject,
   reshapeObject,
+  setTankDimensions,
+  SET_TANK_DIMENSIONS_MAX_MM,
   composite,
   identityTransform,
 } from './commands';
