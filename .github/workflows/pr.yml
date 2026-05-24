@@ -92,7 +92,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   coverage:
-    name: Coverage gate (domain/* ≥90%)
+    name: Coverage gate (domain + rendering + platform ≥90%)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -121,18 +121,20 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # Per-lib jest.config.ts already enforces 90% on domain/* via
-      # coverageThreshold. This job runs the tests with coverage so the
-      # threshold check fires and the workflow fails the PR on regression.
-      - name: Run domain coverage
-        run: pnpm exec nx run-many -t test --projects='tag:scope:domain' --configuration=ci --parallel=3
+      # Per-lib jest.config.ts enforces 90% on every lib that ships
+      # production logic (domain/*, rendering/renderer-2d, platform/{web,
+      # electron}). `--configuration=ci` is wired in nx.json to pass
+      # `--coverage --ci` to the inferred jest target, so the threshold
+      # check fires here and the workflow fails the PR on regression.
+      - name: Run coverage gate
+        run: pnpm exec nx run-many -t test --projects='tag:scope:domain,tag:scope:rendering,tag:scope:platform-web,tag:scope:platform-electron' --configuration=ci --parallel=3
 
       - name: Upload coverage artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: domain-coverage
-          path: coverage/libs/domain/**
+          name: coverage
+          path: coverage/**
           if-no-files-found: ignore
 
   document-round-trip:
