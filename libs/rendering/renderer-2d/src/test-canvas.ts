@@ -1,0 +1,198 @@
+// Test harness — a hand-rolled fake canvas + 2D context that records every
+// drawing operation in order. Used by the renderer-2d unit tests. Lives in
+// `src/` rather than a separate test-utilities lib because it's only ever
+// consumed from this lib's own spec files. NOT re-exported from
+// `src/index.ts`.
+//
+// We picked this over jest-environment-jsdom because:
+//   - jsdom has no real canvas implementation (it returns null from
+//     `getContext('2d')` without an extra `canvas` native dep).
+//   - Stage 0 only paints tank + grid; correctness can be verified by
+//     counting ops and inspecting their arguments. Real-pixel snapshots
+//     belong to F6.1 (image export).
+
+// ─── Recorded operation type ──────────────────────────────────────────────
+
+export interface RecordedOp {
+  method: string;
+  /** Args captured as `JSON.stringify`-able shapes (numbers/strings/bools). */
+  args: ReadonlyArray<number | string | boolean | null | undefined>;
+}
+
+// ─── Fake CanvasRenderingContext2D ────────────────────────────────────────
+
+/**
+ * Records every call onto `ops` along with its arguments. Supports the
+ * subset of the CanvasRenderingContext2D API that Canvas2DRenderer touches.
+ *
+ * Property assignments (`lineWidth`, `strokeStyle`) are recorded as
+ * synthetic ops with method names `set:lineWidth` / `set:strokeStyle` —
+ * this keeps the spec's idempotency check sensitive to style changes too.
+ */
+export class FakeContext2D {
+  readonly ops: RecordedOp[] = [];
+
+  private _lineWidth = 1;
+  private _strokeStyle = '#000';
+  private _fillStyle = '#000';
+
+  // Style properties — getters/setters so renderer code can assign normally.
+  get lineWidth(): number {
+    return this._lineWidth;
+  }
+  set lineWidth(v: number) {
+    this._lineWidth = v;
+    this.ops.push({ method: 'set:lineWidth', args: [v] });
+  }
+  get strokeStyle(): string {
+    return this._strokeStyle;
+  }
+  set strokeStyle(v: string) {
+    this._strokeStyle = v;
+    this.ops.push({ method: 'set:strokeStyle', args: [v] });
+  }
+  get fillStyle(): string {
+    return this._fillStyle;
+  }
+  set fillStyle(v: string) {
+    this._fillStyle = v;
+    this.ops.push({ method: 'set:fillStyle', args: [v] });
+  }
+
+  setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void {
+    this.ops.push({ method: 'setTransform', args: [a, b, c, d, e, f] });
+  }
+  translate(x: number, y: number): void {
+    this.ops.push({ method: 'translate', args: [x, y] });
+  }
+  scale(x: number, y: number): void {
+    this.ops.push({ method: 'scale', args: [x, y] });
+  }
+  rotate(r: number): void {
+    this.ops.push({ method: 'rotate', args: [r] });
+  }
+  save(): void {
+    this.ops.push({ method: 'save', args: [] });
+  }
+  restore(): void {
+    this.ops.push({ method: 'restore', args: [] });
+  }
+  clip(): void {
+    this.ops.push({ method: 'clip', args: [] });
+  }
+  beginPath(): void {
+    this.ops.push({ method: 'beginPath', args: [] });
+  }
+  moveTo(x: number, y: number): void {
+    this.ops.push({ method: 'moveTo', args: [x, y] });
+  }
+  lineTo(x: number, y: number): void {
+    this.ops.push({ method: 'lineTo', args: [x, y] });
+  }
+  rect(x: number, y: number, w: number, h: number): void {
+    this.ops.push({ method: 'rect', args: [x, y, w, h] });
+  }
+  strokeRect(x: number, y: number, w: number, h: number): void {
+    this.ops.push({ method: 'strokeRect', args: [x, y, w, h] });
+  }
+  stroke(): void {
+    this.ops.push({ method: 'stroke', args: [] });
+  }
+  clearRect(x: number, y: number, w: number, h: number): void {
+    this.ops.push({ method: 'clearRect', args: [x, y, w, h] });
+  }
+}
+
+// ─── Fake HTMLCanvasElement ───────────────────────────────────────────────
+
+/**
+ * Just enough surface to satisfy `RenderSurface.canvas` and the renderer's
+ * `getContext('2d')` call.
+ */
+export class FakeCanvas {
+  width = 0;
+  height = 0;
+  readonly style: { width: string; height: string } = { width: '', height: '' };
+
+  private ctx = new FakeContext2D();
+
+  getContext(kind: '2d'): FakeContext2D | null {
+    if (kind !== '2d') return null;
+    return this.ctx;
+  }
+
+  /** Convenience for tests — re-export the recorded context. */
+  get context(): FakeContext2D {
+    return this.ctx;
+  }
+}
+
+// ─── Fake `window` for resize / DPR listener tests ────────────────────────
+
+export interface FakeMediaQueryList {
+  matches: boolean;
+  media: string;
+  addEventListener: jest.Mock<void, [string, () => void]>;
+  removeEventListener: jest.Mock<void, [string, () => void]>;
+}
+
+export interface FakeWindow {
+  addEventListener: jest.Mock<void, [string, () => void, unknown?]>;
+  removeEventListener: jest.Mock<void, [string, () => void]>;
+  matchMedia: jest.Mock<FakeMediaQueryList, [string]>;
+  /** Reference to the last MediaQueryList handed out by matchMedia. */
+  lastMql: FakeMediaQueryList | null;
+}
+
+export function installFakeWindow(): FakeWindow {
+  let lastMql: FakeMediaQueryList | null = null;
+  const fake: FakeWindow = {
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    matchMedia: jest.fn((q: string) => {
+      const mql: FakeMediaQueryList = {
+        matches: false,
+        media: q,
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+      };
+      lastMql = mql;
+      fake.lastMql = mql;
+      return mql;
+    }),
+    lastMql: null,
+  };
+  (globalThis as unknown as { window: FakeWindow }).window = fake;
+  void lastMql;
+  return fake;
+}
+
+export function uninstallFakeWindow(): void {
+  delete (globalThis as unknown as { window?: unknown }).window;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Build a minimal scene fixture for renderer tests. Mirrors the shape of
+ * `domain/scene-model`'s `makeScene` but keeps the test self-contained so
+ * renderer tests don't pull in scene-model's test-fixtures (which aren't
+ * part of its public API).
+ */
+export function makeMinimalScene(width = 360, height = 220, depth = 220) {
+  return {
+    tank: {
+      width,
+      height,
+      depth,
+      glassThickness: 5,
+      style: {
+        frame: 'rimless' as const,
+        background: { kind: 'color' as const, color: '#0b0d0e' },
+      },
+    },
+    substrate: { regions: [] },
+    layers: [],
+    seed: 1337,
+  };
+}
