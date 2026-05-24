@@ -1,0 +1,154 @@
+# PR workflow — Plan §3, Stage 0 F0.7.
+#
+# Runs nx affected for lint/test/build against the PR's base branch on Linux only
+# for speed. The full OS matrix runs on main (see main.yml).
+name: PR
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  # Cancel in-progress runs for the same PR on new push.
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+env:
+  NX_CLOUD_DISTRIBUTED_EXECUTION: 'false'
+  NX_BRANCH: ${{ github.event.number }}
+  NX_RUN_GROUP: ${{ github.run_id }}
+
+jobs:
+  main:
+    name: nx affected (lint / test / build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout (full history for nx affected base)
+        uses: actions/checkout@v4
+        with:
+          # nx affected needs the merge-base with main.
+          fetch-depth: 0
+
+      - name: Set base/head SHAs for nx affected
+        uses: nrwl/nx-set-shas@v4
+        with:
+          main-branch-name: main
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-${{ runner.os }}-
+
+      - name: Cache Nx
+        uses: actions/cache@v4
+        with:
+          path: .nx/cache
+          key: nx-cache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            nx-cache-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Print affected projects
+        run: pnpm exec nx show projects --affected --base=$NX_BASE --head=$NX_HEAD || true
+
+      # The lint target includes @nx/enforce-module-boundaries — a boundary
+      # violation fails this step.
+      - name: Lint (affected) — module-boundary enforcement runs here
+        run: pnpm exec nx affected -t lint --base=$NX_BASE --head=$NX_HEAD --parallel=3
+
+      - name: Test (affected)
+        run: pnpm exec nx affected -t test --base=$NX_BASE --head=$NX_HEAD --parallel=3 --configuration=ci
+
+      - name: Build (affected)
+        run: pnpm exec nx affected -t build --base=$NX_BASE --head=$NX_HEAD --parallel=3
+
+      - name: Affected summary
+        if: always()
+        run: |
+          {
+            echo "## Affected projects"
+            pnpm exec nx show projects --affected --base=$NX_BASE --head=$NX_HEAD || true
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  coverage:
+    name: Coverage gate (domain/* ≥90%)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: nrwl/nx-set-shas@v4
+        with:
+          main-branch-name: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Per-lib jest.config.ts already enforces 90% on domain/* via
+      # coverageThreshold. This job runs the tests with coverage so the
+      # threshold check fires and the workflow fails the PR on regression.
+      - name: Run domain coverage
+        run: pnpm exec nx run-many -t test --projects='tag:scope:domain' --configuration=ci --parallel=3
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: domain-coverage
+          path: coverage/libs/domain/**
+          if-no-files-found: ignore
+
+  document-round-trip:
+    name: document-round-trip (placeholder)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # TODO(F1.3 — domain/document — libs/testing/src/index.ts):
+      # When the `.aqua` v1 schema + (de)serialization land in libs/domain/document
+      # and the property test is wired in libs/testing, replace the placeholder
+      # below with:
+      #   - run: pnpm exec nx test testing -t document-round-trip
+      # This job is REQUIRED on main (see branch protection / required checks).
+      # Stage 0 keeps it as a no-op so the required check exists from day one
+      # and Stage 1 only needs to flip the body, not reconfigure branch protection.
+      - name: Placeholder (F1.3 will replace this with a real property test)
+        run: |
+          echo "document-round-trip placeholder — Stage 0 no-op."
+          echo "Real implementation lands with F1.3 (domain/document) — see TODO in .github/workflows/pr.yml."

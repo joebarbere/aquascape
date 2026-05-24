@@ -1,0 +1,84 @@
+# Main-branch workflow — Plan §3, Stage 0 F0.7.
+#
+# Push to main triggers the full OS matrix run.
+name: main
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: main-${{ github.ref }}
+  cancel-in-progress: false # don't cancel main builds
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  matrix:
+    name: ${{ matrix.os }} — lint / test / build / e2e
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/pnpm/store
+            ~/Library/pnpm/store
+            ~/AppData/Local/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-${{ runner.os }}-
+
+      - name: Cache Nx
+        uses: actions/cache@v4
+        with:
+          path: .nx/cache
+          key: nx-cache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            nx-cache-${{ runner.os }}-
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm exec nx run-many -t lint --parallel=3
+
+      - name: Test
+        run: pnpm exec nx run-many -t test --configuration=ci --parallel=3
+
+      - name: Build
+        run: pnpm exec nx run-many -t build --parallel=3
+
+      # E2E for Stage 0 is opt-in / placeholder. Per the F0.7 spec, Electron e2e
+      # on Windows can be flaky during initial setup — keep continue-on-error
+      # until end of Stage 1, then harden.
+      - name: E2E
+        continue-on-error: true
+        run: pnpm exec nx run-many -t e2e --parallel=1
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ matrix.os }}-${{ github.run_id }}
+          path: |
+            **/playwright-report/**
+            **/test-results/**
+          if-no-files-found: ignore
