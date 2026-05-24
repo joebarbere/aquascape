@@ -69,5 +69,15 @@ export const SceneActions = createActionGroup({
      * the previously-selected preset no longer applies).
      */
     'Set Tank Preset Ref': props<{ presetRef: CatalogRef | null }>(),
+
+    /**
+     * Wholesale-replace the scene + reset the undo/redo history. Dispatched
+     * by the F1.6 document store when opening a `.aqua` file, recovering an
+     * autosave draft, or starting a New Document. The Command pipeline is
+     * NOT the right primitive for this — replacing the scene root is a
+     * change of *identity*, not of *contents*, so it deliberately doesn't
+     * become an undoable command (you don't "undo opening a file").
+     */
+    'Set Scene': props<{ scene: Scene }>(),
   },
 });

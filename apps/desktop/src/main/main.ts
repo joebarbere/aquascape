@@ -19,6 +19,12 @@ import * as path from 'node:path';
 
 import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
 
+import {
+  createDialogBackend,
+  createExportBackend,
+  createFileBackend,
+  createStorageBackend,
+} from './backends';
 import { ELECTRON_CSP } from './csp';
 import { registerIpcHandlers } from './ipc-handlers';
 import { resolveIndexPath, resolvePreloadPath } from './paths';
@@ -109,9 +115,22 @@ app
   .whenReady()
   .then(() => {
     installCsp();
-    registerIpcHandlers(ipcMain);
 
+    // F1.4: the file picker / dialogs / storage / export channels need a
+    // BrowserWindow to anchor native modals to. We pass a `getWindow()`
+    // accessor instead of a window directly so the backends stay valid
+    // across window create / close / reopen cycles.
     let mainWindow: BrowserWindow | null = createMainWindow();
+    const getWindow = (): BrowserWindow | null => mainWindow;
+
+    registerIpcHandlers(ipcMain, {
+      now: () => Date.now(),
+      file: createFileBackend(getWindow),
+      dialog: createDialogBackend(getWindow),
+      storage: createStorageBackend(),
+      export: createExportBackend(getWindow),
+    });
+
     mainWindow.on('closed', () => {
       mainWindow = null;
     });

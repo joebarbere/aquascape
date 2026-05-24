@@ -28,10 +28,12 @@ export {
 } from './services';
 export {
   createInMemoryTransport,
+  createIpcTransport,
   type AlertRequest,
   type ConfirmRequest,
   type ElectronTransport,
   type ExportPngRequest,
+  type IpcBridge,
   type SaveDocumentAsRequest,
   type SaveDocumentRequest,
   type StorageGetRequest,

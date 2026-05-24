@@ -29,7 +29,17 @@ import type {
   SceneRenderer,
   Viewport,
 } from '@aquascape/rendering/renderer-api';
-import { defaultScene, selectScene } from '@aquascape/state';
+import {
+  defaultScene,
+  initialDocumentState,
+  selectDisplayTitle,
+  selectHasPendingDraft,
+  selectLastError,
+  selectPendingDraft,
+  selectRecentFiles,
+  selectScene,
+  selectStatus,
+} from '@aquascape/state';
 
 import { AppComponent } from './app.component';
 import { SCENE_RENDERER } from './renderer.token';
@@ -56,7 +66,20 @@ function configure(mockRenderer: MockSceneRenderer, initialScene = defaultScene(
       { provide: STORAGE_SERVICE, useValue: platform.storageService },
       { provide: RENDER_EXPORT_SERVICE, useValue: platform.renderExportService },
       provideMockStore({
-        selectors: [{ selector: selectScene, value: initialScene }],
+        // Both feature slices have to be in initialState so child components
+        // (EditorShellComponent reads selectors from `document`) don't crash
+        // before the test overrides anything. selectScene + selectStatus etc.
+        // are still preset for direct assertion.
+        initialState: { document: initialDocumentState() },
+        selectors: [
+          { selector: selectScene, value: initialScene },
+          { selector: selectDisplayTitle, value: 'Untitled' },
+          { selector: selectStatus, value: 'idle' as const },
+          { selector: selectRecentFiles, value: [] },
+          { selector: selectHasPendingDraft, value: false },
+          { selector: selectPendingDraft, value: null },
+          { selector: selectLastError, value: null },
+        ],
       }),
     ],
   });

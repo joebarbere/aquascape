@@ -87,6 +87,64 @@ function copyBytes(input: Uint8Array): Uint8Array {
   return out;
 }
 
+// ─── IPC-backed transport (F1.4) ────────────────────────────────────────────
+
+/**
+ * Minimal shape of the preload bridge that this transport forwards to. Kept
+ * narrow so platform-electron doesn't need to import the desktop app's
+ * `IpcContract` (which would couple this lib to apps/desktop).
+ */
+export interface IpcBridge {
+  ['file.open'](): Promise<OpenDocumentResult | null>;
+  ['file.save'](payload: {
+    id?: string;
+    bytes: Uint8Array;
+    suggestedName: string;
+  }): Promise<SaveDocumentResult | null>;
+  ['file.saveAs'](payload: {
+    bytes: Uint8Array;
+    suggestedName: string;
+  }): Promise<SaveDocumentResult | null>;
+  ['dialog.confirm'](payload: {
+    title: string;
+    message: string;
+    danger?: boolean;
+  }): Promise<boolean>;
+  ['dialog.alert'](payload: { title: string; message: string }): Promise<void>;
+  ['storage.get'](payload: { key: string }): Promise<unknown>;
+  ['storage.set'](payload: { key: string; value: unknown }): Promise<void>;
+  ['storage.remove'](payload: { key: string }): Promise<void>;
+  ['export.png'](payload: {
+    bytes: Uint8Array;
+    suggestedName: string;
+  }): Promise<ExportPngResult | null>;
+}
+
+/**
+ * Build a transport that forwards every method to a preload bridge. This is
+ * what `apps/desktop` injects at boot via
+ * `createElectronPlatform(createIpcTransport(window.aquascape.ipc))`.
+ *
+ * The bridge is the typed surface from `apps/desktop/src/shared/ipc-contract.ts`
+ * — we accept the narrower `IpcBridge` here so the platform lib doesn't pull
+ * the app's contract module in transitively.
+ */
+export function createIpcTransport(bridge: IpcBridge): ElectronTransport {
+  return {
+    openDocument: () => bridge['file.open'](),
+    saveDocument: (req) => bridge['file.save'](req),
+    saveDocumentAs: (req) => bridge['file.saveAs'](req),
+    confirm: (req) => bridge['dialog.confirm'](req),
+    alert: (req) => bridge['dialog.alert'](req),
+    storageGet: (req) => bridge['storage.get'](req),
+    storageSet: (req) => bridge['storage.set'](req),
+    storageRemove: (req) => bridge['storage.remove'](req),
+    exportPng: (req) => bridge['export.png'](req),
+  };
+}
+
+// ─── In-memory transport (Stage 0; still used in tests) ────────────────────
+
 /**
  * Build a fresh in-memory transport. Each call returns an isolated set of
  * stores so tests cannot leak state into one another.

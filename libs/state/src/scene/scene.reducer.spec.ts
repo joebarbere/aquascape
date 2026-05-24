@@ -226,6 +226,34 @@ describe('sceneFeature.reducer', () => {
     });
   });
 
+  describe('setScene', () => {
+    it('replaces the scene wholesale and resets the undo/redo stacks', () => {
+      // Apply a command so history is non-empty.
+      const command = setTankDimensions({ width: 800, height: 400, depth: 400 });
+      const pushed = init.history.push(command, init.scene);
+      if (pushed === null) throw new Error('push failed');
+      const editedState = reduce(
+        init,
+        SceneActions.applyCommandSucceeded({
+          scene: pushed.scene,
+          history: pushed.history,
+        }),
+      );
+      expect(editedState.history.past.length).toBe(1);
+
+      // Open a different scene — history must NOT carry over.
+      const openedScene: Scene = {
+        ...defaultScene(),
+        tank: { ...defaultScene().tank, width: 1200 },
+        seed: 999,
+      };
+      const replaced = reduce(editedState, SceneActions.setScene({ scene: openedScene }));
+      expect(replaced.scene).toBe(openedScene);
+      expect(replaced.history.past).toEqual([]);
+      expect(replaced.history.future).toEqual([]);
+    });
+  });
+
   describe('invariant: applyCommandSucceeded does not lose JSON shape', () => {
     it('a SetTankDimensions round-trip stays JSON-clean', () => {
       const command = setTankDimensions({ width: 800, height: 400, depth: 400 });

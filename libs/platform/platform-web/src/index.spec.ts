@@ -160,11 +160,17 @@ describe('InMemoryRenderExportService', () => {
 });
 
 describe('createWebPlatform', () => {
-  it('returns a Platform bundle with every service wired', () => {
+  it('returns a Platform bundle with every service wired (node env → in-memory fallback)', () => {
     const platform = createWebPlatform();
     expect(platform.fileService).toBeInstanceOf(InMemoryFileService);
     expect(platform.dialogService).toBeInstanceOf(StubDialogService);
     expect(platform.storageService).toBeInstanceOf(InMemoryStorageService);
     expect(platform.renderExportService).toBeInstanceOf(InMemoryRenderExportService);
+  });
+
+  it('returns the in-memory bundle when forceInMemory is true', () => {
+    const platform = createWebPlatform({ forceInMemory: true });
+    expect(platform.fileService).toBeInstanceOf(InMemoryFileService);
+    expect(platform.storageService).toBeInstanceOf(InMemoryStorageService);
   });
 });

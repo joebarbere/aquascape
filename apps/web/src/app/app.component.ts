@@ -27,6 +27,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import type { Scene } from '@aquascape/domain/scene-model';
+import { EditorShellComponent } from '@aquascape/features/editor-shell';
 import { TankSetupComponent } from '@aquascape/features/tank-setup';
 import {
   DIALOG_SERVICE,
@@ -51,20 +52,23 @@ import { SCENE_RENDERER } from './renderer.token';
   selector: 'aquascape-root',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, TankSetupComponent],
+  imports: [CommonModule, EditorShellComponent, TankSetupComponent],
   template: `
-    <div class="app-grid">
-      <aside class="app-sidebar" aria-label="Tools">
-        <aquascape-tank-setup></aquascape-tank-setup>
-      </aside>
-      <main class="app-canvas-host">
-        <canvas
-          #canvas
-          class="scene-canvas"
-          aria-label="Aquascape design canvas"
-          role="img"
-        ></canvas>
-      </main>
+    <div class="app-shell">
+      <aquascape-editor-shell></aquascape-editor-shell>
+      <div class="app-grid">
+        <aside class="app-sidebar" aria-label="Tools">
+          <aquascape-tank-setup></aquascape-tank-setup>
+        </aside>
+        <main class="app-canvas-host">
+          <canvas
+            #canvas
+            class="scene-canvas"
+            aria-label="Aquascape design canvas"
+            role="img"
+          ></canvas>
+        </main>
+      </div>
     </div>
   `,
   styles: [
@@ -74,10 +78,17 @@ import { SCENE_RENDERER } from './renderer.token';
         width: 100%;
         height: 100%;
       }
+      .app-shell {
+        display: grid;
+        /* auto rows let the toolbar + recovery/error banners size to their
+           content while the grid takes whatever is left. */
+        grid-template-rows: auto 1fr;
+        height: 100%;
+      }
       .app-grid {
         display: grid;
         grid-template-columns: minmax(280px, 360px) 1fr;
-        height: 100%;
+        min-height: 0; /* allows the canvas host to shrink in flex/grid */
       }
       .app-sidebar {
         overflow-y: auto;

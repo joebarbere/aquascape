@@ -8,6 +8,7 @@ import type { Provider, EnvironmentProviders } from '@angular/core';
 import { provideEffects } from '@ngrx/effects';
 import { provideState } from '@ngrx/store';
 
+import { documentFeature, DocumentEffects } from './document';
 import { sceneFeature, SceneEffects } from './scene';
 
 /**
@@ -31,6 +32,27 @@ export function provideSceneStore(): Array<Provider | EnvironmentProviders> {
   return [provideState(sceneFeature), provideEffects(SceneEffects)];
 }
 
+/**
+ * Compose the document-feature providers. Pair with `provideSceneStore()` —
+ * the two are independent stores but several effects dispatch into both
+ * (open/save/recover/new), so providing one without the other surfaces as
+ * silently-dropped actions at runtime. Always provide both at the app root.
+ *
+ * ```ts
+ * bootstrapApplication(AppComponent, {
+ *   providers: [
+ *     provideStore({}),
+ *     provideEffects(),
+ *     provideSceneStore(),
+ *     provideDocumentStore(),
+ *   ],
+ * });
+ * ```
+ */
+export function provideDocumentStore(): Array<Provider | EnvironmentProviders> {
+  return [provideState(documentFeature), provideEffects(DocumentEffects)];
+}
+
 // Feature surface — actions, selectors, and the default-scene factory.
 export {
   SceneActions,
@@ -51,3 +73,35 @@ export {
   DEFAULT_TANK_DEPTH_MM,
 } from './scene';
 export type { SceneState } from './scene';
+
+// Document feature.
+export {
+  AUTOSAVE_DEBOUNCE_MS,
+  DEFAULT_NEW_FILENAME,
+  DOCUMENT_FEATURE_KEY,
+  DocumentActions,
+  DocumentEffects,
+  MAX_RECENT_FILES,
+  STORAGE_KEY_AUTOSAVE_DRAFT,
+  STORAGE_KEY_RECENT_FILES,
+  UNTITLED_NAME,
+  documentFeature,
+  initialDocumentState,
+  selectCanSave,
+  selectDisplayTitle,
+  selectDocumentState,
+  selectEnvelope,
+  selectFileId,
+  selectHasFile,
+  selectHasPendingDraft,
+  selectIsDirty,
+  selectIsUntitled,
+  selectLastAutosavedAt,
+  selectLastError,
+  selectLastSavedAt,
+  selectName,
+  selectPendingDraft,
+  selectRecentFiles,
+  selectStatus,
+} from './document';
+export type { DocumentState, DocumentStatus, PendingDraft, RecentFileEntry } from './document';

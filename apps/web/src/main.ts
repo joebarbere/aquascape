@@ -17,7 +17,11 @@ import {
   RENDER_EXPORT_SERVICE,
   STORAGE_SERVICE,
 } from '@aquascape/platform/platform-api/angular';
-import { provideSceneStore } from '@aquascape/state';
+import {
+  DocumentEffects,
+  provideDocumentStore,
+  provideSceneStore,
+} from '@aquascape/state';
 import { provideEffects } from '@ngrx/effects';
 import { provideStore } from '@ngrx/store';
 import { provideStoreDevtools } from '@ngrx/store-devtools';
@@ -34,19 +38,29 @@ bootstrapApplication(AppComponent, {
     { provide: DIALOG_SERVICE, useValue: platform.dialogService },
     { provide: STORAGE_SERVICE, useValue: platform.storageService },
     { provide: RENDER_EXPORT_SERVICE, useValue: platform.renderExportService },
-    // NgRx runtime: store + effects, then the scene feature on top.
+    // NgRx runtime: store + effects, then the scene + document features.
     provideStore(),
     provideEffects(),
     provideSceneStore(),
+    provideDocumentStore(),
     provideStoreDevtools({
       maxAge: 25,
       logOnly: !isDevMode(),
       autoPause: true,
     }),
   ],
-}).catch((err: unknown) => {
-  // Surface bootstrap failures to the host. Using console.error here is
-  // appropriate — this is the last-resort handler at the composition root,
-  // not application code. Stage 1+ wires a structured error reporter.
-  console.error('Aquascape bootstrap failed:', err);
-});
+})
+  .then((ref) => {
+    // F1.5: on first paint, prime the document store from storage so the
+    // recovery banner and recent-files menu reflect any persisted state. The
+    // bootstrap call is async; we kick it off without blocking, because the
+    // UI is fully usable in the empty/clean state until storage replies.
+    const docEffects = ref.injector.get(DocumentEffects);
+    void docEffects.bootstrap();
+  })
+  .catch((err: unknown) => {
+    // Surface bootstrap failures to the host. Using console.error here is
+    // appropriate — this is the last-resort handler at the composition root,
+    // not application code. Stage 1+ wires a structured error reporter.
+    console.error('Aquascape bootstrap failed:', err);
+  });

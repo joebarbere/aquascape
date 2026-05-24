@@ -5,7 +5,20 @@
 import { IPC_CHANNELS } from './ipc-contract';
 
 describe('IPC_CHANNELS', () => {
-  it('lists exactly the Stage-0 channels', () => {
-    expect([...IPC_CHANNELS].sort()).toEqual(['ping']);
+  it('lists exactly the F1.4 channel set', () => {
+    expect([...IPC_CHANNELS].sort()).toEqual(
+      [
+        'dialog.alert',
+        'dialog.confirm',
+        'export.png',
+        'file.open',
+        'file.save',
+        'file.saveAs',
+        'ping',
+        'storage.get',
+        'storage.remove',
+        'storage.set',
+      ].sort(),
+    );
   });
 });

@@ -1,3 +1,7 @@
-// Public API for @aquascape/features/editor-shell.
-// Stage 0 scaffold — Angular feature lib for the editor shell. Implementation in F0.6.
-export {};
+// Public API for @aquascape/features/editor-shell. F1.4.
+//
+// Standalone Angular feature lib hosting the top toolbar (New / Open / Save /
+// Save As / Recent), keyboard shortcuts, and the F1.5 crash-recovery prompt.
+// Composed into apps/web as the page header above the canvas.
+
+export { EditorShellComponent } from './lib/editor-shell.component';

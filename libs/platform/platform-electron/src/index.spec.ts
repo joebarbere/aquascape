@@ -13,7 +13,9 @@ import {
   ElectronStorageService,
   createElectronPlatform,
   createInMemoryTransport,
+  createIpcTransport,
   type ElectronTransport,
+  type IpcBridge,
 } from './index';
 
 function bytes(text: string): Uint8Array {
@@ -232,5 +234,92 @@ describe('ElectronTransport seam', () => {
       suggestedName: 'a.aqua',
     });
     expect(await b.fileService.openDocument()).toBeNull();
+  });
+});
+
+describe('createIpcTransport', () => {
+  it('forwards every method to the corresponding bridge channel', async () => {
+    const calls: Array<{ channel: string; payload?: unknown }> = [];
+    const bridge: IpcBridge = {
+      ['file.open']: async () => {
+        calls.push({ channel: 'file.open' });
+        return { id: 'b-id', bytes: bytes('hi'), name: 'b.aqua' };
+      },
+      ['file.save']: async (p) => {
+        calls.push({ channel: 'file.save', payload: p });
+        return { id: 'saved' };
+      },
+      ['file.saveAs']: async (p) => {
+        calls.push({ channel: 'file.saveAs', payload: p });
+        return { id: 'saved-as' };
+      },
+      ['dialog.confirm']: async (p) => {
+        calls.push({ channel: 'dialog.confirm', payload: p });
+        return false;
+      },
+      ['dialog.alert']: async (p) => {
+        calls.push({ channel: 'dialog.alert', payload: p });
+      },
+      ['storage.get']: async (p) => {
+        calls.push({ channel: 'storage.get', payload: p });
+        return 'value';
+      },
+      ['storage.set']: async (p) => {
+        calls.push({ channel: 'storage.set', payload: p });
+      },
+      ['storage.remove']: async (p) => {
+        calls.push({ channel: 'storage.remove', payload: p });
+      },
+      ['export.png']: async (p) => {
+        calls.push({ channel: 'export.png', payload: p });
+        return { path: '/out/r.png' };
+      },
+    };
+
+    const transport = createIpcTransport(bridge);
+
+    expect(await transport.openDocument()).toEqual({
+      id: 'b-id',
+      bytes: bytes('hi'),
+      name: 'b.aqua',
+    });
+    await transport.saveDocument({ bytes: bytes('a'), suggestedName: 'a.aqua' });
+    await transport.saveDocumentAs({ bytes: bytes('a'), suggestedName: 'a.aqua' });
+    expect(await transport.confirm({ title: 't', message: 'm' })).toBe(false);
+    await transport.alert({ title: 't', message: 'm' });
+    expect(await transport.storageGet({ key: 'k' })).toBe('value');
+    await transport.storageSet({ key: 'k', value: 1 });
+    await transport.storageRemove({ key: 'k' });
+    expect(await transport.exportPng({ bytes: bytes('x'), suggestedName: 'r.png' })).toEqual({
+      path: '/out/r.png',
+    });
+
+    expect(calls.map((c) => c.channel)).toEqual([
+      'file.open',
+      'file.save',
+      'file.saveAs',
+      'dialog.confirm',
+      'dialog.alert',
+      'storage.get',
+      'storage.set',
+      'storage.remove',
+      'export.png',
+    ]);
+  });
+
+  it('plugs into createElectronPlatform end-to-end', async () => {
+    const transport = createIpcTransport({
+      ['file.open']: async () => null,
+      ['file.save']: async () => ({ id: 'x' }),
+      ['file.saveAs']: async () => null,
+      ['dialog.confirm']: async () => true,
+      ['dialog.alert']: async () => undefined,
+      ['storage.get']: async () => null,
+      ['storage.set']: async () => undefined,
+      ['storage.remove']: async () => undefined,
+      ['export.png']: async () => null,
+    });
+    const platform = createElectronPlatform(transport);
+    expect(await platform.fileService.openDocument()).toBeNull();
   });
 });

@@ -71,6 +71,11 @@ const reducer = createReducer<SceneState>(
     return { scene: next.scene, history: next.history };
   }),
 
+  on(SceneActions.setScene, (_state, { scene }) => ({
+    scene,
+    history: createHistory(),
+  })),
+
   on(SceneActions.setTankPresetRef, (state, { presetRef }) => {
     // Strip the field entirely when clearing, so `JSON.parse(JSON.stringify(
     // state.scene))` matches a freshly-built scene (round-trip parity with

@@ -1,0 +1,6 @@
+{
+  "name": "@aquascape/features/editor-shell",
+  "version": "0.0.1",
+  "private": true,
+  "type": "commonjs"
+}
