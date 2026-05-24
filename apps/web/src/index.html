@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Aquascape</title>
+    <!--
+      Stage 0 baseline CSP. F0.6 / plan §3.
+      - script-src 'self' so we only execute scripts we shipped. No 'unsafe-inline' / 'unsafe-eval'.
+      - style-src includes 'unsafe-inline' because Angular emits component styles as inline
+        <style> elements by default. F6.4 will revisit this (extract styles + nonce).
+      - img-src allows data: and blob: for canvas / asset exports.
+      - connect-src 'self' covers HMR / livereload (dev server) and file:// (Electron prod).
+      - The Electron shell composes additional file:///data: allowances on top of this base.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <aquascape-root></aquascape-root>
+  </body>
+</html>
