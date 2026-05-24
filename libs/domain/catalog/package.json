@@ -1,0 +1,10 @@
+{
+  "name": "@aquascape/domain/catalog",
+  "version": "0.0.1",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "ajv": "^8",
+    "ajv-formats": "^3"
+  }
+}

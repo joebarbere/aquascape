@@ -31,6 +31,11 @@ import type { Transform } from '@aquascape/domain/geometry';
 import { identityTransform } from '@aquascape/domain/geometry';
 
 import { getLayerById, getObjectWithLayer } from './selectors';
+import {
+  applySubstrateCommand,
+  invertSubstrateCommand,
+  type SubstrateCommand,
+} from './substrate-commands';
 import type { HexColor, Layer, LayerId, ObjectId, Scene, SceneObject, TankStyle } from './types';
 
 // ─── Result type ──────────────────────────────────────────────────────────
@@ -321,6 +326,7 @@ export type Command =
   | ReshapeObjectCommand
   | SetTankDimensionsCommand
   | SetTankStyleCommand
+  | SubstrateCommand
   | CompositeCommand;
 
 // ─── Internal helpers ─────────────────────────────────────────────────────
@@ -674,6 +680,18 @@ export function applyCommand(scene: Scene, command: Command): CommandResult {
       return ok({ ...scene, tank: nextTank });
     }
 
+    case 'AddSubstrateRegion':
+    case 'RemoveSubstrateRegion':
+    case 'SetSubstrateRegionMaterial':
+    case 'SetSubstrateRegionExtent':
+    case 'SetSubstrateRegionProfile': {
+      // Substrate commands are global-structural (no per-layer lock guard);
+      // delegate to the substrate-commands module so the union stays
+      // tractable here while the substrate-specific validation + mutation
+      // lives with its types.
+      return applySubstrateCommand(scene, command);
+    }
+
     case 'Composite': {
       let current = scene;
       for (const child of command.children) {
@@ -849,6 +867,14 @@ export function invertCommand(scene: Scene, command: Command): Command {
         style: clone(scene.tank.style),
         inverse: { previousStyle: clone(command.style) },
       };
+    }
+
+    case 'AddSubstrateRegion':
+    case 'RemoveSubstrateRegion':
+    case 'SetSubstrateRegionMaterial':
+    case 'SetSubstrateRegionExtent':
+    case 'SetSubstrateRegionProfile': {
+      return invertSubstrateCommand(scene, command);
     }
 
     case 'Composite': {

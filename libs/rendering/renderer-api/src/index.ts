@@ -9,12 +9,12 @@
 //
 // DEPENDENCY BUDGET
 // -----------------
-// Imports types from `@aquascape/domain/geometry` and
-// `@aquascape/domain/scene-model`. Nothing else. No Angular, NgRx, RxJS,
-// Electron, platform-*. DOM types (`HTMLCanvasElement`) come from the
-// workspace's `lib.dom` — acceptable here because this is the rendering
-// layer's contract; the `framework:none` tag means "no Angular/Electron/
-// NgRx", not "no DOM types".
+// Imports types from `@aquascape/domain/geometry`, `@aquascape/domain/
+// scene-model`, and `@aquascape/domain/catalog`. Nothing else. No Angular,
+// NgRx, RxJS, Electron, platform-*. DOM types (`HTMLCanvasElement`) come
+// from the workspace's `lib.dom` — acceptable here because this is the
+// rendering layer's contract; the `framework:none` tag means "no Angular/
+// Electron/NgRx", not "no DOM types".
 //
 // COORDINATE SYSTEM
 // -----------------
@@ -24,6 +24,7 @@
 // consumes the same numbers. Renderers never invent their own coordinate
 // space and never write back to the Scene.
 
+import type { Catalog } from '@aquascape/domain/catalog';
 import type { Vec2 } from '@aquascape/domain/geometry';
 import type { Scene, ObjectId, LayerId } from '@aquascape/domain/scene-model';
 
@@ -104,8 +105,14 @@ export interface SceneRenderer {
   /**
    * Paint `scene` at the given `viewport`. Must be idempotent (see
    * invariant above) and must not mutate `scene`.
+   *
+   * The optional `catalog` parameter is consulted for content lookups
+   * (substrate colors as of Stage 2 F2.1; later: hardscape sprites, plant
+   * meshes, etc.). When omitted, the renderer paints with implementation-
+   * defined fallback colors so tests + headless smoke runs stay simple —
+   * the production app always passes a catalog.
    */
-  render(scene: Scene, viewport: Viewport): void;
+  render(scene: Scene, viewport: Viewport, catalog?: Catalog): void;
 
   /**
    * Return the topmost object hit at `point` (canvas CSS pixels) under the

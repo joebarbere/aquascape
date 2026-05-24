@@ -1,4 +1,4 @@
-/* eslint-disable */
+ 
 export default {
   displayName: 'domain-scene-model',
   preset: '../../../jest.preset.js',

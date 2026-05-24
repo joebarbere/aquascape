@@ -69,3 +69,6 @@ export { goldenRatioLines, thirdsLines, focalPoints } from './composition-guides
 
 // ─── Snap ─────────────────────────────────────────────────────────────────
 export { snapToGrid, snapToValue } from './snap';
+
+// ─── Profile / noise (Stage 2 F2.2) ───────────────────────────────────────
+export { sampleCatmullRom, seededHash01 } from './profile';

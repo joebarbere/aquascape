@@ -1,0 +1,12 @@
+{
+  "catalog": "core",
+  "id": "substrate.aquasoil.amazonia",
+  "version": 1,
+  "name": "ADA Aqua Soil Amazonia",
+  "kind": "substrate",
+  "material": "soil",
+  "color": "#3b2a1f",
+  "grainSize": 3,
+  "description": "Nutrient-rich planted-tank substrate. Mildly acidic; lowers pH and softens water on setup.",
+  "tags": ["planted", "soil", "ada"]
+}

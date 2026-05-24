@@ -1,0 +1,12 @@
+{
+  "catalog": "core",
+  "id": "substrate.sand.white",
+  "version": 1,
+  "name": "White Aragonite Sand",
+  "kind": "substrate",
+  "material": "sand",
+  "color": "#efe7d2",
+  "grainSize": 1,
+  "description": "Bright white sand, often used for biotope foregrounds. Raises pH and hardness; not suited to acidic planted tanks.",
+  "tags": ["biotope", "marine", "sand"]
+}

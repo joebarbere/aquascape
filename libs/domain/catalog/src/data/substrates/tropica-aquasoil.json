@@ -1,0 +1,12 @@
+{
+  "catalog": "core",
+  "id": "substrate.aquasoil.tropica",
+  "version": 1,
+  "name": "Tropica Aquarium Soil",
+  "kind": "substrate",
+  "material": "soil",
+  "color": "#2c1d12",
+  "grainSize": 3,
+  "description": "Pre-fertilised dark soil for planted aquariums. Slightly buffers pH downward.",
+  "tags": ["planted", "soil", "tropica"]
+}

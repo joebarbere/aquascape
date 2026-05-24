@@ -14,6 +14,8 @@ export {
   selectHistory,
   selectTank,
   selectTankPresetRef,
+  selectSubstrate,
+  selectSubstrateRegions,
   selectCanUndo,
   selectCanRedo,
 } from './scene.selectors';

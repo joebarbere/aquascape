@@ -26,8 +26,10 @@ import {
   inject,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { coreCatalog } from '@aquascape/domain/catalog';
 import type { Scene } from '@aquascape/domain/scene-model';
 import { EditorShellComponent } from '@aquascape/features/editor-shell';
+import { SubstrateToolComponent } from '@aquascape/features/substrate-tool';
 import { TankSetupComponent } from '@aquascape/features/tank-setup';
 import {
   DIALOG_SERVICE,
@@ -52,13 +54,14 @@ import { SCENE_RENDERER } from './renderer.token';
   selector: 'aquascape-root',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, EditorShellComponent, TankSetupComponent],
+  imports: [CommonModule, EditorShellComponent, SubstrateToolComponent, TankSetupComponent],
   template: `
     <div class="app-shell">
       <aquascape-editor-shell></aquascape-editor-shell>
       <div class="app-grid">
         <aside class="app-sidebar" aria-label="Tools">
           <aquascape-tank-setup></aquascape-tank-setup>
+          <aquascape-substrate-tool></aquascape-substrate-tool>
         </aside>
         <main class="app-canvas-host">
           <canvas
@@ -172,7 +175,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       // idempotent and the source of truth for backing-store sizing.
       this.renderer.attach(surface);
     }
-    this.renderer.render(scene, this.computeViewport(surface, scene));
+    // F2.3 — pass the bundled core catalog so the substrate renderer can
+    // resolve material colors. Community catalogs would be merged here in
+    // Stage 8; for now the core bundle is the single source.
+    this.renderer.render(scene, this.computeViewport(surface, scene), coreCatalog);
   }
 
   private installResizeObserver(): void {

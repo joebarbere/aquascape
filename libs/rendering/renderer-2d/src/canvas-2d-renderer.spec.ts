@@ -943,3 +943,232 @@ describe('Canvas2DRenderer.render — styling: invariants', () => {
     expect(JSON.parse(JSON.stringify(scene))).toEqual(before);
   });
 });
+
+// ─── F2.3 — substrate rendering ─────────────────────────────────────────
+
+describe('Canvas2DRenderer.render (substrate)', () => {
+  let fakeWindow: FakeWindow;
+  beforeEach(() => {
+    fakeWindow = installFakeWindow();
+  });
+  afterEach(() => {
+    uninstallFakeWindow();
+    void fakeWindow;
+  });
+
+  // A small fake catalog implementing only what the renderer reads.
+  function fakeCatalog(entries: Array<{ catalog: string; id: string; color: string }>) {
+    const lookup = new Map<string, { catalog: string; id: string; color: string; kind: 'substrate' }>();
+    for (const e of entries) {
+      lookup.set(`${e.catalog}|${e.id}`, { ...e, kind: 'substrate' });
+    }
+    return {
+      entries: entries as never,
+      get({ catalog, id }: { catalog: string; id: string }) {
+        return lookup.get(`${catalog}|${id}`) ?? null;
+      },
+      byKind() {
+        return [] as never;
+      },
+    } as never;
+  }
+
+  function sceneWithRegion(
+    regions: Array<{
+      id: string;
+      catalog?: string;
+      itemId?: string;
+      fromX?: number;
+      toX?: number;
+      profile?: Array<{ x: number; y: number }>;
+    }>,
+  ) {
+    return {
+      ...makeMinimalScene(600, 360, 360),
+      substrate: {
+        regions: regions.map((r) => ({
+          id: r.id,
+          material: { catalog: r.catalog ?? 'core', id: r.itemId ?? 'substrate.x', version: 1 },
+          fromX: r.fromX ?? 0,
+          toX: r.toX ?? 1,
+          profile: r.profile ?? [
+            { x: 0, y: 40 },
+            { x: 0.5, y: 80 },
+            { x: 1, y: 40 },
+          ],
+        })),
+      },
+    };
+  }
+
+  it('paints nothing when substrate.regions is empty (Stage 0 behaviour preserved)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(makeMinimalScene(), upright);
+    // No fill ops at all when there's no substrate.
+    expect(only(canvas.context.ops, ['fill']).length).toBe(0);
+  });
+
+  it('paints one filled silhouette per region (no catalog → fallback color)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(sceneWithRegion([{ id: 'r-1' }]), upright);
+    const fills = only(canvas.context.ops, ['fill']);
+    expect(fills.length).toBeGreaterThanOrEqual(1);
+    // fillStyle was set to a string color (not "[[gradient]]") before the fill.
+    const styles = only(canvas.context.ops, ['set:fillStyle']);
+    expect(styles.some((op) => typeof op.args[0] === 'string' && op.args[0]!.toString().startsWith('#'))).toBe(
+      true,
+    );
+  });
+
+  it('uses the catalog color when a matching substrate entry is supplied', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const catalog = fakeCatalog([{ catalog: 'core', id: 'substrate.sand.x', color: '#abcdef' }]);
+    r.render(
+      sceneWithRegion([{ id: 'r-1', itemId: 'substrate.sand.x' }]),
+      upright,
+      catalog,
+    );
+    const styles = only(canvas.context.ops, ['set:fillStyle']);
+    expect(styles.some((op) => op.args[0] === '#abcdef')).toBe(true);
+  });
+
+  it('falls back to the default color when the catalog lookup misses', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const catalog = fakeCatalog([{ catalog: 'core', id: 'substrate.OTHER', color: '#abcdef' }]);
+    r.render(
+      sceneWithRegion([{ id: 'r-1', itemId: 'substrate.missing' }]),
+      upright,
+      catalog,
+    );
+    const styles = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
+    // Fallback is #6b5a45 per the module constant.
+    expect(styles).toContain('#6b5a45');
+  });
+
+  it('paints regions in scene order (later draws over earlier)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const catalog = fakeCatalog([
+      { catalog: 'core', id: 'a', color: '#111111' },
+      { catalog: 'core', id: 'b', color: '#222222' },
+    ]);
+    r.render(
+      sceneWithRegion([
+        { id: 'r-1', itemId: 'a' },
+        { id: 'r-2', itemId: 'b' },
+      ]),
+      upright,
+      catalog,
+    );
+    const styles = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
+    const idxA = styles.indexOf('#111111');
+    const idxB = styles.indexOf('#222222');
+    expect(idxA).toBeGreaterThanOrEqual(0);
+    expect(idxB).toBeGreaterThan(idxA);
+  });
+
+  it('issues a clip + fill sequence for grain noise when the region is wide enough', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(
+      sceneWithRegion([
+        {
+          id: 'r-wide',
+          fromX: 0,
+          toX: 1, // full 600 mm width — plenty for grain
+          profile: [
+            { x: 0, y: 40 },
+            { x: 1, y: 40 },
+          ],
+        },
+      ]),
+      upright,
+    );
+    const clips = only(canvas.context.ops, ['clip']);
+    expect(clips.length).toBeGreaterThanOrEqual(1);
+    const fillRects = only(canvas.context.ops, ['fillRect']);
+    expect(fillRects.length).toBeGreaterThan(0);
+  });
+
+  it('skips grain noise on very narrow regions (< 20 mm wide)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    // Baseline render: no substrate. Records the background's fillRects.
+    r.render(makeMinimalScene(600, 360, 360), upright);
+    const baselineFillRects = only(canvas.context.ops, ['fillRect']).length;
+    canvas.context.ops.length = 0;
+    canvas.context.gradients.length = 0;
+    // Now render with a narrow substrate region.
+    r.render(
+      sceneWithRegion([
+        {
+          id: 'r-narrow',
+          fromX: 0,
+          toX: 0.01, // ~6 mm wide on a 600 mm tank
+          profile: [
+            { x: 0, y: 10 },
+            { x: 1, y: 10 },
+          ],
+        },
+      ]),
+      upright,
+    );
+    // The silhouette `fill` IS emitted; substrate-grain `fillRect`s are NOT.
+    expect(only(canvas.context.ops, ['fill']).length).toBeGreaterThanOrEqual(1);
+    expect(only(canvas.context.ops, ['fillRect']).length).toBe(baselineFillRects);
+  });
+
+  it('renders are idempotent in the substrate path (deterministic noise)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithRegion([{ id: 'r-1' }]);
+    r.render(scene, upright);
+    const first = canvas.context.ops.slice();
+    canvas.context.ops.length = 0;
+    canvas.context.gradients.length = 0;
+    r.render(scene, upright);
+    expect(canvas.context.ops).toEqual(first);
+  });
+
+  it('skips a degenerate region with zero width', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(
+      sceneWithRegion([
+        {
+          id: 'r-degenerate',
+          fromX: 0.5,
+          toX: 0.5,
+        },
+      ]),
+      upright,
+    );
+    // No substrate fills emitted for a zero-width region.
+    expect(only(canvas.context.ops, ['fill']).length).toBe(0);
+  });
+
+  it('skips substrate rendering entirely when tank.width is 0 (defensive)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = {
+      ...sceneWithRegion([{ id: 'r' }]),
+      tank: { ...makeMinimalScene(600, 360, 360).tank, width: 0 },
+    };
+    r.render(scene, upright);
+    expect(only(canvas.context.ops, ['fill']).length).toBe(0);
+  });
+});

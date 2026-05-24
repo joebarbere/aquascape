@@ -1,0 +1,12 @@
+{
+  "catalog": "core",
+  "id": "substrate.gravel.fluorite",
+  "version": 1,
+  "name": "Seachem Flourite",
+  "kind": "substrate",
+  "material": "gravel",
+  "color": "#7a3a26",
+  "grainSize": 3,
+  "description": "Porous clay gravel for planted tanks. Inert chemistry; promotes root growth as substrate-only or under aquasoil.",
+  "tags": ["planted", "clay", "gravel"]
+}

@@ -1,0 +1,12 @@
+{
+  "catalog": "core",
+  "id": "substrate.sand.silica",
+  "version": 1,
+  "name": "Silica Sand",
+  "kind": "substrate",
+  "material": "sand",
+  "color": "#d9c896",
+  "grainSize": 1,
+  "description": "Inert pale silica sand, common in Iwagumi designs. No effect on water chemistry.",
+  "tags": ["iwagumi", "inert", "sand"]
+}

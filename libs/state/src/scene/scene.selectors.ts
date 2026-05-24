@@ -35,6 +35,15 @@ export const selectTankPresetRef = createSelector(
   (tank) => tank.presetRef ?? null,
 );
 
+/** Selects `scene.substrate`. Stage 2 F2.2. */
+export const selectSubstrate = createSelector(selectScene, (scene) => scene.substrate);
+
+/** Convenience: just the substrate regions array. */
+export const selectSubstrateRegions = createSelector(
+  selectSubstrate,
+  (substrate) => substrate.regions,
+);
+
 /** True when there is at least one entry in the history's `past` stack. */
 export const selectCanUndo = createSelector(
   selectHistory,

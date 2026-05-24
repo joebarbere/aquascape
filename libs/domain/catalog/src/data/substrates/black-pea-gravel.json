@@ -1,0 +1,12 @@
+{
+  "catalog": "core",
+  "id": "substrate.gravel.black-pea",
+  "version": 1,
+  "name": "Black Pea Gravel",
+  "kind": "substrate",
+  "material": "gravel",
+  "color": "#1f1f24",
+  "grainSize": 5,
+  "description": "Inert rounded black gravel. Pairs well with bright fish; planted tanks need root tabs.",
+  "tags": ["inert", "gravel", "low-tech"]
+}

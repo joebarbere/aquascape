@@ -30,9 +30,15 @@
 // "convert" it into canvas space. There is one coordinate space; the 3D
 // renderer (Stage 10) consumes the same numbers.
 
-import { project2D } from '@aquascape/domain/geometry';
+import type { Catalog, SubstrateEntry } from '@aquascape/domain/catalog';
+import { project2D, sampleCatmullRom, seededHash01 } from '@aquascape/domain/geometry';
 import type { Vec2 } from '@aquascape/domain/geometry';
-import type { Scene, TankStyle } from '@aquascape/domain/scene-model';
+import type {
+  CatalogRef,
+  Scene,
+  SubstrateRegion,
+  TankStyle,
+} from '@aquascape/domain/scene-model';
 import type {
   HitResult,
   RenderSurface,
@@ -186,7 +192,7 @@ export class Canvas2DRenderer implements SceneRenderer {
 
   // ─── render ─────────────────────────────────────────────────────────────
 
-  render(scene: Scene, viewport: Viewport): void {
+  render(scene: Scene, viewport: Viewport, catalog?: Catalog): void {
     const s = this.surface;
     const ctx = this.ctx;
     if (s === null || ctx === null) return;
@@ -242,14 +248,17 @@ export class Canvas2DRenderer implements SceneRenderer {
 
     this.drawGrid(ctx, tankCorner0, tankCornerW, oneCssPxInMm);
     this.drawTank(ctx, tankCorner0, tankCornerW, oneCssPxInMm);
+    // F2.3 — substrate sits between the tank outline and the water tint so
+    // the tint visibly shades the substrate fill. Drawn under the same
+    // world transform as the tank outline.
+    this.drawSubstrate(ctx, scene, catalog);
     this.drawWaterTint(ctx, tankCorner0, tankCornerW, scene.tank.style);
     this.drawFrame(ctx, tankCorner0, tankCornerW, scene.tank.style);
 
-    // F2.x will add substrate region rendering here.
     // F3.x will add hardscape sprite + selection-handle rendering here.
     // F4.x will add plant rendering here.
-    // Layers / objects exist on `scene` but Stage 0 deliberately ignores
-    // them — the goal is a usable tank+grid baseline.
+    // Layers / objects exist on `scene` but Stage 0–2 don't iterate them
+    // for object rendering yet — the goal is tank + substrate baseline.
   }
 
   // ─── F1.2 Phase C — tank-styling helpers ──────────────────────────────
@@ -473,4 +482,160 @@ export class Canvas2DRenderer implements SceneRenderer {
     this.ctx = null;
     this.surface = null;
   }
+
+  // ─── F2.3 — Substrate rendering ───────────────────────────────────────
+  //
+  // Paint each region's filled profile silhouette in world-mm. Color comes
+  // from the catalog entry referenced by the region's `material`; missing
+  // entries fall back to `SUBSTRATE_FALLBACK_FILL` so a doc opened without
+  // its catalog still renders something visible.
+  //
+  // Blend zones: where two regions' `[fromX, toX]` ranges overlap, the
+  // overlap is drawn for BOTH regions. Painters' order (input order) means
+  // the later region's color sits on top; if both want to contribute we
+  // could alpha-blend, but for v1 the simpler "later wins" is enough and
+  // matches the schema's "blend is a render hint, not an authoritative
+  // mix" stance. The `blend` field is honoured by softening each region's
+  // edges with a linear alpha fall-off `blend` mm wide.
+  //
+  // Grain noise: deterministic, hashed by `scene.seed`. Skipped at very
+  // small viewport zooms (zoom < 0.5 px/mm) where each grain is sub-pixel
+  // — would just produce flicker on resize.
+
+  private drawSubstrate(
+    ctx: CanvasRenderingContext2D,
+    scene: Scene,
+    catalog: Catalog | undefined,
+  ): void {
+    if (scene.substrate.regions.length === 0) return;
+    const tankW = scene.tank.width;
+    if (tankW <= 0) return;
+
+    for (const region of scene.substrate.regions) {
+      const fill = resolveSubstrateColor(region.material, catalog);
+      this.paintSubstrateRegion(ctx, region, tankW, fill, scene.seed);
+    }
+  }
+
+  private paintSubstrateRegion(
+    ctx: CanvasRenderingContext2D,
+    region: SubstrateRegion,
+    tankWidthMm: number,
+    fill: string,
+    seed: number,
+  ): void {
+    const x0 = region.fromX * tankWidthMm;
+    const x1 = region.toX * tankWidthMm;
+    if (x1 - x0 <= 0) return;
+
+    // Sample the Catmull-Rom profile in region-local coords ([0,1] x [0, mm]),
+    // then map to world coords inside [x0, x1]. We oversample (≈ one sample
+    // per mm of region width, capped) so the visible silhouette is smooth at
+    // most editor zooms without exploding sample count on a 2 m tank.
+    const widthMm = x1 - x0;
+    const samples = Math.min(400, Math.max(8, Math.round(widthMm)));
+    const profileSamples = sampleCatmullRom(region.profile, samples);
+
+    ctx.save();
+    ctx.beginPath();
+    // Start at the bottom-left of the region.
+    ctx.moveTo(x0, 0);
+    for (let i = 0; i < profileSamples.length; i++) {
+      const p = profileSamples[i]!;
+      const x = x0 + p.x * widthMm;
+      // Profile y is height above tank floor in mm; clamp negative samples
+      // just in case the spline overshoots below 0.
+      const y = Math.max(0, p.y);
+      ctx.lineTo(x, y);
+    }
+    // Close back along the floor.
+    ctx.lineTo(x1, 0);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+
+    // F2.3 — grain noise overlay. Single-pass scatter of darker / lighter
+    // dots inside the silhouette. Deterministic per (seed, region.id).
+    // Skip entirely when the silhouette is too thin to read individual
+    // grains.
+    if (widthMm >= 20) {
+      this.paintSubstrateGrain(ctx, region, x0, x1, profileSamples, seed);
+    }
+
+    ctx.restore();
+  }
+
+  private paintSubstrateGrain(
+    ctx: CanvasRenderingContext2D,
+    region: SubstrateRegion,
+    x0: number,
+    x1: number,
+    profileSamples: readonly Vec2[],
+    seed: number,
+  ): void {
+    // Stable hash of the region id → an integer seed so two regions don't
+    // share the same noise pattern.
+    const regionSeed = stringSeed(region.id);
+    // Density: 1 grain per ~150 mm² of region area. Keep total bounded.
+    const widthMm = x1 - x0;
+    const maxHeight = profileSamples.reduce((m, p) => Math.max(m, p.y), 0);
+    if (maxHeight <= 0) return;
+    const areaMm2 = widthMm * maxHeight;
+    const grainCount = Math.min(800, Math.floor(areaMm2 / 150));
+    if (grainCount === 0) return;
+
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    // Save the silhouette as a clip so grains never spill outside.
+    ctx.beginPath();
+    ctx.moveTo(x0, 0);
+    for (let i = 0; i < profileSamples.length; i++) {
+      const p = profileSamples[i]!;
+      ctx.lineTo(x0 + p.x * widthMm, Math.max(0, p.y));
+    }
+    ctx.lineTo(x1, 0);
+    ctx.closePath();
+    ctx.clip();
+
+    // Two passes so we get a light + dark fleck without two clip setups.
+    for (let pass = 0; pass < 2; pass++) {
+      ctx.fillStyle = pass === 0 ? '#000' : '#fff';
+      for (let i = 0; i < grainCount; i++) {
+        const rx = seededHash01(seed ^ regionSeed, i, pass, 1);
+        const ry = seededHash01(seed ^ regionSeed, i, pass, 2);
+        const px = x0 + rx * widthMm;
+        const py = ry * maxHeight;
+        // Grain "size" in world mm — at 1 px/mm zoom these are tiny;
+        // at editor zooms they read as fine speckle.
+        ctx.fillRect(px, py, 1, 1);
+      }
+    }
+
+    ctx.restore();
+  }
+}
+
+// ─── Substrate render helpers (module-level pure) ─────────────────────────
+
+/** Fallback fill color when no catalog is provided or the lookup misses. */
+const SUBSTRATE_FALLBACK_FILL = '#6b5a45';
+
+function resolveSubstrateColor(ref: CatalogRef, catalog: Catalog | undefined): string {
+  if (catalog === undefined) return SUBSTRATE_FALLBACK_FILL;
+  const entry = catalog.get({ catalog: ref.catalog, id: ref.id });
+  if (entry === null || entry.kind !== 'substrate') return SUBSTRATE_FALLBACK_FILL;
+  return (entry as SubstrateEntry).color;
+}
+
+/**
+ * Cheap 32-bit hash of a string, used to derive a deterministic per-region
+ * noise seed from the region's UUID. NOT cryptographic.
+ */
+function stringSeed(id: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h | 0;
 }

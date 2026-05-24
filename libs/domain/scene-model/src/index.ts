@@ -90,6 +90,28 @@ export {
   identityTransform,
 } from './commands';
 
+// ─── Substrate commands (Stage 2 F2.2) ────────────────────────────────────
+export type {
+  AddSubstrateRegionCommand,
+  RegionId,
+  RemoveSubstrateRegionCommand,
+  SetSubstrateRegionExtentCommand,
+  SetSubstrateRegionMaterialCommand,
+  SetSubstrateRegionProfileCommand,
+  SubstrateCommand,
+} from './substrate-commands';
+
+export {
+  addSubstrateRegion,
+  asRegionId,
+  removeSubstrateRegion,
+  setSubstrateRegionExtent,
+  setSubstrateRegionMaterial,
+  setSubstrateRegionProfile,
+  validateSubstrateRegion,
+} from './substrate-commands';
+
+
 // ─── History ──────────────────────────────────────────────────────────────
 export { createHistory } from './history';
 export type { History, HistoryEntry, HistoryOptions } from './history';

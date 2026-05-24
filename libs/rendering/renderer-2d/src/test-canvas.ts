@@ -130,6 +130,12 @@ export class FakeContext2D {
   stroke(): void {
     this.ops.push({ method: 'stroke', args: [] });
   }
+  fill(): void {
+    this.ops.push({ method: 'fill', args: [] });
+  }
+  closePath(): void {
+    this.ops.push({ method: 'closePath', args: [] });
+  }
   clearRect(x: number, y: number, w: number, h: number): void {
     this.ops.push({ method: 'clearRect', args: [x, y, w, h] });
   }

@@ -12,7 +12,19 @@
         "outputPath": "dist/libs/domain/catalog",
         "main": "libs/domain/catalog/src/index.ts",
         "tsConfig": "libs/domain/catalog/tsconfig.lib.json",
-        "assets": ["libs/domain/catalog/*.md"]
+        "assets": [
+          "libs/domain/catalog/*.md",
+          {
+            "input": "libs/domain/catalog/src/schema",
+            "glob": "**/*.json",
+            "output": "schema"
+          },
+          {
+            "input": "libs/domain/catalog/src/data",
+            "glob": "**/*.json",
+            "output": "data"
+          }
+        ]
       }
     }
   }
