@@ -22,6 +22,19 @@ export interface RecordedOp {
 // ─── Fake CanvasRenderingContext2D ────────────────────────────────────────
 
 /**
+ * Marker object for a linear gradient. The renderer assigns this to
+ * `fillStyle`; our fake `set:fillStyle` op stringifies it so the op stream
+ * stays JSON-friendly. The instance is also recorded directly on the
+ * `createLinearGradient` op so tests can inspect the recorded color stops.
+ */
+export interface FakeLinearGradient {
+  readonly __kind: 'gradient';
+  readonly endpoints: readonly [number, number, number, number];
+  readonly stops: Array<{ at: number; color: string }>;
+  addColorStop(at: number, color: string): void;
+}
+
+/**
  * Records every call onto `ops` along with its arguments. Supports the
  * subset of the CanvasRenderingContext2D API that Canvas2DRenderer touches.
  *
@@ -31,10 +44,13 @@ export interface RecordedOp {
  */
 export class FakeContext2D {
   readonly ops: RecordedOp[] = [];
+  /** Gradients handed out by createLinearGradient, in call order. */
+  readonly gradients: FakeLinearGradient[] = [];
 
   private _lineWidth = 1;
-  private _strokeStyle = '#000';
-  private _fillStyle = '#000';
+  private _strokeStyle: string | FakeLinearGradient = '#000';
+  private _fillStyle: string | FakeLinearGradient = '#000';
+  private _globalAlpha = 1;
 
   // Style properties — getters/setters so renderer code can assign normally.
   get lineWidth(): number {
@@ -44,19 +60,32 @@ export class FakeContext2D {
     this._lineWidth = v;
     this.ops.push({ method: 'set:lineWidth', args: [v] });
   }
-  get strokeStyle(): string {
+  get strokeStyle(): string | FakeLinearGradient {
     return this._strokeStyle;
   }
-  set strokeStyle(v: string) {
+  set strokeStyle(v: string | FakeLinearGradient) {
     this._strokeStyle = v;
-    this.ops.push({ method: 'set:strokeStyle', args: [v] });
+    this.ops.push({
+      method: 'set:strokeStyle',
+      args: [typeof v === 'string' ? v : '[[gradient]]'],
+    });
   }
-  get fillStyle(): string {
+  get fillStyle(): string | FakeLinearGradient {
     return this._fillStyle;
   }
-  set fillStyle(v: string) {
+  set fillStyle(v: string | FakeLinearGradient) {
     this._fillStyle = v;
-    this.ops.push({ method: 'set:fillStyle', args: [v] });
+    this.ops.push({
+      method: 'set:fillStyle',
+      args: [typeof v === 'string' ? v : '[[gradient]]'],
+    });
+  }
+  get globalAlpha(): number {
+    return this._globalAlpha;
+  }
+  set globalAlpha(v: number) {
+    this._globalAlpha = v;
+    this.ops.push({ method: 'set:globalAlpha', args: [v] });
   }
 
   setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void {
@@ -95,11 +124,29 @@ export class FakeContext2D {
   strokeRect(x: number, y: number, w: number, h: number): void {
     this.ops.push({ method: 'strokeRect', args: [x, y, w, h] });
   }
+  fillRect(x: number, y: number, w: number, h: number): void {
+    this.ops.push({ method: 'fillRect', args: [x, y, w, h] });
+  }
   stroke(): void {
     this.ops.push({ method: 'stroke', args: [] });
   }
   clearRect(x: number, y: number, w: number, h: number): void {
     this.ops.push({ method: 'clearRect', args: [x, y, w, h] });
+  }
+  createLinearGradient(x0: number, y0: number, x1: number, y1: number): FakeLinearGradient {
+    const stops: Array<{ at: number; color: string }> = [];
+    const gradient: FakeLinearGradient = {
+      __kind: 'gradient',
+      endpoints: [x0, y0, x1, y1],
+      stops,
+      addColorStop: (at: number, color: string): void => {
+        stops.push({ at, color });
+        this.ops.push({ method: 'addColorStop', args: [at, color] });
+      },
+    };
+    this.gradients.push(gradient);
+    this.ops.push({ method: 'createLinearGradient', args: [x0, y0, x1, y1] });
+    return gradient;
   }
 }
 

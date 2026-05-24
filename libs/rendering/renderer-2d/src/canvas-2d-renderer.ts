@@ -1,9 +1,12 @@
 // Canvas 2D implementation of `SceneRenderer`. Plan §2.4 / Stage 0 F0.4.
 //
-// SCOPE — STAGE 0
-// ---------------
-// Paints tank outline + millimetre grid. Object rendering (substrate fills,
-// hardscape sprites, plant clusters) is deferred to later stages:
+// SCOPE — STAGE 0 + F1.2 PHASE C
+// ------------------------------
+// Paints tank styling + outline + millimetre grid. F1.2 Phase C added
+// `Tank.style` rendering: background (color / gradient / none / image-as-
+// none-stub), water tint overlay, and frame overlays (rimless / framed /
+// braced). Object rendering (substrate fills, hardscape sprites, plant
+// clusters) is deferred to later stages:
 //   - F2.x will add substrate region rendering here.
 //   - F3.x will add hardscape rendering + selection handles here.
 //   - F4.x will add plant rendering (grown according to growth-sim).
@@ -29,7 +32,7 @@
 
 import { project2D } from '@aquascape/domain/geometry';
 import type { Vec2 } from '@aquascape/domain/geometry';
-import type { Scene } from '@aquascape/domain/scene-model';
+import type { Scene, TankStyle } from '@aquascape/domain/scene-model';
 import type {
   HitResult,
   RenderSurface,
@@ -49,6 +52,30 @@ const TANK_STROKE = '#222';
 const GRID_MINOR_STROKE = 'rgba(0, 0, 0, 0.06)';
 /** Grid major line color (rgba with slightly higher alpha). */
 const GRID_MAJOR_STROKE = 'rgba(0, 0, 0, 0.12)';
+
+// ─── F1.2 Phase C — tank-styling tuning constants ────────────────────────
+
+/**
+ * Canvas fill used when `style.background.kind === 'none'` (and currently
+ * for `'image'`, which is a TODO until F6.3). A neutral near-white so the
+ * tank outline + grid are legible without committing to a brand color.
+ */
+const DEFAULT_BACKGROUND_FILL = '#fafafa';
+
+/**
+ * Water tint is rendered as a flat fill across the tank interior with this
+ * global alpha. We deliberately ignore any alpha channel already in the hex
+ * — the tint should look sensible regardless of whether the user picked
+ * `#88ccff` or `#88ccff40`. `save` / `restore` around the assignment.
+ */
+const WATER_TINT_ALPHA = 0.25;
+
+/** World-mm thickness of the top/bottom rim band on framed & braced tanks. */
+const FRAME_RIM_MM = 8;
+/** World-mm width of the centre brace bar on braced tanks. */
+const FRAME_BRACE_WIDTH_MM = 10;
+/** Frame fill color when `style.frameColor` is undefined. */
+const DEFAULT_FRAME_COLOR = '#222';
 
 // ─── Internal types ───────────────────────────────────────────────────────
 
@@ -172,6 +199,11 @@ export class Canvas2DRenderer implements SceneRenderer {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, backingW, backingH);
 
+    // 1a) Background — F1.2 Phase C. Painted under the identity transform
+    //     so endpoints are canvas pixels, not world mm. The background
+    //     covers the entire renderer-visible area, not just the tank.
+    this.drawBackground(ctx, backingW, backingH, scene.tank.style);
+
     // 2) Build the world-to-pixel transform.
     //
     //   p_px = T(cx,cy) · R(-θ) · S(zoom·dpr, -(zoom·dpr)) · T(-center) · p_world
@@ -210,12 +242,128 @@ export class Canvas2DRenderer implements SceneRenderer {
 
     this.drawGrid(ctx, tankCorner0, tankCornerW, oneCssPxInMm);
     this.drawTank(ctx, tankCorner0, tankCornerW, oneCssPxInMm);
+    this.drawWaterTint(ctx, tankCorner0, tankCornerW, scene.tank.style);
+    this.drawFrame(ctx, tankCorner0, tankCornerW, scene.tank.style);
 
     // F2.x will add substrate region rendering here.
     // F3.x will add hardscape sprite + selection-handle rendering here.
     // F4.x will add plant rendering here.
     // Layers / objects exist on `scene` but Stage 0 deliberately ignores
     // them — the goal is a usable tank+grid baseline.
+  }
+
+  // ─── F1.2 Phase C — tank-styling helpers ──────────────────────────────
+
+  /**
+   * Paint the background fill across the entire canvas. Runs under the
+   * identity transform set just before this call.
+   *
+   * Background variants:
+   *   - `'none'`     — flat `DEFAULT_BACKGROUND_FILL` over the whole canvas.
+   *   - `'color'`    — flat `background.color` over the whole canvas.
+   *   - `'gradient'` — linear gradient spanning the canvas at `angle` radians.
+   *     The angle is interpreted in WORLD space (+y up); we convert to canvas
+   *     space by negating the y component when computing endpoints.
+   *   - `'image'`    — TODO(F6.3): treated as `'none'` for now. Stage 0's
+   *     `render` is synchronous; image loading needs an async cache rearch
+   *     that F6.3 will deliver.
+   */
+  private drawBackground(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+    style: TankStyle,
+  ): void {
+    const bg = style.background;
+    if (bg.kind === 'none' || bg.kind === 'image') {
+      // TODO(F6.3): for `'image'`, load and draw asset via async image cache.
+      ctx.fillStyle = DEFAULT_BACKGROUND_FILL;
+      ctx.fillRect(0, 0, w, h);
+      return;
+    }
+    if (bg.kind === 'color') {
+      ctx.fillStyle = bg.color;
+      ctx.fillRect(0, 0, w, h);
+      return;
+    }
+    // Gradient. Endpoints span the canvas along the angle direction. We
+    // pick the canvas center and project the canvas half-diagonal onto the
+    // unit vector `(cos a, -sin a)` — the `-sin` converts WORLD +y-up into
+    // CANVAS +y-down so `angle = π/2` paints bottom→top on screen.
+    const ux = Math.cos(bg.angle);
+    const uy = -Math.sin(bg.angle);
+    const cx = w / 2;
+    const cy = h / 2;
+    // Half-extent along the gradient direction. Projecting the canvas's
+    // half-width and half-height onto the absolute components of `u`
+    // gives the distance from center to the bounding box along `u`. This
+    // ensures the gradient endpoints sit on (or just past) the canvas
+    // rectangle, so stops at 0 and 1 reach the edges.
+    const half = (w * Math.abs(ux) + h * Math.abs(uy)) / 2;
+    const x0 = cx - ux * half;
+    const y0 = cy - uy * half;
+    const x1 = cx + ux * half;
+    const y1 = cy + uy * half;
+    const grad = ctx.createLinearGradient(x0, y0, x1, y1);
+    for (const stop of bg.stops) {
+      grad.addColorStop(stop.at, stop.color);
+    }
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  /**
+   * Paint the water tint as a semi-transparent fill inside the projected
+   * tank rectangle. Runs in world-mm (the world transform is already set).
+   * Uses `globalAlpha = WATER_TINT_ALPHA` regardless of any alpha in the
+   * user-supplied hex so the tint stays visually sensible.
+   */
+  private drawWaterTint(ctx: CanvasRenderingContext2D, a: Vec2, b: Vec2, style: TankStyle): void {
+    if (style.waterTint === undefined) return;
+    const x0 = Math.min(a.x, b.x);
+    const y0 = Math.min(a.y, b.y);
+    const w = Math.abs(b.x - a.x);
+    const h = Math.abs(b.y - a.y);
+    ctx.save();
+    ctx.globalAlpha = WATER_TINT_ALPHA;
+    ctx.fillStyle = style.waterTint;
+    ctx.fillRect(x0, y0, w, h);
+    ctx.restore();
+  }
+
+  /**
+   * Paint the frame overlay (rims / brace) ON TOP of the water tint and
+   * tank outline. World-mm space, so all dimensions are in mm.
+   *
+   * Frame variants:
+   *   - `'rimless'` — no overlay; the thin tank outline IS the look.
+   *   - `'framed'`  — top & bottom rim bands of `FRAME_RIM_MM` mm thickness.
+   *   - `'braced'`  — `'framed'` PLUS a vertical center brace of
+   *     `FRAME_BRACE_WIDTH_MM` mm width running between the rims.
+   */
+  private drawFrame(ctx: CanvasRenderingContext2D, a: Vec2, b: Vec2, style: TankStyle): void {
+    if (style.frame === 'rimless') return;
+    const x0 = Math.min(a.x, b.x);
+    const y0 = Math.min(a.y, b.y);
+    const x1 = Math.max(a.x, b.x);
+    const y1 = Math.max(a.y, b.y);
+    const w = x1 - x0;
+    const color = style.frameColor ?? DEFAULT_FRAME_COLOR;
+
+    ctx.fillStyle = color;
+    // Bottom rim — y0 is the floor in world-mm coords.
+    ctx.fillRect(x0, y0, w, FRAME_RIM_MM);
+    // Top rim — sits BELOW y1 by FRAME_RIM_MM so it stays inside the tank.
+    ctx.fillRect(x0, y1 - FRAME_RIM_MM, w, FRAME_RIM_MM);
+
+    if (style.frame === 'braced') {
+      const cx = (x0 + x1) / 2;
+      const bx = cx - FRAME_BRACE_WIDTH_MM / 2;
+      // Brace spans from inner edge of bottom rim to inner edge of top rim.
+      const by = y0 + FRAME_RIM_MM;
+      const bh = y1 - y0 - 2 * FRAME_RIM_MM;
+      ctx.fillRect(bx, by, FRAME_BRACE_WIDTH_MM, bh);
+    }
   }
 
   /**
