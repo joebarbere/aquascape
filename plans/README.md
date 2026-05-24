@@ -54,6 +54,10 @@ Plan §"Stage <N>" F<X.Y>; <relevant architecture sections>.
 
 ## Index
 
+### Cross-cutting
+
+- [Release pipeline — versioning, installers, GitHub releases](release-pipeline.md) — first release cuts `v0.1.0`; version scheme covers the full pre-v1 / v1.0 / post-v1 progression.
+
 ### Critical path to v1.0
 
 - **Stage 0 — Foundation & Walking Skeleton** ([dir](stage-0-foundation/))
