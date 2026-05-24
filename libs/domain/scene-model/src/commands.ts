@@ -31,7 +31,7 @@ import type { Transform } from '@aquascape/domain/geometry';
 import { identityTransform } from '@aquascape/domain/geometry';
 
 import { getLayerById, getObjectWithLayer } from './selectors';
-import type { Layer, LayerId, ObjectId, Scene, SceneObject } from './types';
+import type { HexColor, Layer, LayerId, ObjectId, Scene, SceneObject, TankStyle } from './types';
 
 // ─── Result type ──────────────────────────────────────────────────────────
 
@@ -231,6 +231,70 @@ export interface SetTankDimensionsCommand {
 export const SET_TANK_DIMENSIONS_MAX_MM = 10_000;
 
 /**
+ * Replace `scene.tank.style` with a new value. Structural / global
+ * operation; NOT blocked by `locked` on any layer — `SetTankStyle` is
+ * treated like `SetTankDimensions`, `RemoveLayer`, `ReorderLayers`.
+ *
+ * SHAPE — WHOLE-STYLE REPLACEMENT
+ *
+ * The command carries the **entire** replacement `TankStyle` rather than
+ * a per-field patch. Rationale:
+ *   - Matches how the UI dispatches: the styling panel's local state is
+ *     one record; emitting "the new style" is simpler than diffing.
+ *   - Inversion is trivial: snapshot the previous style, no patch merge.
+ *   - The `background` union has mutually exclusive variants — a patch
+ *     semantic would have to spell out how to remove fields when switching
+ *     between e.g. `'color'` → `'gradient'`. That's a footgun; whole-style
+ *     replacement sidesteps it.
+ *
+ * APPLY SEMANTICS
+ *  1. Validates `style`. Rejects with `reason: 'invalid'` on:
+ *     - `frame` not in `{'rimless','framed','braced'}`.
+ *     - `frameColor` / `waterTint` present but not a well-formed hex color
+ *       (`#RRGGBB` or `#RRGGBBAA`, case-insensitive).
+ *     - `background.kind === 'color'`: `color` not a well-formed hex.
+ *     - `background.kind === 'gradient'`:
+ *       - `stops.length < 2` (schema-level too; defense in depth here).
+ *       - any stop's `color` not a well-formed hex.
+ *       - any stop's `at` non-finite or outside `[0, 1]`.
+ *       - stops not sorted ascending by `at` — **non-strict** ascending,
+ *         so two stops sharing an `at` (a hard-stop band) is legal.
+ *       - `angle` non-finite.
+ *     - `background.kind === 'image'`: missing `asset`, or `asset.id` /
+ *       `asset.uri` not non-empty strings. (No deep validation of the
+ *       asset bytes — that's the loader's job.)
+ *  2. Replaces `scene.tank.style` with `structuredClone(style)` so the
+ *     stored value is independent from any caller reference. Tank
+ *     `width`/`height`/`depth`/`glassThickness`/`presetRef` are NOT
+ *     touched.
+ *
+ * INVERT SEMANTICS
+ * `invertCommand(scene, cmd)` returns a fresh `SetTankStyleCommand` whose
+ * `style` is the pre-apply `scene.tank.style`, and whose `inverse.previousStyle`
+ * is the original `cmd.style` (so inverse-of-inverse round-trips
+ * structurally).
+ *
+ * **Inverse revalidation policy: always validate.** Apply does not
+ * short-circuit validation when `inverse.previousStyle` is present — the
+ * cost is microseconds (one shallow hex regex per color) and the
+ * always-on path keeps the apply switch simple and catches any latent
+ * bug that produced an invalid style upstream.
+ *
+ * A `SetTankStyleCommand` built freshly from the UI omits `inverse`; one
+ * built by `invertCommand` carries it. Both are JSON-serializable.
+ */
+export interface SetTankStyleCommand {
+  kind: 'SetTankStyle';
+  /** The full replacement style. Whole-style replacement, not a patch. */
+  style: TankStyle;
+  /**
+   * Pre-apply style captured for inversion. Populated by `invertCommand`;
+   * omitted on a freshly-built command from the UI.
+   */
+  inverse?: { previousStyle: TankStyle };
+}
+
+/**
  * Composite command: apply children in order on `apply`, invert children
  * in reverse on `invert`. Treated as a single user action by undo/redo.
  *
@@ -256,6 +320,7 @@ export type Command =
   | MoveObjectCommand
   | ReshapeObjectCommand
   | SetTankDimensionsCommand
+  | SetTankStyleCommand
   | CompositeCommand;
 
 // ─── Internal helpers ─────────────────────────────────────────────────────
@@ -277,6 +342,87 @@ function resolveInsertIndex(index: number | null, length: number): number {
     return length;
   }
   return index;
+}
+
+// ─── TankStyle validation ─────────────────────────────────────────────────
+
+/**
+ * Hex-color shape: `#RRGGBB` or `#RRGGBBAA`, case-insensitive. Intentionally
+ * narrow — three-digit shorthand (`#abc`) and CSS color names are NOT
+ * accepted. Keeps the on-disk representation canonical.
+ */
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/;
+
+function isHexColor(value: unknown): value is HexColor {
+  return typeof value === 'string' && HEX_COLOR_RE.test(value);
+}
+
+/**
+ * Returns `null` if `style` is valid; otherwise a human-readable message
+ * describing the first thing wrong with it. The caller wraps the message
+ * in a `rejected('invalid', ...)` result. Pure, no IO.
+ */
+function validateTankStyle(style: TankStyle): string | null {
+  // frame
+  if (style.frame !== 'rimless' && style.frame !== 'framed' && style.frame !== 'braced') {
+    return `frame must be 'rimless' | 'framed' | 'braced'; got "${String(style.frame)}"`;
+  }
+  // optional colors
+  if (style.frameColor !== undefined && !isHexColor(style.frameColor)) {
+    return `frameColor must be a hex color (#RRGGBB or #RRGGBBAA); got "${String(style.frameColor)}"`;
+  }
+  if (style.waterTint !== undefined && !isHexColor(style.waterTint)) {
+    return `waterTint must be a hex color (#RRGGBB or #RRGGBBAA); got "${String(style.waterTint)}"`;
+  }
+  // background
+  const bg = style.background;
+  switch (bg.kind) {
+    case 'none':
+      break;
+    case 'color': {
+      if (!isHexColor(bg.color)) {
+        return `background.color must be a hex color; got "${String(bg.color)}"`;
+      }
+      break;
+    }
+    case 'image': {
+      if (!bg.asset || typeof bg.asset !== 'object') {
+        return `background.asset must be an AssetRef`;
+      }
+      if (typeof bg.asset.id !== 'string' || bg.asset.id.length === 0) {
+        return `background.asset.id must be a non-empty string`;
+      }
+      if (typeof bg.asset.uri !== 'string' || bg.asset.uri.length === 0) {
+        return `background.asset.uri must be a non-empty string`;
+      }
+      break;
+    }
+    case 'gradient': {
+      if (!Number.isFinite(bg.angle)) {
+        return `background.angle must be finite`;
+      }
+      if (!Array.isArray(bg.stops) || bg.stops.length < 2) {
+        return `background.stops must have ≥ 2 entries`;
+      }
+      let prevAt = Number.NEGATIVE_INFINITY;
+      for (let i = 0; i < bg.stops.length; i++) {
+        const stop = bg.stops[i] as { at: number; color: HexColor };
+        if (!Number.isFinite(stop.at) || stop.at < 0 || stop.at > 1) {
+          return `background.stops[${i}].at must be a finite number in [0, 1]; got ${String(stop.at)}`;
+        }
+        if (!isHexColor(stop.color)) {
+          return `background.stops[${i}].color must be a hex color; got "${String(stop.color)}"`;
+        }
+        // Non-strict ascending: equal `at` values are legal (hard-stop band).
+        if (stop.at < prevAt) {
+          return `background.stops must be sorted ascending by \`at\`; stop ${i} (${stop.at}) < previous (${prevAt})`;
+        }
+        prevAt = stop.at;
+      }
+      break;
+    }
+  }
+  return null;
 }
 
 // ─── apply / invert ───────────────────────────────────────────────────────
@@ -510,6 +656,24 @@ export function applyCommand(scene: Scene, command: Command): CommandResult {
       return ok({ ...scene, tank: nextTank, layers });
     }
 
+    case 'SetTankStyle': {
+      // Always validate, even when an `inverse` envelope is present. The
+      // cost is a few regex checks; the always-on path keeps the apply
+      // switch simple and catches latent bugs.
+      const err = validateTankStyle(command.style);
+      if (err !== null) {
+        return rejected('invalid', `SetTankStyle: ${err}`);
+      }
+      // Whole-style replacement. Tank dimensions / glassThickness /
+      // presetRef are NOT touched. structuredClone so the stored style is
+      // independent of any caller reference.
+      const nextTank: Scene['tank'] = {
+        ...scene.tank,
+        style: clone(command.style),
+      };
+      return ok({ ...scene, tank: nextTank });
+    }
+
     case 'Composite': {
       let current = scene;
       for (const child of command.children) {
@@ -675,6 +839,18 @@ export function invertCommand(scene: Scene, command: Command): Command {
       };
     }
 
+    case 'SetTankStyle': {
+      // Snapshot the pre-apply style, deep-cloned so future scene edits
+      // can't mutate the captured inverse. Carry the would-be-applied
+      // style in `inverse.previousStyle` so inverse-of-inverse also
+      // round-trips structurally.
+      return {
+        kind: 'SetTankStyle',
+        style: clone(scene.tank.style),
+        inverse: { previousStyle: clone(command.style) },
+      };
+    }
+
     case 'Composite': {
       // Invert children in reverse, each against the scene state they would
       // see at undo time. That state isn't `scene` directly; it's the result
@@ -781,6 +957,17 @@ export const setTankDimensions = (dimensions: {
 }): SetTankDimensionsCommand => ({
   kind: 'SetTankDimensions',
   dimensions: { ...dimensions },
+});
+
+/**
+ * Build a {@link SetTankStyleCommand} from a new full style. The `inverse`
+ * envelope is omitted; {@link invertCommand} populates it when undo is
+ * built. The argument is taken by reference — `applyCommand` deep-clones
+ * before storing.
+ */
+export const setTankStyle = (style: TankStyle): SetTankStyleCommand => ({
+  kind: 'SetTankStyle',
+  style,
 });
 
 export const composite = (children: Command[]): CompositeCommand => ({

@@ -64,6 +64,7 @@ export type {
   MoveObjectCommand,
   ReshapeObjectCommand,
   SetTankDimensionsCommand,
+  SetTankStyleCommand,
   CompositeCommand,
 } from './commands';
 
@@ -84,6 +85,7 @@ export {
   reshapeObject,
   setTankDimensions,
   SET_TANK_DIMENSIONS_MAX_MM,
+  setTankStyle,
   composite,
   identityTransform,
 } from './commands';

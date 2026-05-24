@@ -29,12 +29,13 @@ import {
   setLayerOpacity,
   setLayerVisibility,
   setTankDimensions,
+  setTankStyle,
 } from './commands';
 import type { Command } from './commands';
 import { createHistory } from './history';
 import { getObjectWithLayer } from './selectors';
 import { arbScene, arbSceneObject, arbTransform, makeLayer, makeScene } from './test-fixtures';
-import type { LayerId, ObjectId, Scene } from './types';
+import type { LayerId, ObjectId, Scene, TankStyle } from './types';
 
 // Bound fast-check by default to keep CI snappy.
 fc.configureGlobal({ numRuns: 50 });
@@ -172,6 +173,22 @@ describe('Command JSON round-trip', () => {
         })
         .map((dims) => setTankDimensions(dims)),
     );
+
+    // SetTankStyle is likewise always valid against any scene (it doesn't
+    // depend on layers/objects), so include it unconditionally. The full
+    // arbitrary-style property tests live in set-tank-style.spec.ts;
+    // here we just exercise the JSON round-trip for the union member.
+    const arbHex6 = fc.stringMatching(/^#[0-9a-f]{6}$/);
+    const arbStyle: fc.Arbitrary<TankStyle> = fc.oneof(
+      fc.constant({ frame: 'rimless' as const, background: { kind: 'none' as const } }),
+      arbHex6.map(
+        (color): TankStyle => ({
+          frame: 'framed' as const,
+          background: { kind: 'color' as const, color },
+        }),
+      ),
+    );
+    choices.push(arbStyle.map((style) => setTankStyle(style)));
 
     return fc.oneof(...choices);
   };
@@ -379,6 +396,27 @@ describe('apply ∘ invert = id (per-command, on unlocked scenes)', () => {
           checkRoundTrip(setTankDimensions(dims), scene);
         },
       ),
+    );
+  });
+
+  it('SetTankStyle', () => {
+    const arbHex6 = fc.stringMatching(/^#[0-9a-f]{6}$/);
+    const arbStyle: fc.Arbitrary<TankStyle> = fc.oneof(
+      fc.constant({ frame: 'rimless' as const, background: { kind: 'none' as const } }),
+      arbHex6.map(
+        (color): TankStyle => ({
+          frame: 'framed' as const,
+          background: { kind: 'color' as const, color },
+        }),
+      ),
+    );
+    fc.assert(
+      fc.property(arbScene(), arbStyle, (sceneIn, style) => {
+        // Structural op; locked layers don't matter, but unlock to stay
+        // consistent with the rest of the suite.
+        const scene = unlockAll(sceneIn);
+        checkRoundTrip(setTankStyle(style), scene);
+      }),
     );
   });
 
