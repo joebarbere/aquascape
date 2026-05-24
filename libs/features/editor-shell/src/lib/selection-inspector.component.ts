@@ -59,9 +59,19 @@ const DUPLICATE_OFFSET_MM = 20;
   template: `
     @if (hasSelection()) {
       <aside class="selection-inspector" role="toolbar" aria-label="Selection actions">
+        @if (selectionLocked()) {
+          <span
+            class="lock-pill"
+            role="status"
+            title="The selected object's layer is locked. Click the 🔒 icon in the Layers panel to unlock."
+          >
+            🔒 Layer locked
+          </span>
+        }
         <button
           type="button"
           (click)="onMirrorH()"
+          [disabled]="selectionLocked()"
           aria-label="Mirror horizontal"
           title="Mirror horizontal"
         >
@@ -70,6 +80,7 @@ const DUPLICATE_OFFSET_MM = 20;
         <button
           type="button"
           (click)="onMirrorV()"
+          [disabled]="selectionLocked()"
           aria-label="Mirror vertical"
           title="Mirror vertical"
         >
@@ -78,6 +89,7 @@ const DUPLICATE_OFFSET_MM = 20;
         <button
           type="button"
           (click)="onDuplicate()"
+          [disabled]="selectionLocked()"
           aria-label="Duplicate (Cmd/Ctrl+D)"
           title="Duplicate (Cmd/Ctrl+D)"
         >
@@ -86,7 +98,7 @@ const DUPLICATE_OFFSET_MM = 20;
         <button
           type="button"
           (click)="onGroup()"
-          [disabled]="selectionCount() < 2"
+          [disabled]="selectionCount() < 2 || selectionLocked()"
           aria-label="Group selected (Cmd/Ctrl+G)"
           title="Group selected (Cmd/Ctrl+G)"
         >
@@ -95,7 +107,7 @@ const DUPLICATE_OFFSET_MM = 20;
         <button
           type="button"
           (click)="onUngroup()"
-          [disabled]="!anySelectedGrouped()"
+          [disabled]="!anySelectedGrouped() || selectionLocked()"
           aria-label="Ungroup selected (Cmd/Ctrl+Shift+G)"
           title="Ungroup selected (Cmd/Ctrl+Shift+G)"
         >
@@ -104,6 +116,7 @@ const DUPLICATE_OFFSET_MM = 20;
         <button
           type="button"
           (click)="onZUp()"
+          [disabled]="selectionLocked()"
           aria-label="Bring forward (])"
           title="Bring forward (])"
         >
@@ -112,6 +125,7 @@ const DUPLICATE_OFFSET_MM = 20;
         <button
           type="button"
           (click)="onZDown()"
+          [disabled]="selectionLocked()"
           aria-label="Send backward ([)"
           title="Send backward ([)"
         >
@@ -121,6 +135,7 @@ const DUPLICATE_OFFSET_MM = 20;
           type="button"
           class="danger"
           (click)="onDelete()"
+          [disabled]="selectionLocked()"
           aria-label="Delete (Del)"
           title="Delete (Del)"
         >
@@ -171,6 +186,26 @@ const DUPLICATE_OFFSET_MM = 20;
       button.danger:hover {
         background: #a32d26;
       }
+      button:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+      button:disabled:hover {
+        background: #2c3038;
+      }
+      .lock-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 0 10px;
+        height: 32px;
+        background: #3b2f00;
+        color: #ffe69c;
+        border: 1px solid #6b5400;
+        border-radius: 4px;
+        font-size: 12px;
+        white-space: nowrap;
+        cursor: help;
+      }
     `,
   ],
 })
@@ -206,6 +241,29 @@ export class SelectionInspectorComponent {
     for (const layer of scene.layers) {
       for (const obj of layer.objects) {
         if (ids.has(obj.id) && obj.groupId !== undefined) return true;
+      }
+    }
+    return false;
+  };
+
+  /**
+   * True when any selected object lives on a `locked` layer. Every mutation
+   * command (Mirror, Duplicate, Z-up/down, Delete, Group/Ungroup) is rejected
+   * by the scene-model reducer with `reason: 'locked'` in that case — the
+   * button "click" then silently does nothing, leaving the user confused.
+   * The template uses this signal to (a) disable the mutation buttons and
+   * (b) show a "Layer locked" hint pill so the user knows to unlock the
+   * layer in the right-rail layers panel.
+   */
+  readonly selectionLocked = (): boolean => {
+    const scene = this.sceneState();
+    if (scene === null) return false;
+    const ids = new Set<ObjectId>(this.selectedIdsState());
+    if (ids.size === 0) return false;
+    for (const layer of scene.layers) {
+      if (!layer.locked) continue;
+      for (const obj of layer.objects) {
+        if (ids.has(obj.id)) return true;
       }
     }
     return false;
@@ -336,6 +394,10 @@ export class SelectionInspectorComponent {
     ) {
       return;
     }
+    // Match the button [disabled] state — every action below would be
+    // rejected by the reducer with `reason: 'locked'` and silently do
+    // nothing, so don't waste a dispatch.
+    if (this.selectionLocked()) return;
     const mod = event.ctrlKey || event.metaKey;
     if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault();

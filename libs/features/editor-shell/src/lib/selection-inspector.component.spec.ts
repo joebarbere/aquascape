@@ -401,4 +401,49 @@ describe('SelectionInspectorComponent', () => {
     );
     expect(dispatched()).toEqual([]);
   });
+
+  // ── Locked-layer state — every mutation is silently rejected by the
+  //    reducer when the layer is locked, so the inspector must (a) disable
+  //    the buttons, (b) show a status pill, and (c) gate the keyboard
+  //    shortcuts. Otherwise the user clicks Delete and nothing happens.
+
+  function sceneWithLockedObject(id: string): ReturnType<typeof sceneWithObject> {
+    const scene = sceneWithObject(id);
+    scene.layers[0]!.locked = true;
+    return scene;
+  }
+
+  it('shows a "Layer locked" pill when the selection lives on a locked layer', () => {
+    const { fixture } = configure(['a'], sceneWithLockedObject('a'));
+    const pill = fixture.nativeElement.querySelector('.lock-pill') as HTMLElement | null;
+    expect(pill).not.toBeNull();
+    expect(pill?.textContent).toContain('Layer locked');
+  });
+
+  it('disables every mutation button when the selection lives on a locked layer', () => {
+    const { fixture } = configure(['a'], sceneWithLockedObject('a'));
+    for (const label of [
+      'Mirror horizontal',
+      'Mirror vertical',
+      'Duplicate',
+      'Bring forward',
+      'Send backward',
+      'Delete',
+    ]) {
+      const btn = buttonByLabel(fixture, label);
+      expect(btn?.disabled).toBe(true);
+    }
+  });
+
+  it('keyboard Delete is a no-op when the selection is on a locked layer', () => {
+    const { dispatched } = configure(['a'], sceneWithLockedObject('a'));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }));
+    expect(dispatched()).toEqual([]);
+  });
+
+  it('hides the pill again once the layer is unlocked', () => {
+    const { fixture } = configure(['a'], sceneWithObject('a'));
+    const pill = fixture.nativeElement.querySelector('.lock-pill');
+    expect(pill).toBeNull();
+  });
 });

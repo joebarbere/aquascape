@@ -11,12 +11,12 @@
 // action fires, which keeps the effect tree from over-subscribing to the
 // store on init. Lives in `@ngrx/operators` as of NgRx v18.
 
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, isDevMode } from '@angular/core';
 import { applyCommand } from '@aquascape/domain/scene-model';
 import { Actions, createEffect, ofType } from '@ngrx/effects';
 import { concatLatestFrom } from '@ngrx/operators';
 import { Store } from '@ngrx/store';
-import { map } from 'rxjs/operators';
+import { map, tap } from 'rxjs/operators';
 
 import { SceneActions } from './scene.actions';
 import { selectSceneState } from './scene.selectors';
@@ -62,5 +62,33 @@ export class SceneEffects {
         });
       }),
     ),
+  );
+
+  /**
+   * Dev-mode diagnostic: log every `commandRejected` so a "this button
+   * doesn't do anything" symptom always shows up in the DevTools console.
+   * Common cause is `reason: 'locked'` when the user's selection lives on
+   * a layer whose lock toggle is on (UI now shows a "🔒 Layer locked"
+   * pill in the inspector, but the log is still useful for keyboard /
+   * programmatic dispatches and for any other reason value).
+   *
+   * Disabled in production builds — there is no UI for the user to
+   * action a console message, and the typed `commandRejected` action is
+   * already available to any future toast/snackbar layer.
+   */
+  readonly logRejections$ = createEffect(
+    () =>
+      this.actions$.pipe(
+        ofType(SceneActions.commandRejected),
+        tap((action) => {
+          if (isDevMode()) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              `[scene] command rejected (reason=${action.reason}): ${action.message}`,
+            );
+          }
+        }),
+      ),
+    { dispatch: false },
   );
 }
