@@ -23,6 +23,11 @@
             "input": "libs/domain/catalog/src/data",
             "glob": "**/*.json",
             "output": "data"
+          },
+          {
+            "input": "libs/domain/catalog/src",
+            "glob": "validator.generated.cjs",
+            "output": "."
           }
         ]
       }

@@ -11,7 +11,8 @@
     "graph": "nx graph",
     "affected": "nx affected -t lint test build",
     "format": "nx format:write",
-    "format:check": "nx format:check"
+    "format:check": "nx format:check",
+    "precompile:validators": "node tools/precompile-validators.mjs"
   },
   "packageManager": "pnpm@9.12.0",
   "engines": {

@@ -18,6 +18,11 @@
             "input": "libs/domain/document/src/schema",
             "glob": "**/*.json",
             "output": "schema"
+          },
+          {
+            "input": "libs/domain/document/src",
+            "glob": "validator.generated.cjs",
+            "output": "."
           }
         ]
       }

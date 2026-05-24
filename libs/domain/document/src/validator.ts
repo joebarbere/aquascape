@@ -1,21 +1,21 @@
 /**
- * AJV-backed validator for `.aqua` documents (schema v1).
+ * Validator for `.aqua` documents (schema v1).
  *
- * The schema lives next door in `./schema/aqua-document.schema.json`; we import
- * it as JSON (resolveJsonModule) so the compiled output is self-contained and
- * runs in node, the browser, and the Electron renderer without filesystem
- * access. The validator is compiled once at module load.
+ * The schema lives next door in `./schema/aqua-document.schema.json`. The
+ * AJV-compiled validator function is precompiled at build time via
+ * `tools/precompile-validators.mjs` into `./validator.generated.cjs` —
+ * shipped as a committed file so the renderer never has to run AJV's
+ * `new Function(…)` codegen path. That keeps the renderer's CSP free of
+ * `'unsafe-eval'` and lets the Electron desktop ship the strict policy in
+ * production.
+ *
+ * Editing the schema → re-run `pnpm precompile:validators` to regenerate
+ * the `.cjs` file. CI re-runs the script and `git diff --exit-code`s to
+ * catch schema edits without regen.
  */
 
-import Ajv2020, { type ErrorObject } from 'ajv/dist/2020.js';
-import addFormats from 'ajv-formats';
-
 import aquaDocumentSchema from './schema/aqua-document.schema.json';
-
-const ajv = new Ajv2020({ allErrors: true, strict: true });
-addFormats(ajv);
-
-const compiledValidate = ajv.compile(aquaDocumentSchema);
+import compiledValidate from './validator.generated.cjs';
 
 /** A single validation error, pre-formatted for human display. */
 export interface ValidationError {
@@ -46,7 +46,11 @@ export function validateAquaDocument(input: unknown): ValidationResult {
   return { ok: false, errors: (compiledValidate.errors ?? []).map(formatError) };
 }
 
-function formatError(err: ErrorObject): ValidationError {
+function formatError(err: {
+  instancePath: string;
+  message?: string;
+  params: Record<string, unknown>;
+}): ValidationError {
   return {
     path: err.instancePath || '<root>',
     message: err.message ?? 'invalid',

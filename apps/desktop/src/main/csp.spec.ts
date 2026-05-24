@@ -23,8 +23,6 @@ describe('ELECTRON_CSP (production / packaged)', () => {
   });
 
   it('does not allow unsafe-inline in script-src', () => {
-    // The full string includes `'unsafe-inline'` inside style-src only.
-    // Assert the script-src directive does not include it.
     const match = /script-src ([^;]+);/.exec(ELECTRON_CSP);
     expect(match).not.toBeNull();
     if (match === null) throw new Error('unreachable');
@@ -41,11 +39,11 @@ describe('ELECTRON_CSP (production / packaged)', () => {
   });
 });
 
-describe('DEV_CSP (unpackaged / `nx serve desktop` only)', () => {
+describe('DEV_CSP (unpackaged / `nx serve desktop`)', () => {
   it('matches the documented dev policy exactly', () => {
     expect(DEV_CSP).toBe(
       "default-src 'self' file: http://localhost:* ws://localhost:*; " +
-        "script-src 'self' 'unsafe-eval' file: http://localhost:*; " +
+        "script-src 'self' file: http://localhost:*; " +
         "style-src 'self' 'unsafe-inline' http://localhost:*; " +
         "img-src 'self' data: blob: file: http://localhost:*; " +
         "connect-src 'self' file: http://localhost:* ws://localhost:*; " +
@@ -56,14 +54,22 @@ describe('DEV_CSP (unpackaged / `nx serve desktop` only)', () => {
     );
   });
 
-  it('allows unsafe-eval in script-src — needed for AJV runtime compile (dev only)', () => {
-    expect(DEV_CSP).toContain("'unsafe-eval'");
+  it('STILL forbids unsafe-eval — AJV is precompiled, so we never need it', () => {
+    expect(DEV_CSP).not.toContain("'unsafe-eval'");
   });
 
   it('still locks object-src, frame-src, and base-uri to none', () => {
     expect(DEV_CSP).toContain("object-src 'none'");
     expect(DEV_CSP).toContain("frame-src 'none'");
     expect(DEV_CSP).toContain("base-uri 'none'");
+  });
+
+  it('relaxes script-src to allow the Angular dev server, but ONLY localhost', () => {
+    const match = /script-src ([^;]+);/.exec(DEV_CSP);
+    expect(match).not.toBeNull();
+    if (match === null) throw new Error('unreachable');
+    expect(match[1]).toContain('http://localhost:*');
+    expect(match[1]).not.toContain("'unsafe-eval'");
   });
 });
 
@@ -72,7 +78,7 @@ describe('cspForEnvironment', () => {
     expect(cspForEnvironment({ isPackaged: true })).toBe(ELECTRON_CSP);
   });
 
-  it('returns the relaxed DEV_CSP when not packaged', () => {
+  it('returns the localhost-relaxed DEV_CSP when not packaged', () => {
     expect(cspForEnvironment({ isPackaged: false })).toBe(DEV_CSP);
   });
 });
