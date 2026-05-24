@@ -1,0 +1,9 @@
+{
+  "name": "@aquascape/testing",
+  "version": "0.0.1",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "fast-check": "^3"
+  }
+}

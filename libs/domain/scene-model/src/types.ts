@@ -2,10 +2,10 @@
  * In-memory scene types for `@aquascape/domain/scene-model`.
  *
  * These shapes mirror — and are intentionally re-declared from — the canonical
- * on-disk types in `aqua-document.ts`. The in-memory `Scene` is the on-disk
- * `AquaDocument` minus its `format` / `schemaVersion` / `meta` envelope; when
- * `libs/domain/document/` lands (F1.3), marshaling between the two is a
- * one-to-one mapping that wraps/unwraps that envelope.
+ * on-disk types in `@aquascape/domain/document` (`aqua-document.ts`). The
+ * in-memory `Scene` is the on-disk `AquaDocument` minus its `format` /
+ * `schemaVersion` / `meta` envelope; marshaling between the two lives in
+ * `libs/domain/document/src/marshal.ts` and is a one-to-one wrap/unwrap.
  *
  * RULES
  * -----

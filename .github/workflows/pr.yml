@@ -140,19 +140,34 @@ jobs:
           if-no-files-found: ignore
 
   document-round-trip:
-    name: document-round-trip (placeholder)
+    # Runs the F1.3 round-trip property test (libs/testing/src/document-round-trip.spec.ts):
+    # canonical example.aqua.json + fast-check property over arbAquaDocument,
+    # through both JSON serialize and ZIP container pack. REQUIRED on main
+    # (see branch protection); failures here mean the format/loader regressed.
+    name: document-round-trip
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      # TODO(F1.3 — domain/document — libs/testing/src/index.ts):
-      # When the `.aqua` v1 schema + (de)serialization land in libs/domain/document
-      # and the property test is wired in libs/testing, replace the placeholder
-      # below with:
-      #   - run: pnpm exec nx test testing -t document-round-trip
-      # This job is REQUIRED on main (see branch protection / required checks).
-      # Stage 0 keeps it as a no-op so the required check exists from day one
-      # and Stage 1 only needs to flip the body, not reconfigure branch protection.
-      - name: Placeholder (F1.3 will replace this with a real property test)
-        run: |
-          echo "document-round-trip placeholder — Stage 0 no-op."
-          echo "Real implementation lands with F1.3 (domain/document) — see TODO in .github/workflows/pr.yml."
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Run document-round-trip property tests
+        run: pnpm exec nx test testing -t document-round-trip

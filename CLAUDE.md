@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-**Stage 0 is complete + Stage 1 is in progress (F1.1 + F1.2 shipped).** Both apps boot. `apps/web` (Angular 18 standalone, ESBuild `application` builder) renders the tank — sized, styled (frame / water tint / background incl. gradients), and re-rendered live as the user drives the sidebar — via `renderer-2d`. `apps/desktop` (hand-rolled Electron 33 with `electron-builder` for packaging, per ADR-0001) loads that same web bundle behind the non-negotiable security posture (contextIsolation, sandbox, no nodeIntegration, no remote, typed preload bridge, CSP enforced via HTTP header). The `domain/*`, `rendering/*`, `platform/*`, `state/`, and `features/tank-setup/` libs from plan §2.1 are implemented and tested (see "Stage 0 + Stage 1 deliverables" below). Stage 1 continues at `domain/document` (F1.3) — moving `aqua-document.ts` into a real loader + `Migration` chain — then file ops + autosave + dirty tracking (F1.4–F1.6).
+**Stage 0 is complete + Stage 1 is in progress (F1.1 + F1.2 + F1.3 shipped).** Both apps boot. `apps/web` (Angular 18 standalone, ESBuild `application` builder) renders the tank — sized, styled (frame / water tint / background incl. gradients), and re-rendered live as the user drives the sidebar — via `renderer-2d`. `apps/desktop` (hand-rolled Electron 33 with `electron-builder` for packaging, per ADR-0001) loads that same web bundle behind the non-negotiable security posture (contextIsolation, sandbox, no nodeIntegration, no remote, typed preload bridge, CSP enforced via HTTP header). The `domain/*`, `rendering/*`, `platform/*`, `state/`, `features/tank-setup/`, and `testing/` libs from plan §2.1 are implemented and tested (see "Stage 0 + Stage 1 deliverables" below). The `.aqua` v1 format is now a real library — `@aquascape/domain/document` — with an AJV validator, `Migration` chain scaffold, ZIP container (`fflate`), and a fast-check round-trip property test gated by CI; **v1 is locked**, so every future format change requires a `Migration` entry. Stage 1 continues at file ops + autosave + dirty tracking (F1.4–F1.6).
 
-Planning artifacts at the repo root remain authoritative:
+Planning artifacts:
 
-- `aquascape-development-plan.md` — master plan: vision, architecture, 11-stage roadmap, quality gates, traceability matrix. This is the spec.
-- `aqua-document.ts` — canonical TypeScript definition of the `.aqua` v1 document format. Framework-free; will move to `libs/domain/document/` in F1.3.
-- `aqua-document.schema.json` — JSON Schema (Draft 2020-12) mirror of `aqua-document.ts`, for runtime validation on load.
-- `example.aqua.json` — worked Iwagumi document, validated against the schema; the canonical fixture for round-trip tests.
+- `aquascape-development-plan.md` (repo root) — master plan: vision, architecture, 11-stage roadmap, quality gates, traceability matrix. This is the spec.
+- `libs/domain/document/src/aqua-document.ts` — canonical TypeScript definition of the `.aqua` v1 document format. Framework-free.
+- `libs/domain/document/src/schema/aqua-document.schema.json` — JSON Schema (Draft 2020-12) mirror of `aqua-document.ts`, used by `validateAquaDocument` at runtime.
+- `example.aqua.json` (repo root) — worked Iwagumi document, kept at root for discoverability; the canonical fixture used by `document-round-trip.spec.ts`.
 
 Architecture decisions made during F0.1 / F0.7 are recorded under `docs/decisions/` (ADRs 0001 – 0004): Electron tooling, pnpm, Jest coverage, Nx Cloud deferral.
 
@@ -121,6 +121,15 @@ What to refresh where:
 
 ### Stage 1 so far
 
+- `libs/domain/document/` (F1.3) is now real:
+  - **Single source of truth.** `aqua-document.ts` + `schema/aqua-document.schema.json` moved out of the repo root into this lib. The validator imports the JSON via `resolveJsonModule` so the compiled output is self-contained (no fs reads in renderer / browser). The schema is also copied as an `assets` entry in `project.json` so `dist/` has it both at `src/schema/` and at the dist root — redundant but harmless.
+  - **`validateAquaDocument(input: unknown): ValidationResult`** — AJV 2020 + `ajv-formats`, compiled once at module load, returns `{ ok: true } | { ok: false, errors: ValidationError[] }` with structured JSON-pointer paths.
+  - **`Migration` chain.** `runMigrations(doc, migrations, targetVersion)` walks `from`→`from+1` steps in order. Rejects downgrades (`unsupported-future-version`), gaps (`missing-migration`), and migrations whose `to` isn't `from + 1` or whose output's `schemaVersion` doesn't equal `to` (`invalid-step`). `AQUA_MIGRATIONS` is `Object.freeze([])` (v1 baseline). When v2 ships, **prepend** a `{ from: 1, to: 2, migrate }` entry.
+  - **Container.** `packAquaContainer(json, { assets?, thumbnail? })` and `readAquaContainer(bytes)` via `fflate` (zero-dep, pure-JS, sync, runs in node + browser + Electron renderer). `isZipContainer(bytes)` sniffs `PK\x03\x04`; bare-JSON `.aqua` files are accepted on read. Asset paths must start with `assets/` — enforced at pack time (authoring bugs fail loud).
+  - **Loader.** `loadAquaDocument(input: Uint8Array | string)` returns a discriminated `LoadResult` (never throws). Order: container unwrap → JSON.parse → preflight (if `schemaVersion` is missing/non-number, run validator first to surface clean `schema-invalid` errors instead of a confusing `missing-migration` 0 → 1) → `runMigrations` → `validateAquaDocument`.
+  - **Marshaling.** `documentToScene(doc) → { scene, envelope }` and `sceneToDocument(scene, envelope) → AquaDocument`. The envelope carries `meta` + optional `livestock` / `equipment` / `renderHistory` / `extensions` verbatim so load → edit → save preserves unknown extensions ("don't drop what you don't understand"). `meta.seed` is overwritten from `scene.seed` on save; `schemaVersion` is bumped to `CURRENT_SCHEMA_VERSION`.
+  - **Round-trip gate.** `libs/testing/src/document-round-trip.spec.ts` is the CI contract test (`pnpm exec nx test testing -t document-round-trip`). Three layered properties: canonical fixture round-trips through serialize → load and through ZIP pack → load; fast-check `arbAquaDocument` round-trips through both forms; `JSON.parse(JSON.stringify(doc))` is lossless (the format invariant). The arbitrary covers every background `kind`, every scene-object `kind`, optionals on/off, multi-region substrate, livestock + equipment + render history + extensions.
+  - **Caveat (load-bearing).** `arbFiniteNumber` folds `-0` → `0` because `JSON.stringify(-0) === "0"` but `Object.is(-0, 0) === false` and Jest's `toEqual` distinguishes them — a raw `fc.double` producing `-0` would break the format invariant. The fast-check property test caught this; no real document writes `-0`.
 - `libs/domain/scene-model/` adds two structural commands (lock guard bypassed — these are global ops, not object-level):
   - `SetTankDimensions({ width, height, depth })` validates against the domain floor (100–10 000 mm), updates the tank, and clamps every object's `transform.position` inside the new interior AABB. **Nothing is deleted** — an object whose centre lands on a face stays in the scene. Invert carries an `inverse: { previousDimensions, restoredPositions }` envelope so shrink-and-undo restores objects to their original positions; apply short-circuits the clamp when `restoredPositions` is present.
   - `SetTankStyle({ style })` is whole-style replacement (not patches), `structuredClone`-cloned on store, with always-on validation (hex regex + sorted-stops + finite angle + image `AssetRef` shape). Invert carries `inverse: { previousStyle }`. F1.2 also added the **`gradient` background variant** to the document — `{ kind: 'gradient'; angle: number (radians); stops: Array<{ at: number; color: HexColor }> }`, schema-guaranteed `length >= 2` and sorted — in lockstep across `aqua-document.ts`, `aqua-document.schema.json`, `example.aqua.json`, and the in-memory mirror. No `Migration` was added because F1.3 has not shipped yet; once F1.3 locks v1, any further changes need a Migration entry.
@@ -173,15 +182,15 @@ The `lint` target enforces the `@nx/enforce-module-boundaries` rule defined in `
 
 CI workflows in `.github/workflows/` mirror this exactly:
 
-- `pr.yml` — PR workflow: `nx affected -t lint test build` + coverage gate + `document-round-trip` placeholder. Linux only.
+- `pr.yml` — PR workflow: `nx affected -t lint test build` + coverage gate + `document-round-trip` (real, `nx test testing -t document-round-trip`). Linux only.
 - `main.yml` — push to main: full `nx run-many` across the `ubuntu-latest` / `macos-latest` / `windows-latest` matrix.
 
-The **`document-round-trip` job is currently a no-op placeholder**. F1.3 (`domain/document`) replaces it with a real property test from `libs/testing`. The job is wired now so branch-protection required-checks can reference it from day one without reconfiguration when F1.3 lands. See the TODO comment in `.github/workflows/pr.yml`.
+The **`document-round-trip` job** runs `pnpm exec nx test testing -t document-round-trip` — the F1.3 fast-check property suite in `libs/testing/src/document-round-trip.spec.ts`. Three layered properties: canonical fixture round-trips through serialize → load and ZIP pack → load; `arbAquaDocument` round-trips through both forms; `JSON.parse(JSON.stringify(doc))` is lossless. The job is REQUIRED on main; a format/loader regression fails the PR.
 
 ## Working with the planning artifacts
 
 - Treat `aquascape-development-plan.md` as the spec. If a request conflicts with it, surface the conflict instead of silently deviating.
-- When changing the document format, change `aqua-document.ts` and `aqua-document.schema.json` **together**, re-validate `example.aqua.json` against the schema (`node tools/validate-example.mjs`), and update the in-memory mirror in `libs/domain/scene-model/src/types.ts`. v1 is currently in flight — additive changes are cheap until F1.3 ships the loader + `Migration` chain. Once F1.3 ships, never modify v1 in place — every change requires a `Migration` entry.
+- When changing the document format, change `libs/domain/document/src/aqua-document.ts` and `libs/domain/document/src/schema/aqua-document.schema.json` **together**, re-validate `example.aqua.json` against the schema (`node tools/validate-example.mjs`), and update the in-memory mirror in `libs/domain/scene-model/src/types.ts`. **v1 is locked** (F1.3 shipped). Every change requires (a) a new `{ from: N, to: N+1, migrate }` entry prepended to `AQUA_MIGRATIONS` in `libs/domain/document/src/migrations.ts`, (b) `CURRENT_SCHEMA_VERSION` bumped, (c) the previous version's example preserved as a round-trip fixture, and (d) a fast-check property test in `libs/testing` covering the new migration step. The `nx test testing -t document-round-trip` job is REQUIRED on main.
 - The stage roadmap is sequenced deliberately: Stages 0–4 are the critical path to a useful v1.0. Stages 5–6 round out v1.x. Stages 7–10 are parallelizable value-adds once the scene model and platform abstraction have stabilized.
 
 ## Claude Code workflow for this repo

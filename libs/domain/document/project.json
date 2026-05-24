@@ -12,7 +12,14 @@
         "outputPath": "dist/libs/domain/document",
         "main": "libs/domain/document/src/index.ts",
         "tsConfig": "libs/domain/document/tsconfig.lib.json",
-        "assets": ["libs/domain/document/*.md"]
+        "assets": [
+          "libs/domain/document/*.md",
+          {
+            "input": "libs/domain/document/src/schema",
+            "glob": "**/*.json",
+            "output": "schema"
+          }
+        ]
       }
     }
   }
