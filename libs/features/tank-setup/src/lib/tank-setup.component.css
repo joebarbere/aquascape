@@ -25,6 +25,10 @@
 .unit-toggle button {
   border: 1px solid #c0c0c0;
   background: #fff;
+  /* Explicit text color — `color-scheme: light dark` in index.html turns the
+     inherited UA color white under OS dark mode, which makes white-on-white
+     buttons invisible. */
+  color: #222;
   padding: 0.25rem 0.5rem;
   cursor: pointer;
   border-radius: 4px;

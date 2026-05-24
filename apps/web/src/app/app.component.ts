@@ -43,6 +43,7 @@ import {
   NgZone,
   OnDestroy,
   ViewChild,
+  computed,
   effect,
   inject,
   signal,
@@ -186,6 +187,16 @@ type DragState =
             ></div>
           }
           <aquascape-selection-inspector></aquascape-selection-inspector>
+          @if (paletteDragGhost(); as g) {
+            <div
+              class="palette-drag-ghost"
+              [style.left.px]="g.x"
+              [style.top.px]="g.y"
+              aria-hidden="true"
+            >
+              {{ g.label }}
+            </div>
+          }
           <div class="app-timeslider">
             <aquascape-time-slider></aquascape-time-slider>
           </div>
@@ -249,6 +260,25 @@ type DragState =
         pointer-events: none;
         z-index: 4;
       }
+      /* Drag preview that follows the cursor when the user is dragging a
+         palette tile (hardscape or plant) toward the canvas. Positioned at
+         the FIXED viewport coords from the drag service since the canvas
+         host may be inset from the viewport. The pill is offset slightly
+         above-right of the cursor so the actual drop point is unobscured. */
+      .palette-drag-ghost {
+        position: fixed;
+        transform: translate(12px, -28px);
+        padding: 4px 10px;
+        background: rgba(32, 35, 42, 0.92);
+        color: #fff;
+        border-radius: 12px;
+        font-size: 12px;
+        line-height: 1.2;
+        pointer-events: none;
+        z-index: 1000;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+        white-space: nowrap;
+      }
     `,
   ],
 })
@@ -288,6 +318,20 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     width: number;
     height: number;
   } | null>(null);
+
+  /**
+   * Drag-ghost label + viewport coords for the cursor follower shown while a
+   * palette tile is being dragged toward the canvas. Computed from whichever
+   * drag service is currently active (hardscape OR plant). Returns null when
+   * idle so the template hides the overlay.
+   */
+  readonly paletteDragGhost = computed<{ x: number; y: number; label: string } | null>(() => {
+    const hard = this.dragService.active();
+    if (hard !== null) return { x: hard.clientX, y: hard.clientY, label: hard.entry.name };
+    const plant = this.plantDragService.active();
+    if (plant !== null) return { x: plant.clientX, y: plant.clientY, label: plant.entry.name };
+    return null;
+  });
 
   ngAfterViewInit(): void {
     void this.fileService;
@@ -636,10 +680,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     const cssX = clientX - rect.left;
     const cssY = clientY - rect.top;
-    const world = canvasCssToWorld({ x: cssX, y: cssY }, viewport, {
-      width: rect.width,
-      height: rect.height,
-    });
+    const world = clampToTank(
+      canvasCssToWorld({ x: cssX, y: cssY }, viewport, {
+        width: rect.width,
+        height: rect.height,
+      }),
+      scene.tank,
+    );
     const z = scene.tank.depth / 2;
     const layerId = this.ensureLayerExists(scene);
     const newObject: HardscapeObject = {
@@ -701,10 +748,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     const cssX = clientX - rect.left;
     const cssY = clientY - rect.top;
-    const world = canvasCssToWorld({ x: cssX, y: cssY }, viewport, {
-      width: rect.width,
-      height: rect.height,
-    });
+    const world = clampToTank(
+      canvasCssToWorld({ x: cssX, y: cssY }, viewport, {
+        width: rect.width,
+        height: rect.height,
+      }),
+      scene.tank,
+    );
     const z = scene.tank.depth / 2;
     const layerId = this.ensureLayerExists(scene);
     const id = newObjectId();
@@ -867,6 +917,19 @@ function canvasCssToWorld(
   const rxMm = dxMm * cos - dyMm * sin;
   const ryMm = dxMm * sin + dyMm * cos;
   return { x: viewport.center.x + rxMm, y: viewport.center.y + ryMm };
+}
+
+/**
+ * Clamp a world point into the tank's interior `[0, width] × [0, height]`.
+ * Used at palette-drop time so a sloppy drag that releases above / below the
+ * visible tank still produces a usable placement instead of an invisible
+ * object floating off-screen.
+ */
+function clampToTank(p: Vec2, tank: { width: number; height: number }): Vec2 {
+  return {
+    x: Math.max(0, Math.min(tank.width, p.x)),
+    y: Math.max(0, Math.min(tank.height, p.y)),
+  };
 }
 
 function findObjectById(scene: Scene, id: ObjectId): SceneObject | null {

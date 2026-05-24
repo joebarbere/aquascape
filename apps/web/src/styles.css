@@ -1,7 +1,15 @@
 /*
- * Global styles for apps/web. Stage 0 baseline only: zero-margin body so the
- * canvas host fills the viewport. Theming + design tokens land with `libs/ui`
- * in Stage 1.
+ * Global styles for apps/web. Stage 0 baseline + a v1 polish pass for
+ * cross-component button text inheritance.
+ *
+ * The `<meta name="color-scheme" content="light dark">` tag in index.html
+ * advertises both schemes to the UA, which makes UA system colors (e.g.
+ * `ButtonText`) flip to white when the OS is in dark mode. Per-component
+ * buttons set `background: #fff` explicitly but inherit color from the UA
+ * cascade — so white-on-white. The `button, input, select, textarea`
+ * `color: inherit` rule below pins form-control text to the explicit body
+ * color so they read correctly regardless of OS scheme. Dark-mode theming
+ * (Stage 4 follow-up) will switch the body color via CSS custom properties.
  */
 html,
 body {
@@ -17,6 +25,13 @@ body {
     Roboto,
     sans-serif;
   overflow: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  color: inherit;
 }
 
 aquascape-root {
