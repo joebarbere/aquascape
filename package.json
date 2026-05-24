@@ -50,6 +50,8 @@
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "@typescript-eslint/utils": "^8.0.0",
+    "ajv": "^8",
+    "ajv-formats": "^3",
     "electron": "^33",
     "electron-builder": "^25",
     "eslint": "^9.8.0",

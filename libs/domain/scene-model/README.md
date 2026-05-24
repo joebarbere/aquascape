@@ -16,6 +16,10 @@ undo/redo history. Plan §2.3 / Stage 0 F0.3.
   Shapes mirror the on-disk `aqua-document.ts` minus the
   `format` / `schemaVersion` / `meta` envelope; the marshaling layer in
   `libs/domain/document/` (F1.3) wraps/unwraps that envelope.
+  `TankStyle.background` is a discriminated union over
+  `'color' | 'image' | 'gradient' | 'none'`; the `'gradient'` variant carries
+  an `angle` in radians (0 = left→right, π/2 = bottom→top) and ≥ 2
+  `{ at, color }` stops.
 - Branded `ObjectId` / `LayerId` over UUID v4. `newObjectId()` / `newLayerId()`
   factories use `crypto.randomUUID()` by default; swap via `setIdFactory()`
   for tests.
@@ -28,7 +32,7 @@ undo/redo history. Plan §2.3 / Stage 0 F0.3.
 - Concrete commands: `Noop`, `AddLayer`, `RemoveLayer`, `RenameLayer`,
   `SetLayerOpacity`, `SetLayerVisibility`, `SetLayerLocked`, `ReorderLayers`,
   `AddObject`, `RemoveObject`, `MoveObject`, `ReshapeObject`,
-  `SetTankDimensions`, `Composite`.
+  `SetTankDimensions`, `SetTankStyle`, `Composite`.
 - Builder functions (`addLayer`, `moveObject`, …) — pure ergonomics over the
   union members. Hand-rolled records work identically.
 - `History` (`createHistory({ bound? })`) with `push` / `undo` / `redo`.
@@ -132,6 +136,47 @@ so it adapts to width changes automatically. Profile-point `y` (mm from
 tank floor) that exceeds the new `height` is **not yet clamped** —
 there's a `TODO(F2.x)` in the apply handler. No substrate-editing UI
 exists today that could produce a profile point taller than the tank.
+
+### `SetTankStyle` — whole-style replacement with deep validation
+
+`SetTankStyleCommand` carries a full replacement `TankStyle`. It is **not**
+a per-field patch: the entire `frame` / `frameColor` / `waterTint` /
+`background` record is replaced atomically. The UI in F1.2 phase D
+dispatches the whole styling-panel state as one command; inversion is
+trivial (snapshot the previous style); and whole-replacement sidesteps
+the question of how to "patch out" union members of `background` when
+switching between variants.
+
+It is a **structural global operation** — the locked-layer guard does
+NOT apply (same convention as `SetTankDimensions` and `ReorderLayers`).
+Tank `width`/`height`/`depth`/`glassThickness`/`presetRef` are NOT
+touched.
+
+`applyCommand` validates every field before storing:
+
+- `frame` must be one of `rimless` / `framed` / `braced`.
+- `frameColor` / `waterTint`, when present, must match `#RRGGBB` or
+  `#RRGGBBAA` (case-insensitive). Three-digit shorthand and CSS color
+  names are rejected — the on-disk shape stays canonical.
+- `background.kind === 'color'`: `color` must be a valid hex.
+- `background.kind === 'gradient'`: `angle` finite; `stops.length ≥ 2`;
+  each stop's `color` is a valid hex; each `at` is finite and in
+  `[0, 1]`; stops are sorted **non-strictly ascending** by `at` (equal
+  `at` values are legal — they encode a hard-stop band).
+- `background.kind === 'image'`: `asset.id` and `asset.uri` are
+  non-empty strings. Asset bytes are not validated here; that's the
+  loader's job.
+
+**Inverse revalidation policy: always validate.** `applyCommand` does
+not short-circuit validation when an `inverse.previousStyle` envelope is
+present. The cost is microseconds (a handful of regex tests) and the
+always-on path keeps the apply switch simple and catches latent bugs
+upstream.
+
+`SetTankStyleCommand.inverse?.previousStyle` is populated by
+`invertCommand` and absent on freshly-built commands from the UI.
+Storage uses `structuredClone` so the captured snapshot is independent
+of any caller reference.
 
 ### Mutation discipline
 

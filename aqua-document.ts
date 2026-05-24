@@ -162,10 +162,34 @@ export interface TankStyle {
   frameColor?: HexColor;
   /** Water tint applied in rendering; null/omitted = clear. */
   waterTint?: HexColor;
-  /** Background behind the tank (solid color or a referenced backdrop image). */
+  /**
+   * Background behind the tank. Discriminated by `kind`:
+   *   - `'color'`  — flat solid color.
+   *   - `'image'`  — a referenced backdrop image asset.
+   *   - `'gradient'` — a linear multi-stop gradient (see below).
+   *   - `'none'`   — no background; the renderer's clear color shows through.
+   *
+   * For `'gradient'`:
+   *   - `angle` is rotation in RADIANS measured from horizontal. `0` = left→right
+   *     (low `at` on the left, high `at` on the right); `π/2` = bottom→top.
+   *     Radians are used for consistency with `Transform.rotation`, which is the
+   *     only other angle in the format.
+   *   - `stops` is an array of at least two stops, each `{ at, color }` where
+   *     `at` is a fraction in `[0, 1]`. Stops MUST be sorted ascending by `at`;
+   *     the first stop's `at` SHOULD be `0` and the last SHOULD be `1`.
+   *     Renderers MAY extrapolate from the end stops if the bounds are not
+   *     normalized, but the format prefers normalized stops for portability.
+   */
   background:
     | { kind: 'color'; color: HexColor }
     | { kind: 'image'; asset: AssetRef }
+    | {
+        kind: 'gradient';
+        /** Rotation in radians from horizontal. 0 = left→right, π/2 = bottom→top. */
+        angle: number;
+        /** ≥ 2 stops, sorted ascending by `at` ∈ [0, 1]. */
+        stops: Array<{ at: number; color: HexColor }>;
+      }
     | { kind: 'none' };
 }
 

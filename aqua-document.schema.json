@@ -163,6 +163,28 @@
             },
             {
               "type": "object",
+              "required": ["kind", "angle", "stops"],
+              "additionalProperties": false,
+              "properties": {
+                "kind": { "const": "gradient" },
+                "angle": { "type": "number" },
+                "stops": {
+                  "type": "array",
+                  "minItems": 2,
+                  "items": {
+                    "type": "object",
+                    "required": ["at", "color"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "at": { "type": "number", "minimum": 0, "maximum": 1 },
+                      "color": { "$ref": "#/$defs/HexColor" }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
               "required": ["kind"],
               "additionalProperties": false,
               "properties": { "kind": { "const": "none" } }

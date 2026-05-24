@@ -99,6 +99,12 @@ importers:
       '@typescript-eslint/utils':
         specifier: ^8.0.0
         version: 8.59.4(eslint@9.39.4(jiti@1.21.7))(typescript@5.5.4)
+      ajv:
+        specifier: ^8
+        version: 8.20.0
+      ajv-formats:
+        specifier: ^3
+        version: 3.0.1(ajv@8.20.0)
       electron:
         specifier: ^33
         version: 33.4.11
@@ -158,6 +164,8 @@ importers:
 
   libs/domain/scene-model: {}
 
+  libs/features/tank-setup: {}
+
   libs/platform/platform-api: {}
 
   libs/platform/platform-electron: {}
@@ -167,6 +175,8 @@ importers:
   libs/rendering/renderer-2d: {}
 
   libs/rendering/renderer-api: {}
+
+  libs/state: {}
 
 packages:
 
@@ -11650,6 +11660,10 @@ snapshots:
   ajv-formats@3.0.1(ajv@8.17.1):
     optionalDependencies:
       ajv: 8.17.1
+
+  ajv-formats@3.0.1(ajv@8.20.0):
+    optionalDependencies:
+      ajv: 8.20.0
 
   ajv-keywords@3.5.2(ajv@6.15.0):
     dependencies:

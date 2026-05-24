@@ -87,10 +87,29 @@ export interface TankStyle {
   frameColor?: HexColor;
   /** Water tint applied in rendering; null/omitted = clear. */
   waterTint?: HexColor;
-  /** Background behind the tank (solid color or a referenced backdrop image). */
+  /**
+   * Background behind the tank. Discriminated by `kind`:
+   *   - `'color'`    — flat solid color.
+   *   - `'image'`    — a referenced backdrop image asset.
+   *   - `'gradient'` — a linear multi-stop gradient.
+   *   - `'none'`     — no background.
+   *
+   * For `'gradient'`:
+   *   - `angle` is rotation in RADIANS from horizontal (0 = left→right,
+   *     π/2 = bottom→top). Matches `Transform.rotation`'s convention.
+   *   - `stops` has ≥ 2 entries; each `at` is in `[0, 1]`; entries are sorted
+   *     ascending by `at`. Endpoints should be 0 and 1 for portability.
+   */
   background:
     | { kind: 'color'; color: HexColor }
     | { kind: 'image'; asset: AssetRef }
+    | {
+        kind: 'gradient';
+        /** Rotation in radians from horizontal. 0 = left→right, π/2 = bottom→top. */
+        angle: number;
+        /** ≥ 2 stops, sorted ascending by `at` ∈ [0, 1]. */
+        stops: Array<{ at: number; color: HexColor }>;
+      }
     | { kind: 'none' };
 }
 
