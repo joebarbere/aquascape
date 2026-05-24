@@ -78,7 +78,32 @@ Context isolation **on**, sandbox **on**, no `nodeIntegration` in renderer, all 
 
 ## Definition of Done (every feature, per the plan)
 
-Typed public API · unit tests · at least one component or e2e test through the UI · docs entry · accessible (keyboard + ARIA) interaction. Domain libs target ≥90% coverage; pure logic (geometry, growth-sim, commands, document migrations) is exhaustively tested.
+Typed public API · unit tests · at least one component or e2e test through the UI · docs entry · accessible (keyboard + ARIA) interaction · **`README.md` + `CLAUDE.md` updated** (see "Keep documentation in sync with the code" below). Domain libs target ≥90% coverage; pure logic (geometry, growth-sim, commands, document migrations) is exhaustively tested.
+
+## Keep documentation in sync with the code
+
+`README.md` (the front door for drive-by readers) and `CLAUDE.md` (load-bearing context for Claude / future contributors) **must stay current as features land**. After a feature is built and committed, update both files in the same PR — either bundled into the feature's last commit, or as a trailing `docs:` commit (`docs: refresh README + CLAUDE.md for F<X.Y>`) when the feature work was split across multiple commits. Treat documentation drift like a failing test: a feature isn't done until the docs match the code.
+
+What to refresh where:
+
+**`README.md` (visible to anyone browsing the repo):**
+
+- The **Status** line at the top — reflect what's shipped vs. in flight (e.g. "Stage 0 complete + Stage 1 in progress (F1.1 + F1.2 shipped)") and what comes next.
+- **What's here** — move libs/apps from "Empty placeholders" to "Implemented so far" when they get bodies. Expand each implemented bullet with the actual capabilities (commands shipped, components rendered, services bound).
+- **Document format** — note schema additions, when v1 locks (F1.3), whether the example was updated.
+- **Shared infrastructure** bullets — new `tools/` entries, new ADRs, new CI selectors.
+
+**`CLAUDE.md` (load-bearing context Claude reads on every session):**
+
+- The **Repository state** opener — one-sentence update mirroring the README's status line, plus the specific next thing in the roadmap.
+- **Stage deliverables** — add a new `### Stage N so far` subsection when starting a new stage; extend it as each feature lands. Document the **load-bearing decisions**, not what the code does: invert envelope shapes, lock-guard policies, command-shape choices, schema-vs-UI conventions (e.g. radians-in-document vs degrees-in-UI), default constants and their reasoning.
+- **Development commands** — any new `nx serve <app>` / `nx build <app>` / per-target invocations.
+- **Working with the planning artifacts** — update the rules when the document format's lifecycle shifts (e.g. when F1.3 locks v1, change "additive changes are cheap" to "every change requires a Migration entry").
+- **CI coverage gate paragraph** — update the selectors when a new lib gets a 90% threshold or a new feature lib enters the gate.
+
+**Belongs in `CLAUDE.md` but NOT `README.md`:** caveats and gotchas (TRS round-trip is only exact for uniform scale; `restoredPositions` short-circuits the clamp on undo; CSP currently allows `'unsafe-inline'` styles); cross-cutting build prerequisites that bite when adding new libs (the `@aquascape/...` `package.json` name requirement); Stage-N-stub flags (which behaviour is a stand-in vs. final).
+
+**Belongs in `README.md` but NOT `CLAUDE.md`:** quick-start commands a new contributor types in their first minute; license + project pitch; empty-placeholder roster (CLAUDE.md doesn't need to enumerate stubs).
 
 ## Stage 0 + Stage 1 deliverables (what's actually in each lib)
 
