@@ -163,6 +163,15 @@ importers:
         specifier: ~0.14.10
         version: 0.14.10
 
+  libs/domain/catalog:
+    dependencies:
+      ajv:
+        specifier: ^8
+        version: 8.20.0
+      ajv-formats:
+        specifier: ^3
+        version: 3.0.1(ajv@8.20.0)
+
   libs/domain/document:
     dependencies:
       ajv:
@@ -177,7 +186,19 @@ importers:
 
   libs/domain/geometry: {}
 
+  libs/domain/growth-sim: {}
+
   libs/domain/scene-model: {}
+
+  libs/features/editor-shell: {}
+
+  libs/features/hardscape-tool: {}
+
+  libs/features/layers-panel: {}
+
+  libs/features/planting-tool: {}
+
+  libs/features/substrate-tool: {}
 
   libs/features/tank-setup: {}
 
