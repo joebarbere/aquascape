@@ -71,9 +71,11 @@ import {
   type SceneObject,
 } from '@aquascape/domain/scene-model';
 import {
+  CursorPositionService,
   EditorShellComponent,
   PreviewTimeService,
   SelectionInspectorComponent,
+  StatusBarComponent,
   TimeSliderComponent,
 } from '@aquascape/features/editor-shell';
 import { HardscapeDragService, HardscapeToolComponent } from '@aquascape/features/hardscape-tool';
@@ -154,6 +156,7 @@ type DragState =
     LayersPanelComponent,
     PlantingToolComponent,
     SelectionInspectorComponent,
+    StatusBarComponent,
     SubstrateToolComponent,
     TankSetupComponent,
     TimeSliderComponent,
@@ -175,7 +178,19 @@ type DragState =
             aria-label="Aquascape design canvas"
             role="img"
             (pointerdown)="onCanvasPointerDown($event)"
+            (pointermove)="onCanvasPointerMove($event)"
+            (pointerleave)="onCanvasPointerLeave()"
           ></canvas>
+          @if (sceneIsEmpty()) {
+            <div class="empty-hint" aria-hidden="true">
+              <h3>Build your first scape</h3>
+              <p>
+                Pick a tank in the top-left, sculpt substrate, then drag
+                hardscape and plants from the palettes onto the canvas.
+                Scrub the bottom slider to preview plant growth over time.
+              </p>
+            </div>
+          }
           @if (marqueeRect(); as r) {
             <div
               class="marquee-overlay"
@@ -197,6 +212,9 @@ type DragState =
               {{ g.label }}
             </div>
           }
+          <div class="app-status">
+            <aquascape-status-bar></aquascape-status-bar>
+          </div>
           <div class="app-timeslider">
             <aquascape-time-slider></aquascape-time-slider>
           </div>
@@ -246,6 +264,38 @@ type DragState =
         bottom: 12px;
         pointer-events: auto;
       }
+      .app-status {
+        position: absolute;
+        right: 12px;
+        bottom: 64px; /* sit above the time slider */
+        z-index: 3;
+      }
+      .empty-hint {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        max-width: 460px;
+        padding: 18px 22px;
+        background: rgba(32, 35, 42, 0.78);
+        color: #f0f2f5;
+        border-radius: 10px;
+        text-align: center;
+        pointer-events: none;
+        z-index: 2;
+        font-size: 13px;
+        line-height: 1.45;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+      }
+      .empty-hint h3 {
+        margin: 0 0 6px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .empty-hint p {
+        margin: 0;
+        opacity: 0.92;
+      }
       .scene-canvas {
         display: block;
         width: 100%;
@@ -290,6 +340,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private readonly dragService = inject(HardscapeDragService);
   private readonly plantDragService = inject(PlantDragService);
   private readonly previewTime = inject(PreviewTimeService);
+  private readonly cursorPos = inject(CursorPositionService);
   private readonly cdr = inject(ChangeDetectorRef);
 
   private readonly fileService: FileService = inject(FILE_SERVICE);
@@ -333,6 +384,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return null;
   });
 
+  /** Signal that flips to true when the scene has no objects in any layer. */
+  readonly sceneIsEmpty = signal<boolean>(true);
+
   ngAfterViewInit(): void {
     void this.fileService;
     void this.dialogService;
@@ -346,6 +400,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         .subscribe(([scene, ids]) => {
           this.currentScene = scene;
           this.currentSelection = ids;
+          this.sceneIsEmpty.set(
+            scene === null || scene.layers.every((l) => l.objects.length === 0),
+          );
           this.renderCurrent();
         });
 
@@ -465,6 +522,29 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       shift: event.shiftKey,
     });
     event.preventDefault();
+  }
+
+  /**
+   * Pointer-move over the canvas — purely for the status-bar readout.
+   * Publishes the world-space cursor position to `CursorPositionService`.
+   * Independent of the drag classification in `onCanvasPointerDown`; the
+   * drag listeners are document-level and run alongside.
+   */
+  onCanvasPointerMove(event: PointerEvent): void {
+    const viewport = this.currentViewport;
+    if (viewport === null) return;
+    const rect = this.canvasRef.nativeElement.getBoundingClientRect();
+    const world = canvasCssToWorld(
+      { x: event.clientX - rect.left, y: event.clientY - rect.top },
+      viewport,
+      { width: rect.width, height: rect.height },
+    );
+    this.cursorPos.set(world);
+  }
+
+  /** Cursor left the canvas — clear the status-bar readout. */
+  onCanvasPointerLeave(): void {
+    this.cursorPos.set(null);
   }
 
   /** Esc clears selection OR cancels an in-flight drag. */

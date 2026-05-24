@@ -20,6 +20,9 @@ import {
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
   DocumentActions,
+  SceneActions,
+  selectCanRedo,
+  selectCanUndo,
   selectDisplayTitle,
   selectHasPendingDraft,
   selectLastError,
@@ -83,6 +86,29 @@ import { ThemeToggleComponent } from './theme-toggle.component';
           title="Save document as (Ctrl+Shift+S)"
         >
           Save As
+        </button>
+
+        <span class="divider" aria-hidden="true"></span>
+
+        <button
+          type="button"
+          class="action"
+          (click)="onUndo()"
+          [disabled]="!canUndo()"
+          aria-label="Undo (Ctrl+Z)"
+          title="Undo (Ctrl+Z)"
+        >
+          Undo
+        </button>
+        <button
+          type="button"
+          class="action"
+          (click)="onRedo()"
+          [disabled]="!canRedo()"
+          aria-label="Redo (Ctrl+Shift+Z)"
+          title="Redo (Ctrl+Shift+Z)"
+        >
+          Redo
         </button>
 
         @if (recentFiles().length > 0) {
@@ -179,6 +205,17 @@ import { ThemeToggleComponent } from './theme-toggle.component';
         background: #2c3038;
         outline: none;
       }
+      .action:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        background: transparent;
+      }
+      .divider {
+        width: 1px;
+        height: 18px;
+        background: #2c3038;
+        margin: 0 4px;
+      }
       .recent {
         position: relative;
       }
@@ -248,6 +285,8 @@ export class EditorShellComponent {
   });
   readonly pendingDraft = toSignal(this.store.select(selectPendingDraft), { initialValue: null });
   readonly lastError = toSignal(this.store.select(selectLastError), { initialValue: null });
+  readonly canUndo = toSignal(this.store.select(selectCanUndo), { initialValue: false });
+  readonly canRedo = toSignal(this.store.select(selectCanRedo), { initialValue: false });
 
   /** Friendly status text for the title-block status pill. */
   statusLabel(): string {
@@ -289,6 +328,16 @@ export class EditorShellComponent {
     this.store.dispatch(DocumentActions.draftDiscarded());
   }
 
+  onUndo(): void {
+    if (!this.canUndo()) return;
+    this.store.dispatch(SceneActions.undo());
+  }
+
+  onRedo(): void {
+    if (!this.canRedo()) return;
+    this.store.dispatch(SceneActions.redo());
+  }
+
   /**
    * Document-level keybindings. Bound to the host so they work whenever the
    * app has keyboard focus, not only when the toolbar itself is focused.
@@ -298,6 +347,15 @@ export class EditorShellComponent {
   onKeydown(event: KeyboardEvent): void {
     const mod = event.ctrlKey || event.metaKey;
     if (!mod) return;
+    // Ignore shortcuts when typing in form fields; the selection inspector's
+    // own handler enforces the same rule for its keys.
+    const target = event.target as HTMLElement | null;
+    if (
+      target !== null &&
+      (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')
+    ) {
+      return;
+    }
     const key = event.key.toLowerCase();
     if (key === 'n') {
       event.preventDefault();
@@ -311,6 +369,17 @@ export class EditorShellComponent {
     } else if (key === 's') {
       event.preventDefault();
       this.onSave();
+    } else if (key === 'z' && event.shiftKey) {
+      // Cmd/Ctrl+Shift+Z — redo. The de-facto cross-platform shortcut.
+      event.preventDefault();
+      this.onRedo();
+    } else if (key === 'y') {
+      // Cmd/Ctrl+Y — Windows-style redo. Honoured everywhere for muscle memory.
+      event.preventDefault();
+      this.onRedo();
+    } else if (key === 'z') {
+      event.preventDefault();
+      this.onUndo();
     }
   }
 }

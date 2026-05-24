@@ -11,3 +11,8 @@ export { TimeSliderComponent } from './lib/time-slider.component';
 export { PreviewTimeService } from './lib/preview-time.service';
 export { ThemeToggleComponent } from './lib/theme-toggle.component';
 export { ThemeService, STORAGE_KEY_THEME, type ThemePreference } from './lib/theme.service';
+export { StatusBarComponent } from './lib/status-bar.component';
+export {
+  CursorPositionService,
+  type CursorWorldPosition,
+} from './lib/cursor-position.service';
