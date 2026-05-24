@@ -1,0 +1,19 @@
+{
+  "name": "domain-geometry",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/geometry/src",
+  "projectType": "library",
+  "tags": ["scope:domain", "type:lib", "framework:none", "domain:geometry"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/domain/geometry",
+        "main": "libs/domain/geometry/src/index.ts",
+        "tsConfig": "libs/domain/geometry/tsconfig.lib.json",
+        "assets": ["libs/domain/geometry/*.md"]
+      }
+    }
+  }
+}

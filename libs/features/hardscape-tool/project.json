@@ -1,0 +1,19 @@
+{
+  "name": "features-hardscape-tool",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/features/hardscape-tool/src",
+  "projectType": "library",
+  "tags": ["scope:feature", "type:lib"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/features/hardscape-tool",
+        "main": "libs/features/hardscape-tool/src/index.ts",
+        "tsConfig": "libs/features/hardscape-tool/tsconfig.lib.json",
+        "assets": ["libs/features/hardscape-tool/*.md"]
+      }
+    }
+  }
+}

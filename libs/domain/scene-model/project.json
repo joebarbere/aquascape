@@ -1,0 +1,19 @@
+{
+  "name": "domain-scene-model",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/scene-model/src",
+  "projectType": "library",
+  "tags": ["scope:domain", "type:lib", "framework:none", "domain:scene-model"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/domain/scene-model",
+        "main": "libs/domain/scene-model/src/index.ts",
+        "tsConfig": "libs/domain/scene-model/tsconfig.lib.json",
+        "assets": ["libs/domain/scene-model/*.md"]
+      }
+    }
+  }
+}

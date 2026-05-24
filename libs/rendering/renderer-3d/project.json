@@ -1,0 +1,19 @@
+{
+  "name": "rendering-renderer-3d",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/rendering/renderer-3d/src",
+  "projectType": "library",
+  "tags": ["scope:rendering", "type:lib", "framework:none"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/rendering/renderer-3d",
+        "main": "libs/rendering/renderer-3d/src/index.ts",
+        "tsConfig": "libs/rendering/renderer-3d/tsconfig.lib.json",
+        "assets": ["libs/rendering/renderer-3d/*.md"]
+      }
+    }
+  }
+}

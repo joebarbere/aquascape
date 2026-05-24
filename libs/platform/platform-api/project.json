@@ -1,0 +1,19 @@
+{
+  "name": "platform-api",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/platform-api/src",
+  "projectType": "library",
+  "tags": ["scope:platform-api", "type:lib", "framework:none"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/platform/platform-api",
+        "main": "libs/platform/platform-api/src/index.ts",
+        "tsConfig": "libs/platform/platform-api/tsconfig.lib.json",
+        "assets": ["libs/platform/platform-api/*.md"]
+      }
+    }
+  }
+}

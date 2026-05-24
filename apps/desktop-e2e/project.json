@@ -1,0 +1,16 @@
+{
+  "name": "desktop-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/desktop-e2e/src",
+  "projectType": "application",
+  "tags": ["scope:app", "type:app", "platform:electron", "kind:e2e"],
+  "implicitDependencies": ["desktop"],
+  "targets": {
+    "e2e": {
+      "executor": "nx:noop",
+      "options": {
+        "_comment": "Real Playwright-Electron e2e target lands in F0.6 / F0.7. Stage 0 placeholder."
+      }
+    }
+  }
+}

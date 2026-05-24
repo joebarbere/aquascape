@@ -1,0 +1,19 @@
+{
+  "name": "features-livestock-equipment",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/features/livestock-equipment/src",
+  "projectType": "library",
+  "tags": ["scope:feature", "type:lib"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/features/livestock-equipment",
+        "main": "libs/features/livestock-equipment/src/index.ts",
+        "tsConfig": "libs/features/livestock-equipment/tsconfig.lib.json",
+        "assets": ["libs/features/livestock-equipment/*.md"]
+      }
+    }
+  }
+}

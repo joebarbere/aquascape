@@ -1,0 +1,19 @@
+{
+  "name": "rendering-renderer-api",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/rendering/renderer-api/src",
+  "projectType": "library",
+  "tags": ["scope:rendering", "type:lib", "framework:none"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/rendering/renderer-api",
+        "main": "libs/rendering/renderer-api/src/index.ts",
+        "tsConfig": "libs/rendering/renderer-api/tsconfig.lib.json",
+        "assets": ["libs/rendering/renderer-api/*.md"]
+      }
+    }
+  }
+}

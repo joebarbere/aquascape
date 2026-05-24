@@ -1,0 +1,17 @@
+# Build artifacts
+dist
+build
+coverage
+.nx
+node_modules
+tmp
+
+# Generated
+*.lock
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Keep planning artifacts formatted by hand
+aqua-document.schema.json
+example.aqua.json

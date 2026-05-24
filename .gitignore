@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+tmp/
+out/
+out-tsc/
+
+# Nx
+.nx/cache
+.nx/workspace-data
+
+# Angular CLI / Vite cache (created by `nx serve web`)
+.angular/
+
+# Test
+coverage/
+.jest-cache/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Per-user Claude Code settings
+.claude/settings.local.json
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+Thumbs.db

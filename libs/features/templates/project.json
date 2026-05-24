@@ -1,0 +1,19 @@
+{
+  "name": "features-templates",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/features/templates/src",
+  "projectType": "library",
+  "tags": ["scope:feature", "type:lib"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/features/templates",
+        "main": "libs/features/templates/src/index.ts",
+        "tsConfig": "libs/features/templates/tsconfig.lib.json",
+        "assets": ["libs/features/templates/*.md"]
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "features-export",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/features/export/src",
+  "projectType": "library",
+  "tags": ["scope:feature", "type:lib"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/features/export",
+        "main": "libs/features/export/src/index.ts",
+        "tsConfig": "libs/features/export/tsconfig.lib.json",
+        "assets": ["libs/features/export/*.md"]
+      }
+    }
+  }
+}

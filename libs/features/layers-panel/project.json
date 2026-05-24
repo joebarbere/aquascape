@@ -1,0 +1,19 @@
+{
+  "name": "features-layers-panel",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/features/layers-panel/src",
+  "projectType": "library",
+  "tags": ["scope:feature", "type:lib"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/features/layers-panel",
+        "main": "libs/features/layers-panel/src/index.ts",
+        "tsConfig": "libs/features/layers-panel/tsconfig.lib.json",
+        "assets": ["libs/features/layers-panel/*.md"]
+      }
+    }
+  }
+}

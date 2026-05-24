@@ -1,0 +1,19 @@
+{
+  "name": "domain-growth-sim",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/growth-sim/src",
+  "projectType": "library",
+  "tags": ["scope:domain", "type:lib", "framework:none", "domain:growth-sim"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/domain/growth-sim",
+        "main": "libs/domain/growth-sim/src/index.ts",
+        "tsConfig": "libs/domain/growth-sim/tsconfig.lib.json",
+        "assets": ["libs/domain/growth-sim/*.md"]
+      }
+    }
+  }
+}

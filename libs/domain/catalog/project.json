@@ -1,0 +1,19 @@
+{
+  "name": "domain-catalog",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/catalog/src",
+  "projectType": "library",
+  "tags": ["scope:domain", "type:lib", "framework:none", "domain:catalog"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/domain/catalog",
+        "main": "libs/domain/catalog/src/index.ts",
+        "tsConfig": "libs/domain/catalog/tsconfig.lib.json",
+        "assets": ["libs/domain/catalog/*.md"]
+      }
+    }
+  }
+}

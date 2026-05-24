@@ -1,0 +1,19 @@
+{
+  "name": "features-tank-setup",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/features/tank-setup/src",
+  "projectType": "library",
+  "tags": ["scope:feature", "type:lib"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/features/tank-setup",
+        "main": "libs/features/tank-setup/src/index.ts",
+        "tsConfig": "libs/features/tank-setup/tsconfig.lib.json",
+        "assets": ["libs/features/tank-setup/*.md"]
+      }
+    }
+  }
+}

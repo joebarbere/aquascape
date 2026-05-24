@@ -1,0 +1,19 @@
+{
+  "name": "features-substrate-tool",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/features/substrate-tool/src",
+  "projectType": "library",
+  "tags": ["scope:feature", "type:lib"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/features/substrate-tool",
+        "main": "libs/features/substrate-tool/src/index.ts",
+        "tsConfig": "libs/features/substrate-tool/tsconfig.lib.json",
+        "assets": ["libs/features/substrate-tool/*.md"]
+      }
+    }
+  }
+}

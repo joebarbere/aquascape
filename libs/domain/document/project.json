@@ -1,0 +1,19 @@
+{
+  "name": "domain-document",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/document/src",
+  "projectType": "library",
+  "tags": ["scope:domain", "type:lib", "framework:none", "domain:document"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/domain/document",
+        "main": "libs/domain/document/src/index.ts",
+        "tsConfig": "libs/domain/document/tsconfig.lib.json",
+        "assets": ["libs/domain/document/*.md"]
+      }
+    }
+  }
+}

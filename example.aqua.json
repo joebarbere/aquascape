@@ -1,0 +1,144 @@
+{
+  "format": "aquascape",
+  "schemaVersion": 1,
+  "meta": {
+    "id": "8f3b2c1a-4d5e-4a6b-9c8d-0e1f2a3b4c5d",
+    "title": "Sprouting Harmony (example)",
+    "description": "A simple three-stone Iwagumi used as a schema example.",
+    "author": "aquascape",
+    "createdAt": "2026-05-23T14:30:00.000Z",
+    "updatedAt": "2026-05-23T14:45:00.000Z",
+    "appVersion": "1.0.0",
+    "isTemplate": false,
+    "tags": ["iwagumi", "example", "beginner"],
+    "seed": 1337
+  },
+  "tank": {
+    "width": 360,
+    "height": 220,
+    "depth": 220,
+    "glassThickness": 5,
+    "presetRef": { "catalog": "core", "id": "tank.ada-mini-m", "version": 1 },
+    "style": {
+      "frame": "rimless",
+      "waterTint": "#eef6f5",
+      "background": { "kind": "color", "color": "#0b0d0e" }
+    }
+  },
+  "substrate": {
+    "regions": [
+      {
+        "id": "1a2b3c4d-0001-4000-8000-000000000001",
+        "material": { "catalog": "core", "id": "substrate.aquasoil.amazonia", "version": 2 },
+        "fromX": 0,
+        "toX": 1,
+        "blend": 0,
+        "profile": [
+          { "x": 0.0, "y": 35 },
+          { "x": 0.4, "y": 55 },
+          { "x": 0.7, "y": 90 },
+          { "x": 1.0, "y": 70 }
+        ]
+      }
+    ]
+  },
+  "layers": [
+    {
+      "id": "2b3c4d5e-0010-4000-8000-000000000010",
+      "name": "Hardscape",
+      "opacity": 1,
+      "visible": true,
+      "locked": false,
+      "objects": [
+        {
+          "kind": "hardscape",
+          "id": "3c4d5e6f-0100-4000-8000-000000000100",
+          "ref": { "catalog": "core", "id": "rock.seiryu.large-01", "version": 1 },
+          "category": "rock",
+          "transform": {
+            "position": { "x": 230, "y": 90, "z": 110 },
+            "rotation": { "x": 0, "y": 0, "z": 0.05 },
+            "scale": { "x": 1, "y": 1, "z": 1 },
+            "flipX": false,
+            "flipY": false
+          },
+          "note": "Oyaishi (main stone)"
+        },
+        {
+          "kind": "hardscape",
+          "id": "3c4d5e6f-0101-4000-8000-000000000101",
+          "ref": { "catalog": "core", "id": "rock.seiryu.medium-02", "version": 1 },
+          "category": "rock",
+          "transform": {
+            "position": { "x": 120, "y": 55, "z": 90 },
+            "rotation": { "x": 0, "y": 0, "z": -0.1 },
+            "scale": { "x": 0.8, "y": 0.8, "z": 0.8 },
+            "flipX": true,
+            "flipY": false
+          }
+        },
+        {
+          "kind": "hardscape",
+          "id": "3c4d5e6f-0102-4000-8000-000000000102",
+          "ref": { "catalog": "core", "id": "rock.seiryu.small-03", "version": 1 },
+          "category": "rock",
+          "transform": {
+            "position": { "x": 300, "y": 45, "z": 70 },
+            "rotation": { "x": 0, "y": 0, "z": 0.2 },
+            "scale": { "x": 0.55, "y": 0.55, "z": 0.55 },
+            "flipX": false,
+            "flipY": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "2b3c4d5e-0011-4000-8000-000000000011",
+      "name": "Carpet",
+      "opacity": 1,
+      "visible": true,
+      "locked": false,
+      "objects": [
+        {
+          "kind": "plant",
+          "id": "4d5e6f70-1000-4000-8000-000000001000",
+          "ref": { "catalog": "core", "id": "plant.eleocharis.acicularis", "version": 1 },
+          "zone": "foreground",
+          "growth": { "ageWeeks": 6, "vigor": 1 },
+          "transform": {
+            "position": { "x": 180, "y": 50, "z": 110 },
+            "rotation": { "x": 0, "y": 0, "z": 0 },
+            "scale": { "x": 1, "y": 1, "z": 1 },
+            "flipX": false,
+            "flipY": false
+          },
+          "scatter": {
+            "polygon": [
+              { "x": 20, "y": 60 },
+              { "x": 340, "y": 60 },
+              { "x": 340, "y": 200 },
+              { "x": 20, "y": 200 }
+            ],
+            "density": 45,
+            "seed": 7
+          }
+        }
+      ]
+    }
+  ],
+  "livestock": [
+    {
+      "id": "5e6f7081-2000-4000-8000-000000002000",
+      "ref": { "catalog": "core", "id": "fish.boraras.brigittae", "version": 1 },
+      "quantity": 12
+    }
+  ],
+  "equipment": [
+    {
+      "id": "6f708192-3000-4000-8000-000000003000",
+      "ref": { "catalog": "core", "id": "light.led.ada-aquasky", "version": 1 },
+      "settings": { "intensity": 80, "photoperiodHours": 7 }
+    }
+  ],
+  "extensions": {}
+}

@@ -1,0 +1,19 @@
+{
+  "name": "platform-web",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/platform-web/src",
+  "projectType": "library",
+  "tags": ["scope:platform-web", "type:lib"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/platform/platform-web",
+        "main": "libs/platform/platform-web/src/index.ts",
+        "tsConfig": "libs/platform/platform-web/tsconfig.lib.json",
+        "assets": ["libs/platform/platform-web/*.md"]
+      }
+    }
+  }
+}

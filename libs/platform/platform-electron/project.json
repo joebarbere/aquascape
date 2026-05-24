@@ -1,0 +1,19 @@
+{
+  "name": "platform-electron",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/platform-electron/src",
+  "projectType": "library",
+  "tags": ["scope:platform-electron", "type:lib"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/platform/platform-electron",
+        "main": "libs/platform/platform-electron/src/index.ts",
+        "tsConfig": "libs/platform/platform-electron/tsconfig.lib.json",
+        "assets": ["libs/platform/platform-electron/*.md"]
+      }
+    }
+  }
+}
