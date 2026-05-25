@@ -13,6 +13,10 @@ out-tsc/
 # for the dock-hover title — see tools/build-dev-bundle.sh).
 apps/desktop/.dev-bundle/
 
+# electron-builder cache (downloads platform-specific build tools on
+# first run; large + machine-specific).
+.cache/electron-builder/
+
 # Nx
 .nx/cache
 .nx/workspace-data

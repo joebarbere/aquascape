@@ -1,0 +1,40 @@
+{
+  "appId": "dev.aquascape.app",
+  "productName": "Aquascape",
+  "copyright": "© 2026 Aquascape contributors",
+  "asar": true,
+  "compression": "normal",
+  "electronVersion": "33.4.11",
+  "directories": {
+    "app": "../../dist/apps/desktop/electron-app",
+    "output": "../../dist/apps/desktop/installers",
+    "buildResources": "src/assets"
+  },
+  "files": ["**/*"],
+  "mac": {
+    "category": "public.app-category.graphics-design",
+    "icon": "src/assets/icon.icns",
+    "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
+    "hardenedRuntime": false,
+    "gatekeeperAssess": false,
+    "identity": null
+  },
+  "dmg": {
+    "writeUpdateInfo": false
+  },
+  "win": {
+    "icon": "src/assets/icon.ico",
+    "target": [{ "target": "nsis", "arch": ["x64"] }]
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true
+  },
+  "linux": {
+    "icon": "src/assets/icon.png",
+    "category": "Graphics",
+    "target": [{ "target": "AppImage", "arch": ["x64"] }]
+  },
+  "publish": null
+}

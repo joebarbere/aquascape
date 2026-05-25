@@ -15,7 +15,8 @@
     "precompile:validators": "node tools/precompile-validators.mjs",
     "icons": "node tools/build-icons.mjs",
     "dev-bundle": "bash tools/build-dev-bundle.sh",
-    "restart:desktop": "bash tools/restart-desktop.sh"
+    "restart:desktop": "bash tools/restart-desktop.sh",
+    "package:desktop": "bash tools/package-desktop.sh"
   },
   "packageManager": "pnpm@9.12.0",
   "engines": {
@@ -59,7 +60,7 @@
     "ajv": "^8",
     "ajv-formats": "^3",
     "electron": "^33",
-    "electron-builder": "^25",
+    "electron-builder": "^25.1.8",
     "esbuild": "^0.28.0",
     "eslint": "^9.8.0",
     "eslint-config-prettier": "^9.1.0",
