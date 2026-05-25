@@ -934,8 +934,26 @@ export class Canvas2DRenderer implements SceneRenderer {
     const scatter = obj.scatter;
     if (scatter === undefined) return;
     const seed = scatter.seed ?? sceneSeed;
-    const points = scatterInPolygon(scatter.polygon, scatter.density, seed);
+    // Honor `transform.flipX/flipY` on the brush polygon BEFORE scattering.
+    // The user expects Mirror H/V on a carpet patch to flip the patch
+    // footprint — for asymmetric polygons this re-arranges which cells
+    // contain instances. Symmetric polygons (e.g. the auto-created
+    // 16-sided regular circle) are invariant under this flip and stay
+    // visually identical, which is the right answer.
+    const polygon = mirrorPolygon(
+      scatter.polygon,
+      obj.transform.flipX,
+      obj.transform.flipY,
+    );
+    const points = scatterInPolygon(polygon, scatter.density, seed);
     if (points.length === 0) return;
+
+    // Per-instance silhouette flip mirrors EACH plant glyph too, so an
+    // asymmetric silhouette (e.g. Bucephalandra) visibly flips along with
+    // the patch. Symmetric silhouettes (Hairgrass, Vallisneria) stay
+    // invariant. `instanceSx` / `instanceSy` carry the sign.
+    const flipSx = obj.transform.flipX ? -1 : 1;
+    const flipSy = obj.transform.flipY ? -1 : 1;
 
     ctx.save();
     ctx.globalAlpha = layerAlpha;
@@ -945,8 +963,8 @@ export class Canvas2DRenderer implements SceneRenderer {
       ctx.save();
       ctx.translate(p.position.x, p.position.y);
       if (p.rotation !== 0) ctx.rotate(p.rotation);
-      const instanceSx = entry.naturalSize.width * 0.5 * growthScale * p.jitter;
-      const instanceSy = entry.naturalSize.height * 0.5 * growthScale * p.jitter;
+      const instanceSx = entry.naturalSize.width * 0.5 * growthScale * p.jitter * flipSx;
+      const instanceSy = entry.naturalSize.height * 0.5 * growthScale * p.jitter * flipSy;
       if (instanceSx === 0 || instanceSy === 0) {
         ctx.restore();
         continue;
@@ -954,7 +972,7 @@ export class Canvas2DRenderer implements SceneRenderer {
       ctx.scale(instanceSx, instanceSy);
       pathPolygon(ctx, entry.silhouette);
       ctx.fill();
-      const meanScale = (instanceSx + instanceSy) * 0.5;
+      const meanScale = (Math.abs(instanceSx) + Math.abs(instanceSy)) * 0.5;
       if (meanScale > 0) {
         ctx.lineWidth = oneCssPxInMm / meanScale;
         ctx.strokeStyle = strokeColor;
@@ -984,6 +1002,40 @@ function pathPolygon(
     ctx.lineTo(points[i]!.x, points[i]!.y);
   }
   ctx.closePath();
+}
+
+/**
+ * Mirror a polygon about its bounding-box centroid on either axis. Used by
+ * the scatter-plant renderer to make `transform.flipX/Y` produce a visible
+ * change when the user clicks Mirror H/V on a carpet patch: the polygon
+ * footprint flips, so for asymmetric brushes the scattered instances end
+ * up in mirrored positions. Symmetric polygons (the auto-created 16-sided
+ * regular circle) are invariant — Mirror is mathematically a no-op on
+ * them, which is the right answer.
+ */
+function mirrorPolygon(
+  polygon: ReadonlyArray<{ x: number; y: number }>,
+  flipX: boolean,
+  flipY: boolean,
+): ReadonlyArray<{ x: number; y: number }> {
+  if (!flipX && !flipY) return polygon;
+  if (polygon.length === 0) return polygon;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const p of polygon) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  return polygon.map((p) => ({
+    x: flipX ? cx - (p.x - cx) : p.x,
+    y: flipY ? cy - (p.y - cy) : p.y,
+  }));
 }
 
 function clampOpacity(v: number): number {

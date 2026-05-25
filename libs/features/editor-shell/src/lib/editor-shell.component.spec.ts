@@ -264,4 +264,77 @@ describe('EditorShellComponent', () => {
       expect((banner as HTMLElement).textContent?.trim()).toBe('something broke');
     });
   });
+
+  describe('undo / redo', () => {
+    function dispatcheds(store: MockStore): unknown[] {
+      const spy = (store.dispatch as unknown) as jest.Mock | undefined;
+      return spy?.mock.calls.map((c) => c[0]) ?? [];
+    }
+
+    it('Undo button is disabled when canUndo is false', () => {
+      const { fixture } = configure();
+      const btn = buttonByText(fixture, 'Undo');
+      expect(btn.disabled).toBe(true);
+    });
+
+    it('Undo button is enabled and dispatches SceneActions.undo when canUndo is true', () => {
+      const { fixture, store } = configure();
+      const dispatchSpy = jest.spyOn(store, 'dispatch');
+      store.overrideSelector(selectCanUndo, true);
+      store.refreshState();
+      fixture.detectChanges();
+      const btn = buttonByText(fixture, 'Undo');
+      expect(btn.disabled).toBe(false);
+      btn.click();
+      const types = dispatchSpy.mock.calls.map((c) => (c[0] as { type: string }).type);
+      expect(types).toContain('[Scene] Undo');
+    });
+
+    it('Redo button dispatches SceneActions.redo when enabled', () => {
+      const { fixture, store } = configure();
+      const dispatchSpy = jest.spyOn(store, 'dispatch');
+      store.overrideSelector(selectCanRedo, true);
+      store.refreshState();
+      fixture.detectChanges();
+      const btn = buttonByText(fixture, 'Redo');
+      btn.click();
+      const types = dispatchSpy.mock.calls.map((c) => (c[0] as { type: string }).type);
+      expect(types).toContain('[Scene] Redo');
+    });
+
+    it('Cmd+Z fires Undo; Cmd+Shift+Z fires Redo; Cmd+Y also fires Redo', () => {
+      const { store } = configure();
+      const dispatchSpy = jest.spyOn(store, 'dispatch');
+      store.overrideSelector(selectCanUndo, true);
+      store.overrideSelector(selectCanRedo, true);
+      store.refreshState();
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true }));
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true }),
+      );
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', metaKey: true }));
+      void dispatcheds;
+      const types = dispatchSpy.mock.calls.map((c) => (c[0] as { type: string }).type);
+      const undos = types.filter((t) => t === '[Scene] Undo').length;
+      const redos = types.filter((t) => t === '[Scene] Redo').length;
+      expect(undos).toBe(1);
+      expect(redos).toBe(2);
+    });
+
+    it('Cmd+Z is ignored while typing in a form field', () => {
+      const { store } = configure();
+      const dispatchSpy = jest.spyOn(store, 'dispatch');
+      store.overrideSelector(selectCanUndo, true);
+      store.refreshState();
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      input.focus();
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true }),
+      );
+      input.remove();
+      const types = dispatchSpy.mock.calls.map((c) => (c[0] as { type: string }).type);
+      expect(types).not.toContain('[Scene] Undo');
+    });
+  });
 });

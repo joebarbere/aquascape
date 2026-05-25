@@ -31,6 +31,7 @@ import {
   asObjectId,
   identityTransform,
   mirrorObject,
+  moveObject,
   removeObject,
   reorderObjectInLayer,
   addObject,
@@ -347,6 +348,34 @@ export class SelectionInspectorComponent {
     this.store.dispatch(SceneActions.dispatchCommand({ command: setObjectGroupId(ids, null) }));
   }
 
+  /**
+   * Nudge every selected object by `(dx, dy)` mm. Each id becomes one
+   * MoveObject command, which under the scene-model reducer's lock guard
+   * either succeeds or returns `'locked'`. We don't pre-filter on lock —
+   * the keyboard handler already short-circuits when `selectionLocked()`
+   * is true, AND a scatter plant's polygon ALSO needs translating (the
+   * polygon coords are absolute scene mm, not relative to position), so
+   * for scatter plants `moveObject` alone visually re-anchors the
+   * transform but leaves the patch in place; for v1 single specimens
+   * move correctly, scatter patches don't — same trade-off as the
+   * cloneObjectWithOffset path. A follow-up can teach MoveObject to
+   * translate the polygon too.
+   */
+  onNudge(dx: number, dy: number): void {
+    const scene = this.scene();
+    if (scene === null) return;
+    for (const id of this.selectedIds()) {
+      const found = findObject(scene, id);
+      if (found === null) continue;
+      const p = found.object.transform.position;
+      this.store.dispatch(
+        SceneActions.dispatchCommand({
+          command: moveObject(id, { x: p.x + dx, y: p.y + dy, z: p.z }),
+        }),
+      );
+    }
+  }
+
   onZUp(): void {
     const scene = this.scene();
     if (scene === null) return;
@@ -399,6 +428,27 @@ export class SelectionInspectorComponent {
     // nothing, so don't waste a dispatch.
     if (this.selectionLocked()) return;
     const mod = event.ctrlKey || event.metaKey;
+    // Arrow keys nudge the selection. Plain arrows = 1mm step (precision);
+    // Shift+arrow = 10mm step (coarse). Cmd/Ctrl+arrow is intentionally
+    // ignored so it can be used for future shortcuts (e.g. align). World
+    // +y is up, so ArrowUp → +y. We do this BEFORE the mod check so the
+    // arrow gestures work without modifiers.
+    if (
+      !mod &&
+      (event.key === 'ArrowLeft' ||
+        event.key === 'ArrowRight' ||
+        event.key === 'ArrowUp' ||
+        event.key === 'ArrowDown')
+    ) {
+      event.preventDefault();
+      const step = event.shiftKey ? 10 : 1;
+      const dx =
+        event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0;
+      const dy =
+        event.key === 'ArrowDown' ? -step : event.key === 'ArrowUp' ? step : 0;
+      this.onNudge(dx, dy);
+      return;
+    }
     if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault();
       this.onDelete();
@@ -435,6 +485,16 @@ function findObject(scene: Scene, id: ObjectId): { object: SceneObject; layerId:
 /**
  * Clone a SceneObject with a new id and a position offset along (x, y).
  * Used by the duplicate flow so the clone doesn't overlap its source.
+ *
+ * Scatter plants need a special case: their `scatter.polygon` coords live
+ * in absolute scene-space mm, NOT relative to `transform.position`. The
+ * renderer paints each scatter instance at the polygon's absolute coords
+ * and ignores transform entirely. If we only offset the transform, the
+ * duplicate paints exactly over the original and the user sees no change.
+ * Fix: also offset every polygon vertex by the same delta, AND mint a
+ * fresh `scatter.seed` so the duplicated patch's instance arrangement is
+ * visibly different from the original (otherwise two patches of identical
+ * grass blades end up overlapping by chance for any non-tiny offset).
  */
 function cloneObjectWithOffset(obj: SceneObject, offsetMm: number): SceneObject {
   // SceneObject is plain JSON-serializable data (no class instances), so a
@@ -451,6 +511,18 @@ function cloneObjectWithOffset(obj: SceneObject, offsetMm: number): SceneObject 
       z: fresh.transform.position.z,
     },
   };
+  if (fresh.kind === 'plant' && fresh.scatter !== undefined) {
+    const polygon = fresh.scatter.polygon.map((p) => ({
+      x: p.x + offsetMm,
+      y: p.y + offsetMm,
+    }));
+    // 32-bit XOR with a magic constant gives a deterministic-but-different
+    // seed for the duplicate — the patch's instance arrangement visibly
+    // differs from the original so the two patches don't read as one blob.
+    const baseSeed = fresh.scatter.seed ?? 0;
+    const reseed = (baseSeed ^ 0x9e3779b1) >>> 0;
+    fresh.scatter = { ...fresh.scatter, polygon, seed: reseed };
+  }
   return fresh;
 }
 

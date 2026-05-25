@@ -2039,6 +2039,123 @@ describe('Canvas2DRenderer.render (plants)', () => {
       .map((op) => op.args[0]);
     expect(styles).not.toContain(plantEntry.color);
   });
+
+  // The Mirror H / Mirror V buttons on the selection inspector toggle
+  // `transform.flipX/Y`. For scatter (carpet) plants the renderer mirrors
+  // (a) the brush polygon about its centroid (visible re-arrangement for
+  // ASYMMETRIC polygons) and (b) each instance silhouette via a negative
+  // scale arg (visible per-leaf flip for asymmetric silhouettes).
+  // Symmetric polygons + silhouettes are invariant, which is the right
+  // answer mathematically.
+
+  function asymmetricScatterScene(flipX = false, flipY = false) {
+    // Right-triangle polygon — distinctly NOT symmetric on either axis,
+    // so polygon mirror produces a visibly different scatter footprint.
+    const scene = sceneWithPlant({
+      scatter: {
+        polygon: [
+          { x: 200, y: 100 },
+          { x: 320, y: 100 },
+          { x: 320, y: 220 },
+        ],
+        density: 80,
+        seed: 42,
+      },
+    });
+    scene.layers[0]!.objects[0]!.transform.flipX = flipX;
+    scene.layers[0]!.objects[0]!.transform.flipY = flipY;
+    return scene;
+  }
+
+  it('Mirror H on a scatter plant flips the silhouette per instance (negative x-scale)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(asymmetricScatterScene(true, false), upright, fakeCatalog);
+    // For an asymmetric polygon with flipX, every per-instance `ctx.scale(sx, sy)`
+    // call from the scatter path uses a negative sx.
+    const scales = canvas.context.ops
+      .filter((op) => op.method === 'scale')
+      .map((op) => [op.args[0], op.args[1]] as [number, number]);
+    // Filter to the small per-instance scales (the world-transform scale
+    // at the start of render is large). Instances are ~entry.naturalSize/2
+    // × jitter × growthScale; for naturalSize=40 that's ≈ 20mm-sized.
+    // The world-transform `ctx.scale(zoom, -zoom)` lands first with sx=1
+    // for the upright viewport. Filter to per-instance scales (|sx| ≥ 5)
+    // so the world transform doesn't drag the assertion's "every" past.
+    const instanceScales = scales.filter(
+      ([sx, sy]) => Math.abs(sx) >= 5 && Math.abs(sx) < 100 && Math.abs(sy) >= 5,
+    );
+    expect(instanceScales.length).toBeGreaterThan(0);
+    expect(instanceScales.every(([sx]) => sx < 0)).toBe(true);
+  });
+
+  it('Mirror V on a scatter plant flips the silhouette per instance (negative y-scale)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(asymmetricScatterScene(false, true), upright, fakeCatalog);
+    const scales = canvas.context.ops
+      .filter((op) => op.method === 'scale')
+      .map((op) => [op.args[0], op.args[1]] as [number, number]);
+    // The world-transform `ctx.scale(zoom, -zoom)` lands first with sx=1
+    // for the upright viewport. Filter to per-instance scales (|sx| ≥ 5)
+    // so the world transform doesn't drag the assertion's "every" past.
+    const instanceScales = scales.filter(
+      ([sx, sy]) => Math.abs(sx) >= 5 && Math.abs(sx) < 100 && Math.abs(sy) >= 5,
+    );
+    expect(instanceScales.length).toBeGreaterThan(0);
+    expect(instanceScales.every(([, sy]) => sy < 0)).toBe(true);
+  });
+
+  it('Mirror H rearranges instance positions for an asymmetric polygon (visible flip)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(asymmetricScatterScene(false), upright, fakeCatalog);
+    const original = canvas.context.ops
+      .filter((op) => op.method === 'translate')
+      .map((op) => [op.args[0], op.args[1]] as [number, number])
+      .filter(([x]) => x > 100 && x < 500);
+    canvas.context.ops.length = 0;
+    r.render(asymmetricScatterScene(true), upright, fakeCatalog);
+    const mirrored = canvas.context.ops
+      .filter((op) => op.method === 'translate')
+      .map((op) => [op.args[0], op.args[1]] as [number, number])
+      .filter(([x]) => x > 100 && x < 500);
+    expect(mirrored).not.toEqual(original);
+  });
+
+  it('Mirror H on a symmetric polygon produces an identical render (mathematically invariant)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    // Square polygon — symmetric about both axes; mirror is identity.
+    const polygon = [
+      { x: 200, y: 100 },
+      { x: 320, y: 100 },
+      { x: 320, y: 220 },
+      { x: 200, y: 220 },
+    ];
+    const sceneFlat = sceneWithPlant({
+      scatter: { polygon, density: 80, seed: 7 },
+    });
+    r.render(sceneFlat, upright, fakeCatalog);
+    const positionsFlat = canvas.context.ops
+      .filter((op) => op.method === 'translate')
+      .map((op) => [op.args[0], op.args[1]] as [number, number]);
+    canvas.context.ops.length = 0;
+    const sceneFlipped = sceneWithPlant({
+      scatter: { polygon, density: 80, seed: 7 },
+    });
+    sceneFlipped.layers[0]!.objects[0]!.transform.flipX = true;
+    r.render(sceneFlipped, upright, fakeCatalog);
+    const positionsFlipped = canvas.context.ops
+      .filter((op) => op.method === 'translate')
+      .map((op) => Math.abs(op.args[0] as number));
+    const positionsFlatAbs = positionsFlat.map(([x]) => Math.abs(x));
+    expect(positionsFlipped.sort()).toEqual(positionsFlatAbs.sort());
+  });
 });
 
 describe('Canvas2DRenderer.hitTest (plants)', () => {

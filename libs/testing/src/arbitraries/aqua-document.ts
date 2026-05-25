@@ -54,6 +54,28 @@ const arbFiniteNumber = (min: number, max: number): fc.Arbitrary<number> =>
 const arbMm = (min = 1, max = 10_000): fc.Arbitrary<number> =>
   fc.integer({ min, max });
 
+/**
+ * Recursively fold `-0` → `0` inside an arbitrary JSON value. Same rationale
+ * as {@link arbFiniteNumber}: `JSON.stringify(-0) === '0'` collapses `-0` on
+ * write, but `Object.is(-0, 0)` is `false` and Jest's `toEqual` distinguishes
+ * them — so any nested `-0` in the `extensions` bag would break the
+ * round-trip property without showing up as a real-document edge case. We
+ * normalize the generated value rather than rejecting it, because rejecting
+ * shrinks badly under fast-check.
+ */
+function foldMinusZero(value: unknown): unknown {
+  if (typeof value === 'number') return Object.is(value, -0) ? 0 : value;
+  if (Array.isArray(value)) return value.map(foldMinusZero);
+  if (value !== null && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = foldMinusZero(v);
+    }
+    return out;
+  }
+  return value;
+}
+
 const arbHex = (): fc.Arbitrary<HexColor> =>
   fc
     .tuple(
@@ -374,9 +396,13 @@ export const arbAquaDocument = (): fc.Arbitrary<AquaDocument> =>
         nil: undefined,
       }),
       fc.option(
-        fc.dictionary(fc.string({ minLength: 1, maxLength: 12 }), fc.jsonValue(), {
-          maxKeys: 3,
-        }),
+        fc
+          .dictionary(fc.string({ minLength: 1, maxLength: 12 }), fc.jsonValue(), {
+            maxKeys: 3,
+          })
+          // fc.jsonValue() can produce `-0` deep inside an object or array;
+          // fold those to `0` so the round-trip property doesn't flake.
+          .map((dict) => foldMinusZero(dict) as Record<string, unknown>),
         { nil: undefined },
       ),
     )

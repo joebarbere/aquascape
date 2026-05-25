@@ -446,4 +446,113 @@ describe('SelectionInspectorComponent', () => {
     const pill = fixture.nativeElement.querySelector('.lock-pill');
     expect(pill).toBeNull();
   });
+
+  // ── Arrow-key nudging ────────────────────────────────────────────────
+
+  it('ArrowRight dispatches a MoveObject(+1mm, 0) for each selected id', () => {
+    const { dispatched } = configure(['a'], sceneWithObject('a'));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    const cmd = dispatched()[0]! as ReturnType<typeof SceneActions.dispatchCommand>;
+    if (cmd.command.kind !== 'MoveObject') throw new Error('expected MoveObject');
+    // sceneWithObject places the object at (100, 100, 100).
+    expect(cmd.command.position).toEqual({ x: 101, y: 100, z: 100 });
+  });
+
+  it('Shift+ArrowRight uses a 10mm step (coarse mode)', () => {
+    const { dispatched } = configure(['a'], sceneWithObject('a'));
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true }),
+    );
+    const cmd = dispatched()[0]! as ReturnType<typeof SceneActions.dispatchCommand>;
+    if (cmd.command.kind !== 'MoveObject') throw new Error('expected MoveObject');
+    expect(cmd.command.position).toEqual({ x: 110, y: 100, z: 100 });
+  });
+
+  it('ArrowUp moves world +y (up); ArrowDown moves world −y', () => {
+    const { dispatched } = configure(['a'], sceneWithObject('a'));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    const cmds = dispatched().map(
+      (a) => (a as ReturnType<typeof SceneActions.dispatchCommand>).command,
+    );
+    expect(cmds[0]).toMatchObject({
+      kind: 'MoveObject',
+      position: { x: 100, y: 101, z: 100 },
+    });
+    expect(cmds[1]).toMatchObject({
+      kind: 'MoveObject',
+      position: { x: 100, y: 99, z: 100 },
+    });
+  });
+
+  it('arrow keys are ignored when the selection lives on a locked layer', () => {
+    const { dispatched } = configure(['a'], sceneWithLockedObject('a'));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    expect(dispatched()).toEqual([]);
+  });
+
+  it('Cmd+ArrowRight does NOT nudge — reserved for future shortcuts', () => {
+    const { dispatched } = configure(['a'], sceneWithObject('a'));
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowRight', metaKey: true }),
+    );
+    expect(dispatched()).toEqual([]);
+  });
+
+  it('arrow keys are ignored while typing in an input', () => {
+    const { dispatched } = configure(['a'], sceneWithObject('a'));
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    input.remove();
+    expect(dispatched()).toEqual([]);
+  });
+
+  // ── Duplicate of a scatter plant — must offset the polygon AND reseed
+  //    so the duplicate doesn't paint exactly over the original.
+
+  function sceneWithScatterPlant(): ReturnType<typeof sceneWithObject> {
+    const scene = sceneWithObject('a');
+    const obj = scene.layers[0]!.objects[0] as Record<string, unknown>;
+    obj['kind'] = 'plant';
+    obj['ref'] = { catalog: 'core', id: 'plant.x', version: 1 };
+    obj['growth'] = { ageWeeks: 0, vigor: 1 };
+    obj['scatter'] = {
+      polygon: [
+        { x: 100, y: 100 },
+        { x: 200, y: 100 },
+        { x: 200, y: 200 },
+        { x: 100, y: 200 },
+      ],
+      density: 30,
+      seed: 1234,
+    };
+    return scene;
+  }
+
+  it('Duplicate of a scatter plant offsets the polygon AND mints a fresh seed', () => {
+    const { fixture, dispatched } = configure(['a'], sceneWithScatterPlant());
+    buttonByLabel(fixture, 'Duplicate')!.click();
+    const cmd = dispatched()[0]! as ReturnType<typeof SceneActions.dispatchCommand>;
+    if (cmd.command.kind !== 'AddObject') throw new Error('expected AddObject');
+    const obj = cmd.command.object as {
+      kind: string;
+      transform: { position: { x: number; y: number } };
+      scatter: { polygon: Array<{ x: number; y: number }>; seed: number };
+    };
+    expect(obj.kind).toBe('plant');
+    // The default duplicate offset is 20mm; polygon vertices should all
+    // shift by the same delta so the duplicated patch sits beside the
+    // original, not on top of it.
+    expect(obj.scatter.polygon).toEqual([
+      { x: 120, y: 120 },
+      { x: 220, y: 120 },
+      { x: 220, y: 220 },
+      { x: 120, y: 220 },
+    ]);
+    // Seed reseeded so the duplicate's instance arrangement visibly
+    // differs from the original.
+    expect(obj.scatter.seed).not.toBe(1234);
+  });
 });
