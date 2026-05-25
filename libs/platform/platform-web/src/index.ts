@@ -26,6 +26,7 @@ import {
   isFileSystemAccessAvailable,
 } from './file-system-access-file-service';
 import { InMemoryFileService } from './in-memory-file-service';
+import { BrowserDownloadRenderExportService } from './browser-download-render-export-service';
 import { InMemoryRenderExportService } from './in-memory-render-export-service';
 import { InMemoryStorageService } from './in-memory-storage-service';
 import {
@@ -42,6 +43,7 @@ export {
 } from './file-system-access-file-service';
 export { InMemoryFileService } from './in-memory-file-service';
 export { InMemoryRenderExportService } from './in-memory-render-export-service';
+export { BrowserDownloadRenderExportService } from './browser-download-render-export-service';
 export { InMemoryStorageService } from './in-memory-storage-service';
 export {
   IndexedDbStorageService,
@@ -82,11 +84,29 @@ export function createWebPlatform(
     ? new BrowserDialogService((globalRef as { document: Document }).document)
     : new StubDialogService();
 
+  // Stage 6 F6.1 — real browser download via <a download> + Blob URL.
+  // Falls back to the in-memory stub when no `document` / `URL` is
+  // available (Node + jsdom-without-URL setups).
+  const win = globalRef as unknown as {
+    URL?: { createObjectURL?: (b: Blob) => string; revokeObjectURL?: (u: string) => void };
+  };
+  const hasUrl =
+    win.URL !== undefined &&
+    typeof win.URL.createObjectURL === 'function' &&
+    typeof win.URL.revokeObjectURL === 'function';
+  const renderExportService =
+    hasDoc && hasUrl
+      ? new BrowserDownloadRenderExportService(
+          (globalRef as { document: Document }).document,
+          (globalRef as unknown as { URL: { createObjectURL: (b: Blob) => string; revokeObjectURL: (u: string) => void } }).URL,
+        )
+      : new InMemoryRenderExportService();
+
   return {
     fileService,
     dialogService,
     storageService,
-    renderExportService: new InMemoryRenderExportService(),
+    renderExportService,
   };
 }
 

@@ -35,6 +35,7 @@ import {
 } from '@aquascape/state';
 import { Store } from '@ngrx/store';
 
+import { ExportDialogComponent } from './export-dialog.component';
 import { TemplateBrowserComponent, type TemplateInstantiateEvent } from './template-browser.component';
 import { ThemeToggleComponent } from './theme-toggle.component';
 
@@ -42,7 +43,12 @@ import { ThemeToggleComponent } from './theme-toggle.component';
   selector: 'aquascape-editor-shell',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, TemplateBrowserComponent, ThemeToggleComponent],
+  imports: [
+    CommonModule,
+    ExportDialogComponent,
+    TemplateBrowserComponent,
+    ThemeToggleComponent,
+  ],
   template: `
     <header class="editor-shell" role="banner">
       <div class="title-block">
@@ -99,6 +105,15 @@ import { ThemeToggleComponent } from './theme-toggle.component';
           title="Browse templates"
         >
           Templates
+        </button>
+        <button
+          type="button"
+          class="action"
+          (click)="onOpenExport()"
+          aria-label="Export image or summary"
+          title="Export image or summary"
+        >
+          Export
         </button>
 
         <span class="divider" aria-hidden="true"></span>
@@ -167,6 +182,11 @@ import { ThemeToggleComponent } from './theme-toggle.component';
       [currentEnvelope]="currentEnvelope()"
       (instantiate)="onTemplateInstantiated($event)"
     ></aquascape-template-browser>
+
+    <aquascape-export-dialog
+      #exportDialog
+      [currentScene]="currentScene()"
+    ></aquascape-export-dialog>
   `,
   styles: [
     `
@@ -315,6 +335,7 @@ export class EditorShellComponent {
   readonly currentEnvelope = toSignal(this.store.select(selectEnvelope), { initialValue: null });
 
   @ViewChild('templateBrowser') private templateBrowser?: TemplateBrowserComponent;
+  @ViewChild('exportDialog') private exportDialog?: ExportDialogComponent;
 
   /** Friendly status text for the title-block status pill. */
   statusLabel(): string {
@@ -351,6 +372,11 @@ export class EditorShellComponent {
   /** Open the template-browser modal. F5.1. */
   onOpenTemplates(): void {
     this.templateBrowser?.open();
+  }
+
+  /** Open the export dialog. Stage 6 F6.1 + F6.2. */
+  onOpenExport(): void {
+    this.exportDialog?.open();
   }
 
   /**

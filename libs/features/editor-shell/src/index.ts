@@ -85,6 +85,7 @@ export {
   MAX_PERSONAL_TEMPLATES,
   STORAGE_KEY_PERSONAL_TEMPLATES,
 } from './lib/templates.service';
+export { ExportDialogComponent } from './lib/export-dialog.component';
 export {
   ZOOM_MULT_MAX,
   ZOOM_MULT_MIN,

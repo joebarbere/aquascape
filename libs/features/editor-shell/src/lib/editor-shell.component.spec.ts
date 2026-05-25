@@ -11,14 +11,20 @@ import {
   selectCanRedo,
   selectCanUndo,
   selectDisplayTitle,
+  selectEnvelope,
   selectHasPendingDraft,
   selectLastError,
   selectPendingDraft,
   selectRecentFiles,
+  selectScene,
   selectStatus,
 } from '@aquascape/state';
-import type { StorageService } from '@aquascape/platform/platform-api';
-import { STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
+import type {
+  ExportPngResult,
+  RenderExportService,
+  StorageService,
+} from '@aquascape/platform/platform-api';
+import { RENDER_EXPORT_SERVICE, STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 
 import { EditorShellComponent } from './editor-shell.component';
@@ -43,11 +49,22 @@ function makeStubStorage(): StorageService {
   };
 }
 
+function makeStubRenderExport(): RenderExportService {
+  return {
+    exportPng: async (): Promise<ExportPngResult | null> => ({ path: 'memory://stub' }),
+  };
+}
+
 function configure(initial?: ReturnType<typeof initialDocumentState>) {
   TestBed.configureTestingModule({
     imports: [EditorShellComponent],
     providers: [
       { provide: STORAGE_SERVICE, useValue: makeStubStorage() },
+      // Stage 6: the embedded ExportDialogComponent injects
+      // RENDER_EXPORT_SERVICE; the embedded TemplateBrowserComponent reads
+      // selectScene / selectEnvelope. We provide stub values for both so
+      // the injector graph stays satisfiable in the shell's own spec.
+      { provide: RENDER_EXPORT_SERVICE, useValue: makeStubRenderExport() },
       provideMockStore({
         initialState: { [documentFeature.name]: initial ?? initialDocumentState() },
         selectors: [
@@ -59,6 +76,8 @@ function configure(initial?: ReturnType<typeof initialDocumentState>) {
           { selector: selectLastError, value: null },
           { selector: selectCanUndo, value: false },
           { selector: selectCanRedo, value: false },
+          { selector: selectScene, value: null },
+          { selector: selectEnvelope, value: null },
         ],
       }),
     ],
