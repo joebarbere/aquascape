@@ -169,6 +169,20 @@ app.on('web-contents-created', (_event, contents) => {
 
 installPipeGuards();
 
+// Stable canonical app name. Drives:
+//   * macOS dock-hover tooltip (until we update it below to include the
+//     version, after path resolution has run).
+//   * `app.getPath('userData')` → `~/Library/Application Support/Aquascape`
+//     on macOS, the equivalent on Linux / Windows. Stable across version
+//     bumps so user data does NOT move when the app upgrades.
+//   * Notifications "from app" label.
+//
+// Without this call the unpackaged dev run picks up "Electron" (the
+// fallback when the walked-up package.json name is a scope like
+// `@aquascape/source` that's not a valid identity name), which is what
+// the user was seeing in the dock.
+app.setName('Aquascape');
+
 app
   .whenReady()
   .then(() => {
@@ -193,6 +207,14 @@ app
       }
     }
 
+    // Pre-resolve the storage path BEFORE we update `app.setName()` for
+    // display (below). `app.getPath('userData')` is computed lazily from
+    // the current `app.getName()`, so re-naming for the dock hover would
+    // otherwise move the JSON store between writes. We freeze the path
+    // here against the canonical "Aquascape" name and hand a constant
+    // thunk to the backend.
+    const storagePath = path.join(app.getPath('userData'), 'aquascape-storage.json');
+
     // F1.4: the file picker / dialogs / storage / export channels need a
     // BrowserWindow to anchor native modals to. We pass a `getWindow()`
     // accessor instead of a window directly so the backends stay valid
@@ -204,9 +226,30 @@ app
       now: () => Date.now(),
       file: createFileBackend(getWindow),
       dialog: createDialogBackend(getWindow),
-      storage: createStorageBackend(),
+      storage: createStorageBackend(() => storagePath),
       export: createExportBackend(getWindow),
     });
+
+    // Update the display name with a version marker so the macOS dock
+    // hover (and the "About" menu's app name) tells the user which build
+    // they're poking at. Dev runs (`pnpm restart:desktop`, `nx serve
+    // desktop`, plain `electron`) → "(dev)". Packaged builds → the
+    // version baked into the .app bundle's package.json. Done AFTER the
+    // storage path resolution above so the userData directory stays
+    // stable across renames + version bumps.
+    const versionLabel = app.isPackaged ? app.getVersion() : '(dev)';
+    app.setName(`Aquascape ${versionLabel}`);
+
+    // macOS "About Aquascape" panel — keep the canonical name there, with
+    // the resolved version. The app name shown by the dock hover (set via
+    // `app.setName` above) already carries the marker, so we don't repeat
+    // it here.
+    if (process.platform === 'darwin' && typeof app.setAboutPanelOptions === 'function') {
+      app.setAboutPanelOptions({
+        applicationName: 'Aquascape',
+        applicationVersion: versionLabel,
+      });
+    }
 
     mainWindow.on('closed', () => {
       mainWindow = null;

@@ -3,9 +3,18 @@
      a stylized leaf crossbar in the same green family as the brand accent;
      a soft substrate mound at the base of the tile. Designed at 64×64 with
      6–8u strokes so it stays legible at 16px favicon scale. Tile uses a
-     22% corner radius — the macOS Big Sur+ dock-icon convention — so the
-     mark also works as a desktop-app icon. -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Aquascape">
+     22 % corner radius — the macOS Big Sur+ dock-icon convention — so the
+     mark also works as a desktop-app icon.
+
+     The viewBox is intentionally 80 × 80 (with the tile occupying the
+     centre 64 × 64): macOS dock icons are designed against an Apple icon
+     grid that leaves ~10 % transparent padding on each side of the visible
+     shape so the bounding box reads at the same visual size as every
+     other app in the dock. Without this padding the brand mark would
+     render about 25 % larger than its neighbours. The internal coordinate
+     system (rect at 0,0→64,64; A at (10,54)→(32,8)→(54,54); etc.) is
+     unchanged — only the canvas around it grew. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-8 -8 80 80" role="img" aria-label="Aquascape">
   <title>Aquascape</title>
   <!-- Aqua-blue background tile. Cyan-600 (#0891B2) chosen for: (a) "aqua"
        semantic — evokes water; (b) high contrast against the white A
