@@ -59,6 +59,7 @@ import type {
   TankStyle,
 } from '@aquascape/domain/scene-model';
 import type {
+  BackdropImage,
   HitResult,
   OverlayOptions,
   RenderSurface,
@@ -249,6 +250,7 @@ export class Canvas2DRenderer implements SceneRenderer {
     overlayOptions?: OverlayOptions,
     wallBackground?: WallBackground,
     snapGuides?: SnapGuides,
+    backdropImage?: BackdropImage,
   ): void {
     const s = this.surface;
     const ctx = this.ctx;
@@ -265,6 +267,12 @@ export class Canvas2DRenderer implements SceneRenderer {
     //    the world transform a few lines below.
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, backingW, backingH);
+
+    // 1.5) Backdrop image (F6.3). Painted in CSS-pixel space (NO world
+    //      transform applied) so it stretches to fill the full backing
+    //      buffer regardless of zoom / pan. Every world-space layer
+    //      below paints on top of it. No-op when omitted or opacity 0.
+    this.drawBackdrop(ctx, backingW, backingH, backdropImage);
 
     // 2) Build the world-to-pixel transform.
     //
@@ -932,6 +940,34 @@ export class Canvas2DRenderer implements SceneRenderer {
     ctx.arc(0, halfH + stalkLengthMm, handleSizeMm / 2, 0, Math.PI * 2);
     ctx.fillStyle = SELECTION_COLOR;
     ctx.fill();
+    ctx.restore();
+  }
+
+  // ─── Stage 6 F6.3 — Backdrop image ───────────────────────────────────
+  //
+  // View-only photo composited behind everything else. Painted under the
+  // identity transform (in CSS-px space) so it covers the full backing
+  // buffer regardless of zoom / pan — the user typically wants their
+  // photo to behave like a static painting behind the design.
+  //
+  // True no-op when the parameter is omitted, when `opacity <= 0`, or
+  // when the image isn't ready (e.g. dimensions still 0 because the
+  // host hasn't decoded it). Wrapped in save / restore so globalAlpha
+  // doesn't leak into the world-transform paint that follows.
+
+  private drawBackdrop(
+    ctx: CanvasRenderingContext2D,
+    backingW: number,
+    backingH: number,
+    backdrop: BackdropImage | undefined,
+  ): void {
+    if (backdrop === undefined) return;
+    if (!Number.isFinite(backdrop.opacity) || backdrop.opacity <= 0) return;
+    if (backingW <= 0 || backingH <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, backdrop.opacity);
+    // drawImage(source, dx, dy, dw, dh) — cover-fit the entire backing.
+    ctx.drawImage(backdrop.image, 0, 0, backingW, backingH);
     ctx.restore();
   }
 

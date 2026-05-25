@@ -155,6 +155,17 @@ export class FakeContext2D {
   clearRect(x: number, y: number, w: number, h: number): void {
     this.ops.push({ method: 'clearRect', args: [x, y, w, h] });
   }
+  drawImage(
+    _image: unknown,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+  ): void {
+    // Image source is opaque to the test — we record only the destination
+    // rect (the renderer's only inputs we care about for backdrop tests).
+    this.ops.push({ method: 'drawImage', args: [dx, dy, dw, dh] });
+  }
   createLinearGradient(x0: number, y0: number, x1: number, y1: number): FakeLinearGradient {
     const stops: Array<{ at: number; color: string }> = [];
     const gradient: FakeLinearGradient = {

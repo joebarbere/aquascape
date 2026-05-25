@@ -3184,3 +3184,123 @@ describe('Canvas2DRenderer.render (snap guides — F5.4)', () => {
     expect(lastStrokeRect).toBeGreaterThan(snapIdx);
   });
 });
+
+// ─── Stage 6 F6.3 — Backdrop image ────────────────────────────────────────
+
+describe('Canvas2DRenderer.render (backdrop image — F6.3)', () => {
+  const BACKDROP_TANK_W = 360;
+  const BACKDROP_TANK_H = 220;
+  const fakeImage = { __fake: true } as unknown as CanvasImageSource;
+
+  let fakeWindow: FakeWindow;
+  beforeEach(() => {
+    fakeWindow = installFakeWindow();
+    void fakeWindow;
+  });
+  afterEach(() => {
+    uninstallFakeWindow();
+  });
+
+  function renderWith(
+    backdrop: { image: CanvasImageSource; opacity: number } | undefined,
+  ): { ops: RecordedOp[]; backingW: number; backingH: number } {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(
+      makeMinimalScene(BACKDROP_TANK_W, BACKDROP_TANK_H, BACKDROP_TANK_H),
+      upright,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      backdrop,
+    );
+    return { ops: canvas.context.ops, backingW: 800, backingH: 600 };
+  }
+
+  it('is a no-op when backdropImage is omitted', () => {
+    const { ops } = renderWith(undefined);
+    expect(ops.find((o) => o.method === 'drawImage')).toBeUndefined();
+  });
+
+  it('is a no-op when opacity is 0', () => {
+    const { ops } = renderWith({ image: fakeImage, opacity: 0 });
+    expect(ops.find((o) => o.method === 'drawImage')).toBeUndefined();
+  });
+
+  it('is a no-op when opacity is negative or non-finite', () => {
+    expect(
+      renderWith({ image: fakeImage, opacity: -0.5 }).ops.find((o) => o.method === 'drawImage'),
+    ).toBeUndefined();
+    expect(
+      renderWith({ image: fakeImage, opacity: Number.NaN }).ops.find((o) => o.method === 'drawImage'),
+    ).toBeUndefined();
+  });
+
+  it('draws a single drawImage covering the full backing buffer', () => {
+    const { ops, backingW, backingH } = renderWith({ image: fakeImage, opacity: 1 });
+    const drawImages = ops.filter((o) => o.method === 'drawImage');
+    expect(drawImages).toHaveLength(1);
+    expect(drawImages[0]!.args).toEqual([0, 0, backingW, backingH]);
+  });
+
+  it('honours opacity via globalAlpha + clamps > 1 to 1', () => {
+    const { ops } = renderWith({ image: fakeImage, opacity: 0.42 });
+    const drawIdx = ops.findIndex((o) => o.method === 'drawImage');
+    expect(drawIdx).toBeGreaterThan(0);
+    const alphaOps = ops
+      .slice(0, drawIdx)
+      .filter((o) => o.method === 'set:globalAlpha')
+      .map((o) => o.args[0]);
+    expect(alphaOps[alphaOps.length - 1]).toBeCloseTo(0.42, 6);
+
+    const high = renderWith({ image: fakeImage, opacity: 2 });
+    const drawIdx2 = high.ops.findIndex((o) => o.method === 'drawImage');
+    const alpha2 = high.ops
+      .slice(0, drawIdx2)
+      .filter((o) => o.method === 'set:globalAlpha')
+      .map((o) => o.args[0])
+      .pop();
+    expect(alpha2).toBe(1);
+  });
+
+  it('paints BEFORE the world-transform setup so it sits behind every scene layer', () => {
+    const { ops } = renderWith({ image: fakeImage, opacity: 1 });
+    const drawIdx = ops.findIndex((o) => o.method === 'drawImage');
+    const worldTransformIdx = ops.findIndex(
+      (o, i) =>
+        i > 0 &&
+        o.method === 'setTransform' &&
+        (Number(o.args[4]) !== 0 || Number(o.args[5]) !== 0),
+    );
+    expect(drawIdx).toBeGreaterThan(-1);
+    expect(worldTransformIdx).toBeGreaterThan(-1);
+    expect(drawIdx).toBeLessThan(worldTransformIdx);
+  });
+
+  it('wraps in save / restore so globalAlpha does not leak', () => {
+    const { ops } = renderWith({ image: fakeImage, opacity: 0.5 });
+    const drawIdx = ops.findIndex((o) => o.method === 'drawImage');
+    let saveIdx = -1;
+    for (let i = drawIdx - 1; i >= 0; i--) {
+      if (ops[i]!.method === 'save') {
+        saveIdx = i;
+        break;
+      }
+    }
+    let restoreIdx = -1;
+    for (let i = drawIdx + 1; i < ops.length; i++) {
+      if (ops[i]!.method === 'restore') {
+        restoreIdx = i;
+        break;
+      }
+    }
+    expect(saveIdx).toBeGreaterThan(-1);
+    expect(restoreIdx).toBeGreaterThan(drawIdx);
+    const drawImages = ops.filter((o) => o.method === 'drawImage');
+    expect(drawImages).toHaveLength(1);
+  });
+});

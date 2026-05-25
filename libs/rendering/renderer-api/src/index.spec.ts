@@ -8,6 +8,7 @@
 // there is no runtime code to cover.
 
 import type {
+  BackdropImage,
   RenderSurface,
   Viewport,
   HitResult,
@@ -167,5 +168,35 @@ describe('@aquascape/rendering/renderer-api', () => {
     const arity: HitTestArity = 6;
     expect(arity).toBe(6);
     expect(guides.xs).toHaveLength(2);
+  });
+
+  it('accepts backdropImage as the 9th render() arg (F6.3) and exports the BackdropImage shape', () => {
+    // Fake CanvasImageSource — the renderer just forwards it to drawImage.
+    const fakeImage = {} as unknown as CanvasImageSource;
+    const backdrop: BackdropImage = {
+      image: fakeImage,
+      opacity: 0.6,
+    };
+    const stub: SceneRenderer = {
+      attach: () => undefined,
+      render: () => undefined,
+      hitTest: () => null,
+      dispose: () => undefined,
+    };
+    stub.render(
+      {} as Scene,
+      {} as Viewport,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      backdrop,
+    );
+    type HitTestArity = Parameters<SceneRenderer['hitTest']>['length'];
+    const arity: HitTestArity = 6;
+    expect(arity).toBe(6);
+    expect(backdrop.opacity).toBe(0.6);
   });
 });

@@ -132,6 +132,29 @@ export interface WallBackground {
 }
 
 /**
+ * Stage 6 F6.3 — view-only "backdrop photo" composited behind the scene.
+ *
+ * Painted FIRST, after the canvas clear but BEFORE the world transform
+ * is applied. The renderer scales `image` to fill the entire backing
+ * buffer (cover-fit) and honours `opacity` via `globalAlpha`. The
+ * resulting visual reads as a static painting behind the design — the
+ * user typically imports a photo of their room / tank's intended
+ * placement and overlays the scene to preview composition.
+ *
+ * View-only for v1: not serialised into `Scene` / `.aqua`. Persistence
+ * lives in `BackdropService` (editor-shell) under
+ * `aquascape.ui.backdrop.*` as a data URL. Future iterations can promote
+ * this to a schema-backed `scene.environment.backdrop` with proper ZIP
+ * asset embedding so backdrops follow shared `.aqua` files.
+ */
+export interface BackdropImage {
+  /** Pre-decoded image source the renderer hands to `ctx.drawImage`. */
+  image: CanvasImageSource;
+  /** Fill opacity in `[0, 1]`. 1 = fully opaque, 0 = invisible. */
+  opacity: number;
+}
+
+/**
  * Stage 5 F5.3 + F5.4 — ephemeral alignment lines painted during a drag
  * when the dragged object's position snaps to a target (grid, golden /
  * thirds guide, or another object's centre). The renderer draws each
@@ -210,8 +233,16 @@ export interface SceneRenderer {
    * of every scene object but BENEATH selection handles so the user
    * can read both the guide AND the handle. No-op when omitted / empty.
    *
-   * NOTE: the positional argument list is at its sensible limit. Any
-   * further additions should refactor `render(...)` to an options object.
+   * The optional `backdropImage` parameter (Stage 6 F6.3) paints a
+   * pre-decoded photo across the full backing buffer, BEFORE the world
+   * transform is applied. The image is cover-fit (stretches to fill).
+   * No-op when omitted / opacity 0. Painted first so every other layer
+   * (wall, tank, scene objects, overlays, snap guides, handles) sits on
+   * top of it.
+   *
+   * NOTE: the positional argument list is at its sensible limit. The
+   * next addition MUST refactor `render(...)` to an options object;
+   * this comment has been here since the 8th arg landed.
    */
   render(
     scene: Scene,
@@ -222,6 +253,7 @@ export interface SceneRenderer {
     overlayOptions?: OverlayOptions,
     wallBackground?: WallBackground,
     snapGuides?: SnapGuides,
+    backdropImage?: BackdropImage,
   ): void;
 
   /**

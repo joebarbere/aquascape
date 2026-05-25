@@ -87,6 +87,19 @@ export {
 } from './lib/templates.service';
 export { ExportDialogComponent } from './lib/export-dialog.component';
 export {
+  BackdropPanelComponent,
+  BACKDROP_PANEL_COLLAPSED_KEY,
+} from './lib/backdrop-panel.component';
+export {
+  BackdropService,
+  DEFAULT_BACKDROP_OPACITY,
+  MAX_BACKDROP_BYTES,
+  STORAGE_KEY_BACKDROP_DATA_URL,
+  STORAGE_KEY_BACKDROP_ENABLED,
+  STORAGE_KEY_BACKDROP_OPACITY,
+  type ImageDecoder,
+} from './lib/backdrop.service';
+export {
   ZOOM_MULT_MAX,
   ZOOM_MULT_MIN,
   ZOOM_STEP_MULT,

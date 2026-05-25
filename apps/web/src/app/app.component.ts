@@ -71,6 +71,8 @@ import {
   type SceneObject,
 } from '@aquascape/domain/scene-model';
 import {
+  BackdropPanelComponent,
+  BackdropService,
   CompositionOverlaysComponent,
   CursorPositionService,
   EditorShellComponent,
@@ -179,6 +181,7 @@ type DragState =
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    BackdropPanelComponent,
     CommonModule,
     CompositionOverlaysComponent,
     EditorShellComponent,
@@ -315,6 +318,7 @@ type DragState =
             <aquascape-composition-overlays></aquascape-composition-overlays>
             <aquascape-snap-settings></aquascape-snap-settings>
             <aquascape-wall-background></aquascape-wall-background>
+            <aquascape-backdrop-panel></aquascape-backdrop-panel>
           </div>
         </aside>
 
@@ -608,6 +612,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private readonly overlayOptions = inject(OverlayOptionsService);
   private readonly wallBackground = inject(WallBackgroundService);
   private readonly snapOptions = inject(SnapOptionsService);
+  private readonly backdropService = inject(BackdropService);
   private readonly viewportState = inject(ViewportService);
   private readonly cursorPos = inject(CursorPositionService);
   private readonly cdr = inject(ChangeDetectorRef);
@@ -816,6 +821,23 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     void this.wallBackground.wall();
     if (this.wallBackgroundFirstRun) {
       this.wallBackgroundFirstRun = false;
+      return;
+    }
+    if (this.currentScene !== null) {
+      this.renderCurrent();
+    }
+  });
+
+  // Stage 6 F6.3 — re-render when the backdrop photo is enabled /
+  // imported / cleared / has its opacity changed. Same first-run guard
+  // pattern; the backdrop service's `backdrop` computed flips to null
+  // when disabled or when no image is loaded, so the renderer no-ops in
+  // those cases.
+  private backdropFirstRun = true;
+  private readonly backdropEffect = effect(() => {
+    void this.backdropService.backdrop();
+    if (this.backdropFirstRun) {
+      this.backdropFirstRun = false;
       return;
     }
     if (this.currentScene !== null) {
@@ -1615,6 +1637,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.overlayOptions.overlays(),
       this.wallBackground.wall(),
       this.currentSnapGuides ?? undefined,
+      this.backdropService.backdrop() ?? undefined,
     );
   }
 
