@@ -1,19 +1,26 @@
 <!-- Aquascape brand mark — Geometric A monogram on an aqua-blue rounded
-     tile. White A strokes for maximum contrast against the aqua background;
-     a stylized leaf crossbar in the same green family as the brand accent;
-     a soft substrate mound at the base of the tile. Designed at 64×64 with
-     6–8u strokes so it stays legible at 16px favicon scale. Tile uses a
-     22 % corner radius — the macOS Big Sur+ dock-icon convention — so the
-     mark also works as a desktop-app icon.
+     tile, designed to sit comfortably in the macOS Dock alongside Slack /
+     VS Code / Finder.
 
-     The viewBox is intentionally 80 × 80 (with the tile occupying the
-     centre 64 × 64): macOS dock icons are designed against an Apple icon
-     grid that leaves ~10 % transparent padding on each side of the visible
-     shape so the bounding box reads at the same visual size as every
-     other app in the dock. Without this padding the brand mark would
-     render about 25 % larger than its neighbours. The internal coordinate
-     system (rect at 0,0→64,64; A at (10,54)→(32,8)→(54,54); etc.) is
-     unchanged — only the canvas around it grew. -->
+     TWO LAYERS OF PADDING, each load-bearing for the dock-grid look:
+
+       1. OUTER padding via the 80 × 80 viewBox (tile occupies the centre
+          64 × 64 = 80 % of canvas). macOS designs dock icons against an
+          Apple grid that leaves ~10 % transparent padding on each side of
+          the visible shape so the bounding box reads at the same visual
+          size as every other app. Without this the mark would render
+          ~25 % larger than its neighbours.
+
+       2. INNER padding via the `<g id="brand"`> transform that scales the
+          A + leaf + hill 0.7× around the tile centre (32, 32). Every
+          other macOS app icon leaves ~20-30 % margin between the colored
+          tile edge and the logo content (e.g. Slack's hashtag sits in
+          the middle ~60 % of its purple tile). Without this scale, the
+          A diagonals reached the tile corners and the icon felt cramped
+          + visually bigger than its neighbours.
+
+     Strokes scale with the content (no `vector-effect="non-scaling-stroke"`)
+     so the visual weight of the A stays proportional at every size. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="-8 -8 80 80" role="img" aria-label="Aquascape">
   <title>Aquascape</title>
   <!-- Aqua-blue background tile. Cyan-600 (#0891B2) chosen for: (a) "aqua"
@@ -32,38 +39,45 @@
     ry="14.3"
     fill="#0891b2"
   />
-  <!-- Substrate hill: a soft mound the A rests on. Earth-tone, drawn first
-       so it sits behind the letter strokes. -->
-  <path
-    id="hill"
-    d="M 4 56 Q 32 42 60 56 L 60 60 L 4 60 Z"
-    fill="#8b6a4a"
-  />
-  <!-- Letter A diagonals: two thick strokes meeting at the apex. Drawn as
-       a single closed polyline with round joins so the apex reads cleanly
-       at small sizes. White so it pops against the aqua tile. -->
-  <g id="letter-a" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
-    <polyline id="a-strokes" points="10,54 32,8 54,54" />
+  <!-- Brand content scaled to ~70 % of the tile so it reads as "centred
+       logo with margin" instead of "tile-shaped letterform". The transform
+       reads right-to-left (SVG composition rule): translate origin to the
+       tile centre, scale 0.7, translate back — i.e. a 0.7× scale anchored
+       at (32, 32). -->
+  <g id="brand" transform="translate(32 32) scale(0.7) translate(-32 -32)">
+    <!-- Substrate hill: a soft mound the A rests on. Earth-tone, drawn
+         first so it sits behind the letter strokes. -->
+    <path
+      id="hill"
+      d="M 4 56 Q 32 42 60 56 L 60 60 L 4 60 Z"
+      fill="#8b6a4a"
+    />
+    <!-- Letter A diagonals: two thick strokes meeting at the apex. Drawn
+         as a single closed polyline with round joins so the apex reads
+         cleanly at small sizes. White so it pops against the aqua tile. -->
+    <g id="letter-a" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+      <polyline id="a-strokes" points="10,54 32,8 54,54" />
+    </g>
+    <!-- Leaf crossbar: an almond / oval shape, horizontally oriented, with
+         a pointed tip on each side. Fresh aqua-green; positioned across
+         the A roughly two-thirds of the way down. -->
+    <path
+      id="leaf"
+      d="M 18 40 Q 32 30 46 40 Q 32 50 18 40 Z"
+      fill="#3aa67a"
+      stroke="#266b50"
+      stroke-width="1.5"
+      stroke-linejoin="round"
+    />
+    <!-- Leaf midrib for character at larger sizes; barely visible at 16px
+         but adds depth on tab thumbnails. -->
+    <path
+      id="leaf-midrib"
+      d="M 20 40 L 44 40"
+      stroke="#266b50"
+      stroke-width="1"
+      stroke-linecap="round"
+      opacity="0.6"
+    />
   </g>
-  <!-- Leaf crossbar: an almond / oval shape, horizontally oriented, with a
-       pointed tip on each side. Fresh aqua-green; positioned across the A
-       roughly two-thirds of the way down. -->
-  <path
-    id="leaf"
-    d="M 18 40 Q 32 30 46 40 Q 32 50 18 40 Z"
-    fill="#3aa67a"
-    stroke="#266b50"
-    stroke-width="1.5"
-    stroke-linejoin="round"
-  />
-  <!-- Leaf midrib for character at larger sizes; barely visible at 16px but
-       adds depth on tab thumbnails. -->
-  <path
-    id="leaf-midrib"
-    d="M 20 40 L 44 40"
-    stroke="#266b50"
-    stroke-width="1"
-    stroke-linecap="round"
-    opacity="0.6"
-  />
 </svg>
