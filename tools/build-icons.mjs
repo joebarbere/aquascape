@@ -47,11 +47,19 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..');
 const sourceSvg = join(repoRoot, 'apps', 'web', 'src', 'favicon.svg');
 const outDir = join(repoRoot, 'apps', 'desktop', 'src', 'assets');
+const webIconDir = join(repoRoot, 'apps', 'web', 'src', 'icons');
 
 // ─── Icon size matrices ───────────────────────────────────────────────────
 
 /** Windows ICO sizes. Microsoft's guidance + de-facto convention. */
 const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256];
+
+/**
+ * PWA / web-manifest icons. Stage 6 F6.4. Android's home-screen + splash
+ * generator needs 192 + 512 minimum; we add 384 + Apple-touch 180 so iOS
+ * Add-to-Home-Screen gets a sharp icon too.
+ */
+const PWA_ICON_SIZES = [180, 192, 384, 512];
 
 /**
  * macOS ICNS iconset entries. Each entry: [filename, pixel size]. Apple's
@@ -163,7 +171,16 @@ async function main() {
     await rm(tmpIconset, { recursive: true, force: true });
   }
 
-  console.log(`[build-icons] done. Outputs in ${outDir}`);
+  // 4) PWA / web-manifest icons. Same per-size rasterisation strategy as
+  //    Windows ICO so glyph hinting stays sharp at the smaller sizes.
+  await mkdir(webIconDir, { recursive: true });
+  console.log(`[build-icons] rasterising PWA icons: ${PWA_ICON_SIZES.join(', ')}`);
+  for (const size of PWA_ICON_SIZES) {
+    const buf = await rasterize(svgBytes, size);
+    await writeFile(join(webIconDir, `icon-${size}.png`), buf);
+  }
+
+  console.log(`[build-icons] done. Outputs in ${outDir} + ${webIconDir}`);
 }
 
 main().catch((err) => {

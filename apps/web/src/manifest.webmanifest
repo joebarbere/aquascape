@@ -1,0 +1,20 @@
+{
+  "name": "Aquascape",
+  "short_name": "Aquascape",
+  "description": "Open-source aquascaping design tool — pick a tank, sculpt substrate, place hardscape + plants, and watch the layout grow.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a1622",
+  "theme_color": "#0891b2",
+  "categories": ["design", "graphics", "productivity"],
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icons/icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

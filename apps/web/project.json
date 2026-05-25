@@ -21,6 +21,16 @@
             "glob": "favicon.svg",
             "input": "apps/web/src",
             "output": "/"
+          },
+          {
+            "glob": "manifest.webmanifest",
+            "input": "apps/web/src",
+            "output": "/"
+          },
+          {
+            "glob": "icon-*.png",
+            "input": "apps/web/src/icons",
+            "output": "/icons"
           }
         ]
       },
