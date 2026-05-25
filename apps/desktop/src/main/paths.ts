@@ -44,3 +44,22 @@ export function resolveIndexPath(mainDir: string): string {
 export function resolvePreloadPath(mainDir: string): string {
   return path.join(mainDir, '..', '..', '..', 'preload', 'src', 'preload', 'preload.js');
 }
+
+/**
+ * Resolve the absolute path to the app icon PNG, given the directory
+ * containing the compiled `main.js` at runtime. The icon is copied by the
+ * `build-main` target's `assets` entry to `dist/apps/desktop/main/assets/`.
+ *
+ * Runtime layout: from `dist/apps/desktop/main/src/main/`, climb 2 to
+ * `dist/apps/desktop/main/` and descend into `assets/icon.png`.
+ *
+ * Used for:
+ *   - `BrowserWindow({ icon })` on Windows / Linux (macOS ignores it for
+ *     window chrome but the app.dock.setIcon() call uses the same file).
+ *   - `app.dock.setIcon()` on macOS to surface the brand mark in the dock
+ *     during `nx serve desktop` (production packaging needs a proper ICNS
+ *     in the app bundle's Info.plist — separate follow-up).
+ */
+export function resolveIconPath(mainDir: string): string {
+  return path.join(mainDir, '..', '..', 'assets', 'icon.png');
+}

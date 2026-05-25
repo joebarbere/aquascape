@@ -4,8 +4,30 @@ import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { SceneActions, defaultScene, selectScene } from '@aquascape/state';
 import { asLayerId } from '@aquascape/domain/scene-model';
 import type { Layer, Scene } from '@aquascape/domain/scene-model';
+import { STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
+import type { StorageService } from '@aquascape/platform/platform-api';
 
-import { LayersPanelComponent } from './layers-panel.component';
+import { LAYERS_PANEL_COLLAPSED_KEY, LayersPanelComponent } from './layers-panel.component';
+
+class FakeStorageService implements StorageService {
+  readonly data = new Map<string, unknown>();
+  get<T>(key: string): Promise<T | null> {
+    return Promise.resolve((this.data.get(key) as T | undefined) ?? null);
+  }
+  set<T>(key: string, value: T): Promise<void> {
+    this.data.set(key, value);
+    return Promise.resolve();
+  }
+  remove(key: string): Promise<void> {
+    this.data.delete(key);
+    return Promise.resolve();
+  }
+}
+
+async function flushPromises(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
 function makeLayer(id: string, name: string, overrides: Partial<Layer> = {}): Layer {
   return {
@@ -23,7 +45,8 @@ function sceneWithLayers(layers: Layer[]): Scene {
   return { ...defaultScene(), layers };
 }
 
-function configure(scene: Scene) {
+function configure(scene: Scene, options: { storage?: FakeStorageService } = {}) {
+  const storage = options.storage ?? new FakeStorageService();
   TestBed.configureTestingModule({
     imports: [LayersPanelComponent],
     providers: [
@@ -33,6 +56,7 @@ function configure(scene: Scene) {
         },
         selectors: [{ selector: selectScene, value: scene }],
       }),
+      { provide: STORAGE_SERVICE, useValue: storage },
     ],
   });
   const store = TestBed.inject(MockStore);
@@ -42,6 +66,7 @@ function configure(scene: Scene) {
   return {
     fixture,
     store,
+    storage,
     dispatched: () => dispatchSpy.mock.calls.map((c) => c[0]),
   };
 }
@@ -270,5 +295,52 @@ describe('LayersPanelComponent — actions', () => {
     const { fixture, dispatched } = configure(scene);
     fixture.componentInstance.onRename(scene.layers[0]!, new Event('change'));
     expect(dispatched()).toEqual([]);
+  });
+});
+
+describe('LayersPanelComponent — collapsible header', () => {
+  it('renders the header as a button with aria-expanded=true by default', () => {
+    const { fixture } = configure(sceneWithLayers([makeLayer('a', 'L1')]));
+    const toggle = fixture.nativeElement.querySelector('.panel-header__toggle') as HTMLButtonElement;
+    expect(toggle.tagName).toBe('BUTTON');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.getAttribute('aria-controls')).toBe('layers-panel-body');
+  });
+
+  it('shows the layer count in the header badge', () => {
+    const { fixture } = configure(sceneWithLayers([makeLayer('a', 'A'), makeLayer('b', 'B')]));
+    const count = fixture.nativeElement.querySelector('.panel-header__count');
+    expect(count).not.toBeNull();
+    expect(count!.textContent?.trim()).toBe('2');
+  });
+
+  it('clicking the header toggles the collapsed signal and hides the body', () => {
+    const { fixture } = configure(sceneWithLayers([makeLayer('a', 'L1')]));
+    const toggle = fixture.nativeElement.querySelector('.panel-header__toggle') as HTMLButtonElement;
+    const body = fixture.nativeElement.querySelector('#layers-panel-body') as HTMLElement;
+    expect(fixture.componentInstance.collapsed()).toBe(false);
+    expect(body.hidden).toBe(false);
+    toggle.click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.collapsed()).toBe(true);
+    expect(body.hidden).toBe(true);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('persists collapsed state to StorageService on toggle', async () => {
+    const { fixture, storage } = configure(sceneWithLayers([makeLayer('a', 'L1')]));
+    fixture.componentInstance.toggleCollapsed();
+    fixture.detectChanges();
+    await flushPromises();
+    expect(storage.data.get(LAYERS_PANEL_COLLAPSED_KEY)).toBe(true);
+  });
+
+  it('hydrates the collapsed signal from StorageService on init', async () => {
+    const storage = new FakeStorageService();
+    await storage.set(LAYERS_PANEL_COLLAPSED_KEY, true);
+    const { fixture } = configure(sceneWithLayers([makeLayer('a', 'L1')]), { storage });
+    await flushPromises();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.collapsed()).toBe(true);
   });
 });

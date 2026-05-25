@@ -1,3 +1,5 @@
+/* Tank-setup styles. Two-step Brand → Size picker; custom W×H×D form
+   uses an input-wrap so the unit suffix lives inside the input. */
 :host {
   display: block;
   font: 14px system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -9,9 +11,49 @@
   gap: 1rem;
   padding: 1rem;
 }
-.tank-setup h2 {
+.tank-setup__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+/* Specificity bump so [hidden] beats author display:flex. */
+.tank-setup__body[hidden] {
+  display: none;
+}
+.panel-header__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.25rem 0.4rem;
+  background: transparent;
+  color: inherit;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.panel-header__toggle:hover,
+.panel-header__toggle:focus-visible {
+  background: var(--surface-hover, #f0f0f0);
+  outline: none;
+  border-color: var(--border, #e0e0e0);
+}
+.panel-header__chevron {
+  display: inline-block;
+  font-size: 1rem;
+  line-height: 1;
+  width: 0.75rem;
+  transition: transform 0.15s ease;
+}
+.panel-header__chevron--open {
+  transform: rotate(90deg);
+}
+.panel-header__title {
   margin: 0;
   font-size: 1.1rem;
+  flex: 1;
 }
 .unit-toggle {
   display: flex;
@@ -38,65 +80,166 @@
   border-color: var(--accent-hover, #1565c0);
 }
 .unit-toggle button:focus-visible,
-.presets__list button:focus-visible,
-.custom__field input:focus-visible,
+.brand-card:focus-visible,
+.size-card:focus-visible,
+.size-picker__back:focus-visible,
+.custom__input-wrap input:focus-visible,
 .custom button[type='submit']:focus-visible {
   outline: 2px solid var(--accent-hover, #1565c0);
   outline-offset: 1px;
 }
-.presets {
-  border: 1px solid var(--border, #ddd);
-  border-radius: 6px;
-  padding: 0.75rem;
+.brand-picker,
+.size-picker,
+.custom-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.brand-picker__heading {
   margin: 0;
-}
-.presets legend {
-  padding: 0 0.25rem;
-  font-weight: 600;
-}
-.presets__group + .presets__group {
-  margin-top: 0.75rem;
-}
-.presets__group-heading {
   font-size: 0.85rem;
   text-transform: uppercase;
   color: var(--text-muted, #555);
-  margin: 0 0 0.25rem;
+  letter-spacing: 0.02em;
 }
-.presets__list {
+.brand-picker__grid,
+.size-picker__grid {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.presets__list button {
-  width: 100%;
-  text-align: left;
-  border: 1px solid var(--border-strong, #d0d0d0);
-  background: var(--surface-2, #fff);
-  color: inherit;
-  padding: 0.4rem 0.6rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font: inherit;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
   gap: 0.5rem;
 }
-.presets__list button:hover,
-.presets__list button:focus-visible {
-  background: var(--surface-hover, #f0f0f0);
+/* 2-col at 220 px sidebar (~188 px usable); 3-col when each col fits 85 px. */
+.brand-picker__grid {
+  grid-template-columns: repeat(auto-fit, minmax(85px, 1fr));
 }
-.presets__list button[aria-checked='true'] {
+/* 1-col at 220 px sidebar; 2-col once each card has 180 px. */
+.size-picker__grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.brand-card,
+.size-card {
+  width: 100%;
+  background: var(--surface-2, #fff);
+  color: inherit;
+  border: 1px solid var(--border-strong, #d0d0d0);
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  transition:
+    border-color 0.12s ease,
+    background-color 0.12s ease;
+}
+.brand-card:hover,
+.size-card:hover {
+  background: var(--surface-hover, #f0f0f0);
+  border-color: var(--accent, #1e88e5);
+}
+.brand-card.is-active,
+.size-card.is-active {
   background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
   border-color: var(--accent, #1e88e5);
 }
-.presets__dims {
+.brand-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 4.5rem;
+  padding: 0.6rem 0.5rem;
+  text-align: center;
+}
+.brand-card__name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.brand-card__count {
   color: var(--text-muted, #555);
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
+.size-picker__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.size-picker__back {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--accent-hover, #1565c0);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+}
+.size-picker__back:hover {
+  background: var(--surface-hover, #f0f0f0);
+}
+.size-picker__heading {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.size-card {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+}
+.size-card__silhouette {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  color: var(--text-muted, #555);
+}
+.size-card__silhouette svg {
+  display: block;
+}
+.size-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.size-card__name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.size-card__check {
+  color: var(--accent-hover, #1565c0);
+  font-weight: 700;
+}
+.size-card__dims {
+  color: var(--text-muted, #555);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.size-card__chip {
+  align-self: flex-start;
+  margin-top: 0.15rem;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.7rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface, #fff));
+  color: var(--accent-hover, #1565c0);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+}
+/* Custom dimensions form (Task B). The .custom__input-wrap positions the
+   unit suffix absolutely INSIDE the input so a narrow sidebar can't push
+   it onto the input border. */
 .custom {
   display: flex;
   flex-direction: column;
@@ -104,13 +247,17 @@
 }
 .custom__field {
   display: grid;
-  grid-template-columns: 5rem 1fr 2rem;
+  grid-template-columns: 5rem 1fr;
   gap: 0.4rem;
   align-items: center;
 }
-.custom__field input {
+.custom__input-wrap {
+  position: relative;
+}
+.custom__input-wrap input {
   width: 100%;
-  padding: 0.25rem 0.4rem;
+  box-sizing: border-box;
+  padding: 0.25rem 2.5rem 0.25rem 0.4rem;
   background: var(--surface-2, #fff);
   color: inherit;
   border: 1px solid var(--border-strong, #c0c0c0);
@@ -118,11 +265,17 @@
   font: inherit;
   font-variant-numeric: tabular-nums;
 }
-.custom__field input[aria-invalid='true'] {
+.custom__input-wrap input[aria-invalid='true'] {
   border-color: var(--danger, #c62828);
 }
 .custom__unit {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
   color: var(--text-muted, #555);
+  font-size: 0.85rem;
 }
 .custom__error {
   grid-column: 1 / -1;

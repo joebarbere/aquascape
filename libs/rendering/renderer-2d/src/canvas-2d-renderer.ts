@@ -223,14 +223,13 @@ export class Canvas2DRenderer implements SceneRenderer {
     const backingW = s.canvas.width;
     const backingH = s.canvas.height;
 
-    // 1) Clear the full backing store under the identity transform.
+    // 1) Clear the full backing store under the identity transform. The
+    //    area outside the tank rect stays transparent so the page (host
+    //    element) background — which follows the theme — shows through.
+    //    The tank's `style.background` is painted INSIDE the tank under
+    //    the world transform a few lines below.
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, backingW, backingH);
-
-    // 1a) Background — F1.2 Phase C. Painted under the identity transform
-    //     so endpoints are canvas pixels, not world mm. The background
-    //     covers the entire renderer-visible area, not just the tank.
-    this.drawBackground(ctx, backingW, backingH, scene.tank.style);
 
     // 2) Build the world-to-pixel transform.
     //
@@ -268,6 +267,11 @@ export class Canvas2DRenderer implements SceneRenderer {
       z: 0,
     });
 
+    // Tank-style background: painted INSIDE the tank rect (clipped to the
+    // tank outline) so the tank reads as a centered card on the host page
+    // background, rather than the background absorbing the whole canvas.
+    // Runs before the grid so grid lines paint on top.
+    this.drawBackground(ctx, tankCorner0, tankCornerW, scene.tank.style);
     this.drawGrid(ctx, tankCorner0, tankCornerW, oneCssPxInMm);
     this.drawTank(ctx, tankCorner0, tankCornerW, oneCssPxInMm);
     // F2.3 — substrate sits between the tank outline and the water tint so
@@ -292,61 +296,64 @@ export class Canvas2DRenderer implements SceneRenderer {
   // ─── F1.2 Phase C — tank-styling helpers ──────────────────────────────
 
   /**
-   * Paint the background fill across the entire canvas. Runs under the
-   * identity transform set just before this call.
+   * Paint the tank's `style.background` INSIDE the tank rect. Runs under
+   * the world transform (world-mm coords).
    *
    * Background variants:
-   *   - `'none'`     — flat `DEFAULT_BACKGROUND_FILL` over the whole canvas.
-   *   - `'color'`    — flat `background.color` over the whole canvas.
-   *   - `'gradient'` — linear gradient spanning the canvas at `angle` radians.
-   *     The angle is interpreted in WORLD space (+y up); we convert to canvas
-   *     space by negating the y component when computing endpoints.
-   *   - `'image'`    — TODO(F6.3): treated as `'none'` for now. Stage 0's
-   *     `render` is synchronous; image loading needs an async cache rearch
-   *     that F6.3 will deliver.
+   *   - `'none'`     — flat `DEFAULT_BACKGROUND_FILL` inside the tank.
+   *   - `'color'`    — flat `background.color` inside the tank.
+   *   - `'gradient'` — linear gradient spanning the TANK rect at `angle`
+   *     radians. The angle is interpreted in WORLD space (+y up). World
+   *     space is already +y up under the current ctx transform (the world
+   *     transform has a negative y-scale), so we use +cos / +sin without
+   *     the canvas-frame y-flip the previous canvas-wide variant needed.
+   *   - `'image'`    — TODO(F6.3): treated as `'none'` for now. The async
+   *     image-cache rearch that F6.3 will deliver lives here.
+   *
+   * The area OUTSIDE the tank rect stays transparent so the host's page
+   * background (theme-driven) shows through — the tank reads as a centered
+   * "card" rather than absorbing the whole canvas.
    */
-  private drawBackground(
-    ctx: CanvasRenderingContext2D,
-    w: number,
-    h: number,
-    style: TankStyle,
-  ): void {
+  private drawBackground(ctx: CanvasRenderingContext2D, a: Vec2, b: Vec2, style: TankStyle): void {
+    const x0 = Math.min(a.x, b.x);
+    const y0 = Math.min(a.y, b.y);
+    const x1 = Math.max(a.x, b.x);
+    const y1 = Math.max(a.y, b.y);
+    const w = x1 - x0;
+    const h = y1 - y0;
     const bg = style.background;
     if (bg.kind === 'none' || bg.kind === 'image') {
       // TODO(F6.3): for `'image'`, load and draw asset via async image cache.
       ctx.fillStyle = DEFAULT_BACKGROUND_FILL;
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(x0, y0, w, h);
       return;
     }
     if (bg.kind === 'color') {
       ctx.fillStyle = bg.color;
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(x0, y0, w, h);
       return;
     }
-    // Gradient. Endpoints span the canvas along the angle direction. We
-    // pick the canvas center and project the canvas half-diagonal onto the
-    // unit vector `(cos a, -sin a)` — the `-sin` converts WORLD +y-up into
-    // CANVAS +y-down so `angle = π/2` paints bottom→top on screen.
+    // Gradient. Endpoints span the TANK along the angle direction. Pick
+    // the tank centre and project the tank's half-diagonal onto the unit
+    // vector `(cos a, sin a)` (world +y up). Half-extent = sum of the
+    // axis half-extents projected onto the angle, so the endpoints sit on
+    // (or just past) the tank rectangle and stops at 0 / 1 reach the
+    // glass edges.
     const ux = Math.cos(bg.angle);
-    const uy = -Math.sin(bg.angle);
-    const cx = w / 2;
-    const cy = h / 2;
-    // Half-extent along the gradient direction. Projecting the canvas's
-    // half-width and half-height onto the absolute components of `u`
-    // gives the distance from center to the bounding box along `u`. This
-    // ensures the gradient endpoints sit on (or just past) the canvas
-    // rectangle, so stops at 0 and 1 reach the edges.
+    const uy = Math.sin(bg.angle);
+    const cx = (x0 + x1) / 2;
+    const cy = (y0 + y1) / 2;
     const half = (w * Math.abs(ux) + h * Math.abs(uy)) / 2;
-    const x0 = cx - ux * half;
-    const y0 = cy - uy * half;
-    const x1 = cx + ux * half;
-    const y1 = cy + uy * half;
-    const grad = ctx.createLinearGradient(x0, y0, x1, y1);
+    const gx0 = cx - ux * half;
+    const gy0 = cy - uy * half;
+    const gx1 = cx + ux * half;
+    const gy1 = cy + uy * half;
+    const grad = ctx.createLinearGradient(gx0, gy0, gx1, gy1);
     for (const stop of bg.stops) {
       grad.addColorStop(stop.at, stop.color);
     }
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(x0, y0, w, h);
   }
 
   /**

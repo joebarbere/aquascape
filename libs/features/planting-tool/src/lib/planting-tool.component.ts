@@ -14,6 +14,14 @@
 // The user can later edit the patch outline through the inspector (future
 // work). A freehand brush polygon UI is deferred to a follow-up; this
 // implicit behaviour ships scatter rendering end-to-end with no extra UI.
+//
+// Collapsible header (Task A): the panel gains a self-collapsing header
+// bar with title + count badge + chevron, persisted per-panel via
+// StorageService. Independent of every other panel.
+//
+// Paging (Task B): tile grid is paginated 8-per-page; the pager hides
+// when the visible list fits on a single page. Filter changes reset to
+// page 1.
 
 import { CommonModule } from '@angular/common';
 import {
@@ -22,16 +30,25 @@ import {
   DestroyRef,
   HostListener,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
 
 import { coreCatalog } from '@aquascape/domain/catalog';
 import type { PlantEntry } from '@aquascape/domain/catalog';
+import { STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
+import type { StorageService } from '@aquascape/platform/platform-api';
 
 import { PlantDragService } from './plant-drag.service';
 
 type ZoneFilter = 'all' | 'foreground' | 'midground' | 'background';
+
+/** Default page size for the tile grid. 2 cols × 4 rows reads well in a sidebar. */
+export const PLANTING_TOOL_PAGE_SIZE = 8;
+
+/** StorageService key for the collapsed-state flag. */
+export const PLANTING_TOOL_COLLAPSED_KEY = 'aquascape.ui.collapsed.planting-tool';
 
 @Component({
   selector: 'aquascape-planting-tool',
@@ -40,59 +57,104 @@ type ZoneFilter = 'all' | 'foreground' | 'midground' | 'background';
   imports: [CommonModule],
   template: `
     <section class="planting-tool" aria-labelledby="planting-tool-heading">
-      <header class="planting-tool__header">
-        <h2 id="planting-tool-heading">Plants</h2>
+      <header class="panel-header">
+        <button
+          type="button"
+          class="panel-header__toggle"
+          [attr.aria-expanded]="!collapsed()"
+          aria-controls="planting-tool-body"
+          (click)="toggleCollapsed()"
+        >
+          <span
+            class="panel-header__chevron"
+            [class.panel-header__chevron--open]="!collapsed()"
+            aria-hidden="true"
+            >›</span
+          >
+          <h2 id="planting-tool-heading" class="panel-header__title">Plants</h2>
+          <span class="panel-header__count" aria-label="entries">{{ totalCount() }}</span>
+        </button>
       </header>
 
-      <div class="planting-tool__filters" role="radiogroup" aria-label="Zone filter">
-        @for (z of zones; track z.value) {
-          <button
-            type="button"
-            class="filter"
-            role="radio"
-            [class.active]="filter() === z.value"
-            [attr.aria-checked]="filter() === z.value"
-            (click)="filter.set(z.value)"
-          >
-            {{ z.label }}
-          </button>
-        }
-      </div>
-
-      <div class="planting-tool__grid">
-        @for (entry of visibleEntries(); track entry.id) {
-          <button
-            type="button"
-            class="tile"
-            [class.carpet]="isCarpet(entry)"
-            [attr.aria-label]="ariaLabel(entry)"
-            [title]="tooltipFor(entry)"
-            (pointerdown)="onPointerDown($event, entry)"
-          >
-            <svg
-              class="tile__silhouette"
-              viewBox="-1.1 -1.1 2.2 2.2"
-              preserveAspectRatio="xMidYMid meet"
-              aria-hidden="true"
+      <div id="planting-tool-body" class="planting-tool__body" [hidden]="collapsed()">
+        <div class="planting-tool__filters" role="radiogroup" aria-label="Zone filter">
+          @for (z of zones; track z.value) {
+            <button
+              type="button"
+              class="filter"
+              role="radio"
+              [class.active]="filter() === z.value"
+              [attr.aria-checked]="filter() === z.value"
+              (click)="onFilterChange(z.value)"
             >
-              <polygon
-                [attr.points]="svgPoints(entry)"
-                [attr.fill]="entry.color"
-                stroke="#222"
-                stroke-width="0.04"
-              />
-            </svg>
-            <span class="tile__name">{{ entry.name }}</span>
-            @if (isCarpet(entry)) {
-              <span class="tile__badge" aria-hidden="true">carpet</span>
-            }
-          </button>
+              {{ z.label }}
+            </button>
+          }
+        </div>
+
+        <div class="planting-tool__grid">
+          @for (entry of pageEntries(); track entry.id) {
+            <button
+              type="button"
+              class="tile"
+              [class.carpet]="isCarpet(entry)"
+              [attr.aria-label]="ariaLabel(entry)"
+              [title]="tooltipFor(entry)"
+              (pointerdown)="onPointerDown($event, entry)"
+            >
+              <svg
+                class="tile__silhouette"
+                viewBox="-1.1 -1.1 2.2 2.2"
+                preserveAspectRatio="xMidYMid meet"
+                aria-hidden="true"
+              >
+                <polygon
+                  [attr.points]="svgPoints(entry)"
+                  [attr.fill]="entry.color"
+                  stroke="#222"
+                  stroke-width="0.04"
+                />
+              </svg>
+              <span class="tile__name">{{ entry.name }}</span>
+              @if (isCarpet(entry)) {
+                <span class="tile__badge" aria-hidden="true">carpet</span>
+              }
+            </button>
+          }
+        </div>
+
+        @if (visibleEntries().length === 0) {
+          <p class="planting-tool__empty">No plants match the filter.</p>
+        }
+
+        @if (totalPages() > 1) {
+          <nav class="pager" aria-label="Plant pages">
+            <button
+              type="button"
+              class="pager__btn"
+              data-testid="planting-pager-prev"
+              [disabled]="page() <= 1"
+              (click)="prevPage()"
+              aria-label="Previous page"
+            >
+              « Prev
+            </button>
+            <span class="pager__indicator" aria-live="polite">
+              Page {{ page() }} of {{ totalPages() }}
+            </span>
+            <button
+              type="button"
+              class="pager__btn"
+              data-testid="planting-pager-next"
+              [disabled]="page() >= totalPages()"
+              (click)="nextPage()"
+              aria-label="Next page"
+            >
+              Next »
+            </button>
+          </nav>
         }
       </div>
-
-      @if (visibleEntries().length === 0) {
-        <p class="planting-tool__empty">No plants match the filter.</p>
-      }
     </section>
   `,
   styles: [
@@ -103,10 +165,58 @@ type ZoneFilter = 'all' | 'foreground' | 'midground' | 'background';
         font-family: system-ui, sans-serif;
         font-size: 13px;
       }
-      .planting-tool__header h2 {
+      .panel-header {
         margin: 0 0 8px;
+      }
+      .panel-header__toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        padding: 4px 6px;
+        background: transparent;
+        color: inherit;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        cursor: pointer;
+        font: inherit;
+        text-align: left;
+      }
+      .panel-header__toggle:hover,
+      .panel-header__toggle:focus-visible {
+        background: var(--surface-hover, #f0f0f0);
+        outline: none;
+        border-color: var(--border, #e0e0e0);
+      }
+      .panel-header__chevron {
+        display: inline-block;
+        font-size: 16px;
+        line-height: 1;
+        width: 12px;
+        transition: transform 0.15s ease;
+        transform: rotate(0deg);
+      }
+      .panel-header__chevron--open {
+        transform: rotate(90deg);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .panel-header__chevron {
+          transition: none;
+        }
+      }
+      .panel-header__title {
+        margin: 0;
         font-size: 14px;
         font-weight: 600;
+        flex: 1;
+      }
+      .panel-header__count {
+        color: var(--text-muted, #777);
+        font-variant-numeric: tabular-nums;
+        font-size: 11px;
+        padding: 1px 6px;
+        border-radius: 8px;
+        background: var(--surface, #f1f1f3);
       }
       .planting-tool__filters {
         display: flex;
@@ -185,12 +295,43 @@ type ZoneFilter = 'all' | 'foreground' | 'midground' | 'background';
         color: var(--text-muted, #777);
         font-style: italic;
       }
+      .pager {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .pager__btn {
+        background: transparent;
+        color: inherit;
+        border: 1px solid var(--border-strong, #ccc);
+        border-radius: 4px;
+        padding: 3px 8px;
+        cursor: pointer;
+        font: inherit;
+      }
+      .pager__btn:hover:not(:disabled),
+      .pager__btn:focus-visible:not(:disabled) {
+        background: var(--surface-hover, #f0f0f0);
+        outline: none;
+      }
+      .pager__btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .pager__indicator {
+        font-size: 11px;
+        color: var(--text-muted, #555);
+        font-variant-numeric: tabular-nums;
+      }
     `,
   ],
 })
 export class PlantingToolComponent {
   private readonly dragService = inject(PlantDragService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly storage = inject<StorageService>(STORAGE_SERVICE);
 
   readonly zones: ReadonlyArray<{ value: ZoneFilter; label: string }> = [
     { value: 'all', label: 'All' },
@@ -201,13 +342,77 @@ export class PlantingToolComponent {
 
   readonly filter = signal<ZoneFilter>('all');
 
+  /** Collapsed-panel state. Hydrated from StorageService on construct. */
+  readonly collapsed = signal<boolean>(false);
+
+  /** 1-indexed current page. Resets to 1 on filter change. */
+  readonly page = signal<number>(1);
+
+  /**
+   * Page size as a writable signal so tests can shrink it without standing
+   * up a massive synthetic catalog. Initialised to the public constant.
+   */
+  readonly pageSize = signal<number>(PLANTING_TOOL_PAGE_SIZE);
+
   private readonly allEntries: ReadonlyArray<PlantEntry> = coreCatalog.byKind('plant');
+
+  readonly totalCount = computed<number>(() => this.allEntries.length);
 
   readonly visibleEntries = computed<ReadonlyArray<PlantEntry>>(() => {
     const f = this.filter();
     if (f === 'all') return this.allEntries;
     return this.allEntries.filter((e) => e.zone === f);
   });
+
+  readonly totalPages = computed<number>(() => {
+    const n = this.visibleEntries().length;
+    if (n === 0) return 1;
+    return Math.ceil(n / this.pageSize());
+  });
+
+  /** Slice of `visibleEntries` for the current page. */
+  readonly pageEntries = computed<ReadonlyArray<PlantEntry>>(() => {
+    const visible = this.visibleEntries();
+    const start = (this.page() - 1) * this.pageSize();
+    return visible.slice(start, start + this.pageSize());
+  });
+
+  constructor() {
+    // Hydrate collapsed state. Failures non-fatal.
+    this.storage
+      .get<boolean>(PLANTING_TOOL_COLLAPSED_KEY)
+      .then((stored) => {
+        if (typeof stored === 'boolean') {
+          this.collapsed.set(stored);
+        }
+      })
+      .catch(() => {
+        // Best-effort.
+      });
+
+    // Persist collapsed state on every change. Skip the effect's initial
+    // synchronous pass so we don't immediately overwrite the hydrate.
+    let firstRun = true;
+    effect(() => {
+      const value = this.collapsed();
+      if (firstRun) {
+        firstRun = false;
+        return;
+      }
+      this.storage.set(PLANTING_TOOL_COLLAPSED_KEY, value).catch(() => {
+        // Best-effort.
+      });
+    });
+
+    // Clamp page when the visible list shrinks (e.g. filter change that
+    // didn't go through onFilterChange).
+    effect(() => {
+      const max = this.totalPages();
+      if (this.page() > max) {
+        this.page.set(max);
+      }
+    });
+  }
 
   /** SVG `points=` attribute for a plant silhouette in normalized space. */
   svgPoints(entry: PlantEntry): string {
@@ -230,6 +435,29 @@ export class PlantingToolComponent {
     const co2 = `${entry.co2} CO₂`;
     const diff = entry.difficulty;
     return `${entry.name} — ${light}, ${co2}, ${diff}`;
+  }
+
+  // ── Header ────────────────────────────────────────────────────────────
+
+  toggleCollapsed(): void {
+    this.collapsed.update((v) => !v);
+  }
+
+  // ── Filter + pager ────────────────────────────────────────────────────
+
+  onFilterChange(next: ZoneFilter): void {
+    this.filter.set(next);
+    // Reset paging on filter change so the user lands on page 1 of the new
+    // (possibly much smaller) filtered list.
+    this.page.set(1);
+  }
+
+  prevPage(): void {
+    this.page.update((p) => Math.max(1, p - 1));
+  }
+
+  nextPage(): void {
+    this.page.update((p) => Math.min(this.totalPages(), p + 1));
   }
 
   // ── Drag handlers ──────────────────────────────────────────────────────

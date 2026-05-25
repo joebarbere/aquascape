@@ -21,7 +21,15 @@
 // could batch into one entry per gesture if it proves noisy).
 
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 
 import {
@@ -38,8 +46,13 @@ import {
   type LayerId,
   type Scene,
 } from '@aquascape/domain/scene-model';
+import { STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
+import type { StorageService } from '@aquascape/platform/platform-api';
 import { SceneActions, selectScene } from '@aquascape/state';
 import { Store } from '@ngrx/store';
+
+/** StorageService key for the collapsed-state flag. */
+export const LAYERS_PANEL_COLLAPSED_KEY = 'aquascape.ui.collapsed.layers-panel';
 
 /**
  * Layer factory for the "+" button. Empty `objects` array; default opacity
@@ -60,8 +73,27 @@ function nextLayerName(existing: ReadonlyArray<Layer>): string {
   imports: [CommonModule],
   template: `
     <section class="layers-panel" aria-label="Layers">
-      <header>
-        <h3>Layers</h3>
+      <header class="panel-header">
+        <button
+          type="button"
+          class="panel-header__toggle"
+          [attr.aria-expanded]="!collapsed()"
+          aria-controls="layers-panel-body"
+          (click)="toggleCollapsed()"
+        >
+          <span
+            class="panel-header__chevron"
+            [class.panel-header__chevron--open]="!collapsed()"
+            aria-hidden="true"
+            >›</span
+          >
+          <h3 class="panel-header__title">Layers</h3>
+          <span class="panel-header__count" aria-label="layers">{{ layerCount() }}</span>
+        </button>
+      </header>
+
+      <div id="layers-panel-body" class="layers-panel__body" [hidden]="collapsed()">
+      <div class="layers-panel__actions">
         <button
           type="button"
           class="add"
@@ -71,7 +103,7 @@ function nextLayerName(existing: ReadonlyArray<Layer>): string {
         >
           + New layer
         </button>
-      </header>
+      </div>
 
       @if (layers().length === 0) {
         <p class="empty">No layers — add one to start placing objects.</p>
@@ -154,6 +186,7 @@ function nextLayerName(existing: ReadonlyArray<Layer>): string {
           }
         </ul>
       }
+      </div>
     </section>
   `,
   styles: [
@@ -162,26 +195,75 @@ function nextLayerName(existing: ReadonlyArray<Layer>): string {
         display: block;
       }
       .layers-panel {
-        background: #1e2228;
-        color: #ddd;
+        background: var(--surface);
+        color: var(--text);
         padding: 8px;
         border-radius: 6px;
         font-size: 13px;
       }
-      header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 6px;
+      .panel-header {
+        margin: 0 0 6px;
       }
-      h3 {
+      .panel-header__toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        padding: 4px 6px;
+        background: transparent;
+        color: inherit;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        cursor: pointer;
+        font: inherit;
+        text-align: left;
+      }
+      .panel-header__toggle:hover,
+      .panel-header__toggle:focus-visible {
+        background: var(--surface-hover);
+        outline: none;
+        border-color: var(--border);
+      }
+      .panel-header__chevron {
+        display: inline-block;
+        font-size: 16px;
+        line-height: 1;
+        width: 12px;
+        transition: transform 0.15s ease;
+        transform: rotate(0deg);
+        color: var(--text-muted);
+      }
+      .panel-header__chevron--open {
+        transform: rotate(90deg);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .panel-header__chevron {
+          transition: none;
+        }
+      }
+      .panel-header__title {
         margin: 0;
         font-size: 14px;
+        flex: 1;
+      }
+      .panel-header__count {
+        color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
+        font-size: 11px;
+        padding: 1px 6px;
+        border-radius: 8px;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+      }
+      .layers-panel__actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 6px;
       }
       .add {
-        background: #2c3038;
-        color: #fff;
-        border: 1px solid #3a3f48;
+        background: var(--surface-2);
+        color: var(--text);
+        border: 1px solid var(--border-strong);
         border-radius: 4px;
         padding: 3px 8px;
         cursor: pointer;
@@ -189,12 +271,12 @@ function nextLayerName(existing: ReadonlyArray<Layer>): string {
       }
       .add:hover,
       .add:focus-visible {
-        background: #3a3f48;
+        background: var(--surface-hover);
         outline: none;
       }
       .empty {
         font-style: italic;
-        color: #888;
+        color: var(--text-muted);
         margin: 4px 0;
       }
       ul {
@@ -212,13 +294,14 @@ function nextLayerName(existing: ReadonlyArray<Layer>): string {
         align-items: center;
         padding: 3px 4px;
         border-radius: 3px;
-        background: #262a31;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
       }
       .layer-row.hidden {
         opacity: 0.5;
       }
       .layer-row.locked .name {
-        color: #aaa;
+        color: var(--text-muted);
       }
       input.name {
         background: transparent;
@@ -231,12 +314,13 @@ function nextLayerName(existing: ReadonlyArray<Layer>): string {
       }
       input.name:hover,
       input.name:focus-visible {
-        border-color: #3a3f48;
-        background: #1e2228;
+        border-color: var(--border-strong);
+        background: var(--surface);
         outline: none;
       }
       input.opacity {
         width: 100%;
+        accent-color: var(--accent);
       }
       .icon {
         background: transparent;
@@ -249,8 +333,8 @@ function nextLayerName(existing: ReadonlyArray<Layer>): string {
       }
       .icon:hover,
       .icon:focus-visible {
-        border-color: #3a3f48;
-        background: #2c3038;
+        border-color: var(--border-strong);
+        background: var(--surface-hover);
         outline: none;
       }
       .icon:disabled {
@@ -258,8 +342,9 @@ function nextLayerName(existing: ReadonlyArray<Layer>): string {
         cursor: not-allowed;
       }
       .icon.danger:hover {
-        background: #7a1f1a;
-        border-color: #a32d26;
+        background: var(--danger);
+        color: var(--danger-text);
+        border-color: var(--danger-hover);
       }
     `,
   ],
@@ -267,10 +352,17 @@ function nextLayerName(existing: ReadonlyArray<Layer>): string {
 export class LayersPanelComponent {
   private readonly store = inject(Store);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly storage = inject<StorageService>(STORAGE_SERVICE);
 
   private readonly scene$ = this.store.select(selectScene);
   readonly scene = toSignal<Scene | null>(this.scene$, { initialValue: null });
   readonly layers = (): ReadonlyArray<Layer> => this.scene()?.layers ?? [];
+
+  /** Layer count for the header badge. */
+  readonly layerCount = computed<number>(() => this.scene()?.layers.length ?? 0);
+
+  /** Collapsed-panel state. Hydrated from StorageService on construct. */
+  readonly collapsed = signal<boolean>(false);
 
   /**
    * Layers in display order — front (top of stack) first. Carries the
@@ -294,6 +386,36 @@ export class LayersPanelComponent {
     this.scene$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((s) => {
       this.currentScene = s;
     });
+
+    // Hydrate collapsed state. Failures non-fatal.
+    this.storage
+      .get<boolean>(LAYERS_PANEL_COLLAPSED_KEY)
+      .then((stored) => {
+        if (typeof stored === 'boolean') {
+          this.collapsed.set(stored);
+        }
+      })
+      .catch(() => {
+        // Best-effort.
+      });
+
+    // Persist collapsed state on every change. Skip the effect's initial
+    // pass so we don't immediately overwrite the hydrate.
+    let firstRun = true;
+    effect(() => {
+      const value = this.collapsed();
+      if (firstRun) {
+        firstRun = false;
+        return;
+      }
+      this.storage.set(LAYERS_PANEL_COLLAPSED_KEY, value).catch(() => {
+        // Best-effort.
+      });
+    });
+  }
+
+  toggleCollapsed(): void {
+    this.collapsed.update((v) => !v);
   }
 
   // ── Action handlers ────────────────────────────────────────────────────

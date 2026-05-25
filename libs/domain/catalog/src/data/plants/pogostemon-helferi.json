@@ -1,0 +1,33 @@
+{
+  "catalog": "core",
+  "id": "plant.pogostemon.helferi",
+  "version": 1,
+  "name": "Downoi (Pogostemon helferi)",
+  "kind": "plant",
+  "zone": "midground",
+  "lighting": "high",
+  "co2": "high",
+  "difficulty": "moderate",
+  "color": "#5a9d3d",
+  "naturalSize": { "width": 80, "height": 90, "depth": 80 },
+  "description": "Distinctive star-shaped rosette of crinkled, curly leaves. Spreads via side shoots into clumps. Needs strong light, CO2, and rich substrate to stay compact and vibrant.",
+  "tags": ["rosette", "midground", "star", "high-tech", "crinkled"],
+  "silhouette": [
+    { "x": 0, "y": -1 },
+    { "x": 0.35, "y": -0.55 },
+    { "x": 0.95, "y": -0.3 },
+    { "x": 0.55, "y": -0.05 },
+    { "x": 0.95, "y": 0.35 },
+    { "x": 0.4, "y": 0.55 },
+    { "x": 0.55, "y": 0.95 },
+    { "x": 0.05, "y": 0.65 },
+    { "x": -0.05, "y": 0.65 },
+    { "x": -0.55, "y": 0.95 },
+    { "x": -0.4, "y": 0.55 },
+    { "x": -0.95, "y": 0.35 },
+    { "x": -0.55, "y": -0.05 },
+    { "x": -0.95, "y": -0.3 },
+    { "x": -0.35, "y": -0.55 }
+  ],
+  "growth": { "weeksToMature": 9, "sizeAtZero": 0.4 }
+}

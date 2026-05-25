@@ -20,18 +20,59 @@
  * with `catalog: 'community:<slug>'` namespacing.
  */
 
+// Hardscape — rocks
+import rockBlackLava from './data/hardscape/rock-black-lava.json';
+import rockElephantSkin from './data/hardscape/rock-elephant-skin.json';
+import rockFrodo from './data/hardscape/rock-frodo.json';
+import rockIota from './data/hardscape/rock-iota.json';
 import rockOhko from './data/hardscape/rock-ohko.json';
+import rockPagoda from './data/hardscape/rock-pagoda.json';
+import rockPetrifiedWood from './data/hardscape/rock-petrified-wood.json';
+import rockPolarIce from './data/hardscape/rock-polar-ice.json';
 import rockSeiryuLarge from './data/hardscape/rock-seiryu-large.json';
 import rockSeiryuMedium from './data/hardscape/rock-seiryu-medium.json';
+import rockSnowMountain from './data/hardscape/rock-snow-mountain.json';
+import rockTexasHoley from './data/hardscape/rock-texas-holey.json';
+// Hardscape — wood
+import woodBonsai from './data/hardscape/wood-bonsai.json';
+import woodCholla from './data/hardscape/wood-cholla.json';
 import woodMalaysian from './data/hardscape/wood-malaysian.json';
 import woodManzanita from './data/hardscape/wood-manzanita.json';
+import woodMopani from './data/hardscape/wood-mopani.json';
+import woodRedmoor from './data/hardscape/wood-redmoor.json';
 import woodSpiderwood from './data/hardscape/wood-spiderwood.json';
-import plantBucephalandra from './data/plants/bucephalandra.json';
-import plantCryptocoryne from './data/plants/cryptocoryne-wendtii.json';
+// Plants — foreground (carpets)
 import plantEleocharis from './data/plants/eleocharis-acicularis.json';
+import plantGlossostigma from './data/plants/glossostigma-elatinoides.json';
+import plantHemianthus from './data/plants/hemianthus-callitrichoides.json';
+import plantMarsilea from './data/plants/marsilea-hirsuta.json';
 import plantMonteCarlo from './data/plants/monte-carlo.json';
+import plantSagittaria from './data/plants/sagittaria-subulata.json';
+import plantUtricularia from './data/plants/utricularia-graminifolia.json';
+// Plants — midground
+import plantAnubiasBarteri from './data/plants/anubias-barteri.json';
+import plantAnubiasNanaPetite from './data/plants/anubias-nana-petite.json';
+import plantBucephalandra from './data/plants/bucephalandra.json';
+import plantCryptocoryneParva from './data/plants/cryptocoryne-parva.json';
+import plantCryptocoryneWendtii from './data/plants/cryptocoryne-wendtii.json';
+import plantHydrocotyle from './data/plants/hydrocotyle-tripartita.json';
+import plantHygrophilaPinnatifida from './data/plants/hygrophila-pinnatifida.json';
+import plantJavaFern from './data/plants/microsorum-pteropus.json';
+import plantJavaFernTrident from './data/plants/microsorum-pteropus-trident.json';
+import plantPogostemonHelferi from './data/plants/pogostemon-helferi.json';
+import plantRiccia from './data/plants/riccia-fluitans.json';
+import plantStaurogyne from './data/plants/staurogyne-repens.json';
+// Plants — background
+import plantAmmannia from './data/plants/ammannia-gracilis.json';
+import plantHygrophilaPolysperma from './data/plants/hygrophila-polysperma.json';
+import plantLimnophila from './data/plants/limnophila-sessiliflora.json';
+import plantLudwigia from './data/plants/ludwigia-repens.json';
+import plantMyriophyllum from './data/plants/myriophyllum-mattogrossense.json';
+import plantPogostemonStellatus from './data/plants/pogostemon-stellatus.json';
 import plantRotala from './data/plants/rotala-rotundifolia.json';
-import plantVallisneria from './data/plants/vallisneria-nana.json';
+import plantVallisneriaNana from './data/plants/vallisneria-nana.json';
+import plantVallisneriaSpiralis from './data/plants/vallisneria-spiralis.json';
+// Substrates (Stage 2)
 import aquaSoilAmazonia from './data/substrates/aqua-soil-amazonia.json';
 import blackPeaGravel from './data/substrates/black-pea-gravel.json';
 import fluorite from './data/substrates/fluorite.json';
@@ -49,20 +90,58 @@ export const CORE_CATALOG_MANIFESTS: readonly unknown[] = [
   whiteSand,
   blackPeaGravel,
   fluorite,
-  // Hardscape (Stage 3 F3.5)
+  // Hardscape — rocks (Stage 3 F3.5 + library expansion)
   rockSeiryuLarge,
   rockSeiryuMedium,
   rockOhko,
+  rockFrodo,
+  rockPagoda,
+  rockBlackLava,
+  rockTexasHoley,
+  rockElephantSkin,
+  rockPetrifiedWood,
+  rockPolarIce,
+  rockIota,
+  rockSnowMountain,
+  // Hardscape — wood
   woodSpiderwood,
   woodManzanita,
   woodMalaysian,
-  // Plants (Stage 4 F4.1)
+  woodMopani,
+  woodCholla,
+  woodBonsai,
+  woodRedmoor,
+  // Plants — foreground / carpets (Stage 4 F4.1 + library expansion)
   plantEleocharis,
   plantMonteCarlo,
-  plantCryptocoryne,
+  plantGlossostigma,
+  plantHemianthus,
+  plantMarsilea,
+  plantSagittaria,
+  plantUtricularia,
+  // Plants — midground
+  plantCryptocoryneWendtii,
+  plantCryptocoryneParva,
   plantBucephalandra,
-  plantVallisneria,
+  plantAnubiasNanaPetite,
+  plantAnubiasBarteri,
+  plantJavaFern,
+  plantJavaFernTrident,
+  plantStaurogyne,
+  plantPogostemonHelferi,
+  plantHygrophilaPinnatifida,
+  plantHydrocotyle,
+  plantRiccia,
+  // Plants — background
+  plantVallisneriaNana,
+  plantVallisneriaSpiralis,
   plantRotala,
+  plantLimnophila,
+  plantLudwigia,
+  plantPogostemonStellatus,
+  plantHygrophilaPolysperma,
+  plantAmmannia,
+  plantMyriophyllum,
 ];
 
 /**

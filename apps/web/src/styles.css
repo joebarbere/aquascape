@@ -143,4 +143,346 @@ aquascape-root {
   display: block;
   width: 100vw;
   height: 100vh;
+
+  /* Editor shell layout variables — updated live from pointermove via direct
+     DOM writes on the `<aquascape-root>` element (no per-frame ngStyle), and
+     committed back through StorageService on pointerup. The defaults here
+     are overwritten by `AppComponent.applyHostWidths()` on hydration. */
+  --sidebar-width: 320px;
+  --rail-width: 280px;
+  /* Re-expand strip is the only affordance to re-open a collapsed pane, so
+     it needs to be a real-sized button (≥ 28 px wide hit target) rather than
+     a thin gutter. The vertical text label inside makes the function
+     unambiguous. */
+  --reexpand-width: 32px;
+  --handle-width: 6px;
+  --handle-hit: 14px;
+}
+
+/* ── Editor shell layout (Figma-style resizable + collapsible panels) ─── */
+
+.app-shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+}
+
+/* The drawer-bar is hidden in the wide/tablet layouts; CSS turns it on only
+   below 768px. Kept in the DOM at all sizes so a11y consumers find the
+   drawer-toggle buttons regardless. */
+.app-drawer-bar {
+  display: none;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.drawer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.drawer-toggle:hover {
+  background: var(--surface-hover);
+}
+
+/* WIDE LAYOUT (default). The grid lays out:
+     [reexpand?] sidebar [handle?] canvas [handle?] rail [reexpand?]
+   Columns that don't apply (e.g. handle when collapsed) are omitted from
+   the DOM via @if — the grid-template-columns lists below match each
+   collapse permutation 1:1. */
+.app-grid {
+  display: grid;
+  grid-template-columns:
+    var(--sidebar-width)
+    var(--handle-width)
+    1fr
+    var(--handle-width)
+    var(--rail-width);
+  min-height: 0;
+  position: relative;
+}
+.app-shell.sidebar-collapsed .app-grid {
+  grid-template-columns:
+    var(--reexpand-width)
+    1fr
+    var(--handle-width)
+    var(--rail-width);
+}
+.app-shell.rail-collapsed .app-grid {
+  grid-template-columns:
+    var(--sidebar-width)
+    var(--handle-width)
+    1fr
+    var(--reexpand-width);
+}
+.app-shell.sidebar-collapsed.rail-collapsed .app-grid {
+  grid-template-columns:
+    var(--reexpand-width)
+    1fr
+    var(--reexpand-width);
+}
+
+.app-sidebar,
+.app-rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+}
+.app-sidebar {
+  border-right: 1px solid var(--border);
+}
+.app-rail {
+  border-left: 1px solid var(--border);
+}
+/* When collapsed in wide/tablet mode, the grid drops the panel's column
+   but the `<aside>` is still in the DOM (so component state + scroll
+   position are preserved across expand/collapse). Without this rule the
+   panel would render at the wrong column position and grid auto-placement
+   would wrap the rail onto a new row — exactly the bug the screenshot
+   showed. Gated away from phone mode because phone panels are
+   `position: fixed` drawer overlays whose visibility is controlled by the
+   `.sidebar-open` / `.rail-open` classes, not by `.sidebar-collapsed`. */
+.app-shell:not(.is-phone).sidebar-collapsed .app-sidebar {
+  display: none;
+}
+.app-shell:not(.is-phone).rail-collapsed .app-rail {
+  display: none;
+}
+/* The pane-header anchors its controls to the OUTER edge of the pane (left
+   sidebar → left edge; right rail → right edge) so the collapse button and
+   the resulting reexpand strip end up in the same place. Otherwise the user
+   clicks "collapse" on the canvas-facing edge and the strip appears on the
+   far edge of the screen — feels broken. */
+.pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  min-height: 28px;
+}
+.app-rail .pane-header {
+  justify-content: flex-end;
+}
+.pane-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.pane-collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.pane-collapse:hover {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent-hover);
+}
+.pane-collapse:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.app-rail .pane-collapse svg {
+  transform: scaleX(-1);
+}
+.pane-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+}
+.app-rail .pane-body {
+  padding: 8px;
+}
+
+/* The resize handle is visually narrow (--handle-width) but extends to a
+   wider hit area via a transparent ::before pseudo. Touch targets stay
+   >= 14px wide. */
+.resize-handle {
+  position: relative;
+  width: var(--handle-width);
+  background: var(--border);
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 5;
+}
+.resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc((var(--handle-hit) - var(--handle-width)) / -2);
+  width: var(--handle-hit);
+}
+.resize-handle:hover,
+.resize-handle:focus-visible {
+  background: var(--accent);
+}
+.resize-handle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+body.is-dragging-handle {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+/* Re-expand strip — a narrow column that replaces a collapsed panel and
+   re-opens it on click. Carries a vertical label (rotated -90° on the left,
+   +90° on the right) so the function is unambiguous even when the user has
+   never seen the affordance before. Chevron points inward toward the canvas. */
+.reexpand-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: var(--reexpand-width);
+  height: 100%;
+  padding: 12px 0;
+  background: var(--surface);
+  color: var(--text);
+  border: none;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  font: inherit;
+}
+.reexpand-right {
+  border-right: none;
+  border-left: 1px solid var(--border);
+}
+.reexpand-strip:hover,
+.reexpand-strip:focus-visible {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--text);
+}
+.reexpand-strip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.reexpand-right svg {
+  transform: scaleX(-1);
+}
+.reexpand-strip__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  /* Vertical text — left strip reads bottom-to-top, right strip reads
+     top-to-bottom, so the chevron always sits at the canvas-facing edge. */
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+.reexpand-right .reexpand-strip__label {
+  transform: none;
+}
+.reexpand-strip:hover .reexpand-strip__label,
+.reexpand-strip:focus-visible .reexpand-strip__label {
+  color: var(--text);
+}
+
+/* Drawer scrim — covers the viewport beneath an open phone drawer.
+   pointer-events is off by default so it never blocks clicks in
+   wide/tablet mode; only the `.is-phone.*-open` state turns it on. */
+.drawer-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 900;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease-out;
+}
+.app-shell.is-phone.sidebar-open .drawer-scrim,
+.app-shell.is-phone.rail-open .drawer-scrim {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* TABLET layout (768 – 1199px): slightly tighter default widths via clamp
+   so the canvas stays useful on small laptops. The user's persisted width
+   still wins (set via the host inline style); the clamp is only the var
+   default for first-boot users at this breakpoint. */
+@media (max-width: 1199px) and (min-width: 768px) {
+  aquascape-root {
+    --sidebar-width: clamp(200px, 28vw, 320px);
+    --rail-width: clamp(180px, 22vw, 280px);
+  }
+}
+
+/* PHONE layout (< 768px): side panels become overlay drawers. The grid
+   collapses to a single column (canvas only). Drawers slide in from the
+   edges. */
+@media (max-width: 767px) {
+  .app-drawer-bar {
+    display: flex;
+  }
+  .app-grid,
+  .app-shell.sidebar-collapsed .app-grid,
+  .app-shell.rail-collapsed .app-grid,
+  .app-shell.sidebar-collapsed.rail-collapsed .app-grid {
+    grid-template-columns: 1fr;
+  }
+  /* @if already keeps these out of the DOM at phone width; defensive CSS
+     hide too in case the breakpoint() signal lags the media-query
+     transition by a frame. */
+  .reexpand-strip,
+  .resize-handle {
+    display: none;
+  }
+  .app-sidebar,
+  .app-rail {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: min(85vw, 320px);
+    z-index: 950;
+    box-shadow: 0 0 16px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease-out;
+    grid-column: 1 / -1;
+  }
+  .app-sidebar {
+    left: 0;
+    transform: translateX(-100%);
+  }
+  .app-rail {
+    right: 0;
+    transform: translateX(100%);
+  }
+  .app-shell.is-phone.sidebar-open .app-sidebar {
+    transform: translateX(0);
+  }
+  .app-shell.is-phone.rail-open .app-rail {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar,
+  .app-rail,
+  .drawer-scrim {
+    transition: none;
+  }
 }

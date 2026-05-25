@@ -1,0 +1,28 @@
+{
+  "catalog": "core",
+  "id": "plant.vallisneria.spiralis",
+  "version": 1,
+  "name": "Vallisneria spiralis",
+  "kind": "plant",
+  "zone": "background",
+  "lighting": "medium",
+  "co2": "none",
+  "difficulty": "easy",
+  "color": "#4f9438",
+  "naturalSize": { "width": 60, "height": 400, "depth": 60 },
+  "description": "Classic ribbon-leaved Val. Slightly twisted, very long blades that often trail along the water surface. Spreads aggressively via runners; pulls hard water-column nutrients.",
+  "tags": ["background", "tall", "ribbon", "runner", "low-tech"],
+  "silhouette": [
+    { "x": -0.15, "y": -1 },
+    { "x": 0.15, "y": -1 },
+    { "x": 0.5, "y": -0.2 },
+    { "x": 0.25, "y": 0.4 },
+    { "x": 0.5, "y": 0.7 },
+    { "x": 0.1, "y": 1 },
+    { "x": -0.1, "y": 1 },
+    { "x": -0.5, "y": 0.7 },
+    { "x": -0.25, "y": 0.4 },
+    { "x": -0.5, "y": -0.2 }
+  ],
+  "growth": { "weeksToMature": 9, "sizeAtZero": 0.35 }
+}

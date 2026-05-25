@@ -1,0 +1,27 @@
+{
+  "catalog": "core",
+  "id": "wood.cholla.small",
+  "version": 1,
+  "name": "Cholla Wood",
+  "kind": "hardscape",
+  "category": "wood",
+  "subcategory": "cholla",
+  "naturalSize": { "width": 60, "height": 200, "depth": 60 },
+  "color": "#6b5240",
+  "description": "Hollow, lattice-textured skeleton of a desert cholla cactus. Cylindrical with characteristic perforated walls — instant shrimp shelter and biofilm magnet. Sinks after a brief boil.",
+  "tags": ["wood", "cholla", "shrimp", "perforated", "cylindrical"],
+  "silhouette": [
+    { "x": -0.5, "y": -1 },
+    { "x": 0.5, "y": -1 },
+    { "x": 0.6, "y": -0.6 },
+    { "x": 0.5, "y": -0.2 },
+    { "x": 0.55, "y": 0.2 },
+    { "x": 0.45, "y": 0.6 },
+    { "x": 0.5, "y": 1 },
+    { "x": -0.5, "y": 1 },
+    { "x": -0.45, "y": 0.6 },
+    { "x": -0.55, "y": 0.2 },
+    { "x": -0.5, "y": -0.2 },
+    { "x": -0.6, "y": -0.6 }
+  ]
+}

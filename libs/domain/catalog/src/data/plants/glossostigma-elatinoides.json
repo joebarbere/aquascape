@@ -1,0 +1,29 @@
+{
+  "catalog": "core",
+  "id": "plant.glossostigma.elatinoides",
+  "version": 1,
+  "name": "Glosso (Glossostigma elatinoides)",
+  "kind": "plant",
+  "zone": "foreground",
+  "lighting": "high",
+  "co2": "high",
+  "difficulty": "advanced",
+  "color": "#8ec851",
+  "naturalSize": { "width": 30, "height": 20, "depth": 30 },
+  "description": "Classic ADA carpet — tiny spade-shaped leaves on short creeping stems. Demands strong light and CO2 or it grows leggy and reaches for the surface.",
+  "tags": ["carpet", "foreground", "high-tech", "ada"],
+  "silhouette": [
+    { "x": -0.75, "y": -0.8 },
+    { "x": -0.3, "y": -0.95 },
+    { "x": 0.3, "y": -0.95 },
+    { "x": 0.75, "y": -0.7 },
+    { "x": 0.95, "y": -0.1 },
+    { "x": 0.65, "y": 0.55 },
+    { "x": 0.15, "y": 0.85 },
+    { "x": -0.2, "y": 0.95 },
+    { "x": -0.65, "y": 0.65 },
+    { "x": -0.95, "y": 0.05 }
+  ],
+  "growth": { "weeksToMature": 6, "sizeAtZero": 0.3 },
+  "defaultDensity": 15
+}

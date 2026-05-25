@@ -16,7 +16,13 @@
         "tsConfig": "apps/web/tsconfig.app.json",
         "styles": ["apps/web/src/styles.css"],
         "scripts": [],
-        "assets": []
+        "assets": [
+          {
+            "glob": "favicon.svg",
+            "input": "apps/web/src",
+            "output": "/"
+          }
+        ]
       },
       "configurations": {
         "production": {
@@ -28,8 +34,8 @@
             },
             {
               "type": "anyComponentStyle",
-              "maximumWarning": "2kb",
-              "maximumError": "4kb"
+              "maximumWarning": "6kb",
+              "maximumError": "8kb"
             }
           ],
           "outputHashing": "all"

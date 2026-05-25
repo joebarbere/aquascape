@@ -12,7 +12,9 @@
         "outputPath": "dist/apps/desktop/main",
         "main": "apps/desktop/src/main/main.ts",
         "tsConfig": "apps/desktop/tsconfig.main.json",
-        "assets": []
+        "assets": [
+          { "glob": "icon.png", "input": "apps/desktop/src/assets", "output": "assets" }
+        ]
       }
     },
     "build-preload": {

@@ -20,7 +20,10 @@ import { CommonModule } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
+  effect,
   inject,
+  signal,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -36,8 +39,13 @@ import {
   setSubstrateRegionProfile,
   type SubstrateRegion,
 } from '@aquascape/domain/scene-model';
+import { STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
+import type { StorageService } from '@aquascape/platform/platform-api';
 import { SceneActions, selectSubstrateRegions } from '@aquascape/state';
 import { Store } from '@ngrx/store';
+
+/** StorageService key for the collapsed-state flag (Task A). */
+export const SUBSTRATE_TOOL_COLLAPSED_KEY = 'aquascape.ui.collapsed.substrate-tool';
 
 @Component({
   selector: 'aquascape-substrate-tool',
@@ -46,8 +54,27 @@ import { Store } from '@ngrx/store';
   imports: [CommonModule, FormsModule],
   template: `
     <section class="substrate-tool" aria-labelledby="substrate-tool-heading">
-      <header class="substrate-tool__header">
-        <h2 id="substrate-tool-heading">Substrate</h2>
+      <header class="panel-header">
+        <button
+          type="button"
+          class="panel-header__toggle"
+          [attr.aria-expanded]="!collapsed()"
+          aria-controls="substrate-tool-body"
+          (click)="toggleCollapsed()"
+        >
+          <span
+            class="panel-header__chevron"
+            [class.panel-header__chevron--open]="!collapsed()"
+            aria-hidden="true"
+            >›</span
+          >
+          <h2 id="substrate-tool-heading" class="panel-header__title">Substrate</h2>
+          <span class="panel-header__count" aria-label="regions">{{ regionCount() }}</span>
+        </button>
+      </header>
+
+      <div id="substrate-tool-body" class="substrate-tool__body" [hidden]="collapsed()">
+      <div class="substrate-tool__actions">
         <button
           type="button"
           class="substrate-tool__add-region"
@@ -56,7 +83,7 @@ import { Store } from '@ngrx/store';
         >
           + Add region
         </button>
-      </header>
+      </div>
 
       @if (regions().length === 0) {
         <p class="substrate-tool__empty">
@@ -177,6 +204,7 @@ import { Store } from '@ngrx/store';
           </fieldset>
         </article>
       }
+      </div>
     </section>
   `,
   styles: [
@@ -187,16 +215,63 @@ import { Store } from '@ngrx/store';
         font-family: system-ui, sans-serif;
         font-size: 13px;
       }
-      .substrate-tool__header {
+      .panel-header {
+        margin: 0 0 8px;
+      }
+      .panel-header__toggle {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        margin-bottom: 8px;
+        gap: 6px;
+        width: 100%;
+        padding: 4px 6px;
+        background: transparent;
+        color: inherit;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        cursor: pointer;
+        font: inherit;
+        text-align: left;
       }
-      .substrate-tool__header h2 {
+      .panel-header__toggle:hover,
+      .panel-header__toggle:focus-visible {
+        background: var(--surface-hover, #f0f0f0);
+        outline: none;
+        border-color: var(--border, #e0e0e0);
+      }
+      .panel-header__chevron {
+        display: inline-block;
+        font-size: 16px;
+        line-height: 1;
+        width: 12px;
+        transition: transform 0.15s ease;
+        transform: rotate(0deg);
+      }
+      .panel-header__chevron--open {
+        transform: rotate(90deg);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .panel-header__chevron {
+          transition: none;
+        }
+      }
+      .panel-header__title {
         margin: 0;
         font-size: 14px;
         font-weight: 600;
+        flex: 1;
+      }
+      .panel-header__count {
+        color: var(--text-muted, #777);
+        font-variant-numeric: tabular-nums;
+        font-size: 11px;
+        padding: 1px 6px;
+        border-radius: 8px;
+        background: var(--surface, #f1f1f3);
+      }
+      .substrate-tool__actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 8px;
       }
       .substrate-tool__empty {
         margin: 0;
@@ -294,11 +369,47 @@ import { Store } from '@ngrx/store';
 })
 export class SubstrateToolComponent {
   private readonly store = inject(Store);
+  private readonly storage = inject<StorageService>(STORAGE_SERVICE);
 
   /** Substrate entries available to the material picker (kind: 'substrate'). */
   readonly substrateChoices: readonly SubstrateEntry[] = coreCatalog.byKind('substrate');
 
   readonly regions = toSignal(this.store.select(selectSubstrateRegions), { initialValue: [] });
+
+  /** Count badge for the collapsible header — live region count. */
+  readonly regionCount = computed<number>(() => this.regions().length);
+
+  /** Collapsed-panel state. Hydrated from StorageService on construct. */
+  readonly collapsed = signal<boolean>(false);
+
+  constructor() {
+    this.storage
+      .get<boolean>(SUBSTRATE_TOOL_COLLAPSED_KEY)
+      .then((stored) => {
+        if (typeof stored === 'boolean') {
+          this.collapsed.set(stored);
+        }
+      })
+      .catch(() => {
+        // Best-effort.
+      });
+
+    let firstRun = true;
+    effect(() => {
+      const value = this.collapsed();
+      if (firstRun) {
+        firstRun = false;
+        return;
+      }
+      this.storage.set(SUBSTRATE_TOOL_COLLAPSED_KEY, value).catch(() => {
+        // Best-effort.
+      });
+    });
+  }
+
+  toggleCollapsed(): void {
+    this.collapsed.update((v) => !v);
+  }
 
   // ─── Actions ───────────────────────────────────────────────────────────
 

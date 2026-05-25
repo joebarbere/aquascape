@@ -1,0 +1,32 @@
+{
+  "catalog": "core",
+  "id": "wood.redmoor.medium",
+  "version": 1,
+  "name": "Redmoor Root",
+  "kind": "hardscape",
+  "category": "wood",
+  "subcategory": "redmoor",
+  "naturalSize": { "width": 320, "height": 220, "depth": 160 },
+  "color": "#8a4a2c",
+  "description": "Long, twisting reddish-brown root wood with smooth tapered branches. Sweeping, asymmetric silhouettes. Lighter than Malaysian — may need pre-soaking or weighting to sink.",
+  "tags": ["wood", "redmoor", "root", "twisting", "asymmetric"],
+  "silhouette": [
+    { "x": -0.95, "y": -0.1 },
+    { "x": -0.75, "y": -0.55 },
+    { "x": -0.4, "y": -0.85 },
+    { "x": 0.0, "y": -0.95 },
+    { "x": 0.3, "y": -0.7 },
+    { "x": 0.65, "y": -0.85 },
+    { "x": 0.9, "y": -0.45 },
+    { "x": 0.85, "y": -0.05 },
+    { "x": 0.95, "y": 0.3 },
+    { "x": 0.65, "y": 0.45 },
+    { "x": 0.8, "y": 0.75 },
+    { "x": 0.3, "y": 0.95 },
+    { "x": -0.05, "y": 0.7 },
+    { "x": -0.35, "y": 0.9 },
+    { "x": -0.7, "y": 0.75 },
+    { "x": -0.85, "y": 0.4 },
+    { "x": -0.95, "y": 0.15 }
+  ]
+}

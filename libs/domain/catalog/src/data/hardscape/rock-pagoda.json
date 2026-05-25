@@ -1,0 +1,33 @@
+{
+  "catalog": "core",
+  "id": "rock.pagoda.medium",
+  "version": 1,
+  "name": "Pagoda Stone (Yamaya)",
+  "kind": "hardscape",
+  "category": "rock",
+  "subcategory": "pagoda",
+  "naturalSize": { "width": 220, "height": 90, "depth": 130 },
+  "color": "#8a6a4d",
+  "description": "Flat, horizontally-layered limestone that looks like stacked pagoda roofs. Mildly raises hardness — pair with hard-water species. Excellent for terraced layouts.",
+  "tags": ["rock", "pagoda", "yamaya", "layered", "stacked"],
+  "silhouette": [
+    { "x": -0.95, "y": -0.45 },
+    { "x": -0.85, "y": -0.9 },
+    { "x": -0.4, "y": -0.95 },
+    { "x": 0.1, "y": -0.85 },
+    { "x": 0.55, "y": -0.95 },
+    { "x": 0.95, "y": -0.7 },
+    { "x": 0.9, "y": -0.35 },
+    { "x": 0.7, "y": -0.2 },
+    { "x": 0.95, "y": 0.05 },
+    { "x": 0.8, "y": 0.25 },
+    { "x": 0.95, "y": 0.5 },
+    { "x": 0.65, "y": 0.7 },
+    { "x": 0.15, "y": 0.95 },
+    { "x": -0.35, "y": 0.85 },
+    { "x": -0.7, "y": 0.55 },
+    { "x": -0.95, "y": 0.25 },
+    { "x": -0.8, "y": 0.0 },
+    { "x": -0.95, "y": -0.2 }
+  ]
+}

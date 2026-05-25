@@ -1,0 +1,32 @@
+{
+  "catalog": "core",
+  "id": "plant.ludwigia.repens",
+  "version": 1,
+  "name": "Ludwigia repens",
+  "kind": "plant",
+  "zone": "background",
+  "lighting": "medium",
+  "co2": "low",
+  "difficulty": "easy",
+  "color": "#b85a3a",
+  "naturalSize": { "width": 80, "height": 280, "depth": 60 },
+  "description": "Reliable red stem plant — opposite oval leaves that turn deep red/copper under strong light. Less demanding than most reds; a forgiving starter for color in low-tech tanks.",
+  "tags": ["background", "stem", "red", "low-tech"],
+  "silhouette": [
+    { "x": -0.25, "y": -1 },
+    { "x": 0.25, "y": -1 },
+    { "x": 0.55, "y": -0.55 },
+    { "x": 0.85, "y": -0.3 },
+    { "x": 0.65, "y": 0.05 },
+    { "x": 0.95, "y": 0.4 },
+    { "x": 0.55, "y": 0.65 },
+    { "x": 0.25, "y": 0.95 },
+    { "x": -0.25, "y": 0.95 },
+    { "x": -0.55, "y": 0.65 },
+    { "x": -0.95, "y": 0.4 },
+    { "x": -0.65, "y": 0.05 },
+    { "x": -0.85, "y": -0.3 },
+    { "x": -0.55, "y": -0.55 }
+  ],
+  "growth": { "weeksToMature": 6, "sizeAtZero": 0.4 }
+}

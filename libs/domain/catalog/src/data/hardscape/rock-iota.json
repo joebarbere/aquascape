@@ -1,0 +1,25 @@
+{
+  "catalog": "core",
+  "id": "rock.iota.small",
+  "version": 1,
+  "name": "Iota Stone",
+  "kind": "hardscape",
+  "category": "rock",
+  "subcategory": "iota",
+  "naturalSize": { "width": 90, "height": 70, "depth": 70 },
+  "color": "#776a5a",
+  "description": "Small rounded river-stone-like accent rock with mottled brown-grey coloration. Inert. Good for filling negative space and breaking up larger compositions.",
+  "tags": ["rock", "iota", "accent", "small", "rounded"],
+  "silhouette": [
+    { "x": -0.7, "y": -0.85 },
+    { "x": -0.15, "y": -0.95 },
+    { "x": 0.45, "y": -0.8 },
+    { "x": 0.9, "y": -0.45 },
+    { "x": 0.95, "y": 0.1 },
+    { "x": 0.7, "y": 0.65 },
+    { "x": 0.25, "y": 0.95 },
+    { "x": -0.3, "y": 0.85 },
+    { "x": -0.75, "y": 0.5 },
+    { "x": -0.95, "y": -0.1 }
+  ]
+}

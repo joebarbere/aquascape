@@ -1,0 +1,33 @@
+{
+  "catalog": "core",
+  "id": "wood.bonsai.medium",
+  "version": 1,
+  "name": "Bonsai Wood",
+  "kind": "hardscape",
+  "category": "wood",
+  "subcategory": "bonsai",
+  "naturalSize": { "width": 320, "height": 280, "depth": 200 },
+  "color": "#5a3d24",
+  "description": "Composite / sculpted driftwood arrangement that mimics a miniature tree — thick trunk, branching crown. Often glued from spiderwood pieces; centerpiece-grade. Excellent platform for moss carpets and epiphytes.",
+  "tags": ["wood", "bonsai", "tree", "centerpiece", "moss", "epiphyte"],
+  "silhouette": [
+    { "x": -0.25, "y": -1 },
+    { "x": 0.25, "y": -1 },
+    { "x": 0.35, "y": -0.5 },
+    { "x": 0.2, "y": -0.05 },
+    { "x": 0.55, "y": 0.1 },
+    { "x": 0.85, "y": 0.0 },
+    { "x": 0.95, "y": 0.35 },
+    { "x": 0.7, "y": 0.65 },
+    { "x": 0.95, "y": 0.85 },
+    { "x": 0.45, "y": 0.95 },
+    { "x": 0.1, "y": 0.8 },
+    { "x": -0.15, "y": 0.95 },
+    { "x": -0.55, "y": 0.85 },
+    { "x": -0.85, "y": 0.55 },
+    { "x": -0.95, "y": 0.2 },
+    { "x": -0.65, "y": 0.05 },
+    { "x": -0.4, "y": -0.15 },
+    { "x": -0.3, "y": -0.5 }
+  ]
+}

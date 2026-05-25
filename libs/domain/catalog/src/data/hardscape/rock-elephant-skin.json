@@ -1,0 +1,28 @@
+{
+  "catalog": "core",
+  "id": "rock.elephant-skin.medium",
+  "version": 1,
+  "name": "Elephant Skin Stone",
+  "kind": "hardscape",
+  "category": "rock",
+  "subcategory": "elephant-skin",
+  "naturalSize": { "width": 200, "height": 130, "depth": 130 },
+  "color": "#8e8474",
+  "description": "Smooth, rounded stone with characteristic wrinkled-skin texture that resembles elephant hide. Inert; safe for any pH. Lends itself to soft, sculpted layouts.",
+  "tags": ["rock", "elephant-skin", "smooth", "rounded"],
+  "silhouette": [
+    { "x": -0.85, "y": -0.85 },
+    { "x": -0.4, "y": -0.95 },
+    { "x": 0.15, "y": -0.95 },
+    { "x": 0.65, "y": -0.8 },
+    { "x": 0.95, "y": -0.4 },
+    { "x": 0.95, "y": 0.15 },
+    { "x": 0.75, "y": 0.6 },
+    { "x": 0.4, "y": 0.9 },
+    { "x": -0.05, "y": 0.95 },
+    { "x": -0.5, "y": 0.85 },
+    { "x": -0.85, "y": 0.55 },
+    { "x": -0.95, "y": 0.1 },
+    { "x": -0.95, "y": -0.4 }
+  ]
+}

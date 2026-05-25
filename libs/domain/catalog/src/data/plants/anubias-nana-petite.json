@@ -1,0 +1,31 @@
+{
+  "catalog": "core",
+  "id": "plant.anubias.nana-petite",
+  "version": 1,
+  "name": "Anubias nana 'Petite'",
+  "kind": "plant",
+  "zone": "midground",
+  "lighting": "low",
+  "co2": "none",
+  "difficulty": "easy",
+  "color": "#2f5e2a",
+  "naturalSize": { "width": 50, "height": 50, "depth": 50 },
+  "description": "Tiny version of the classic Anubias. Slow-growing rhizome plant with miniature oval leaves — attach to wood or rock; never bury the rhizome. Excellent nano-tank accent.",
+  "tags": ["rhizome", "midground", "epiphyte", "low-tech", "nano"],
+  "silhouette": [
+    { "x": -0.7, "y": -0.4 },
+    { "x": -0.45, "y": -0.85 },
+    { "x": -0.1, "y": -0.95 },
+    { "x": 0.25, "y": -0.7 },
+    { "x": 0.65, "y": -0.85 },
+    { "x": 0.85, "y": -0.4 },
+    { "x": 0.95, "y": 0.0 },
+    { "x": 0.75, "y": 0.5 },
+    { "x": 0.35, "y": 0.85 },
+    { "x": -0.05, "y": 0.95 },
+    { "x": -0.4, "y": 0.85 },
+    { "x": -0.75, "y": 0.55 },
+    { "x": -0.95, "y": 0.05 }
+  ],
+  "growth": { "weeksToMature": 14, "sizeAtZero": 0.65 }
+}

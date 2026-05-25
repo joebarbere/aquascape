@@ -1,0 +1,28 @@
+{
+  "catalog": "core",
+  "id": "rock.polar-ice.medium",
+  "version": 1,
+  "name": "Polar Ice Mountain Stone",
+  "kind": "hardscape",
+  "category": "rock",
+  "subcategory": "polar-ice",
+  "naturalSize": { "width": 180, "height": 160, "depth": 100 },
+  "color": "#cfd6d8",
+  "description": "Pale grey-white stone with sharp angular planes that resemble glacial ice. Raises pH; pair with hard-water-tolerant plants and livestock. Striking contrast against dark substrate.",
+  "tags": ["rock", "polar-ice", "white", "angular", "iwagumi"],
+  "silhouette": [
+    { "x": -0.9, "y": -0.85 },
+    { "x": -0.3, "y": -0.95 },
+    { "x": 0.4, "y": -0.7 },
+    { "x": 0.9, "y": -0.85 },
+    { "x": 0.95, "y": -0.2 },
+    { "x": 0.55, "y": 0.0 },
+    { "x": 0.85, "y": 0.55 },
+    { "x": 0.3, "y": 0.95 },
+    { "x": -0.1, "y": 0.65 },
+    { "x": -0.5, "y": 0.95 },
+    { "x": -0.85, "y": 0.5 },
+    { "x": -0.65, "y": 0.05 },
+    { "x": -0.95, "y": -0.35 }
+  ]
+}

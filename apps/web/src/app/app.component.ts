@@ -107,6 +107,13 @@ import { Store } from '@ngrx/store';
 import { defaultViewport } from './default-viewport';
 import { applyMoveDrag, applyRotateDrag, applyScaleDrag } from './drag-math';
 import { SCENE_RENDERER } from './renderer.token';
+import {
+  boundsFor,
+  clampPanelWidth,
+  resolveBreakpoint,
+  SHELL_STORAGE_KEYS,
+  type ShellBreakpoint,
+} from './shell-layout';
 
 // ─── Drag state shape ────────────────────────────────────────────────────
 
@@ -162,15 +169,144 @@ type DragState =
     TimeSliderComponent,
   ],
   template: `
-    <div class="app-shell">
+    <div
+      class="app-shell"
+      [class.is-phone]="breakpoint() === 'phone'"
+      [class.is-tablet]="breakpoint() === 'tablet'"
+      [class.sidebar-collapsed]="sidebarCollapsed()"
+      [class.rail-collapsed]="railCollapsed()"
+      [class.sidebar-open]="phoneSidebarOpen()"
+      [class.rail-open]="phoneRailOpen()"
+    >
       <aquascape-editor-shell></aquascape-editor-shell>
+
+      <!-- Phone-only drawer toggle bar. Hidden via CSS above 768px. -->
+      <div class="app-drawer-bar" role="toolbar" aria-label="Panel toggles">
+        <button
+          type="button"
+          class="drawer-toggle"
+          [attr.aria-expanded]="phoneSidebarOpen()"
+          aria-controls="app-sidebar"
+          aria-label="Toggle tools panel"
+          (click)="togglePhoneSidebar()"
+        >
+          <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16">
+            <path
+              d="M2 3h12M2 8h12M2 13h12"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              fill="none"
+            />
+          </svg>
+          <span>Tools</span>
+        </button>
+        <button
+          type="button"
+          class="drawer-toggle"
+          [attr.aria-expanded]="phoneRailOpen()"
+          aria-controls="app-rail"
+          aria-label="Toggle layers panel"
+          (click)="togglePhoneRail()"
+        >
+          <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16">
+            <path
+              d="M2 4h12v3H2zM2 9h12v3H2z"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+            />
+          </svg>
+          <span>Layers</span>
+        </button>
+      </div>
+
       <div class="app-grid">
-        <aside class="app-sidebar" aria-label="Tools">
-          <aquascape-tank-setup></aquascape-tank-setup>
-          <aquascape-substrate-tool></aquascape-substrate-tool>
-          <aquascape-hardscape-tool></aquascape-hardscape-tool>
-          <aquascape-planting-tool></aquascape-planting-tool>
+        <!-- Re-expand strip (left). Shown when sidebar is collapsed. Hidden in
+             phone mode because the drawer toggle replaces it. -->
+        @if (sidebarCollapsed() && breakpoint() !== 'phone') {
+          <button
+            type="button"
+            class="reexpand-strip reexpand-left"
+            aria-label="Expand tools panel"
+            title="Expand tools panel"
+            (click)="setSidebarCollapsed(false)"
+          >
+            <svg aria-hidden="true" viewBox="0 0 12 16" width="12" height="16">
+              <path
+                d="M4 4l4 4-4 4"
+                stroke="currentColor"
+                stroke-width="1.6"
+                fill="none"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <span class="reexpand-strip__label">Tools</span>
+          </button>
+        }
+
+        <aside
+          id="app-sidebar"
+          class="app-sidebar"
+          aria-label="Tools"
+          [attr.aria-hidden]="breakpoint() === 'phone' && !phoneSidebarOpen() ? true : null"
+        >
+          <header class="pane-header">
+            <button
+              type="button"
+              class="pane-collapse"
+              [attr.aria-expanded]="
+                !sidebarCollapsed() && (breakpoint() !== 'phone' || phoneSidebarOpen())
+              "
+              aria-controls="app-sidebar-body"
+              [attr.aria-label]="
+                breakpoint() === 'phone' ? 'Close tools panel' : 'Collapse tools panel'
+              "
+              [attr.title]="
+                breakpoint() === 'phone' ? 'Close tools panel' : 'Collapse tools panel'
+              "
+              (click)="collapseSidebar()"
+            >
+              <svg aria-hidden="true" viewBox="0 0 12 16" width="12" height="16">
+                <path
+                  d="M8 4l-4 4 4 4"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  fill="none"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+            <span class="pane-title">Tools</span>
+          </header>
+          <div id="app-sidebar-body" class="pane-body">
+            <aquascape-tank-setup></aquascape-tank-setup>
+            <aquascape-substrate-tool></aquascape-substrate-tool>
+            <aquascape-hardscape-tool></aquascape-hardscape-tool>
+            <aquascape-planting-tool></aquascape-planting-tool>
+          </div>
         </aside>
+
+        <!-- Sidebar drag handle. Hidden when collapsed (no panel to size) or
+             in phone mode (overlay drawer doesn't resize). -->
+        @if (!sidebarCollapsed() && breakpoint() !== 'phone') {
+          <div
+            class="resize-handle resize-handle-sidebar"
+            role="separator"
+            aria-orientation="vertical"
+            aria-controls="app-sidebar"
+            [attr.aria-valuemin]="currentSidebarBounds().min"
+            [attr.aria-valuemax]="currentSidebarBounds().max"
+            [attr.aria-valuenow]="sidebarWidth()"
+            aria-label="Resize tools panel"
+            tabindex="0"
+            (pointerdown)="onSidebarHandlePointerDown($event)"
+            (keydown)="onSidebarHandleKey($event)"
+          ></div>
+        }
+
         <main class="app-canvas-host">
           <canvas
             #canvas
@@ -185,9 +321,9 @@ type DragState =
             <div class="empty-hint" aria-hidden="true">
               <h3>Build your first scape</h3>
               <p>
-                Pick a tank in the top-left, sculpt substrate, then drag
-                hardscape and plants from the palettes onto the canvas.
-                Scrub the bottom slider to preview plant growth over time.
+                Pick a tank in the top-left, sculpt substrate, then drag hardscape and plants from
+                the palettes onto the canvas. Scrub the bottom slider to preview plant growth over
+                time.
               </p>
             </div>
           }
@@ -219,43 +355,103 @@ type DragState =
             <aquascape-time-slider></aquascape-time-slider>
           </div>
         </main>
-        <aside class="app-rail" aria-label="Layers">
-          <aquascape-layers-panel></aquascape-layers-panel>
+
+        @if (!railCollapsed() && breakpoint() !== 'phone') {
+          <div
+            class="resize-handle resize-handle-rail"
+            role="separator"
+            aria-orientation="vertical"
+            aria-controls="app-rail"
+            [attr.aria-valuemin]="currentRailBounds().min"
+            [attr.aria-valuemax]="currentRailBounds().max"
+            [attr.aria-valuenow]="railWidth()"
+            aria-label="Resize layers panel"
+            tabindex="0"
+            (pointerdown)="onRailHandlePointerDown($event)"
+            (keydown)="onRailHandleKey($event)"
+          ></div>
+        }
+
+        <aside
+          id="app-rail"
+          class="app-rail"
+          aria-label="Layers"
+          [attr.aria-hidden]="breakpoint() === 'phone' && !phoneRailOpen() ? true : null"
+        >
+          <header class="pane-header">
+            <button
+              type="button"
+              class="pane-collapse"
+              [attr.aria-expanded]="
+                !railCollapsed() && (breakpoint() !== 'phone' || phoneRailOpen())
+              "
+              aria-controls="app-rail-body"
+              [attr.aria-label]="
+                breakpoint() === 'phone' ? 'Close layers panel' : 'Collapse layers panel'
+              "
+              [attr.title]="
+                breakpoint() === 'phone' ? 'Close layers panel' : 'Collapse layers panel'
+              "
+              (click)="collapseRail()"
+            >
+              <svg aria-hidden="true" viewBox="0 0 12 16" width="12" height="16">
+                <path
+                  d="M4 4l4 4-4 4"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  fill="none"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+            <span class="pane-title">Layers</span>
+          </header>
+          <div id="app-rail-body" class="pane-body">
+            <aquascape-layers-panel></aquascape-layers-panel>
+          </div>
         </aside>
+
+        @if (railCollapsed() && breakpoint() !== 'phone') {
+          <button
+            type="button"
+            class="reexpand-strip reexpand-right"
+            aria-label="Expand layers panel"
+            title="Expand layers panel"
+            (click)="setRailCollapsed(false)"
+          >
+            <svg aria-hidden="true" viewBox="0 0 12 16" width="12" height="16">
+              <path
+                d="M8 4l-4 4 4 4"
+                stroke="currentColor"
+                stroke-width="1.6"
+                fill="none"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <span class="reexpand-strip__label">Layers</span>
+          </button>
+        }
       </div>
+
+      <!-- Backdrop scrim for the phone drawers. Click to close. Pointer-events
+           only active in phone mode + when a drawer is open (CSS gates this). -->
+      <div class="drawer-scrim" aria-hidden="true" (click)="closePhoneDrawers()"></div>
     </div>
   `,
   styles: [
     `
-      :host {
-        display: block;
-        width: 100%;
-        height: 100%;
-      }
-      .app-shell {
-        display: grid;
-        grid-template-rows: auto 1fr;
-        height: 100%;
-      }
-      .app-grid {
-        display: grid;
-        grid-template-columns: minmax(280px, 360px) 1fr minmax(240px, 320px);
-        min-height: 0;
-      }
-      .app-sidebar {
-        overflow-y: auto;
-        border-right: 1px solid var(--border);
-        background: var(--surface);
-      }
-      .app-rail {
-        overflow-y: auto;
-        border-left: 1px solid var(--border);
-        background: var(--surface);
-        padding: 8px;
-      }
+      /* Component-scoped styles only — the editor-shell layout (grid columns,
+         resize handles, drawer slide-ins, breakpoints) lives in the global
+         styles.css because (a) those rules target classes on the
+         aquascape-root host + its descendants, and (b) keeping them
+         inside the component pushes the bundle over the 4kb per-component
+         CSS budget. Component CSS here is only the canvas-local overlays. */
       .app-canvas-host {
         position: relative;
         overflow: hidden;
+        min-width: 0;
       }
       .app-timeslider {
         position: absolute;
@@ -267,7 +463,7 @@ type DragState =
       .app-status {
         position: absolute;
         right: 12px;
-        bottom: 64px; /* sit above the time slider */
+        bottom: 64px;
         z-index: 3;
       }
       .empty-hint {
@@ -387,11 +583,59 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   /** Signal that flips to true when the scene has no objects in any layer. */
   readonly sceneIsEmpty = signal<boolean>(true);
 
+  // ─── Shell layout state (Figma-style resizable + collapsible panels) ──
+  //
+  // Widths live as signals so the template can read `aria-valuenow`, but the
+  // actual layout updates during a drag are pushed straight to the host CSS
+  // variables (no per-frame ngStyle / change-detection). The signal is only
+  // written on pointer-up (the commit) and on the keyboard-nudge path.
+
+  readonly sidebarWidth = signal<number>(320);
+  readonly railWidth = signal<number>(280);
+  readonly sidebarCollapsed = signal<boolean>(false);
+  readonly railCollapsed = signal<boolean>(false);
+
+  /** Current viewport-derived breakpoint. Drives the layout mode + drawer toggles. */
+  readonly breakpoint = signal<ShellBreakpoint>('wide');
+
+  /** Phone-only: which drawer (if any) is currently overlaid on the canvas. */
+  readonly phoneSidebarOpen = signal<boolean>(false);
+  readonly phoneRailOpen = signal<boolean>(false);
+
+  /** Memoized bounds for the current breakpoint (`computed` so the template can
+   *  bind aria-valuemin / aria-valuemax against them without recomputing). */
+  readonly currentSidebarBounds = computed(() => boundsFor(this.breakpoint(), 'sidebar'));
+  readonly currentRailBounds = computed(() => boundsFor(this.breakpoint(), 'rail'));
+
+  /** True only after `hydrateShellLayout()` resolves. Until then we hold off
+   *  writing the persisted values back (so the initial hydration doesn't
+   *  echo into storage on every boot). */
+  private shellHydrated = false;
+
+  /** Active handle drag state. */
+  private handleDragState: {
+    readonly panel: 'sidebar' | 'rail';
+    readonly startCssX: number;
+    readonly startWidth: number;
+  } | null = null;
+  private handleMoveHandler: ((e: PointerEvent) => void) | null = null;
+  private handleUpHandler: ((e: PointerEvent) => void) | null = null;
+
+  /** Cached MediaQueryList objects + their listeners so we can detach on destroy. */
+  private mqlPhone: MediaQueryList | null = null;
+  private mqlTablet: MediaQueryList | null = null;
+  private mqlListener: ((e: MediaQueryListEvent) => void) | null = null;
+
   ngAfterViewInit(): void {
     void this.fileService;
     void this.dialogService;
-    void this.storageService;
     void this.renderExportService;
+
+    // Apply the initial host CSS variables (so layout looks right before
+    // hydration resolves), set up the matchMedia listener, then hydrate.
+    this.applyHostWidths();
+    this.initBreakpointWatcher();
+    void this.hydrateShellLayout();
 
     this.ngZone.runOutsideAngular(() => {
       this.installResizeObserver();
@@ -444,6 +688,322 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.teardown();
     this.cancelDrag(); // detach any in-flight document listeners
+    this.detachHandleListeners();
+    this.detachBreakpointWatcher();
+  }
+
+  // ─── Shell layout: hydration ─────────────────────────────────────────────
+
+  /**
+   * Pull persisted widths + collapsed flags out of the StorageService and
+   * apply them. Tolerant of partial / corrupted state: each key is
+   * read + validated independently, and any unreadable value falls back to
+   * the breakpoint default (via `clampPanelWidth`).
+   *
+   * Marks `shellHydrated = true` only at the end so the per-commit writes
+   * (`persistSidebarWidth` etc.) don't accidentally re-write the defaults
+   * back into storage on a fresh boot before the user has done anything.
+   */
+  private async hydrateShellLayout(): Promise<void> {
+    try {
+      const [sw, rw, sc, rc] = await Promise.all([
+        this.storageService.get<number>(SHELL_STORAGE_KEYS.sidebarWidth),
+        this.storageService.get<number>(SHELL_STORAGE_KEYS.railWidth),
+        this.storageService.get<boolean>(SHELL_STORAGE_KEYS.sidebarCollapsed),
+        this.storageService.get<boolean>(SHELL_STORAGE_KEYS.railCollapsed),
+      ]);
+      const sidebarBounds = boundsFor(this.breakpoint(), 'sidebar');
+      const railBounds = boundsFor(this.breakpoint(), 'rail');
+      if (typeof sw === 'number') {
+        this.sidebarWidth.set(
+          clampPanelWidth(sw, sidebarBounds.min, sidebarBounds.max, sidebarBounds.defaultValue),
+        );
+      }
+      if (typeof rw === 'number') {
+        this.railWidth.set(
+          clampPanelWidth(rw, railBounds.min, railBounds.max, railBounds.defaultValue),
+        );
+      }
+      if (typeof sc === 'boolean') this.sidebarCollapsed.set(sc);
+      if (typeof rc === 'boolean') {
+        this.railCollapsed.set(rc);
+      } else if (this.breakpoint() === 'tablet') {
+        // Tablet default: auto-collapse the rail (the user can re-expand
+        // explicitly). Only kicks in if no preference is persisted yet.
+        this.railCollapsed.set(true);
+      }
+    } catch {
+      // StorageService failures are non-fatal — leave the in-memory defaults
+      // in place and continue.
+    }
+    this.shellHydrated = true;
+    this.applyHostWidths();
+    this.cdr.markForCheck();
+  }
+
+  /** Write the host's CSS custom properties for the current width signals. */
+  private applyHostWidths(): void {
+    const host =
+      (this.canvasRef.nativeElement.ownerDocument?.querySelector(
+        'aquascape-root',
+      ) as HTMLElement | null) ?? null;
+    if (host === null) return;
+    host.style.setProperty('--sidebar-width', `${this.sidebarWidth()}px`);
+    host.style.setProperty('--rail-width', `${this.railWidth()}px`);
+  }
+
+  // ─── Shell layout: breakpoint watcher ────────────────────────────────────
+
+  private initBreakpointWatcher(): void {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      // Test/SSR environment — leave breakpoint() at its `wide` default.
+      return;
+    }
+    this.mqlPhone = window.matchMedia('(max-width: 767px)');
+    this.mqlTablet = window.matchMedia('(min-width: 768px) and (max-width: 1199px)');
+    this.recomputeBreakpoint();
+    const listener = (): void => this.recomputeBreakpoint();
+    this.mqlListener = listener;
+    // `addEventListener('change', …)` is supported in every modern browser;
+    // the older `addListener` API isn't needed for our minimum target.
+    this.mqlPhone.addEventListener('change', listener);
+    this.mqlTablet.addEventListener('change', listener);
+  }
+
+  private detachBreakpointWatcher(): void {
+    if (this.mqlListener === null) return;
+    this.mqlPhone?.removeEventListener('change', this.mqlListener);
+    this.mqlTablet?.removeEventListener('change', this.mqlListener);
+    this.mqlListener = null;
+    this.mqlPhone = null;
+    this.mqlTablet = null;
+  }
+
+  private recomputeBreakpoint(): void {
+    if (typeof window === 'undefined') return;
+    const bp = resolveBreakpoint(window.innerWidth);
+    const previous = this.breakpoint();
+    if (bp === previous) return;
+    this.breakpoint.set(bp);
+    // Close any open phone drawer when leaving phone mode so it doesn't
+    // linger as a hidden focus-trap.
+    if (bp !== 'phone') {
+      this.phoneSidebarOpen.set(false);
+      this.phoneRailOpen.set(false);
+    }
+    // Re-clamp current widths against the new bounds (don't OVERWRITE the
+    // persisted preference — clamp only). This keeps a 320px sidebar wide-
+    // mode preference at 320px when zooming back from tablet to wide.
+    const sb = boundsFor(bp, 'sidebar');
+    const rb = boundsFor(bp, 'rail');
+    this.sidebarWidth.set(clampPanelWidth(this.sidebarWidth(), sb.min, sb.max, sb.defaultValue));
+    this.railWidth.set(clampPanelWidth(this.railWidth(), rb.min, rb.max, rb.defaultValue));
+    this.applyHostWidths();
+    this.cdr.markForCheck();
+  }
+
+  // ─── Shell layout: collapse toggles ──────────────────────────────────────
+
+  collapseSidebar(): void {
+    if (this.breakpoint() === 'phone') {
+      this.phoneSidebarOpen.set(false);
+      return;
+    }
+    this.setSidebarCollapsed(true);
+  }
+
+  collapseRail(): void {
+    if (this.breakpoint() === 'phone') {
+      this.phoneRailOpen.set(false);
+      return;
+    }
+    this.setRailCollapsed(true);
+  }
+
+  setSidebarCollapsed(collapsed: boolean): void {
+    this.sidebarCollapsed.set(collapsed);
+    this.persistFlag(SHELL_STORAGE_KEYS.sidebarCollapsed, collapsed);
+    this.cdr.markForCheck();
+  }
+
+  setRailCollapsed(collapsed: boolean): void {
+    this.railCollapsed.set(collapsed);
+    this.persistFlag(SHELL_STORAGE_KEYS.railCollapsed, collapsed);
+    this.cdr.markForCheck();
+  }
+
+  togglePhoneSidebar(): void {
+    const next = !this.phoneSidebarOpen();
+    this.phoneSidebarOpen.set(next);
+    // Mutually exclusive — opening one closes the other so the canvas stays
+    // visible behind the active drawer.
+    if (next) this.phoneRailOpen.set(false);
+    this.cdr.markForCheck();
+  }
+
+  togglePhoneRail(): void {
+    const next = !this.phoneRailOpen();
+    this.phoneRailOpen.set(next);
+    if (next) this.phoneSidebarOpen.set(false);
+    this.cdr.markForCheck();
+  }
+
+  closePhoneDrawers(): void {
+    this.phoneSidebarOpen.set(false);
+    this.phoneRailOpen.set(false);
+    this.cdr.markForCheck();
+  }
+
+  // ─── Shell layout: resize handle pointer drag ────────────────────────────
+
+  onSidebarHandlePointerDown(event: PointerEvent): void {
+    this.startHandleDrag(event, 'sidebar');
+  }
+
+  onRailHandlePointerDown(event: PointerEvent): void {
+    this.startHandleDrag(event, 'rail');
+  }
+
+  private startHandleDrag(event: PointerEvent, panel: 'sidebar' | 'rail'): void {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const startWidth = panel === 'sidebar' ? this.sidebarWidth() : this.railWidth();
+    this.handleDragState = { panel, startCssX: event.clientX, startWidth };
+    document.body.classList.add('is-dragging-handle');
+    const move = (e: PointerEvent): void => this.onHandlePointerMove(e);
+    const up = (e: PointerEvent): void => this.onHandlePointerUp(e);
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    this.handleMoveHandler = move;
+    this.handleUpHandler = up;
+  }
+
+  private onHandlePointerMove(event: PointerEvent): void {
+    const state = this.handleDragState;
+    if (state === null) return;
+    const dx = event.clientX - state.startCssX;
+    // Sidebar grows when the cursor moves right; rail grows when the cursor
+    // moves left. The sign flip is the only difference between the two.
+    const rawWidth = state.panel === 'sidebar' ? state.startWidth + dx : state.startWidth - dx;
+    const bounds =
+      state.panel === 'sidebar' ? this.currentSidebarBounds() : this.currentRailBounds();
+    const clamped = clampPanelWidth(rawWidth, bounds.min, bounds.max, bounds.defaultValue);
+    // Write straight to the host CSS var — no signal write yet (avoids
+    // change-detection per frame). The signal is committed on pointerup.
+    const host =
+      (this.canvasRef.nativeElement.ownerDocument?.querySelector(
+        'aquascape-root',
+      ) as HTMLElement | null) ?? null;
+    if (host !== null) {
+      host.style.setProperty(
+        state.panel === 'sidebar' ? '--sidebar-width' : '--rail-width',
+        `${clamped}px`,
+      );
+    }
+  }
+
+  private onHandlePointerUp(event: PointerEvent): void {
+    const state = this.handleDragState;
+    if (state === null) return;
+    const dx = event.clientX - state.startCssX;
+    const rawWidth = state.panel === 'sidebar' ? state.startWidth + dx : state.startWidth - dx;
+    const bounds =
+      state.panel === 'sidebar' ? this.currentSidebarBounds() : this.currentRailBounds();
+    const clamped = clampPanelWidth(rawWidth, bounds.min, bounds.max, bounds.defaultValue);
+    if (state.panel === 'sidebar') {
+      this.sidebarWidth.set(clamped);
+      this.persistWidth(SHELL_STORAGE_KEYS.sidebarWidth, clamped);
+    } else {
+      this.railWidth.set(clamped);
+      this.persistWidth(SHELL_STORAGE_KEYS.railWidth, clamped);
+    }
+    this.detachHandleListeners();
+    document.body.classList.remove('is-dragging-handle');
+    this.applyHostWidths();
+    this.cdr.markForCheck();
+  }
+
+  private detachHandleListeners(): void {
+    if (this.handleMoveHandler !== null) {
+      document.removeEventListener('pointermove', this.handleMoveHandler);
+      this.handleMoveHandler = null;
+    }
+    if (this.handleUpHandler !== null) {
+      document.removeEventListener('pointerup', this.handleUpHandler);
+      this.handleUpHandler = null;
+    }
+    this.handleDragState = null;
+  }
+
+  // ─── Shell layout: keyboard a11y for the separators ─────────────────────
+
+  /**
+   * Per WAI-ARIA APG, a focused vertical separator responds to ArrowLeft /
+   * ArrowRight with width adjustments in fixed increments. Home / End jump
+   * to the bounds. The 16px step matches the visual density of the panel
+   * gutters; it's intentionally coarse so a keyboard-only user can sweep
+   * the full range without holding the key for ages.
+   */
+  onSidebarHandleKey(event: KeyboardEvent): void {
+    this.handleSeparatorKey(event, 'sidebar');
+  }
+
+  onRailHandleKey(event: KeyboardEvent): void {
+    this.handleSeparatorKey(event, 'rail');
+  }
+
+  private handleSeparatorKey(event: KeyboardEvent, panel: 'sidebar' | 'rail'): void {
+    const step = 16;
+    let delta: number | null = null;
+    let absolute: 'min' | 'max' | null = null;
+    switch (event.key) {
+      case 'ArrowLeft':
+        delta = panel === 'sidebar' ? -step : step;
+        break;
+      case 'ArrowRight':
+        delta = panel === 'sidebar' ? step : -step;
+        break;
+      case 'Home':
+        absolute = 'min';
+        break;
+      case 'End':
+        absolute = 'max';
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    const bounds = panel === 'sidebar' ? this.currentSidebarBounds() : this.currentRailBounds();
+    const current = panel === 'sidebar' ? this.sidebarWidth() : this.railWidth();
+    const raw =
+      absolute === 'min' ? bounds.min : absolute === 'max' ? bounds.max : current + (delta ?? 0);
+    const clamped = clampPanelWidth(raw, bounds.min, bounds.max, bounds.defaultValue);
+    if (panel === 'sidebar') {
+      this.sidebarWidth.set(clamped);
+      this.persistWidth(SHELL_STORAGE_KEYS.sidebarWidth, clamped);
+    } else {
+      this.railWidth.set(clamped);
+      this.persistWidth(SHELL_STORAGE_KEYS.railWidth, clamped);
+    }
+    this.applyHostWidths();
+    this.cdr.markForCheck();
+  }
+
+  // ─── Shell layout: persistence ───────────────────────────────────────────
+
+  private persistWidth(key: string, value: number): void {
+    if (!this.shellHydrated) return;
+    void this.storageService.set(key, value).catch(() => {
+      // Persistence is best-effort — a quota error or transient failure
+      // shouldn't break the UI.
+    });
+  }
+
+  private persistFlag(key: string, value: boolean): void {
+    if (!this.shellHydrated) return;
+    void this.storageService.set(key, value).catch(() => {
+      /* best-effort */
+    });
   }
 
   // ── Pointer down on the canvas: classify the gesture ─────────────────

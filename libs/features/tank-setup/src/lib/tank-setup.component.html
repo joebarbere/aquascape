@@ -1,173 +1,305 @@
 <section class="tank-setup" aria-labelledby="tank-setup-heading">
-  <h2 id="tank-setup-heading">Tank</h2>
+  <header class="panel-header">
+    <button
+      type="button"
+      class="panel-header__toggle"
+      [attr.aria-expanded]="!collapsed()"
+      aria-controls="tank-setup-body"
+      (click)="toggleCollapsed()"
+    >
+      <span
+        class="panel-header__chevron"
+        [class.panel-header__chevron--open]="!collapsed()"
+        aria-hidden="true"
+        >›</span
+      >
+      <h2 id="tank-setup-heading" class="panel-header__title">Tank</h2>
+    </button>
+  </header>
 
-  <!-- Unit toggle ───────────────────────────────────────────────────────── -->
-  <div role="group" aria-labelledby="unit-toggle-label" class="unit-toggle">
-    <span id="unit-toggle-label" class="unit-toggle__label">Units</span>
-    <button
-      type="button"
-      data-testid="unit-cm"
-      [attr.aria-pressed]="displayUnit() === 'cm'"
-      [class.is-active]="displayUnit() === 'cm'"
-      (click)="setUnit('cm')"
-    >
-      cm
-    </button>
-    <button
-      type="button"
-      data-testid="unit-in"
-      [attr.aria-pressed]="displayUnit() === 'in'"
-      [class.is-active]="displayUnit() === 'in'"
-      (click)="setUnit('in')"
-    >
-      in
-    </button>
-    <button
-      type="button"
-      data-testid="unit-mm"
-      [attr.aria-pressed]="displayUnit() === 'mm'"
-      [class.is-active]="displayUnit() === 'mm'"
-      (click)="setUnit('mm')"
-    >
-      mm
-    </button>
-  </div>
+  <div id="tank-setup-body" class="tank-setup__body" [hidden]="collapsed()">
+    <!-- Unit toggle ───────────────────────────────────────────────────────── -->
+    <div role="group" aria-labelledby="unit-toggle-label" class="unit-toggle">
+      <span id="unit-toggle-label" class="unit-toggle__label">Units</span>
+      <button
+        type="button"
+        data-testid="unit-cm"
+        [attr.aria-pressed]="displayUnit() === 'cm'"
+        [class.is-active]="displayUnit() === 'cm'"
+        (click)="setUnit('cm')"
+      >
+        cm
+      </button>
+      <button
+        type="button"
+        data-testid="unit-in"
+        [attr.aria-pressed]="displayUnit() === 'in'"
+        [class.is-active]="displayUnit() === 'in'"
+        (click)="setUnit('in')"
+      >
+        in
+      </button>
+      <button
+        type="button"
+        data-testid="unit-mm"
+        [attr.aria-pressed]="displayUnit() === 'mm'"
+        [class.is-active]="displayUnit() === 'mm'"
+        (click)="setUnit('mm')"
+      >
+        mm
+      </button>
+    </div>
 
-  <!-- Preset picker ─────────────────────────────────────────────────────── -->
-  <fieldset class="presets">
-    <legend>Presets</legend>
-    @for (group of presetGroups; track group.brand) {
-      <div class="presets__group" role="radiogroup" [attr.aria-label]="group.brand + ' tanks'">
-        <h3 class="presets__group-heading">{{ group.brand }}</h3>
-        <ul class="presets__list">
-          @for (preset of group.items; track preset.id) {
+    <!-- Step 1 — Brand picker ────────────────────────────────────────────── -->
+    @if (view() === 'brands') {
+      <section
+        class="brand-picker"
+        aria-labelledby="brand-picker-heading"
+        data-testid="brand-picker"
+      >
+        <h3 id="brand-picker-heading" class="brand-picker__heading">Choose a brand</h3>
+        <ul class="brand-picker__grid" role="list">
+          @for (b of brandSummaries; track b.brand) {
+            <li>
+              <button
+                type="button"
+                class="brand-card"
+                [class.is-active]="activeBrand() === b.brand"
+                [attr.data-testid]="'brand-' + b.brand"
+                [attr.aria-current]="activeBrand() === b.brand ? 'true' : null"
+                (click)="pickBrand(b.brand)"
+              >
+                <span class="brand-card__name">{{ b.label }}</span>
+                @if (b.count !== null) {
+                  <span class="brand-card__count"
+                    >{{ b.count }} {{ b.count === 1 ? 'tank' : 'tanks' }}</span
+                  >
+                } @else {
+                  <span class="brand-card__count">Custom W×H×D</span>
+                }
+              </button>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
+    <!-- Step 2 — Size picker for a brand ─────────────────────────────────── -->
+    @if (view() === 'sizes' && activeBrand() !== null && activeBrand() !== 'Custom') {
+      <section
+        class="size-picker"
+        aria-labelledby="size-picker-heading"
+        data-testid="size-picker"
+      >
+        <div class="size-picker__top">
+          <button
+            type="button"
+            class="size-picker__back"
+            data-testid="back-to-brands"
+            (click)="backToBrands()"
+          >
+            <span aria-hidden="true">←</span> Back to brands
+          </button>
+          <h3 id="size-picker-heading" class="size-picker__heading">{{ activeBrand() }}</h3>
+        </div>
+
+        <ul
+          class="size-picker__grid"
+          role="radiogroup"
+          [attr.aria-label]="activeBrand() + ' tanks'"
+        >
+          @for (preset of activePresets(); track preset.id) {
             <li>
               <button
                 type="button"
                 role="radio"
+                class="size-card"
                 [attr.aria-checked]="isPresetActive(preset.id)"
                 [class.is-active]="isPresetActive(preset.id)"
                 [attr.data-testid]="'preset-' + preset.id"
                 (click)="selectPreset(preset)"
                 (keydown.enter)="selectPreset(preset)"
               >
-                <span class="presets__name">{{ preset.name }}</span>
-                <span class="presets__dims">
-                  {{ display(preset.width) }} × {{ display(preset.height) }} ×
-                  {{ display(preset.depth) }} {{ displayUnit() }}
+                <span class="size-card__silhouette" aria-hidden="true">
+                  <svg
+                    [attr.width]="silhouetteDims(preset).w"
+                    [attr.height]="silhouetteDims(preset).h"
+                    [attr.viewBox]="
+                      '0 0 ' + silhouetteDims(preset).w + ' ' + silhouetteDims(preset).h
+                    "
+                  >
+                    <rect
+                      x="0.5"
+                      y="0.5"
+                      [attr.width]="silhouetteDims(preset).w - 1"
+                      [attr.height]="silhouetteDims(preset).h - 1"
+                      fill="var(--surface, #f7faff)"
+                      stroke="currentColor"
+                      stroke-width="1"
+                    ></rect>
+                    <rect
+                      [attr.x]="1.5"
+                      [attr.y]="silhouetteDims(preset).h * 0.7"
+                      [attr.width]="silhouetteDims(preset).w - 3"
+                      [attr.height]="silhouetteDims(preset).h * 0.3 - 1.5"
+                      fill="currentColor"
+                      opacity="0.18"
+                    ></rect>
+                  </svg>
+                </span>
+                <span class="size-card__body">
+                  <span class="size-card__name">
+                    {{ preset.name }}
+                    @if (isPresetActive(preset.id)) {
+                      <span class="size-card__check" aria-hidden="true">✓</span>
+                    }
+                  </span>
+                  <span class="size-card__dims">
+                    {{ display(preset.width) }} × {{ display(preset.height) }} ×
+                    {{ display(preset.depth) }} {{ displayUnit() }}
+                  </span>
+                  @if (shapeChip(preset); as chip) {
+                    <span class="size-card__chip" [attr.data-testid]="'chip-' + preset.id">{{
+                      chip
+                    }}</span>
+                  }
                 </span>
               </button>
             </li>
           }
         </ul>
-      </div>
+      </section>
     }
-  </fieldset>
 
-  <!-- Custom dimensions form ────────────────────────────────────────────── -->
-  <form
-    [formGroup]="customForm"
-    (ngSubmit)="applyCustom()"
-    novalidate
-    aria-labelledby="custom-heading"
-    class="custom"
-  >
-    <h3 id="custom-heading">Custom</h3>
-
-    <div class="custom__field">
-      <label for="custom-width">Width</label>
-      <input
-        id="custom-width"
-        data-testid="custom-width"
-        type="number"
-        inputmode="decimal"
-        [attr.min]="band().min"
-        [attr.max]="band().max"
-        [value]="display(customForm.value.width)"
-        (input)="onAxisInput('width', $any($event.target).value)"
-        [attr.aria-invalid]="customForm.get('width')?.invalid && customForm.get('width')?.touched"
-        aria-describedby="width-error custom-help aspect-warning"
-      />
-      <span class="custom__unit">{{ displayUnit() }}</span>
-      <p
-        id="width-error"
-        class="custom__error"
-        role="alert"
-        [hidden]="!(customForm.get('width')?.invalid && customForm.get('width')?.touched)"
+    <!-- Step 2 — Custom branch ───────────────────────────────────────────── -->
+    @if (view() === 'sizes' && activeBrand() === 'Custom') {
+      <section
+        class="custom-wrap"
+        aria-labelledby="custom-heading"
+        data-testid="custom-wrap"
       >
-        Width must be between {{ band().min }} and {{ band().max }} {{ displayUnit() }}.
-      </p>
-    </div>
+        <div class="size-picker__top">
+          <button
+            type="button"
+            class="size-picker__back"
+            data-testid="back-to-brands"
+            (click)="backToBrands()"
+          >
+            <span aria-hidden="true">←</span> Back to brands
+          </button>
+          <h3 id="custom-heading" class="size-picker__heading">Custom</h3>
+        </div>
 
-    <div class="custom__field">
-      <label for="custom-height">Height</label>
-      <input
-        id="custom-height"
-        data-testid="custom-height"
-        type="number"
-        inputmode="decimal"
-        [attr.min]="band().min"
-        [attr.max]="band().max"
-        [value]="display(customForm.value.height)"
-        (input)="onAxisInput('height', $any($event.target).value)"
-        [attr.aria-invalid]="customForm.get('height')?.invalid && customForm.get('height')?.touched"
-        aria-describedby="height-error custom-help aspect-warning"
-      />
-      <span class="custom__unit">{{ displayUnit() }}</span>
-      <p
-        id="height-error"
-        class="custom__error"
-        role="alert"
-        [hidden]="!(customForm.get('height')?.invalid && customForm.get('height')?.touched)"
-      >
-        Height must be between {{ band().min }} and {{ band().max }} {{ displayUnit() }}.
-      </p>
-    </div>
+        <form [formGroup]="customForm" (ngSubmit)="applyCustom()" novalidate class="custom">
+          <div class="custom__field">
+            <label for="custom-width">Width</label>
+            <div class="custom__input-wrap">
+              <input
+                id="custom-width"
+                data-testid="custom-width"
+                type="number"
+                inputmode="decimal"
+                [attr.min]="band().min"
+                [attr.max]="band().max"
+                [value]="display(customForm.value.width)"
+                (input)="onAxisInput('width', $any($event.target).value)"
+                [attr.aria-invalid]="
+                  customForm.get('width')?.invalid && customForm.get('width')?.touched
+                "
+                aria-describedby="width-error custom-help aspect-warning"
+              />
+              <span class="custom__unit" aria-hidden="true">{{ displayUnit() }}</span>
+            </div>
+            <p
+              id="width-error"
+              class="custom__error"
+              role="alert"
+              [hidden]="!(customForm.get('width')?.invalid && customForm.get('width')?.touched)"
+            >
+              Width must be between {{ band().min }} and {{ band().max }} {{ displayUnit() }}.
+            </p>
+          </div>
 
-    <div class="custom__field">
-      <label for="custom-depth">Depth</label>
-      <input
-        id="custom-depth"
-        data-testid="custom-depth"
-        type="number"
-        inputmode="decimal"
-        [attr.min]="band().min"
-        [attr.max]="band().max"
-        [value]="display(customForm.value.depth)"
-        (input)="onAxisInput('depth', $any($event.target).value)"
-        [attr.aria-invalid]="customForm.get('depth')?.invalid && customForm.get('depth')?.touched"
-        aria-describedby="depth-error custom-help aspect-warning"
-      />
-      <span class="custom__unit">{{ displayUnit() }}</span>
-      <p
-        id="depth-error"
-        class="custom__error"
-        role="alert"
-        [hidden]="!(customForm.get('depth')?.invalid && customForm.get('depth')?.touched)"
-      >
-        Depth must be between {{ band().min }} and {{ band().max }} {{ displayUnit() }}.
-      </p>
-    </div>
+          <div class="custom__field">
+            <label for="custom-height">Height</label>
+            <div class="custom__input-wrap">
+              <input
+                id="custom-height"
+                data-testid="custom-height"
+                type="number"
+                inputmode="decimal"
+                [attr.min]="band().min"
+                [attr.max]="band().max"
+                [value]="display(customForm.value.height)"
+                (input)="onAxisInput('height', $any($event.target).value)"
+                [attr.aria-invalid]="
+                  customForm.get('height')?.invalid && customForm.get('height')?.touched
+                "
+                aria-describedby="height-error custom-help aspect-warning"
+              />
+              <span class="custom__unit" aria-hidden="true">{{ displayUnit() }}</span>
+            </div>
+            <p
+              id="height-error"
+              class="custom__error"
+              role="alert"
+              [hidden]="!(customForm.get('height')?.invalid && customForm.get('height')?.touched)"
+            >
+              Height must be between {{ band().min }} and {{ band().max }} {{ displayUnit() }}.
+            </p>
+          </div>
 
-    <p id="custom-help" class="custom__help">
-      Range: {{ band().min }} – {{ band().max }} {{ displayUnit() }} per axis.
-    </p>
+          <div class="custom__field">
+            <label for="custom-depth">Depth</label>
+            <div class="custom__input-wrap">
+              <input
+                id="custom-depth"
+                data-testid="custom-depth"
+                type="number"
+                inputmode="decimal"
+                [attr.min]="band().min"
+                [attr.max]="band().max"
+                [value]="display(customForm.value.depth)"
+                (input)="onAxisInput('depth', $any($event.target).value)"
+                [attr.aria-invalid]="
+                  customForm.get('depth')?.invalid && customForm.get('depth')?.touched
+                "
+                aria-describedby="depth-error custom-help aspect-warning"
+              />
+              <span class="custom__unit" aria-hidden="true">{{ displayUnit() }}</span>
+            </div>
+            <p
+              id="depth-error"
+              class="custom__error"
+              role="alert"
+              [hidden]="!(customForm.get('depth')?.invalid && customForm.get('depth')?.touched)"
+            >
+              Depth must be between {{ band().min }} and {{ band().max }} {{ displayUnit() }}.
+            </p>
+          </div>
 
-    <p
-      id="aspect-warning"
-      class="custom__warning"
-      data-testid="aspect-warning"
-      aria-live="polite"
-      [hidden]="aspectWarning() === null"
-    >
-      {{ aspectWarning() }}
-    </p>
+          <p id="custom-help" class="custom__help">
+            Range: {{ band().min }} – {{ band().max }} {{ displayUnit() }} per axis.
+          </p>
 
-    <button type="submit" data-testid="apply-custom" [disabled]="customForm.invalid">
-      Apply custom dimensions
-    </button>
-  </form>
+          <p
+            id="aspect-warning"
+            class="custom__warning"
+            data-testid="aspect-warning"
+            aria-live="polite"
+            [hidden]="aspectWarning() === null"
+          >
+            {{ aspectWarning() }}
+          </p>
 
-  <!-- Styling subpanel (F1.2 Phase D) ───────────────────────────────────── -->
-  <aquascape-tank-styling></aquascape-tank-styling>
+          <button type="submit" data-testid="apply-custom" [disabled]="customForm.invalid">
+            Apply custom dimensions
+          </button>
+        </form>
+      </section>
+    }
+
+    <!-- Styling subpanel (F1.2 Phase D) ───────────────────────────────────── -->
+    <aquascape-tank-styling></aquascape-tank-styling>
+  </div>
 </section>

@@ -1,0 +1,41 @@
+<!-- Aquascape brand mark — Geometric A monogram.
+     A bold geometric capital A whose crossbar is a stylized leaf, sitting on a
+     soft substrate hill. Designed at 64×64 with 6–8u strokes so it stays
+     legible at 16px favicon scale. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Aquascape">
+  <title>Aquascape</title>
+  <!-- Substrate hill: a soft mound the A rests on. Earth-tone, drawn first so
+       it sits behind the letter strokes. -->
+  <path
+    id="hill"
+    d="M 4 56 Q 32 42 60 56 L 60 60 L 4 60 Z"
+    fill="#8b6a4a"
+  />
+  <!-- Letter A diagonals: two thick strokes meeting at the apex. Drawn as a
+       single closed polyline with round joins so the apex reads cleanly at
+       small sizes. Dark slate so it dominates the mark. -->
+  <g id="letter-a" fill="none" stroke="#1f2933" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <polyline id="a-strokes" points="10,54 32,8 54,54" />
+  </g>
+  <!-- Leaf crossbar: an almond / oval shape, horizontally oriented, with a
+       pointed tip on each side. Fresh aqua-green; positioned across the A
+       roughly two-thirds of the way down. -->
+  <path
+    id="leaf"
+    d="M 18 40 Q 32 30 46 40 Q 32 50 18 40 Z"
+    fill="#3aa67a"
+    stroke="#266b50"
+    stroke-width="1.5"
+    stroke-linejoin="round"
+  />
+  <!-- Leaf midrib for character at larger sizes; barely visible at 16px but
+       adds depth on tab thumbnails. -->
+  <path
+    id="leaf-midrib"
+    d="M 20 40 L 44 40"
+    stroke="#266b50"
+    stroke-width="1"
+    stroke-linecap="round"
+    opacity="0.6"
+  />
+</svg>

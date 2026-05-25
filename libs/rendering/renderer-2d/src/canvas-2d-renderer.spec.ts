@@ -523,15 +523,18 @@ describe('Canvas2DRenderer.render — background', () => {
     uninstallFakeWindow();
   });
 
-  it('"none" paints a default neutral fill across the canvas', () => {
+  // Tank in sceneWithStyle defaults to 360 × 220 mm at the origin; the
+  // background fillRect covers that rect in world-mm (no longer the whole
+  // canvas — see the "centered card" change to drawBackground).
+  it('"none" paints a default neutral fill inside the tank rect', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
     r.render(sceneWithStyle({ frame: 'rimless', background: { kind: 'none' } }), upright);
     const fillRects = canvas.context.ops.filter((o) => o.method === 'fillRect');
-    // Exactly one full-canvas fillRect — no water tint, no frame, no extras.
+    // Exactly one tank-rect fillRect — no water tint, no frame, no extras.
     expect(fillRects.length).toBe(1);
-    expect(fillRects[0]!.args).toEqual([0, 0, 800, 600]);
+    expect(fillRects[0]!.args).toEqual([0, 0, 360, 220]);
     // The fillStyle just before that fillRect must be the documented default.
     const ops = canvas.context.ops;
     const fillRectIdx = indexOfOp(ops, 'fillRect');
@@ -539,7 +542,7 @@ describe('Canvas2DRenderer.render — background', () => {
     expect(fillStyles[fillStyles.length - 1]!.args).toEqual(['#fafafa']);
   });
 
-  it('"color" paints a fillRect covering the canvas with the chosen color', () => {
+  it('"color" paints a fillRect covering the tank rect with the chosen color', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
@@ -553,7 +556,7 @@ describe('Canvas2DRenderer.render — background', () => {
     const ops = canvas.context.ops;
     const fillRectIdx = indexOfOp(ops, 'fillRect');
     expect(fillRectIdx).toBeGreaterThanOrEqual(0);
-    expect(ops[fillRectIdx]!.args).toEqual([0, 0, 800, 600]);
+    expect(ops[fillRectIdx]!.args).toEqual([0, 0, 360, 220]);
     const fillStyles = ops.slice(0, fillRectIdx).filter((o) => o.method === 'set:fillStyle');
     expect(fillStyles[fillStyles.length - 1]!.args).toEqual(['#0b0d0e']);
   });
@@ -579,13 +582,13 @@ describe('Canvas2DRenderer.render — background', () => {
     const ops = canvas.context.ops;
     const fillRectIdx = indexOfOp(ops, 'fillRect');
     expect(fillRectIdx).toBeGreaterThanOrEqual(0);
-    expect(ops[fillRectIdx]!.args).toEqual([0, 0, 800, 600]);
+    expect(ops[fillRectIdx]!.args).toEqual([0, 0, 360, 220]);
     // Default fill color, same as 'none'.
     const fillStyles = ops.slice(0, fillRectIdx).filter((o) => o.method === 'set:fillStyle');
     expect(fillStyles[fillStyles.length - 1]!.args).toEqual(['#fafafa']);
   });
 
-  it('"gradient" creates a linear gradient spanning the canvas at angle=0', () => {
+  it('"gradient" creates a linear gradient spanning the tank rect at angle=0', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
@@ -606,21 +609,22 @@ describe('Canvas2DRenderer.render — background', () => {
     const ops = canvas.context.ops;
     const gradIdx = indexOfOp(ops, 'createLinearGradient');
     expect(gradIdx).toBeGreaterThanOrEqual(0);
-    // angle=0 → unit vector (1, 0); half-extent = w/2 = 400, center (400,300).
-    // Endpoints: (0, 300) → (800, 300).
-    expect(ops[gradIdx]!.args).toEqual([0, 300, 800, 300]);
+    // Tank is 360 × 220 at origin. angle=0 → unit vector (1, 0);
+    // half-extent = w/2 = 180, center (180, 110).
+    // Endpoints in world-mm: (0, 110) → (360, 110).
+    expect(ops[gradIdx]!.args).toEqual([0, 110, 360, 110]);
     // addColorStop should have been called once per stop, in order.
     const stops = ops.filter((o) => o.method === 'addColorStop');
     expect(stops.length).toBe(2);
     expect(stops[0]!.args).toEqual([0, '#001122']);
     expect(stops[1]!.args).toEqual([1, '#334455']);
-    // A fillRect over the canvas must come after the gradient is built.
+    // The tank-rect fillRect comes after the gradient is built.
     const fillRectIdx = indexOfOp(ops, 'fillRect', gradIdx);
     expect(fillRectIdx).toBeGreaterThan(gradIdx);
-    expect(ops[fillRectIdx]!.args).toEqual([0, 0, 800, 600]);
+    expect(ops[fillRectIdx]!.args).toEqual([0, 0, 360, 220]);
   });
 
-  it('"gradient" with angle=π/2 paints bottom-to-top in CANVAS pixels', () => {
+  it('"gradient" with angle=π/2 paints bottom-to-top in WORLD coords', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
@@ -629,7 +633,7 @@ describe('Canvas2DRenderer.render — background', () => {
         frame: 'rimless',
         background: {
           kind: 'gradient',
-          angle: Math.PI / 2, // bottom → top in WORLD; ↑ in WORLD = ↓ in CANVAS y
+          angle: Math.PI / 2, // bottom → top in WORLD; world +y is ↑ on screen
           stops: [
             { at: 0, color: '#aaaaaa' },
             { at: 1, color: '#ffffff' },
@@ -640,14 +644,17 @@ describe('Canvas2DRenderer.render — background', () => {
     );
     const ops = canvas.context.ops;
     const gradIdx = indexOfOp(ops, 'createLinearGradient');
-    // angle=π/2 → (cos, -sin) = (~0, -1); half = h/2 = 300, center (400,300).
-    // Endpoints: (400, 300 - (-1)*300) = (400, 600) → (400, 300 + (-1)*300) = (400, 0).
-    // So gradient at=0 sits at canvas y=600 (bottom) and at=1 at y=0 (top).
+    // Drawn under the world transform (world +y up; renderer's negative
+    // y-scale flips it to canvas +y down). angle=π/2 → (cos, sin) = (0, 1);
+    // tank centre (180, 110); half-height 110 → endpoints
+    // (180, 110 - 110) = (180, 0) → (180, 110 + 110) = (180, 220).
+    // at=0 sits at world y=0 (tank bottom — bottom of screen);
+    // at=1 sits at world y=220 (tank top — top of screen).
     const args = ops[gradIdx]!.args as number[];
-    expect(args[0]).toBeCloseTo(400);
-    expect(args[1]).toBeCloseTo(600);
-    expect(args[2]).toBeCloseTo(400);
-    expect(args[3]).toBeCloseTo(0);
+    expect(args[0]).toBeCloseTo(180);
+    expect(args[1]).toBeCloseTo(0);
+    expect(args[2]).toBeCloseTo(180);
+    expect(args[3]).toBeCloseTo(220);
   });
 
   it('"gradient" accepts >2 stops and forwards them in order', () => {
@@ -700,6 +707,23 @@ describe('Canvas2DRenderer.render — water tint', () => {
     expect(alphas.length).toBe(0);
   });
 
+  // After the "centered card" change to drawBackground, BOTH the background
+  // and the water tint paint at the same world-mm tank rect (0, 0, 360, 220).
+  // The tint is distinguishable by its save/globalAlpha/fillRect/restore
+  // wrap. These helpers find the tint specifically.
+  const TANK_RECT_ARGS = JSON.stringify([0, 0, 360, 220]);
+  const isTankRectFillRect = (o: { method: string; args: unknown[] }): boolean =>
+    o.method === 'fillRect' && JSON.stringify(o.args) === TANK_RECT_ARGS;
+  /**
+   * Locate the WATER-TINT fillRect — the second tank-rect fillRect, which
+   * lives inside a save/restore wrap with globalAlpha set. Background paints
+   * the first such fillRect under the default alpha.
+   */
+  const findTintFillRectIdx = (ops: Array<{ method: string; args: unknown[] }>): number => {
+    const matches = ops.map((o, i) => (isTankRectFillRect(o) ? i : -1)).filter((i) => i >= 0);
+    return matches.length >= 2 ? (matches[1] as number) : -1;
+  };
+
   it('paints a tinted fillRect inside the tank in world-mm', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
@@ -713,12 +737,11 @@ describe('Canvas2DRenderer.render — water tint', () => {
       upright,
     );
     const ops = canvas.context.ops;
-    // The water tint fillRect must cover the tank interior in world-mm:
-    // tank is (0, 0) to (360, 220) per sceneWithStyle defaults.
-    const tankFills = ops.filter(
-      (o) => o.method === 'fillRect' && JSON.stringify(o.args) === JSON.stringify([0, 0, 360, 220]),
-    );
-    expect(tankFills.length).toBe(1);
+    // Two tank-rect fillRects total now: [0] background, [1] water tint.
+    const tankFills = ops.filter(isTankRectFillRect);
+    expect(tankFills.length).toBe(2);
+    const tintIdx = findTintFillRectIdx(ops);
+    expect(tintIdx).toBeGreaterThanOrEqual(0);
   });
 
   it('wraps the tint in save/restore with globalAlpha set', () => {
@@ -734,10 +757,7 @@ describe('Canvas2DRenderer.render — water tint', () => {
       upright,
     );
     const ops = canvas.context.ops;
-    // Locate the tint fillRect by its world-mm args.
-    const tintIdx = ops.findIndex(
-      (o) => o.method === 'fillRect' && JSON.stringify(o.args) === JSON.stringify([0, 0, 360, 220]),
-    );
+    const tintIdx = findTintFillRectIdx(ops);
     expect(tintIdx).toBeGreaterThanOrEqual(0);
     // Walk backwards to find the matching `save`. There must be a globalAlpha
     // set between save and the fillRect, and a restore after the fillRect.
@@ -769,9 +789,7 @@ describe('Canvas2DRenderer.render — water tint', () => {
       upright,
     );
     const ops = canvas.context.ops;
-    const tintIdx = ops.findIndex(
-      (o) => o.method === 'fillRect' && JSON.stringify(o.args) === JSON.stringify([0, 0, 360, 220]),
-    );
+    const tintIdx = findTintFillRectIdx(ops);
     const fillStyles = ops.slice(0, tintIdx).filter((o) => o.method === 'set:fillStyle');
     // The most recent fillStyle before the tint fillRect must be the hex
     // the user picked — the renderer doesn't parse it.

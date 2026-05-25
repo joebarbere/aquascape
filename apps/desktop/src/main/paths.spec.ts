@@ -6,7 +6,7 @@
 
 import * as path from 'node:path';
 
-import { resolveIndexPath, resolvePreloadPath } from './paths';
+import { resolveIconPath, resolveIndexPath, resolvePreloadPath } from './paths';
 
 const MAIN_DIR = path.join('/abs', 'dist', 'apps', 'desktop', 'main', 'src', 'main');
 
@@ -31,5 +31,17 @@ describe('resolvePreloadPath', () => {
 
   it('produces a normalised path', () => {
     expect(resolvePreloadPath(MAIN_DIR)).not.toContain('..');
+  });
+});
+
+describe('resolveIconPath', () => {
+  it('resolves to dist/apps/desktop/main/assets/icon.png (alongside main.js)', () => {
+    expect(resolveIconPath(MAIN_DIR)).toBe(
+      path.join('/abs', 'dist', 'apps', 'desktop', 'main', 'assets', 'icon.png'),
+    );
+  });
+
+  it('produces a normalised path', () => {
+    expect(resolveIconPath(MAIN_DIR)).not.toContain('..');
   });
 });

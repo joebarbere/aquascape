@@ -6,11 +6,36 @@ import {
   defaultScene,
   selectSubstrateRegions,
 } from '@aquascape/state';
+import { STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
+import type { StorageService } from '@aquascape/platform/platform-api';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import type { Action } from '@ngrx/store';
 
-import { SubstrateToolComponent } from './substrate-tool.component';
+import {
+  SUBSTRATE_TOOL_COLLAPSED_KEY,
+  SubstrateToolComponent,
+} from './substrate-tool.component';
 import type { SubstrateRegion } from '@aquascape/domain/scene-model';
+
+class FakeStorageService implements StorageService {
+  readonly data = new Map<string, unknown>();
+  get<T>(key: string): Promise<T | null> {
+    return Promise.resolve((this.data.get(key) as T | undefined) ?? null);
+  }
+  set<T>(key: string, value: T): Promise<void> {
+    this.data.set(key, value);
+    return Promise.resolve();
+  }
+  remove(key: string): Promise<void> {
+    this.data.delete(key);
+    return Promise.resolve();
+  }
+}
+
+async function flushPromises(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
 function regionFixture(overrides: Partial<SubstrateRegion> = {}): SubstrateRegion {
   return {
@@ -26,7 +51,11 @@ function regionFixture(overrides: Partial<SubstrateRegion> = {}): SubstrateRegio
   };
 }
 
-function configure(regions: readonly SubstrateRegion[] = []) {
+function configure(
+  regions: readonly SubstrateRegion[] = [],
+  options: { storage?: FakeStorageService } = {},
+) {
+  const storage = options.storage ?? new FakeStorageService();
   TestBed.configureTestingModule({
     imports: [SubstrateToolComponent],
     providers: [
@@ -34,6 +63,7 @@ function configure(regions: readonly SubstrateRegion[] = []) {
         initialState: { scene: { scene: defaultScene(), history: { past: [], future: [], limit: 200 } } },
         selectors: [{ selector: selectSubstrateRegions, value: regions as never }],
       }),
+      { provide: STORAGE_SERVICE, useValue: storage },
     ],
   });
   const fixture = TestBed.createComponent(SubstrateToolComponent);
@@ -41,7 +71,7 @@ function configure(regions: readonly SubstrateRegion[] = []) {
   // Wrap dispatch in a spy so every test can inspect what was dispatched
   // without re-installing the spy each time.
   const getActions = watchDispatches(TestBed.inject(MockStore));
-  return { fixture, getActions };
+  return { fixture, getActions, storage };
 }
 
 /**
@@ -309,6 +339,57 @@ describe('SubstrateToolComponent', () => {
       const component = fixture.componentInstance as SubstrateToolComponent;
       component.onPointChange(region, 99, 'x', 0.5);
       expect(getActions()).toEqual([]);
+    });
+  });
+
+  describe('collapsible header', () => {
+    it('renders the header as a button with aria-expanded=true by default', () => {
+      const { fixture } = configure();
+      const toggle = fixture.nativeElement.querySelector(
+        '.panel-header__toggle',
+      ) as HTMLButtonElement;
+      expect(toggle.tagName).toBe('BUTTON');
+      expect(toggle.getAttribute('aria-expanded')).toBe('true');
+      expect(toggle.getAttribute('aria-controls')).toBe('substrate-tool-body');
+    });
+
+    it('shows the region count in the header badge', () => {
+      const { fixture } = configure([regionFixture({ id: 'a' }), regionFixture({ id: 'b' })]);
+      const count = fixture.nativeElement.querySelector('.panel-header__count');
+      expect(count).not.toBeNull();
+      expect(count!.textContent?.trim()).toBe('2');
+    });
+
+    it('clicking the header toggles the collapsed signal and hides the body', () => {
+      const { fixture } = configure();
+      const toggle = fixture.nativeElement.querySelector(
+        '.panel-header__toggle',
+      ) as HTMLButtonElement;
+      const body = fixture.nativeElement.querySelector('#substrate-tool-body') as HTMLElement;
+      expect(fixture.componentInstance.collapsed()).toBe(false);
+      expect(body.hidden).toBe(false);
+      toggle.click();
+      fixture.detectChanges();
+      expect(fixture.componentInstance.collapsed()).toBe(true);
+      expect(body.hidden).toBe(true);
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('persists collapsed state to StorageService on toggle', async () => {
+      const { fixture, storage } = configure();
+      fixture.componentInstance.toggleCollapsed();
+      fixture.detectChanges();
+      await flushPromises();
+      expect(storage.data.get(SUBSTRATE_TOOL_COLLAPSED_KEY)).toBe(true);
+    });
+
+    it('hydrates the collapsed signal from StorageService on init', async () => {
+      const storage = new FakeStorageService();
+      await storage.set(SUBSTRATE_TOOL_COLLAPSED_KEY, true);
+      const { fixture } = configure([], { storage });
+      await flushPromises();
+      fixture.detectChanges();
+      expect(fixture.componentInstance.collapsed()).toBe(true);
     });
   });
 });

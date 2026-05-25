@@ -1,0 +1,30 @@
+{
+  "catalog": "core",
+  "id": "wood.mopani.medium",
+  "version": 1,
+  "name": "Mopani Wood",
+  "kind": "hardscape",
+  "category": "wood",
+  "subcategory": "mopani",
+  "naturalSize": { "width": 280, "height": 150, "depth": 130 },
+  "color": "#4a2f1c",
+  "description": "Dense African hardwood with two-tone (light-tan + dark-brown) coloration and a sculptural, sandblasted appearance. Sinks readily. Leaches strong tannins — soak well before use.",
+  "tags": ["wood", "mopani", "two-tone", "blackwater", "sculptural"],
+  "silhouette": [
+    { "x": -0.95, "y": -0.4 },
+    { "x": -0.6, "y": -0.55 },
+    { "x": -0.25, "y": -0.85 },
+    { "x": 0.05, "y": -0.6 },
+    { "x": 0.45, "y": -0.9 },
+    { "x": 0.85, "y": -0.5 },
+    { "x": 0.95, "y": -0.05 },
+    { "x": 0.6, "y": 0.25 },
+    { "x": 0.9, "y": 0.55 },
+    { "x": 0.4, "y": 0.7 },
+    { "x": 0.15, "y": 0.95 },
+    { "x": -0.25, "y": 0.7 },
+    { "x": -0.55, "y": 0.95 },
+    { "x": -0.85, "y": 0.55 },
+    { "x": -0.95, "y": 0.1 }
+  ]
+}

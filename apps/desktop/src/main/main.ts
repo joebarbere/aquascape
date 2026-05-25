@@ -17,7 +17,7 @@
 
 import * as path from 'node:path';
 
-import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeImage, session, shell } from 'electron';
 
 import {
   createDialogBackend,
@@ -27,7 +27,7 @@ import {
 } from './backends';
 import { cspForEnvironment } from './csp';
 import { registerIpcHandlers } from './ipc-handlers';
-import { resolveIndexPath, resolvePreloadPath } from './paths';
+import { resolveIconPath, resolveIndexPath, resolvePreloadPath } from './paths';
 import { buildWebPreferences } from './web-preferences';
 
 const DEV_SERVER_ENV = 'DEV_SERVER_URL';
@@ -112,11 +112,19 @@ function createMainWindow(): BrowserWindow {
   const preloadPath = resolvePreloadPath(__dirname);
   const webPreferences = buildWebPreferences(preloadPath);
 
+  // Brand-mark icon — load once and feed to both the BrowserWindow (for
+  // Windows / Linux window chrome) and `app.dock.setIcon()` (macOS dock).
+  // A read failure is non-fatal; the app falls back to the default Electron
+  // diamond. The `icon` property is omitted entirely when the file is
+  // missing because Electron's type for it doesn't permit `undefined`.
+  const icon = nativeImage.createFromPath(resolveIconPath(__dirname));
+
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
     backgroundColor: '#000000',
     webPreferences,
+    ...(icon.isEmpty() ? {} : { icon }),
   });
 
   const devServerUrl = process.env[DEV_SERVER_ENV];
@@ -157,6 +165,19 @@ app
   .whenReady()
   .then(() => {
     installCsp();
+
+    // macOS dock icon. BrowserWindow's `icon` is ignored on macOS for window
+    // chrome (the OS uses the app bundle icon), but `app.dock.setIcon()`
+    // surfaces the brand mark in the dock at runtime — important for the
+    // dev experience (`nx serve desktop`) where there's no signed bundle
+    // yet. Production packaging needs a proper ICNS in the bundle's
+    // Info.plist; that's a separate follow-up.
+    if (process.platform === 'darwin' && app.dock !== undefined) {
+      const dockIcon = nativeImage.createFromPath(resolveIconPath(__dirname));
+      if (!dockIcon.isEmpty()) {
+        app.dock.setIcon(dockIcon);
+      }
+    }
 
     // F1.4: the file picker / dialogs / storage / export channels need a
     // BrowserWindow to anchor native modals to. We pass a `getWindow()`

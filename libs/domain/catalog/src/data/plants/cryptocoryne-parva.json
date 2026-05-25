@@ -1,0 +1,31 @@
+{
+  "catalog": "core",
+  "id": "plant.cryptocoryne.parva",
+  "version": 1,
+  "name": "Cryptocoryne parva",
+  "kind": "plant",
+  "zone": "midground",
+  "lighting": "medium",
+  "co2": "low",
+  "difficulty": "moderate",
+  "color": "#4f7a35",
+  "naturalSize": { "width": 50, "height": 60, "depth": 50 },
+  "description": "Smallest Crypt — narrow upright blades on a compact rosette. Slow grower; can melt on transplant before re-emerging. Pretty foreground-to-midground transition.",
+  "tags": ["rosette", "midground", "crypt", "small"],
+  "silhouette": [
+    { "x": 0, "y": -1 },
+    { "x": 0.4, "y": -0.65 },
+    { "x": 0.8, "y": -0.3 },
+    { "x": 0.55, "y": 0.0 },
+    { "x": 0.85, "y": 0.4 },
+    { "x": 0.45, "y": 0.65 },
+    { "x": 0.15, "y": 0.95 },
+    { "x": -0.15, "y": 0.95 },
+    { "x": -0.45, "y": 0.65 },
+    { "x": -0.85, "y": 0.4 },
+    { "x": -0.55, "y": 0.0 },
+    { "x": -0.8, "y": -0.3 },
+    { "x": -0.4, "y": -0.65 }
+  ],
+  "growth": { "weeksToMature": 14, "sizeAtZero": 0.4 }
+}

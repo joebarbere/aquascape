@@ -58,23 +58,27 @@ const STEP_WEEKS = 1;
         align-items: center;
         gap: 8px;
         padding: 6px 8px;
-        background: #1e2228;
-        color: #ddd;
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border);
         border-radius: 6px;
         font-size: 13px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
       }
       input[type='range'] {
         flex: 1;
+        accent-color: var(--accent);
       }
       .label {
         min-width: 4ch;
         text-align: right;
         font-variant-numeric: tabular-nums;
+        color: var(--text-muted);
       }
       .now {
-        background: #2c3038;
-        color: inherit;
-        border: 1px solid #3a3f48;
+        background: var(--surface-2);
+        color: var(--text);
+        border: 1px solid var(--border-strong);
         border-radius: 4px;
         padding: 3px 8px;
         cursor: pointer;
@@ -82,12 +86,13 @@ const STEP_WEEKS = 1;
       }
       .now:hover,
       .now:focus-visible {
-        background: #3a3f48;
+        background: var(--surface-hover);
         outline: none;
       }
       .now.active {
-        background: #3a8050;
-        border-color: #3a8050;
+        background: var(--accent);
+        color: var(--accent-text);
+        border-color: var(--accent-hover);
       }
     `,
   ],
