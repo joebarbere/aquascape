@@ -15,6 +15,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   HostListener,
+  ViewChild,
   inject,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -24,21 +25,24 @@ import {
   selectCanRedo,
   selectCanUndo,
   selectDisplayTitle,
+  selectEnvelope,
   selectHasPendingDraft,
   selectLastError,
   selectPendingDraft,
   selectRecentFiles,
+  selectScene,
   selectStatus,
 } from '@aquascape/state';
 import { Store } from '@ngrx/store';
 
+import { TemplateBrowserComponent, type TemplateInstantiateEvent } from './template-browser.component';
 import { ThemeToggleComponent } from './theme-toggle.component';
 
 @Component({
   selector: 'aquascape-editor-shell',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, ThemeToggleComponent],
+  imports: [CommonModule, TemplateBrowserComponent, ThemeToggleComponent],
   template: `
     <header class="editor-shell" role="banner">
       <div class="title-block">
@@ -86,6 +90,15 @@ import { ThemeToggleComponent } from './theme-toggle.component';
           title="Save document as (Ctrl+Shift+S)"
         >
           Save As
+        </button>
+        <button
+          type="button"
+          class="action"
+          (click)="onOpenTemplates()"
+          aria-label="Browse templates"
+          title="Browse templates"
+        >
+          Templates
         </button>
 
         <span class="divider" aria-hidden="true"></span>
@@ -147,6 +160,13 @@ import { ThemeToggleComponent } from './theme-toggle.component';
         {{ lastError() }}
       </aside>
     }
+
+    <aquascape-template-browser
+      #templateBrowser
+      [currentScene]="currentScene()"
+      [currentEnvelope]="currentEnvelope()"
+      (instantiate)="onTemplateInstantiated($event)"
+    ></aquascape-template-browser>
   `,
   styles: [
     `
@@ -287,6 +307,14 @@ export class EditorShellComponent {
   readonly lastError = toSignal(this.store.select(selectLastError), { initialValue: null });
   readonly canUndo = toSignal(this.store.select(selectCanUndo), { initialValue: false });
   readonly canRedo = toSignal(this.store.select(selectCanRedo), { initialValue: false });
+  /** Current scene snapshot — fed into the template browser so "save as
+   *  template" can marshal it. May be null briefly during boot. */
+  readonly currentScene = toSignal(this.store.select(selectScene), { initialValue: null });
+  /** Current document envelope — preserves unknown extensions in the
+   *  saved template. Null when the user hasn't opened anything. */
+  readonly currentEnvelope = toSignal(this.store.select(selectEnvelope), { initialValue: null });
+
+  @ViewChild('templateBrowser') private templateBrowser?: TemplateBrowserComponent;
 
   /** Friendly status text for the title-block status pill. */
   statusLabel(): string {
@@ -318,6 +346,21 @@ export class EditorShellComponent {
 
   onOpenRecent(fileId: string): void {
     this.store.dispatch(DocumentActions.openRecentFileRequested({ fileId }));
+  }
+
+  /** Open the template-browser modal. F5.1. */
+  onOpenTemplates(): void {
+    this.templateBrowser?.open();
+  }
+
+  /**
+   * Apply a template instantiation: replace the scene + clear the file
+   * association (same effect as `newDocumentRequested`, but with the
+   * template's scene instead of `defaultScene()`).
+   */
+  onTemplateInstantiated(event: TemplateInstantiateEvent): void {
+    this.store.dispatch(SceneActions.setScene({ scene: event.scene }));
+    this.store.dispatch(DocumentActions.documentReset());
   }
 
   onRecover(): void {

@@ -77,6 +77,15 @@ export {
   type SnapTargets,
 } from './lib/snap-math';
 export {
+  TemplateBrowserComponent,
+  type TemplateInstantiateEvent,
+} from './lib/template-browser.component';
+export {
+  TemplatesService,
+  MAX_PERSONAL_TEMPLATES,
+  STORAGE_KEY_PERSONAL_TEMPLATES,
+} from './lib/templates.service';
+export {
   ZOOM_MULT_MAX,
   ZOOM_MULT_MIN,
   ZOOM_STEP_MULT,
