@@ -32,7 +32,8 @@
             "input": "apps/web/src/icons",
             "output": "/icons"
           }
-        ]
+        ],
+        "serviceWorker": "apps/web/ngsw-config.json"
       },
       "configurations": {
         "production": {

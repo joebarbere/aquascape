@@ -11,6 +11,7 @@
 
 import { bootstrapApplication } from '@angular/platform-browser';
 import { isDevMode, provideZoneChangeDetection } from '@angular/core';
+import { provideServiceWorker } from '@angular/service-worker';
 import {
   DIALOG_SERVICE,
   FILE_SERVICE,
@@ -55,6 +56,16 @@ bootstrapApplication(AppComponent, {
       maxAge: 25,
       logOnly: !isDevMode(),
       autoPause: true,
+    }),
+    // Stage 6 F6.4 follow-up — register the @angular/service-worker SW
+    // produced by the build (via `serviceWorker: ngsw-config.json` in
+    // project.json). Production-only: dev disables it so the dev server
+    // serves fresh bundles without cache surprises. Registration is
+    // deferred ~30 s after app stable so the SW doesn't compete with
+    // initial paint or first-input responsiveness.
+    provideServiceWorker('ngsw-worker.js', {
+      enabled: !isDevMode(),
+      registrationStrategy: 'registerWhenStable:30000',
     }),
   ],
 })
