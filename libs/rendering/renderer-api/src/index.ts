@@ -101,6 +101,37 @@ export interface OverlayOptions {
 }
 
 /**
+ * Stage 5.x — view-only "room wall" background. A filled rectangle painted
+ * BEHIND the tank in world-mm coordinates, so the user can sketch a
+ * background colour for the surface their tank is sitting against. The
+ * rectangle is centred on the tank's geometric centre and sized
+ * independently of the tank itself — `widthMm` × `heightMm` are absolute,
+ * not tank-relative, because the room exists in its own space.
+ *
+ * v1 ships colour-only; gradient / image fills are a follow-up when the
+ * "customise the entire room" scope expands. The data is NOT serialised
+ * into `Scene` / `.aqua` — it's a per-user UI preference held in
+ * `WallBackgroundService` (root-provided in `features/editor-shell`) and
+ * persisted under `aquascape.ui.wall.*`.
+ *
+ * Painted between the grid pass and the tank outline so the wall sits
+ * behind the tank glass and substrate, on top of any canvas-level
+ * `tank.style.background` fill but below every scene object.
+ *
+ * No-op when omitted, when `enabled` is `false`, or when either dimension
+ * is `≤ 0`.
+ */
+export interface WallBackground {
+  enabled: boolean;
+  /** Solid fill colour as a hex string (`#rrggbb` or `#rrggbbaa`). */
+  color: string;
+  /** Wall width in world millimetres. Centred on the tank's x centre. */
+  widthMm: number;
+  /** Wall height in world millimetres. Centred on the tank's y centre. */
+  heightMm: number;
+}
+
+/**
  * The renderer contract. Both `renderer-2d` (now) and `renderer-3d`
  * (Stage 10) implement this. Features depend on this interface, never on a
  * concrete renderer.
@@ -147,6 +178,13 @@ export interface SceneRenderer {
    * are decoration — they don't appear in `hitTest`, never mutate the
    * scene, and add no canvas work when the parameter is omitted or every
    * flag is false.
+   *
+   * The optional `wallBackground` parameter (Stage 5.x) paints a filled
+   * "room wall" rectangle BEHIND the tank in world-mm coordinates (between
+   * the grid and the tank outline). Centred on the tank's geometric
+   * centre; `widthMm × heightMm` are absolute. Decoration only — not in
+   * `hitTest`, never mutates the scene, true no-op when omitted /
+   * disabled / zero-sized.
    */
   render(
     scene: Scene,
@@ -155,6 +193,7 @@ export interface SceneRenderer {
     selection?: ReadonlyArray<ObjectId>,
     previewAgeWeeks?: number,
     overlayOptions?: OverlayOptions,
+    wallBackground?: WallBackground,
   ): void;
 
   /**

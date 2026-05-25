@@ -2792,3 +2792,200 @@ describe('Canvas2DRenderer.render (composition overlays — F5.3)', () => {
     expect(fillStyles(ops)).not.toContain(FOCAL_FILL);
   });
 });
+
+// ─── Stage 5.x — Wall background ──────────────────────────────────────────
+//
+// View-only room-wall rectangle painted behind the tank. Centred on the
+// tank's geometric centre, sized in world-mm independently of the tank.
+
+describe('Canvas2DRenderer.render (wall background — Stage 5.x)', () => {
+  const TANK_W = 360;
+  const TANK_H = 220;
+  const WALL_COLOR = '#2a2d35';
+
+  let fakeWindow: FakeWindow;
+
+  beforeEach(() => {
+    fakeWindow = installFakeWindow();
+    void fakeWindow;
+  });
+
+  afterEach(() => {
+    uninstallFakeWindow();
+  });
+
+  function renderWith(
+    wall:
+      | { enabled: boolean; color: string; widthMm: number; heightMm: number }
+      | undefined,
+  ): { ops: RecordedOp[] } {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(
+      makeMinimalScene(TANK_W, TANK_H, TANK_H),
+      upright,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      wall,
+    );
+    return { ops: canvas.context.ops };
+  }
+
+  /** Find the `fillRect` op the wall paint emits — its fillStyle is the
+   *  wall color and its position matches the configured rect. */
+  function wallFillRect(ops: RecordedOp[], color: string): RecordedOp | null {
+    // The wall paint is wrapped in save / set:fillStyle / fillRect /
+    // restore. Locate the set:fillStyle with our color, then the next
+    // fillRect inside that block.
+    for (let i = 0; i < ops.length; i++) {
+      const op = ops[i]!;
+      if (op.method === 'set:fillStyle' && op.args[0] === color) {
+        // Look ahead for the matching fillRect (before the next restore).
+        for (let j = i + 1; j < ops.length; j++) {
+          if (ops[j]!.method === 'restore') break;
+          if (ops[j]!.method === 'fillRect') return ops[j]!;
+        }
+      }
+    }
+    return null;
+  }
+
+  it('is a no-op when wallBackground is omitted', () => {
+    const { ops } = renderWith(undefined);
+    expect(wallFillRect(ops, WALL_COLOR)).toBeNull();
+  });
+
+  it('is a no-op when enabled is false', () => {
+    const { ops } = renderWith({
+      enabled: false,
+      color: WALL_COLOR,
+      widthMm: 1200,
+      heightMm: 600,
+    });
+    expect(wallFillRect(ops, WALL_COLOR)).toBeNull();
+  });
+
+  it('is a no-op when widthMm is 0 (defensive)', () => {
+    const { ops } = renderWith({
+      enabled: true,
+      color: WALL_COLOR,
+      widthMm: 0,
+      heightMm: 600,
+    });
+    expect(wallFillRect(ops, WALL_COLOR)).toBeNull();
+  });
+
+  it('is a no-op when heightMm is 0 (defensive)', () => {
+    const { ops } = renderWith({
+      enabled: true,
+      color: WALL_COLOR,
+      widthMm: 1200,
+      heightMm: 0,
+    });
+    expect(wallFillRect(ops, WALL_COLOR)).toBeNull();
+  });
+
+  it('is a no-op when widthMm or heightMm is negative (defensive)', () => {
+    const { ops } = renderWith({
+      enabled: true,
+      color: WALL_COLOR,
+      widthMm: -100,
+      heightMm: 600,
+    });
+    expect(wallFillRect(ops, WALL_COLOR)).toBeNull();
+  });
+
+  it('paints a fillRect centred on the tank at the configured size', () => {
+    const widthMm = 1200;
+    const heightMm = 600;
+    const { ops } = renderWith({
+      enabled: true,
+      color: WALL_COLOR,
+      widthMm,
+      heightMm,
+    });
+    const rect = wallFillRect(ops, WALL_COLOR);
+    expect(rect).not.toBeNull();
+    // World-coord centre = (TANK_W/2, TANK_H/2). Wall corner = centre -
+    // size/2.
+    const expectedX = TANK_W / 2 - widthMm / 2;
+    const expectedY = TANK_H / 2 - heightMm / 2;
+    expect(rect!.args).toEqual([expectedX, expectedY, widthMm, heightMm]);
+  });
+
+  it('the wall paint precedes the tank outline so the tank covers it inside its rect', () => {
+    const widthMm = 1200;
+    const heightMm = 600;
+    const { ops } = renderWith({
+      enabled: true,
+      color: WALL_COLOR,
+      widthMm,
+      heightMm,
+    });
+    // Wall = first fillRect with WALL_COLOR.
+    const wallIdx = ops.findIndex(
+      (o, i) =>
+        o.method === 'fillRect' &&
+        i > 0 &&
+        ops[i - 1]?.method === 'set:fillStyle' &&
+        ops[i - 1]?.args[0] === WALL_COLOR,
+    );
+    // Tank outline = strokeRect.
+    const tankIdx = ops.findIndex((o) => o.method === 'strokeRect');
+    expect(wallIdx).toBeGreaterThan(-1);
+    expect(tankIdx).toBeGreaterThan(-1);
+    expect(wallIdx).toBeLessThan(tankIdx);
+  });
+
+  it('wall save / restore brackets exactly one fillRect (no style leak)', () => {
+    const { ops } = renderWith({
+      enabled: true,
+      color: WALL_COLOR,
+      widthMm: 1200,
+      heightMm: 600,
+    });
+    // Find the set:fillStyle for the wall color and the following save +
+    // restore pair around it. Verify the fillRect sits between them.
+    const styleIdx = ops.findIndex(
+      (o) => o.method === 'set:fillStyle' && o.args[0] === WALL_COLOR,
+    );
+    expect(styleIdx).toBeGreaterThan(-1);
+    // Walk back to the nearest save.
+    let saveIdx = -1;
+    for (let i = styleIdx; i >= 0; i--) {
+      if (ops[i]!.method === 'save') {
+        saveIdx = i;
+        break;
+      }
+    }
+    expect(saveIdx).toBeGreaterThan(-1);
+    // Walk forward to the matching restore.
+    let restoreIdx = -1;
+    for (let i = styleIdx + 1; i < ops.length; i++) {
+      if (ops[i]!.method === 'restore') {
+        restoreIdx = i;
+        break;
+      }
+    }
+    expect(restoreIdx).toBeGreaterThan(styleIdx);
+    const block = ops.slice(saveIdx, restoreIdx + 1);
+    expect(block.filter((o) => o.method === 'fillRect')).toHaveLength(1);
+  });
+
+  it('paints with the configured color (not a default)', () => {
+    const customColor = '#aabbcc';
+    const { ops } = renderWith({
+      enabled: true,
+      color: customColor,
+      widthMm: 1000,
+      heightMm: 500,
+    });
+    const fills = ops
+      .filter((o) => o.method === 'set:fillStyle')
+      .map((o) => o.args[0]);
+    expect(fills).toContain(customColor);
+  });
+});

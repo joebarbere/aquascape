@@ -80,6 +80,8 @@ import {
   StatusBarComponent,
   TimeSliderComponent,
   ViewportService,
+  WallBackgroundComponent,
+  WallBackgroundService,
   ZoomControlComponent,
   ZOOM_MULT_MAX,
   ZOOM_MULT_MIN,
@@ -179,6 +181,7 @@ type DragState =
     SubstrateToolComponent,
     TankSetupComponent,
     TimeSliderComponent,
+    WallBackgroundComponent,
     ZoomControlComponent,
   ],
   template: `
@@ -300,6 +303,7 @@ type DragState =
             <aquascape-hardscape-tool></aquascape-hardscape-tool>
             <aquascape-planting-tool></aquascape-planting-tool>
             <aquascape-composition-overlays></aquascape-composition-overlays>
+            <aquascape-wall-background></aquascape-wall-background>
           </div>
         </aside>
 
@@ -561,6 +565,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private readonly plantDragService = inject(PlantDragService);
   private readonly previewTime = inject(PreviewTimeService);
   private readonly overlayOptions = inject(OverlayOptionsService);
+  private readonly wallBackground = inject(WallBackgroundService);
   private readonly viewportState = inject(ViewportService);
   private readonly cursorPos = inject(CursorPositionService);
   private readonly cdr = inject(ChangeDetectorRef);
@@ -740,6 +745,21 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     void this.viewportState.userPan();
     if (this.viewportStateFirstRun) {
       this.viewportStateFirstRun = false;
+      return;
+    }
+    if (this.currentScene !== null) {
+      this.renderCurrent();
+    }
+  });
+
+  // Stage 5.x — re-render when any wall-background field flips so the
+  // user sees the wall appear / change colour / resize immediately.
+  // Mirrors the overlay + zoom effects.
+  private wallBackgroundFirstRun = true;
+  private readonly wallBackgroundEffect = effect(() => {
+    void this.wallBackground.wall();
+    if (this.wallBackgroundFirstRun) {
+      this.wallBackgroundFirstRun = false;
       return;
     }
     if (this.currentScene !== null) {
@@ -1518,6 +1538,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.currentSelection,
       previewAge ?? undefined,
       this.overlayOptions.overlays(),
+      this.wallBackground.wall(),
     );
   }
 

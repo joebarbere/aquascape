@@ -64,6 +64,7 @@ import type {
   RenderSurface,
   SceneRenderer,
   Viewport,
+  WallBackground,
 } from '@aquascape/rendering/renderer-api';
 
 // ─── Tuning constants ─────────────────────────────────────────────────────
@@ -238,6 +239,7 @@ export class Canvas2DRenderer implements SceneRenderer {
     selection?: ReadonlyArray<ObjectId>,
     previewAgeWeeks?: number,
     overlayOptions?: OverlayOptions,
+    wallBackground?: WallBackground,
   ): void {
     const s = this.surface;
     const ctx = this.ctx;
@@ -290,6 +292,14 @@ export class Canvas2DRenderer implements SceneRenderer {
       y: scene.tank.height,
       z: 0,
     });
+
+    // Stage 5.x — view-only "room wall" background. Painted FIRST in world
+    // space (right after the clear) so the tank's own style.background fill
+    // and the tank outline cover the wall where the tank sits, and the wall
+    // is visible only in the area outside the tank's silhouette — i.e.
+    // exactly how a real wall reads through the front-view projection.
+    // No-op when omitted / disabled / zero-sized.
+    this.drawWallBackground(ctx, scene, wallBackground);
 
     // Tank-style background: painted INSIDE the tank rect (clipped to the
     // tank outline) so the tank reads as a centered card on the host page
@@ -909,6 +919,41 @@ export class Canvas2DRenderer implements SceneRenderer {
     ctx.arc(0, halfH + stalkLengthMm, handleSizeMm / 2, 0, Math.PI * 2);
     ctx.fillStyle = SELECTION_COLOR;
     ctx.fill();
+    ctx.restore();
+  }
+
+  // ─── Stage 5.x — Wall background ─────────────────────────────────────
+  //
+  // View-only "room wall" rectangle painted in world-mm coordinates,
+  // centred on the tank's geometric centre, sized independently of the
+  // tank (configurable in mm via the editor-shell `WallBackgroundService`).
+  // Called BEFORE every other paint pass so the tank's `style.background`
+  // covers the wall inside the tank rect — the wall is therefore visible
+  // only in the area outside the tank's silhouette.
+  //
+  // True no-op when the argument is omitted, when `enabled` is false, or
+  // when either dimension is non-positive. Wrapped in save / restore so
+  // the fillStyle assignment doesn't leak into the next paint.
+
+  private drawWallBackground(
+    ctx: CanvasRenderingContext2D,
+    scene: Scene,
+    wall: WallBackground | undefined,
+  ): void {
+    if (wall === undefined || !wall.enabled) return;
+    if (wall.widthMm <= 0 || wall.heightMm <= 0) return;
+    const tankW = scene.tank.width;
+    const tankH = scene.tank.height;
+    if (tankW <= 0 || tankH <= 0) return;
+
+    const cx = tankW / 2;
+    const cy = tankH / 2;
+    const x = cx - wall.widthMm / 2;
+    const y = cy - wall.heightMm / 2;
+
+    ctx.save();
+    ctx.fillStyle = wall.color;
+    ctx.fillRect(x, y, wall.widthMm, wall.heightMm);
     ctx.restore();
   }
 

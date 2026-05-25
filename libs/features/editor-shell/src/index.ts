@@ -29,6 +29,22 @@ export {
 export { ViewportService } from './lib/viewport.service';
 export { ZoomControlComponent } from './lib/zoom-control.component';
 export {
+  WallBackgroundComponent,
+  WALL_BACKGROUND_COLLAPSED_KEY,
+} from './lib/wall-background.component';
+export {
+  WallBackgroundService,
+  DEFAULT_WALL_COLOR,
+  DEFAULT_WALL_HEIGHT_MM,
+  DEFAULT_WALL_WIDTH_MM,
+  MAX_WALL_DIM_MM,
+  MIN_WALL_DIM_MM,
+  STORAGE_KEY_WALL_COLOR,
+  STORAGE_KEY_WALL_ENABLED,
+  STORAGE_KEY_WALL_HEIGHT_MM,
+  STORAGE_KEY_WALL_WIDTH_MM,
+} from './lib/wall-background.service';
+export {
   ZOOM_MULT_MAX,
   ZOOM_MULT_MIN,
   ZOOM_STEP_MULT,

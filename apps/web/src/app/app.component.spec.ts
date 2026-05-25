@@ -46,7 +46,11 @@ import {
   selectStatus,
 } from '@aquascape/state';
 
-import { OverlayOptionsService, ViewportService } from '@aquascape/features/editor-shell';
+import {
+  OverlayOptionsService,
+  ViewportService,
+  WallBackgroundService,
+} from '@aquascape/features/editor-shell';
 
 import { AppComponent } from './app.component';
 import { SCENE_RENDERER } from './renderer.token';
@@ -548,6 +552,49 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
 
     expect(viewport.userZoomMult()).not.toBeNull();
     expect(viewport.userZoomMult()!).toBeGreaterThan(1);
+  });
+
+  // ─── Stage 5.x — wall background ────────────────────────────────────────
+
+  it('passes the current WallBackground as the 7th render() argument', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const firstCall = renderer.render.mock.calls[0]!;
+    // Index 6 is the WallBackground slot (scene, viewport, catalog,
+    // selection, previewAge, overlayOptions, wallBackground).
+    expect(firstCall[6]).toEqual({
+      enabled: false,
+      color: expect.stringMatching(/^#[0-9a-f]{6,8}$/i),
+      widthMm: expect.any(Number),
+      heightMm: expect.any(Number),
+    });
+  });
+
+  it('re-renders with the new wall config when the service updates', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    renderer.render.mockClear();
+    const wall = TestBed.inject(WallBackgroundService);
+    wall.setEnabled(true);
+    wall.setColor('#112233');
+    wall.setWidthMm(900);
+    wall.setHeightMm(450);
+    fixture.detectChanges();
+
+    expect(renderer.render).toHaveBeenCalled();
+    const finalArgs = renderer.render.mock.calls.at(-1)!;
+    expect(finalArgs[6]).toEqual({
+      enabled: true,
+      color: '#112233',
+      widthMm: 900,
+      heightMm: 450,
+    });
   });
 
   it('plain wheel (no Cmd/Ctrl) does NOT touch zoom — page-scroll preserved', () => {

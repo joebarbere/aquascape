@@ -13,6 +13,7 @@ import type {
   HitResult,
   SceneRenderer,
   OverlayOptions,
+  WallBackground,
 } from './index';
 import type { Scene, ObjectId, LayerId } from '@aquascape/domain/scene-model';
 import type { Vec2 } from '@aquascape/domain/geometry';
@@ -106,5 +107,36 @@ describe('@aquascape/rendering/renderer-api', () => {
     const arity: HitTestArity = 6;
     expect(arity).toBe(6);
     expect(overlays.goldenRatio).toBe(true);
+  });
+
+  it('accepts wallBackground as the 7th render() arg (Stage 5.x) and exports the WallBackground shape', () => {
+    // Type-only assertions: WallBackground exposes exactly the four fields
+    // the renderer + UI service share. `render`'s 7th slot accepts it.
+    // `hitTest` still does NOT take the wall — it's pure decoration.
+    const wall: WallBackground = {
+      enabled: true,
+      color: '#2a2d35',
+      widthMm: 1200,
+      heightMm: 600,
+    };
+    const stub: SceneRenderer = {
+      attach: () => undefined,
+      render: () => undefined,
+      hitTest: () => null,
+      dispose: () => undefined,
+    };
+    stub.render(
+      {} as Scene,
+      {} as Viewport,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      wall,
+    );
+    type HitTestArity = Parameters<SceneRenderer['hitTest']>['length'];
+    const arity: HitTestArity = 6;
+    expect(arity).toBe(6);
+    expect(wall.widthMm).toBe(1200);
   });
 });
