@@ -46,20 +46,51 @@ export function resolvePreloadPath(mainDir: string): string {
 }
 
 /**
- * Resolve the absolute path to the app icon PNG, given the directory
- * containing the compiled `main.js` at runtime. The icon is copied by the
- * `build-main` target's `assets` entry to `dist/apps/desktop/main/assets/`.
+ * Resolve the absolute path to the app icon, given the directory containing
+ * the compiled `main.js` at runtime. The icons (PNG / ICO / ICNS) are
+ * generated from `apps/web/src/favicon.svg` via `pnpm icons`
+ * (`tools/build-icons.mjs`) and copied by the `build-main` target's
+ * `assets` entry to `dist/apps/desktop/main/assets/`.
  *
  * Runtime layout: from `dist/apps/desktop/main/src/main/`, climb 2 to
- * `dist/apps/desktop/main/` and descend into `assets/icon.png`.
+ * `dist/apps/desktop/main/` and descend into `assets/icon.<ext>`.
  *
- * Used for:
- *   - `BrowserWindow({ icon })` on Windows / Linux (macOS ignores it for
- *     window chrome but the app.dock.setIcon() call uses the same file).
- *   - `app.dock.setIcon()` on macOS to surface the brand mark in the dock
- *     during `nx serve desktop` (production packaging needs a proper ICNS
- *     in the app bundle's Info.plist — separate follow-up).
+ * The optional `kind` argument selects the file format:
+ *   - `'png'`  — cross-platform fallback (used by `BrowserWindow({ icon })`
+ *     on Linux and as the universal fallback).
+ *   - `'ico'`  — Windows multi-size icon (16, 24, 32, 48, 64, 128, 256).
+ *     Used for the Windows `BrowserWindow` icon and (later) by the
+ *     packager for the `.exe` resource section.
+ *   - `'icns'` — macOS-native icon bundle (16…1024 incl. @2x retinas).
+ *     Used by `app.dock.setIcon()` for crisp dock rendering across DPRs;
+ *     consumed by the packager (Stage 8+) for the `.app` bundle's
+ *     `Contents/Resources/`.
+ *
+ * Defaults to PNG when omitted (callers that don't care about platform
+ * native formats).
  */
-export function resolveIconPath(mainDir: string): string {
-  return path.join(mainDir, '..', '..', 'assets', 'icon.png');
+export type IconKind = 'png' | 'ico' | 'icns';
+
+export function resolveIconPath(mainDir: string, kind: IconKind = 'png'): string {
+  return path.join(mainDir, '..', '..', 'assets', `icon.${kind}`);
+}
+
+/**
+ * Resolve the most appropriate icon path for the current platform. Used by
+ * the BrowserWindow constructor and `app.dock.setIcon()` so each OS gets
+ * its native-format icon at runtime.
+ *
+ * - Linux / unknown → PNG.
+ * - Windows         → ICO.
+ * - macOS           → ICNS (sharper on retina than rasterising a PNG).
+ */
+export function resolvePlatformIconPath(mainDir: string, platform: NodeJS.Platform): string {
+  switch (platform) {
+    case 'darwin':
+      return resolveIconPath(mainDir, 'icns');
+    case 'win32':
+      return resolveIconPath(mainDir, 'ico');
+    default:
+      return resolveIconPath(mainDir, 'png');
+  }
 }

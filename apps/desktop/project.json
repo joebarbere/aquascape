@@ -13,7 +13,11 @@
         "main": "apps/desktop/src/main/main.ts",
         "tsConfig": "apps/desktop/tsconfig.main.json",
         "assets": [
-          { "glob": "icon.png", "input": "apps/desktop/src/assets", "output": "assets" }
+          {
+            "glob": "icon.{png,ico,icns}",
+            "input": "apps/desktop/src/assets",
+            "output": "assets"
+          }
         ]
       }
     },

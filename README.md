@@ -58,7 +58,7 @@ Empty placeholders (stage-gated implementation):
 
 Shared infrastructure:
 
-- `tools/` — workspace tooling: `scaffold-libs.cjs` (lib scaffolder), `validate-example.mjs` (thin AJV CLI that points at `libs/domain/document/src/schema/aqua-document.schema.json` for one-off contributor sanity checks; the authoritative gate is `nx test testing -t document-round-trip`), `validate-catalog.mjs` (thin AJV CLI for the catalog JSON manifests).
+- `tools/` — workspace tooling: `scaffold-libs.cjs` (lib scaffolder), `validate-example.mjs` (thin AJV CLI that points at `libs/domain/document/src/schema/aqua-document.schema.json` for one-off contributor sanity checks; the authoritative gate is `nx test testing -t document-round-trip`), `validate-catalog.mjs` (thin AJV CLI for the catalog JSON manifests), `build-icons.mjs` (`pnpm icons` — rasterizes `apps/web/src/favicon.svg` into the desktop's `icon.png` / `icon.ico` / `icon.icns` via `sharp` + `png-to-ico` + macOS `iconutil`), `restart-desktop.sh` (`pnpm restart:desktop` — sequenced web-then-Electron dev-stack restart that reaps prior processes by port + main-script path).
 - `docs/decisions/` — four foundational ADRs (Electron tooling, pnpm, Jest coverage, Nx Cloud deferral).
 - `plans/` — per-feature implementation plans (one `F<X.Y>` file per feature, grouped by stage).
 - `.claude/` — nine project sub-agent definitions (`scene-model-engineer`, `renderer-engineer`, `electron-platform-engineer`, `angular-feature-engineer`, etc.) plus team playbooks.

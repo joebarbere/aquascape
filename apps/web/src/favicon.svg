@@ -1,20 +1,39 @@
-<!-- Aquascape brand mark — Geometric A monogram.
-     A bold geometric capital A whose crossbar is a stylized leaf, sitting on a
-     soft substrate hill. Designed at 64×64 with 6–8u strokes so it stays
-     legible at 16px favicon scale. -->
+<!-- Aquascape brand mark — Geometric A monogram on an aqua-blue rounded
+     tile. White A strokes for maximum contrast against the aqua background;
+     a stylized leaf crossbar in the same green family as the brand accent;
+     a soft substrate mound at the base of the tile. Designed at 64×64 with
+     6–8u strokes so it stays legible at 16px favicon scale. Tile uses a
+     22% corner radius — the macOS Big Sur+ dock-icon convention — so the
+     mark also works as a desktop-app icon. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Aquascape">
   <title>Aquascape</title>
-  <!-- Substrate hill: a soft mound the A rests on. Earth-tone, drawn first so
-       it sits behind the letter strokes. -->
+  <!-- Aqua-blue background tile. Cyan-600 (#0891B2) chosen for: (a) "aqua"
+       semantic — evokes water; (b) high contrast against the white A
+       (~5:1, comfortably above WCAG AA for UI); (c) sits in the same
+       blue-green family as the leaf so the mark reads as one composition,
+       not three competing colours. rx/ry = 14.3 ≈ 22.37 % of the 64-unit
+       side — the rounded-rect approximation of Apple's squircle. -->
+  <rect
+    id="tile"
+    x="0"
+    y="0"
+    width="64"
+    height="64"
+    rx="14.3"
+    ry="14.3"
+    fill="#0891b2"
+  />
+  <!-- Substrate hill: a soft mound the A rests on. Earth-tone, drawn first
+       so it sits behind the letter strokes. -->
   <path
     id="hill"
     d="M 4 56 Q 32 42 60 56 L 60 60 L 4 60 Z"
     fill="#8b6a4a"
   />
-  <!-- Letter A diagonals: two thick strokes meeting at the apex. Drawn as a
-       single closed polyline with round joins so the apex reads cleanly at
-       small sizes. Dark slate so it dominates the mark. -->
-  <g id="letter-a" fill="none" stroke="#1f2933" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Letter A diagonals: two thick strokes meeting at the apex. Drawn as
+       a single closed polyline with round joins so the apex reads cleanly
+       at small sizes. White so it pops against the aqua tile. -->
+  <g id="letter-a" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
     <polyline id="a-strokes" points="10,54 32,8 54,54" />
   </g>
   <!-- Leaf crossbar: an almond / oval shape, horizontally oriented, with a

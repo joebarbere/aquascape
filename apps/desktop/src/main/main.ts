@@ -27,7 +27,12 @@ import {
 } from './backends';
 import { cspForEnvironment } from './csp';
 import { registerIpcHandlers } from './ipc-handlers';
-import { resolveIconPath, resolveIndexPath, resolvePreloadPath } from './paths';
+import {
+  resolveIconPath,
+  resolveIndexPath,
+  resolvePlatformIconPath,
+  resolvePreloadPath,
+} from './paths';
 import { buildWebPreferences } from './web-preferences';
 
 const DEV_SERVER_ENV = 'DEV_SERVER_URL';
@@ -112,12 +117,15 @@ function createMainWindow(): BrowserWindow {
   const preloadPath = resolvePreloadPath(__dirname);
   const webPreferences = buildWebPreferences(preloadPath);
 
-  // Brand-mark icon — load once and feed to both the BrowserWindow (for
-  // Windows / Linux window chrome) and `app.dock.setIcon()` (macOS dock).
-  // A read failure is non-fatal; the app falls back to the default Electron
-  // diamond. The `icon` property is omitted entirely when the file is
-  // missing because Electron's type for it doesn't permit `undefined`.
-  const icon = nativeImage.createFromPath(resolveIconPath(__dirname));
+  // Brand-mark icon — load the platform-native format (ICO on Windows,
+  // ICNS on macOS, PNG on Linux + fallback). A read failure is non-fatal;
+  // the app falls back to the default Electron diamond. The `icon`
+  // property is omitted entirely when the file is missing because
+  // Electron's type for it doesn't permit `undefined`. macOS ignores
+  // BrowserWindow.icon for the window-title chrome (the .app bundle's
+  // ICNS in Info.plist owns that), so the dock-icon path below is what
+  // actually drives the visible brand at runtime there.
+  const icon = nativeImage.createFromPath(resolvePlatformIconPath(__dirname, process.platform));
 
   const win = new BrowserWindow({
     width: 1280,
@@ -166,14 +174,20 @@ app
   .then(() => {
     installCsp();
 
-    // macOS dock icon. BrowserWindow's `icon` is ignored on macOS for window
-    // chrome (the OS uses the app bundle icon), but `app.dock.setIcon()`
-    // surfaces the brand mark in the dock at runtime — important for the
-    // dev experience (`nx serve desktop`) where there's no signed bundle
-    // yet. Production packaging needs a proper ICNS in the bundle's
-    // Info.plist; that's a separate follow-up.
+    // macOS dock icon. BrowserWindow's `icon` is ignored on macOS for
+    // window chrome (the OS uses the .app bundle's ICNS), but
+    // `app.dock.setIcon()` surfaces the brand mark in the dock at runtime
+    // — important for the dev experience (`nx serve desktop`) where
+    // there's no signed bundle yet. We load the native ICNS so the dock
+    // icon stays crisp across retina + DPR changes; falls back to PNG if
+    // the ICNS isn't there (e.g. someone ran `pnpm icons` on Linux and
+    // the macOS-only iconutil step was skipped). Production packaging
+    // (Stage 8+) will embed the same ICNS in Info.plist via the packager.
     if (process.platform === 'darwin' && app.dock !== undefined) {
-      const dockIcon = nativeImage.createFromPath(resolveIconPath(__dirname));
+      let dockIcon = nativeImage.createFromPath(resolveIconPath(__dirname, 'icns'));
+      if (dockIcon.isEmpty()) {
+        dockIcon = nativeImage.createFromPath(resolveIconPath(__dirname, 'png'));
+      }
       if (!dockIcon.isEmpty()) {
         app.dock.setIcon(dockIcon);
       }

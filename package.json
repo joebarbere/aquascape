@@ -12,7 +12,9 @@
     "affected": "nx affected -t lint test build",
     "format": "nx format:write",
     "format:check": "nx format:check",
-    "precompile:validators": "node tools/precompile-validators.mjs"
+    "precompile:validators": "node tools/precompile-validators.mjs",
+    "icons": "node tools/build-icons.mjs",
+    "restart:desktop": "bash tools/restart-desktop.sh"
   },
   "packageManager": "pnpm@9.12.0",
   "engines": {
@@ -66,8 +68,10 @@
     "jest-preset-angular": "^14.3.0",
     "jsonc-eslint-parser": "^2.4.0",
     "nx": "20.2.2",
+    "png-to-ico": "^3.0.1",
     "prettier": "^3.3.3",
     "rxjs": "^7.8.2",
+    "sharp": "^0.34.5",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
     "tslib": "^2.6.3",
