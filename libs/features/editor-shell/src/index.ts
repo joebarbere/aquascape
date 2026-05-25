@@ -45,6 +45,38 @@ export {
   STORAGE_KEY_WALL_WIDTH_MM,
 } from './lib/wall-background.service';
 export {
+  SnapSettingsComponent,
+  SNAP_SETTINGS_COLLAPSED_KEY,
+} from './lib/snap-settings.component';
+export {
+  SnapOptionsService,
+  STORAGE_KEY_SNAP_ENABLED,
+  STORAGE_KEY_SNAP_GRID_SIZE_MM,
+  STORAGE_KEY_SNAP_TOLERANCE_CSS_PX,
+  STORAGE_KEY_SNAP_TO_GRID,
+  STORAGE_KEY_SNAP_TO_GUIDES,
+  STORAGE_KEY_SNAP_TO_OBJECTS,
+  type SnapOptions,
+} from './lib/snap-options.service';
+export {
+  DEFAULT_GRID_SIZE_MM,
+  DEFAULT_TOLERANCE_CSS_PX,
+  MAX_GRID_SIZE_MM,
+  MAX_TOLERANCE_CSS_PX,
+  MIN_GRID_SIZE_MM,
+  MIN_TOLERANCE_CSS_PX,
+  gridTargets,
+  guideTargets,
+  mergeTargets,
+  objectTargets,
+  snapAxis,
+  snapPosition,
+  toleranceCssPxToMm,
+  type AxisSnap,
+  type SnapResult,
+  type SnapTargets,
+} from './lib/snap-math';
+export {
   ZOOM_MULT_MAX,
   ZOOM_MULT_MIN,
   ZOOM_STEP_MULT,

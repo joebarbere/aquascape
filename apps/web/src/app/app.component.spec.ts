@@ -573,6 +573,18 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     });
   });
 
+  // ─── Stage 5 F5.4 — snap guides arg ────────────────────────────────────
+
+  it('passes undefined for snapGuides on initial render (no drag in flight)', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const args = renderer.render.mock.calls[0]!;
+    // Index 7 is the SnapGuides slot.
+    expect(args[7]).toBeUndefined();
+  });
+
   it('re-renders with the new wall config when the service updates', () => {
     const renderer = new MockSceneRenderer();
     configure(renderer);

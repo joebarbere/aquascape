@@ -77,6 +77,8 @@ import {
   OverlayOptionsService,
   PreviewTimeService,
   SelectionInspectorComponent,
+  SnapOptionsService,
+  SnapSettingsComponent,
   StatusBarComponent,
   TimeSliderComponent,
   ViewportService,
@@ -88,7 +90,13 @@ import {
   clampZoomMult,
   composeViewport,
   cursorToWorld,
+  gridTargets,
+  guideTargets,
+  mergeTargets,
+  objectTargets,
   panForCursorAnchor,
+  snapPosition,
+  toleranceCssPxToMm,
   wheelDeltaToZoomFactor,
 } from '@aquascape/features/editor-shell';
 import { HardscapeDragService, HardscapeToolComponent } from '@aquascape/features/hardscape-tool';
@@ -112,6 +120,7 @@ import type {
   HitResult,
   RenderSurface,
   SceneRenderer,
+  SnapGuides,
   Viewport,
 } from '@aquascape/rendering/renderer-api';
 import { SceneActions, SelectionActions, selectScene, selectSelectedIds } from '@aquascape/state';
@@ -177,6 +186,7 @@ type DragState =
     LayersPanelComponent,
     PlantingToolComponent,
     SelectionInspectorComponent,
+    SnapSettingsComponent,
     StatusBarComponent,
     SubstrateToolComponent,
     TankSetupComponent,
@@ -303,6 +313,7 @@ type DragState =
             <aquascape-hardscape-tool></aquascape-hardscape-tool>
             <aquascape-planting-tool></aquascape-planting-tool>
             <aquascape-composition-overlays></aquascape-composition-overlays>
+            <aquascape-snap-settings></aquascape-snap-settings>
             <aquascape-wall-background></aquascape-wall-background>
           </div>
         </aside>
@@ -364,6 +375,16 @@ type DragState =
               aria-hidden="true"
             >
               {{ g.label }}
+            </div>
+          }
+          @if (dragReadout(); as r) {
+            <div
+              class="drag-readout"
+              [style.left.px]="r.cssX"
+              [style.top.px]="r.cssY"
+              aria-hidden="true"
+            >
+              {{ r.text }}
             </div>
           }
           <div class="app-status">
@@ -553,6 +574,26 @@ type DragState =
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
         white-space: nowrap;
       }
+      /* F5.3 — distance / position readout shown next to the cursor during
+         any move / scale / rotate drag. Positioned in CSS-px relative to
+         the canvas host (not viewport-fixed like the palette ghost,
+         because the readout is anchored to where the drag is happening
+         inside the canvas). */
+      .drag-readout {
+        position: absolute;
+        transform: translate(12px, -28px);
+        padding: 3px 8px;
+        background: rgba(32, 35, 42, 0.92);
+        color: #fff;
+        border-radius: 10px;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.2;
+        pointer-events: none;
+        z-index: 5;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+        white-space: nowrap;
+      }
     `,
   ],
 })
@@ -566,6 +607,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private readonly previewTime = inject(PreviewTimeService);
   private readonly overlayOptions = inject(OverlayOptionsService);
   private readonly wallBackground = inject(WallBackgroundService);
+  private readonly snapOptions = inject(SnapOptionsService);
   private readonly viewportState = inject(ViewportService);
   private readonly cursorPos = inject(CursorPositionService);
   private readonly cdr = inject(ChangeDetectorRef);
@@ -597,6 +639,20 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     width: number;
     height: number;
   } | null>(null);
+
+  /**
+   * F5.3 — drag readout. Set during a move / scale / rotate drag to a
+   * `{text, cssX, cssY}` triple that the template renders as a small pill
+   * floating near the cursor. Cleared on drag end / cancel.
+   */
+  readonly dragReadout = signal<{ text: string; cssX: number; cssY: number } | null>(null);
+
+  /**
+   * F5.4 — currently engaged snap-alignment lines in world-mm. Passed as
+   * the 8th render() arg so the renderer paints the bright magenta lines
+   * indicating active snaps. Cleared on drag end / cancel.
+   */
+  private currentSnapGuides: SnapGuides | null = null;
 
   /**
    * Drag-ghost label + viewport coords for the cursor follower shown while a
@@ -1255,8 +1311,23 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    const finalTransform = this.computeFinalTransform(state);
+    // F5.4 — apply snap to the FINAL transform too so the dispatched
+    // command lands at the snapped position, not the raw cursor position.
+    // The preview the user saw + the persisted state must match.
+    const previewBase = this.computeFinalTransform(state);
+    const scene = this.currentScene;
+    const finalTransform =
+      scene === null
+        ? previewBase
+        : this.applySnapToPreview(scene, state, previewBase).transform;
+
     this.dragState = null;
+    // F5.3 / F5.4 — clear visual drag affordances now that the gesture
+    // has resolved. The store will fire `selectScene` and renderCurrent
+    // will paint without snap guides + without the readout.
+    this.dragReadout.set(null);
+    this.currentSnapGuides = null;
+
     // Dispatch ONE command per gesture so undo restores the pre-drag state.
     if (state.kind === 'move') {
       this.store.dispatch(
@@ -1278,6 +1349,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.detachDocumentListeners();
     this.dragState = null;
     this.marqueeRect.set(null);
+    // F5.3 / F5.4 — clear the readout + snap guides so they don't linger
+    // past the drag they belong to.
+    this.dragReadout.set(null);
+    this.currentSnapGuides = null;
     this.cdr.markForCheck();
   }
 
@@ -1539,14 +1614,114 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       previewAge ?? undefined,
       this.overlayOptions.overlays(),
       this.wallBackground.wall(),
+      this.currentSnapGuides ?? undefined,
     );
   }
 
   private buildPreviewScene(scene: Scene): Scene {
-    if (this.dragState === null || this.dragState.kind === 'marquee') return scene;
+    if (this.dragState === null || this.dragState.kind === 'marquee') {
+      // No object-drag in flight → no snap guides + no readout. Both are
+      // already cleared by onDocumentPointerUp / cancelDrag; we
+      // deliberately do NOT touch them here so we never write to a signal
+      // inside the render path.
+      return scene;
+    }
     const state = this.dragState;
-    const preview = this.computeFinalTransform(state);
+    const previewBase = this.computeFinalTransform(state);
+    const { transform: preview, guides } = this.applySnapToPreview(
+      scene,
+      state,
+      previewBase,
+    );
+    this.currentSnapGuides = guides;
+    this.updateDragReadout(state, preview);
     return mapObjectTransform(scene, state.objectId, preview);
+  }
+
+  /**
+   * F5.4 — snap math for the in-flight move drag. The renderer paints a
+   * bright magenta alignment line for each engaged target via the 8th
+   * `snapGuides` render() arg. Scale + rotate drags pass through
+   * untouched (snap for those gestures is a follow-up; the rotation
+   * snap-to-15° increments idea is its own design call).
+   */
+  private applySnapToPreview(
+    scene: Scene,
+    state: DragState,
+    previewBase: Transform,
+  ): { transform: Transform; guides: SnapGuides | null } {
+    if (state.kind !== 'move') return { transform: previewBase, guides: null };
+    const opts = this.snapOptions.options();
+    if (!opts.enabled || (!opts.toGrid && !opts.toGuides && !opts.toObjects)) {
+      return { transform: previewBase, guides: null };
+    }
+    const viewport = this.currentViewport;
+    if (viewport === null) return { transform: previewBase, guides: null };
+    const toleranceMm = toleranceCssPxToMm(opts.toleranceCssPx, viewport.zoom);
+    if (toleranceMm <= 0) return { transform: previewBase, guides: null };
+
+    const targetGroups = [
+      opts.toGrid ? gridTargets(scene.tank.width, scene.tank.height, opts.gridSizeMm) : null,
+      opts.toGuides ? guideTargets(scene.tank.width, scene.tank.height) : null,
+      opts.toObjects ? objectTargets(scene, state.objectId) : null,
+    ].filter((g): g is { xs: ReadonlyArray<number>; ys: ReadonlyArray<number> } => g !== null);
+    if (targetGroups.length === 0) return { transform: previewBase, guides: null };
+    const targets = mergeTargets(...targetGroups);
+
+    const snapped = snapPosition(
+      { x: previewBase.position.x, y: previewBase.position.y },
+      targets,
+      toleranceMm,
+    );
+
+    const transform: Transform = {
+      ...previewBase,
+      position: { ...previewBase.position, x: snapped.position.x, y: snapped.position.y },
+    };
+    const guides: SnapGuides = {
+      xs: snapped.snappedX === null ? [] : [snapped.snappedX],
+      ys: snapped.snappedY === null ? [] : [snapped.snappedY],
+    };
+    return { transform, guides };
+  }
+
+  /**
+   * F5.3 — drag readout. Set the small floating pill near the cursor to
+   * a kind-appropriate text. Position is the cursor's CSS coords inside
+   * the canvas host (computed from the drag state's `currentWorld` via
+   * the inverse viewport transform).
+   */
+  private updateDragReadout(state: DragState, finalTransform: Transform): void {
+    if (state.kind === 'marquee') {
+      this.dragReadout.set(null);
+      return;
+    }
+    const viewport = this.currentViewport;
+    const canvas = this.canvasRef.nativeElement;
+    if (viewport === null) {
+      this.dragReadout.set(null);
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    // Inverse of cursorToWorld used in zoom-math: cursorCssX =
+    // (worldX - center.x) * zoom + canvasW/2; y axis is flipped (canvas
+    // +y down vs world +y up).
+    const cssX = (state.currentWorld.x - viewport.center.x) * viewport.zoom + rect.width / 2;
+    const cssY = -(state.currentWorld.y - viewport.center.y) * viewport.zoom + rect.height / 2;
+
+    let text: string;
+    if (state.kind === 'move') {
+      text = `${Math.round(finalTransform.position.x)}, ${Math.round(finalTransform.position.y)} mm`;
+    } else if (state.kind === 'scale') {
+      const sx = finalTransform.scale.x;
+      const sy = finalTransform.scale.y;
+      text = `${(sx * 100).toFixed(0)}% × ${(sy * 100).toFixed(0)}%`;
+    } else {
+      // rotate
+      const degrees = (finalTransform.rotation.z * 180) / Math.PI;
+      text = `${degrees.toFixed(0)}°`;
+    }
+    this.dragReadout.set({ text, cssX, cssY });
   }
 
   private installResizeObserver(): void {

@@ -2989,3 +2989,198 @@ describe('Canvas2DRenderer.render (wall background — Stage 5.x)', () => {
     expect(fills).toContain(customColor);
   });
 });
+
+// ─── Stage 5 F5.4 — snap alignment guides ─────────────────────────────────
+
+describe('Canvas2DRenderer.render (snap guides — F5.4)', () => {
+  const TANK_W = 360;
+  const TANK_H = 220;
+  const SNAP_STROKE = 'rgba(255, 64, 192, 0.95)';
+
+  let fakeWindow: FakeWindow;
+
+  beforeEach(() => {
+    fakeWindow = installFakeWindow();
+    void fakeWindow;
+  });
+
+  afterEach(() => {
+    uninstallFakeWindow();
+  });
+
+  function render(
+    guides: { xs: number[]; ys: number[] } | undefined,
+  ): { ops: RecordedOp[] } {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(
+      makeMinimalScene(TANK_W, TANK_H, TANK_H),
+      upright,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      guides,
+    );
+    return { ops: canvas.context.ops };
+  }
+
+  function strokeStyles(ops: RecordedOp[]): string[] {
+    return ops.filter((o) => o.method === 'set:strokeStyle').map((o) => String(o.args[0]));
+  }
+
+  it('is a no-op when snapGuides is omitted', () => {
+    const { ops } = render(undefined);
+    expect(strokeStyles(ops)).not.toContain(SNAP_STROKE);
+  });
+
+  it('is a no-op when both arrays are empty', () => {
+    const { ops } = render({ xs: [], ys: [] });
+    expect(strokeStyles(ops)).not.toContain(SNAP_STROKE);
+  });
+
+  it('paints one vertical line per xs entry across the full tank height', () => {
+    const { ops } = render({ xs: [180, 240], ys: [] });
+    const idx = ops.findIndex(
+      (o) => o.method === 'set:strokeStyle' && o.args[0] === SNAP_STROKE,
+    );
+    expect(idx).toBeGreaterThan(-1);
+    const restoreIdx = ops.findIndex((o, i) => i > idx && o.method === 'restore');
+    const block = ops.slice(idx, restoreIdx);
+    const moves = block.filter((o) => o.method === 'moveTo').map((o) => o.args);
+    const lines = block.filter((o) => o.method === 'lineTo').map((o) => o.args);
+    expect(moves).toEqual([
+      [180, 0],
+      [240, 0],
+    ]);
+    expect(lines).toEqual([
+      [180, TANK_H],
+      [240, TANK_H],
+    ]);
+  });
+
+  it('paints one horizontal line per ys entry across the full tank width', () => {
+    const { ops } = render({ xs: [], ys: [110, 55] });
+    const idx = ops.findIndex(
+      (o) => o.method === 'set:strokeStyle' && o.args[0] === SNAP_STROKE,
+    );
+    const restoreIdx = ops.findIndex((o, i) => i > idx && o.method === 'restore');
+    const block = ops.slice(idx, restoreIdx);
+    const moves = block.filter((o) => o.method === 'moveTo').map((o) => o.args);
+    const lines = block.filter((o) => o.method === 'lineTo').map((o) => o.args);
+    expect(moves).toEqual([
+      [0, 110],
+      [0, 55],
+    ]);
+    expect(lines).toEqual([
+      [TANK_W, 110],
+      [TANK_W, 55],
+    ]);
+  });
+
+  it('paints xs + ys mixed in a single stroke pass (one stroke call)', () => {
+    const { ops } = render({ xs: [100], ys: [50] });
+    const idx = ops.findIndex(
+      (o) => o.method === 'set:strokeStyle' && o.args[0] === SNAP_STROKE,
+    );
+    const restoreIdx = ops.findIndex((o, i) => i > idx && o.method === 'restore');
+    const block = ops.slice(idx, restoreIdx);
+    expect(block.filter((o) => o.method === 'stroke')).toHaveLength(1);
+  });
+
+  it('uses solid lines (no setLineDash dash pattern leaks)', () => {
+    const { ops } = render({ xs: [100], ys: [] });
+    const idx = ops.findIndex(
+      (o) => o.method === 'set:strokeStyle' && o.args[0] === SNAP_STROKE,
+    );
+    const restoreIdx = ops.findIndex((o, i) => i > idx && o.method === 'restore');
+    const block = ops.slice(idx, restoreIdx);
+    const lastDash = block
+      .filter((o) => o.method === 'setLineDash')
+      .map((o) => o.args[0])
+      .pop();
+    // Empty array = solid line.
+    expect(lastDash).toEqual([]);
+  });
+
+  it('snap guides paint AFTER composition overlays so they sit on top', () => {
+    // Render with both engaged: golden overlay AND a snap-guide line at
+    // the same x. The snap guide stroke should appear at a higher index
+    // than any overlay style change.
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(
+      makeMinimalScene(TANK_W, TANK_H, TANK_H),
+      upright,
+      undefined,
+      undefined,
+      undefined,
+      { goldenRatio: true, thirds: false, focalPoints: false },
+      undefined,
+      { xs: [180], ys: [] },
+    );
+    const ops = canvas.context.ops;
+    const overlayIdx = ops.findIndex(
+      (o) => o.method === 'set:strokeStyle' && o.args[0] === 'rgba(255, 215, 0, 0.45)',
+    );
+    const snapIdx = ops.findIndex(
+      (o) => o.method === 'set:strokeStyle' && o.args[0] === SNAP_STROKE,
+    );
+    expect(overlayIdx).toBeGreaterThan(-1);
+    expect(snapIdx).toBeGreaterThan(overlayIdx);
+  });
+
+  it('snap guides paint BEFORE selection handles (handles stay on top)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = {
+      ...makeMinimalScene(TANK_W, TANK_H, TANK_H),
+      layers: [
+        {
+          id: 'L' as never,
+          name: 'L',
+          opacity: 1,
+          visible: true,
+          locked: false,
+          objects: [
+            {
+              kind: 'hardscape' as const,
+              id: 'a' as never,
+              ref: { catalog: 'core', id: 'rock', version: 1 },
+              transform: {
+                position: { x: 180, y: 110, z: 0 },
+                rotation: { x: 0, y: 0, z: 0 },
+                scale: { x: 1, y: 1, z: 1 },
+                flipX: false,
+                flipY: false,
+              },
+            },
+          ],
+        },
+      ],
+    };
+    r.render(
+      scene,
+      upright,
+      undefined,
+      ['a' as never],
+      undefined,
+      undefined,
+      undefined,
+      { xs: [180], ys: [110] },
+    );
+    const ops = canvas.context.ops;
+    const snapIdx = ops.findLastIndex(
+      (o) => o.method === 'set:strokeStyle' && o.args[0] === SNAP_STROKE,
+    );
+    const lastStrokeRect = ops.findLastIndex((o) => o.method === 'strokeRect');
+    expect(snapIdx).toBeGreaterThan(-1);
+    // Selection handle paint emits strokeRect (corner squares) AFTER the
+    // snap guides.
+    expect(lastStrokeRect).toBeGreaterThan(snapIdx);
+  });
+});

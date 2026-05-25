@@ -13,6 +13,7 @@ import type {
   HitResult,
   SceneRenderer,
   OverlayOptions,
+  SnapGuides,
   WallBackground,
 } from './index';
 import type { Scene, ObjectId, LayerId } from '@aquascape/domain/scene-model';
@@ -138,5 +139,33 @@ describe('@aquascape/rendering/renderer-api', () => {
     const arity: HitTestArity = 6;
     expect(arity).toBe(6);
     expect(wall.widthMm).toBe(1200);
+  });
+
+  it('accepts snapGuides as the 8th render() arg (F5.4) and exports the SnapGuides shape', () => {
+    const guides: SnapGuides = {
+      xs: [180, 240],
+      ys: [110],
+    };
+    const stub: SceneRenderer = {
+      attach: () => undefined,
+      render: () => undefined,
+      hitTest: () => null,
+      dispose: () => undefined,
+    };
+    stub.render(
+      {} as Scene,
+      {} as Viewport,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      guides,
+    );
+    // hitTest stays 6-arg.
+    type HitTestArity = Parameters<SceneRenderer['hitTest']>['length'];
+    const arity: HitTestArity = 6;
+    expect(arity).toBe(6);
+    expect(guides.xs).toHaveLength(2);
   });
 });

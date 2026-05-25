@@ -63,6 +63,7 @@ import type {
   OverlayOptions,
   RenderSurface,
   SceneRenderer,
+  SnapGuides,
   Viewport,
   WallBackground,
 } from '@aquascape/rendering/renderer-api';
@@ -118,6 +119,13 @@ const OVERLAY_DASH_CSS_PX = 4;
 const OVERLAY_LINE_WIDTH_CSS_PX = 1;
 /** Focal-point marker radius in CSS px. */
 const OVERLAY_FOCAL_RADIUS_CSS_PX = 4;
+
+// ─── F5.4 — snap-guide tuning constants ──────────────────────────────────
+
+/** Stroke color for engaged snap alignment lines (vivid magenta, bright). */
+const SNAP_GUIDE_STROKE = 'rgba(255, 64, 192, 0.95)';
+/** Snap-guide stroke width in CSS px — slightly heavier than overlay lines. */
+const SNAP_GUIDE_LINE_WIDTH_CSS_PX = 1.5;
 
 // ─── Internal types ───────────────────────────────────────────────────────
 
@@ -240,6 +248,7 @@ export class Canvas2DRenderer implements SceneRenderer {
     previewAgeWeeks?: number,
     overlayOptions?: OverlayOptions,
     wallBackground?: WallBackground,
+    snapGuides?: SnapGuides,
   ): void {
     const s = this.surface;
     const ctx = this.ctx;
@@ -326,6 +335,10 @@ export class Canvas2DRenderer implements SceneRenderer {
     // handles, so handles always sit on top and stay readable when the user
     // turns guides on.
     this.drawCompositionOverlays(ctx, scene, oneCssPxInMm, overlayOptions);
+    // F5.4 — ephemeral snap-alignment guides paint AFTER the overlays but
+    // BEFORE selection handles so the user can read both the "you're
+    // locked here" line and the corner handles at the same time.
+    this.drawSnapGuides(ctx, scene, oneCssPxInMm, snapGuides);
     if (selectedSet !== null) {
       this.drawSelectionHandles(ctx, scene, catalog, oneCssPxInMm, selectedSet);
     }
@@ -954,6 +967,48 @@ export class Canvas2DRenderer implements SceneRenderer {
     ctx.save();
     ctx.fillStyle = wall.color;
     ctx.fillRect(x, y, wall.widthMm, wall.heightMm);
+    ctx.restore();
+  }
+
+  // ─── F5.4 — Snap alignment guides ─────────────────────────────────────
+  //
+  // Ephemeral lines painted during a drag when the dragged object's
+  // position has snapped to a target (grid / golden / thirds / focal /
+  // another object's centre). Each `xs[i]` becomes a vertical line at
+  // world x = xs[i] spanning the tank's height; each `ys[i]` becomes a
+  // horizontal line. The host clears the param on pointerup so the lines
+  // disappear cleanly.
+  //
+  // True no-op when the argument is omitted OR both arrays are empty.
+  // Wrapped in save / restore so style state doesn't leak into the
+  // selection-handle paint that follows.
+
+  private drawSnapGuides(
+    ctx: CanvasRenderingContext2D,
+    scene: Scene,
+    oneCssPxInMm: number,
+    guides: SnapGuides | undefined,
+  ): void {
+    if (guides === undefined) return;
+    if (guides.xs.length === 0 && guides.ys.length === 0) return;
+    const tankW = scene.tank.width;
+    const tankH = scene.tank.height;
+    if (tankW <= 0 || tankH <= 0) return;
+
+    ctx.save();
+    ctx.lineWidth = SNAP_GUIDE_LINE_WIDTH_CSS_PX * oneCssPxInMm;
+    ctx.strokeStyle = SNAP_GUIDE_STROKE;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    for (const x of guides.xs) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, tankH);
+    }
+    for (const y of guides.ys) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(tankW, y);
+    }
+    ctx.stroke();
     ctx.restore();
   }
 

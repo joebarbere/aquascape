@@ -132,6 +132,23 @@ export interface WallBackground {
 }
 
 /**
+ * Stage 5 F5.3 + F5.4 — ephemeral alignment lines painted during a drag
+ * when the dragged object's position snaps to a target (grid, golden /
+ * thirds guide, or another object's centre). The renderer draws each
+ * vertical line at world x = `xs[i]` spanning the tank's height, and each
+ * horizontal line at world y = `ys[i]` spanning the tank's width. Lines
+ * are thin, bright, and dash-free so they read as "you're locked here"
+ * vs. the dashed composition overlays which read as "reference grid".
+ *
+ * Non-interactive (not in `hitTest`), never mutates the scene. True no-op
+ * when omitted or when both arrays are empty.
+ */
+export interface SnapGuides {
+  readonly xs: ReadonlyArray<number>;
+  readonly ys: ReadonlyArray<number>;
+}
+
+/**
  * The renderer contract. Both `renderer-2d` (now) and `renderer-3d`
  * (Stage 10) implement this. Features depend on this interface, never on a
  * concrete renderer.
@@ -185,6 +202,16 @@ export interface SceneRenderer {
    * centre; `widthMm × heightMm` are absolute. Decoration only — not in
    * `hitTest`, never mutates the scene, true no-op when omitted /
    * disabled / zero-sized.
+   *
+   * The optional `snapGuides` parameter (Stage 5 F5.4) paints ephemeral
+   * alignment lines for the snap targets that are currently engaged. The
+   * host updates this every pointermove during a drag; on pointerup or
+   * cancel it clears the field and the lines disappear. Painted ON TOP
+   * of every scene object but BENEATH selection handles so the user
+   * can read both the guide AND the handle. No-op when omitted / empty.
+   *
+   * NOTE: the positional argument list is at its sensible limit. Any
+   * further additions should refactor `render(...)` to an options object.
    */
   render(
     scene: Scene,
@@ -194,6 +221,7 @@ export interface SceneRenderer {
     previewAgeWeeks?: number,
     overlayOptions?: OverlayOptions,
     wallBackground?: WallBackground,
+    snapGuides?: SnapGuides,
   ): void;
 
   /**
