@@ -665,6 +665,9 @@ export function applyCommand(scene: Scene, command: Command): CommandResult {
       ) {
         return rejected('invalid', `MoveObject: non-finite position`);
       }
+      const oldP = found.object.transform.position;
+      const dx = command.position.x - oldP.x;
+      const dy = command.position.y - oldP.y;
       const nextObject: SceneObject = {
         ...found.object,
         transform: {
@@ -672,6 +675,26 @@ export function applyCommand(scene: Scene, command: Command): CommandResult {
           position: { ...command.position },
         },
       };
+      // Scatter plants carry their patch outline in absolute scene-space
+      // mm (Plan §3 — `Patch outline in scene space (mm)`). MoveObject
+      // changes the plant's `transform.position` but the renderer paints
+      // scatter instances from `scatter.polygon` directly. Without
+      // translating the polygon by the same delta, a Move (or arrow-key
+      // nudge, or click-drag) shifts the transform's "anchor" but leaves
+      // the actual patch visually pinned to the original position — the
+      // user sees nothing change. Apply the position delta to every
+      // polygon vertex so the patch tracks the move.
+      if (
+        nextObject.kind === 'plant' &&
+        nextObject.scatter !== undefined &&
+        (dx !== 0 || dy !== 0)
+      ) {
+        const polygon = nextObject.scatter.polygon.map((p) => ({
+          x: p.x + dx,
+          y: p.y + dy,
+        }));
+        nextObject.scatter = { ...nextObject.scatter, polygon };
+      }
       const objects = found.layer.objects.map((o) => (o.id === command.objectId ? nextObject : o));
       return ok(replaceLayer(scene, found.layer.id, { ...found.layer, objects }));
     }

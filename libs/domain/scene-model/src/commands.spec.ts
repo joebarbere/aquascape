@@ -321,6 +321,56 @@ describe('applyCommand', () => {
       const r = applyCommand(makeScene(), moveObject(asObjectId('nope'), { x: 0, y: 0, z: 0 }));
       expect(r.ok).toBe(false);
     });
+
+    // Scatter plants store their patch outline in absolute scene-space mm.
+    // Without translating the polygon by the same delta as the position,
+    // moving the plant (or nudging it with arrow keys) would shift the
+    // transform anchor but leave the visible patch pinned to the original
+    // place — the user sees nothing change.
+    it("translates a scatter plant's polygon by the same delta as the position", () => {
+      const plantId = asObjectId('cccccccc-0000-4000-8000-000000000099');
+      const plant = {
+        ...makePlant(plantId, 100, 100, 0),
+        scatter: {
+          polygon: [
+            { x: 100, y: 100 },
+            { x: 200, y: 100 },
+            { x: 200, y: 200 },
+            { x: 100, y: 200 },
+          ],
+          density: 30,
+          seed: 1,
+        },
+      };
+      const scene = {
+        ...makeScene(),
+        layers: [makeLayer('layer-1', 'Carpet', [plant])],
+      };
+      const r = applyOk(scene, moveObject(plantId, { x: 130, y: 120, z: 0 }));
+      if (!r.ok) return;
+      const moved = r.scene.layers[0]!.objects[0] as typeof plant;
+      // Position delta: dx=+30, dy=+20. Every polygon vertex shifts too.
+      expect(moved.scatter.polygon).toEqual([
+        { x: 130, y: 120 },
+        { x: 230, y: 120 },
+        { x: 230, y: 220 },
+        { x: 130, y: 220 },
+      ]);
+    });
+
+    it('leaves a single-specimen plant (no scatter) unchanged beyond the transform', () => {
+      const plantId = asObjectId('cccccccc-0000-4000-8000-000000000098');
+      const plant = makePlant(plantId, 100, 100, 0);
+      const scene = {
+        ...makeScene(),
+        layers: [makeLayer('layer-1', 'Rosette', [plant])],
+      };
+      const r = applyOk(scene, moveObject(plantId, { x: 130, y: 120, z: 0 }));
+      if (!r.ok) return;
+      const moved = r.scene.layers[0]!.objects[0]!;
+      expect(moved.transform.position).toEqual({ x: 130, y: 120, z: 0 });
+      expect((moved as { scatter?: unknown }).scatter).toBeUndefined();
+    });
   });
 
   describe('ReshapeObject', () => {

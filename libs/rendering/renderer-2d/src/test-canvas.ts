@@ -97,6 +97,9 @@ export class FakeContext2D {
   scale(x: number, y: number): void {
     this.ops.push({ method: 'scale', args: [x, y] });
   }
+  setLineDash(segments: ReadonlyArray<number>): void {
+    this.ops.push({ method: 'setLineDash', args: [segments.slice()] });
+  }
   rotate(r: number): void {
     this.ops.push({ method: 'rotate', args: [r] });
   }

@@ -2126,11 +2126,16 @@ describe('Canvas2DRenderer.render (plants)', () => {
     expect(mirrored).not.toEqual(original);
   });
 
-  it('Mirror H on a symmetric polygon produces an identical render (mathematically invariant)', () => {
+  it('Mirror H on a symmetric polygon STILL re-arranges instances via seed XOR (visible feedback)', () => {
+    // Polygon mirror is identity for a symmetric polygon (a square is
+    // symmetric about both axes), so without the seed-XOR mix the render
+    // would be byte-identical — Mirror on the default auto-created
+    // circular brush would look like nothing happened. The renderer XORs
+    // a magic constant into the effective seed when flipX/flipY is true
+    // to force a visibly different scatter.
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    // Square polygon — symmetric about both axes; mirror is identity.
     const polygon = [
       { x: 200, y: 100 },
       { x: 320, y: 100 },
@@ -2152,9 +2157,34 @@ describe('Canvas2DRenderer.render (plants)', () => {
     r.render(sceneFlipped, upright, fakeCatalog);
     const positionsFlipped = canvas.context.ops
       .filter((op) => op.method === 'translate')
-      .map((op) => Math.abs(op.args[0] as number));
-    const positionsFlatAbs = positionsFlat.map(([x]) => Math.abs(x));
-    expect(positionsFlipped.sort()).toEqual(positionsFlatAbs.sort());
+      .map((op) => [op.args[0], op.args[1]] as [number, number]);
+    expect(positionsFlipped).not.toEqual(positionsFlat);
+  });
+
+  it('selected scatter plant gets a non-interactive dashed bbox around the polygon AABB', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const polygon = [
+      { x: 200, y: 100 },
+      { x: 320, y: 100 },
+      { x: 320, y: 220 },
+      { x: 200, y: 220 },
+    ];
+    const scene = sceneWithPlant({ scatter: { polygon, density: 20, seed: 1 } });
+    r.render(scene, upright, fakeCatalog, ['p-1' as never]);
+    const rects = canvas.context.ops
+      .filter((op) => op.method === 'strokeRect')
+      .map((op) => op.args as [number, number, number, number]);
+    expect(rects.length).toBeGreaterThan(0);
+    const bbox = rects.find(
+      ([x, y, w, h]) =>
+        Math.round(x) === 200 &&
+        Math.round(y) === 100 &&
+        Math.round(w) === 120 &&
+        Math.round(h) === 120,
+    );
+    expect(bbox).toBeDefined();
   });
 });
 

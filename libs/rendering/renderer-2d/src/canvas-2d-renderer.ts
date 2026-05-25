@@ -783,13 +783,55 @@ export class Canvas2DRenderer implements SceneRenderer {
       if (!layer.visible) continue;
       for (const obj of layer.objects) {
         if (!selected.has(obj.id)) continue;
-        // Scatter-patch plants don't get handles — reshaping a brush polygon
-        // is a different gesture than scaling/rotating a sprite.
+        // Scatter-patch plants don't get interactive handles — reshaping
+        // a brush polygon is a different gesture than scaling/rotating a
+        // sprite — but they DO get a non-interactive dashed bbox around
+        // the polygon AABB so the user gets visual feedback that the
+        // patch is selected.
+        if (obj.kind === 'plant' && obj.scatter !== undefined) {
+          this.paintScatterSelectionBox(ctx, obj.scatter.polygon, oneCssPxInMm);
+          continue;
+        }
         const extents = resolveSelectableExtents(obj, catalog, undefined);
         if (extents === null) continue;
         this.paintSelectionHandlesGeneric(ctx, obj.transform, extents, oneCssPxInMm);
       }
     }
+  }
+
+  /**
+   * Paint a dashed bbox around a scatter patch's polygon AABB. Renders in
+   * scene-mm space (no transform), with screen-px line width and dash
+   * pattern so it stays visually consistent at any zoom. No corner / rotate
+   * handles — scatter brushes don't have a useful "scale" or "rotate"
+   * affordance through corner drags.
+   */
+  private paintScatterSelectionBox(
+    ctx: CanvasRenderingContext2D,
+    polygon: ReadonlyArray<{ x: number; y: number }>,
+    oneCssPxInMm: number,
+  ): void {
+    if (polygon.length === 0) return;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const p of polygon) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+    const w = maxX - minX;
+    const h = maxY - minY;
+    if (w <= 0 || h <= 0) return;
+    ctx.save();
+    ctx.lineWidth = SELECTION_LINE_WIDTH_PX * oneCssPxInMm;
+    ctx.strokeStyle = SELECTION_COLOR;
+    const dash = 6 * oneCssPxInMm;
+    ctx.setLineDash([dash, dash]);
+    ctx.strokeRect(minX, minY, w, h);
+    ctx.restore();
   }
 
   private paintSelectionHandlesGeneric(
@@ -933,13 +975,23 @@ export class Canvas2DRenderer implements SceneRenderer {
   ): void {
     const scatter = obj.scatter;
     if (scatter === undefined) return;
-    const seed = scatter.seed ?? sceneSeed;
+    // Effective seed XORs in a flipX/flipY signature so Mirror produces a
+    // visibly different scatter arrangement even on symmetric brushes
+    // (the default auto-created 16-sided regular circle is symmetric, so
+    // polygon mirror alone is a no-op — without this XOR, clicking Mirror
+    // on a carpet drop looks like nothing happened). XOR is self-inverse,
+    // so Mirror twice on the same axis restores the original arrangement.
+    const baseSeed = scatter.seed ?? sceneSeed;
+    const seed =
+      ((baseSeed ^ (obj.transform.flipX ? SCATTER_FLIP_X_SEED_MIX : 0)) ^
+        (obj.transform.flipY ? SCATTER_FLIP_Y_SEED_MIX : 0)) >>>
+      0;
     // Honor `transform.flipX/flipY` on the brush polygon BEFORE scattering.
     // The user expects Mirror H/V on a carpet patch to flip the patch
     // footprint — for asymmetric polygons this re-arranges which cells
     // contain instances. Symmetric polygons (e.g. the auto-created
-    // 16-sided regular circle) are invariant under this flip and stay
-    // visually identical, which is the right answer.
+    // 16-sided regular circle) are invariant under this flip; the seed
+    // XOR above is what makes the visible re-scatter happen there.
     const polygon = mirrorPolygon(
       scatter.polygon,
       obj.transform.flipX,
@@ -988,6 +1040,16 @@ export class Canvas2DRenderer implements SceneRenderer {
 
 const SELECTION_COLOR = '#3a8eff';
 const SELECTION_LINE_WIDTH_PX = 1.5;
+/**
+ * Magic 32-bit constants XOR'd into the scatter seed when the plant's
+ * `transform.flipX/Y` is true. XOR is self-inverse so toggling a flip
+ * twice restores the original arrangement. Numbers are arbitrary mixing
+ * primes (the same value used in the carpet-clone reseed elsewhere) — any
+ * pair of non-zero distinct constants would do; what matters is that
+ * each axis produces a clearly different arrangement.
+ */
+const SCATTER_FLIP_X_SEED_MIX = 0x9e3779b1;
+const SCATTER_FLIP_Y_SEED_MIX = 0x85ebca77;
 const SELECTION_HANDLE_PX = 8;
 const SELECTION_ROTATE_STALK_PX = 18;
 
