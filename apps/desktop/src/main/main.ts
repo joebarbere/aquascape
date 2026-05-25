@@ -234,20 +234,22 @@ app
     // hover (and the "About" menu's app name) tells the user which build
     // they're poking at. Dev runs (`pnpm restart:desktop`, `nx serve
     // desktop`, plain `electron`) → "(dev)". Packaged builds → the
-    // version baked into the .app bundle's package.json. Done AFTER the
-    // storage path resolution above so the userData directory stays
-    // stable across renames + version bumps.
-    const versionLabel = app.isPackaged ? app.getVersion() : '(dev)';
-    app.setName(`Aquascape ${versionLabel}`);
+    // version baked into the .app bundle's package.json, wrapped in
+    // matching parentheses (e.g. "(1.0.0)"). Done AFTER the storage path
+    // resolution above so the userData directory stays stable across
+    // renames + version bumps.
+    const versionString = app.isPackaged ? app.getVersion() : 'dev';
+    app.setName(`Aquascape (${versionString})`);
 
     // macOS "About Aquascape" panel — keep the canonical name there, with
-    // the resolved version. The app name shown by the dock hover (set via
-    // `app.setName` above) already carries the marker, so we don't repeat
-    // it here.
+    // the bare resolved version (the About panel renders this under its
+    // own "Version" label, so parens would be redundant). The app name
+    // shown by the dock hover (set via `app.setName` above) already
+    // carries the parenthesized marker.
     if (process.platform === 'darwin' && typeof app.setAboutPanelOptions === 'function') {
       app.setAboutPanelOptions({
         applicationName: 'Aquascape',
-        applicationVersion: versionLabel,
+        applicationVersion: versionString,
       });
     }
 
