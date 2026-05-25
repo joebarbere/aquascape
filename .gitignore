@@ -9,6 +9,10 @@ tmp/
 out/
 out-tsc/
 
+# Per-clone macOS dev bundle (cloned Electron.app with patched Info.plist
+# for the dock-hover title — see tools/build-dev-bundle.sh).
+apps/desktop/.dev-bundle/
+
 # Nx
 .nx/cache
 .nx/workspace-data

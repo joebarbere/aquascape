@@ -22,9 +22,13 @@
 
 set -eu
 
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PORT=4200
+MAIN_JS="$REPO_ROOT/dist/apps/desktop/main/src/main/main.js"
 MAIN_PATTERN='dist/apps/desktop/main/src/main/main.js'
 READY_TIMEOUT_SEC=60
+DEV_BUNDLE="$REPO_ROOT/apps/desktop/.dev-bundle/Aquascape (dev).app"
+DEV_BUNDLE_BIN="$DEV_BUNDLE/Contents/MacOS/Electron"
 
 echo "[restart-desktop] reaping prior dev stack…"
 
@@ -87,12 +91,37 @@ until curl -fsS -o /dev/null "http://localhost:$PORT/" 2>/dev/null; do
 done
 echo "[restart-desktop] :$PORT ready (after ${WAITED}s)"
 
-# ── Stage 3: Electron in foreground ───────────────────────────────────────
-# Use `serve-electron` (not `serve`) so we don't spin up a second nx serve
-# web. Builds main + preload once via the target's dependsOn, then runs
-# electron against the freshly-built main.js.
+# ── Stage 3: build the desktop main + preload bundles ────────────────────
+# `nx serve` would do this for us, but we want to launch the Electron
+# binary directly from our dev bundle (so the dock hover reads "Aquascape
+# (dev)" instead of "Electron") — which means we manage the build step
+# ourselves rather than going through `nx run desktop:serve-electron`.
+echo "[restart-desktop] building desktop main + preload…"
+pnpm exec nx run-many -t build-main,build-preload -p desktop >/dev/null
+
+# ── Stage 4: build the macOS dev .app bundle (idempotent) ─────────────────
+# Wraps the installed Electron binary with a patched Info.plist so
+# `CFBundleName = "Aquascape (dev)"`. `app.setName()` from JS cannot
+# override the dock-hover name macOS reads from the launched .app's
+# Info.plist — this bundle is the workaround. Skipped on non-macOS (the
+# build script handles that internally).
+echo "[restart-desktop] ensuring dev .app bundle is up to date…"
+bash "$REPO_ROOT/tools/build-dev-bundle.sh"
+
+# ── Stage 5: Electron in foreground via the dev bundle ────────────────────
+# On macOS, launch the patched-bundle binary directly so env vars
+# (DEV_SERVER_URL) propagate and the dock hover picks up CFBundleName.
+# Falls back to plain `electron` on non-macOS or if the bundle is missing
+# (e.g. the build-dev-bundle skipped because /usr/libexec/PlistBuddy is
+# absent in a stripped container).
 echo "[restart-desktop] launching Electron…"
-pnpm exec nx run desktop:serve-electron &
+if [ -x "$DEV_BUNDLE_BIN" ]; then
+  echo "  via dev bundle: $DEV_BUNDLE"
+  DEV_SERVER_URL="http://localhost:$PORT" "$DEV_BUNDLE_BIN" "$MAIN_JS" &
+else
+  echo "  via plain electron (no dev bundle available)"
+  DEV_SERVER_URL="http://localhost:$PORT" pnpm exec electron "$MAIN_JS" &
+fi
 ELECTRON_PID=$!
 
 # Wait on Electron (the foreground concern — when the window closes, the
