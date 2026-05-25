@@ -224,15 +224,9 @@ describe('WallBackgroundService', () => {
   describe('storage.set rejection', () => {
     it('every setter still updates the in-memory value when storage.set rejects', async () => {
       const failing: StorageService = {
-        get<T>(): Promise<T | null> {
-          return Promise.resolve(null);
-        },
-        set<T>(): Promise<void> {
-          return Promise.reject(new Error('set boom'));
-        },
-        remove(): Promise<void> {
-          return Promise.resolve();
-        },
+        get: () => Promise.resolve(null),
+        set: () => Promise.reject(new Error('set boom')),
+        remove: () => Promise.resolve(),
       };
       TestBed.configureTestingModule({
         providers: [{ provide: STORAGE_SERVICE, useValue: failing }],

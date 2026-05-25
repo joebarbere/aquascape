@@ -61,7 +61,9 @@ import type {
 import type {
   BackdropImage,
   HitResult,
+  HitTestOptions,
   OverlayOptions,
+  RenderOptions,
   RenderSurface,
   SceneRenderer,
   SnapGuides,
@@ -241,17 +243,16 @@ export class Canvas2DRenderer implements SceneRenderer {
 
   // ─── render ─────────────────────────────────────────────────────────────
 
-  render(
-    scene: Scene,
-    viewport: Viewport,
-    catalog?: Catalog,
-    selection?: ReadonlyArray<ObjectId>,
-    previewAgeWeeks?: number,
-    overlayOptions?: OverlayOptions,
-    wallBackground?: WallBackground,
-    snapGuides?: SnapGuides,
-    backdropImage?: BackdropImage,
-  ): void {
+  render(scene: Scene, viewport: Viewport, options: RenderOptions = {}): void {
+    const {
+      catalog,
+      selection,
+      previewAgeWeeks,
+      overlayOptions,
+      wallBackground,
+      snapGuides,
+      backdropImage,
+    } = options;
     const s = this.surface;
     const ctx = this.ctx;
     if (s === null || ctx === null) return;
@@ -546,10 +547,9 @@ export class Canvas2DRenderer implements SceneRenderer {
     point: Vec2,
     scene: Scene,
     viewport: Viewport,
-    catalog?: Catalog,
-    selection?: ReadonlyArray<ObjectId>,
-    previewAgeWeeks?: number,
+    options: HitTestOptions = {},
   ): HitResult | null {
+    const { catalog, selection, previewAgeWeeks } = options;
     // The surface is the source of truth for canvas dimensions. Without an
     // attach we have no frame of reference — return null.
     const s = this.surface;

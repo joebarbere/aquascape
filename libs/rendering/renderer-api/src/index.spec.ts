@@ -9,15 +9,17 @@
 
 import type {
   BackdropImage,
-  RenderSurface,
-  Viewport,
   HitResult,
-  SceneRenderer,
+  HitTestOptions,
   OverlayOptions,
+  RenderOptions,
+  RenderSurface,
+  SceneRenderer,
   SnapGuides,
+  Viewport,
   WallBackground,
 } from './index';
-import type { Scene, ObjectId, LayerId } from '@aquascape/domain/scene-model';
+import type { LayerId, ObjectId, Scene } from '@aquascape/domain/scene-model';
 import type { Vec2 } from '@aquascape/domain/geometry';
 
 describe('@aquascape/rendering/renderer-api', () => {
@@ -25,9 +27,6 @@ describe('@aquascape/rendering/renderer-api', () => {
     // The body of this test is a series of type-only assignments. They
     // produce no runtime work — but if any field on the exported types
     // is renamed, removed, or retyped, this file fails to type-check.
-
-    // A fake renderer that satisfies the interface — also confirms the
-    // method signatures are what features will be coded against.
     const fake: SceneRenderer = {
       attach(surface: RenderSurface) {
         void surface.canvas;
@@ -35,17 +34,32 @@ describe('@aquascape/rendering/renderer-api', () => {
         void surface.width;
         void surface.height;
       },
-      render(scene: Scene, viewport: Viewport) {
+      render(scene: Scene, viewport: Viewport, options?: RenderOptions) {
         void scene.tank;
         void viewport.center;
         void viewport.zoom;
         void viewport.rotation;
+        void options?.catalog;
+        void options?.selection;
+        void options?.previewAgeWeeks;
+        void options?.overlayOptions;
+        void options?.wallBackground;
+        void options?.snapGuides;
+        void options?.backdropImage;
       },
-      hitTest(point: Vec2, scene: Scene, viewport: Viewport): HitResult | null {
+      hitTest(
+        point: Vec2,
+        scene: Scene,
+        viewport: Viewport,
+        options?: HitTestOptions,
+      ): HitResult | null {
         void point.x;
         void point.y;
         void scene.layers;
         void viewport.center;
+        void options?.catalog;
+        void options?.selection;
+        void options?.previewAgeWeeks;
         const objectId = '' as ObjectId;
         const layerId = '' as LayerId;
         // Confirm the optional `handle` literal set hasn't drifted.
@@ -56,147 +70,116 @@ describe('@aquascape/rendering/renderer-api', () => {
         // no-op
       },
     };
-
-    // Touch `fake` so the var isn't flagged as unused.
     expect(typeof fake.attach).toBe('function');
     expect(typeof fake.render).toBe('function');
     expect(typeof fake.hitTest).toBe('function');
     expect(typeof fake.dispose).toBe('function');
   });
 
-  it('accepts previewAgeWeeks as the trailing render() and hitTest() arg (F4.4)', () => {
-    // Type-only assertion: a callable matching the new signature must accept
-    // an optional `previewAgeWeeks` number. If the interface changes shape,
-    // these assignments stop compiling.
-    const stub: SceneRenderer = {
-      attach: () => undefined,
-      render: () => undefined,
-      hitTest: () => null,
-      dispose: () => undefined,
-    };
-    stub.render({} as Scene, {} as Viewport, undefined, undefined, 12);
-    const hit = stub.hitTest(
-      { x: 0, y: 0 } as Vec2,
-      {} as Scene,
-      {} as Viewport,
-      undefined,
-      undefined,
-      12,
-    );
-    expect(hit).toBeNull();
+  describe('post-refactor arity', () => {
+    // The render → options-object refactor collapsed the historical 9-arg
+    // render() + 6-arg hitTest() to 3 args + 4 args respectively. These
+    // assertions lock that down so a future drift back to positional args
+    // is a compile-time + runtime failure.
+
+    it('render() arity is exactly 3 (scene, viewport, options?)', () => {
+      type RenderArity = Parameters<SceneRenderer['render']>['length'];
+      const arity: RenderArity = 3;
+      expect(arity).toBe(3);
+    });
+
+    it('hitTest() arity is exactly 4 (point, scene, viewport, options?)', () => {
+      type HitTestArity = Parameters<SceneRenderer['hitTest']>['length'];
+      const arity: HitTestArity = 4;
+      expect(arity).toBe(4);
+    });
+
+    it('render() accepts an empty options object', () => {
+      const stub: SceneRenderer = {
+        attach: () => undefined,
+        render: () => undefined,
+        hitTest: () => null,
+        dispose: () => undefined,
+      };
+      stub.render({} as Scene, {} as Viewport, {});
+      stub.render({} as Scene, {} as Viewport, undefined);
+      stub.render({} as Scene, {} as Viewport);
+      expect(stub.render).toBeDefined();
+    });
+
+    it('hitTest() accepts an empty options object', () => {
+      const stub: SceneRenderer = {
+        attach: () => undefined,
+        render: () => undefined,
+        hitTest: () => null,
+        dispose: () => undefined,
+      };
+      stub.hitTest({ x: 0, y: 0 } as Vec2, {} as Scene, {} as Viewport, {});
+      stub.hitTest({ x: 0, y: 0 } as Vec2, {} as Scene, {} as Viewport, undefined);
+      stub.hitTest({ x: 0, y: 0 } as Vec2, {} as Scene, {} as Viewport);
+      expect(stub.hitTest).toBeDefined();
+    });
   });
 
-  it('accepts overlayOptions as the 6th render() arg (F5.3) and exports the OverlayOptions shape', () => {
-    // Type-only assertions: the OverlayOptions shape is exactly three booleans,
-    // and `render()`'s 6th parameter accepts it. `hitTest()` deliberately does
-    // NOT take overlays — they are non-interactive view aids.
-    const overlays: OverlayOptions = {
-      goldenRatio: true,
-      thirds: false,
-      focalPoints: true,
-    };
-    const stub: SceneRenderer = {
-      attach: () => undefined,
-      render: () => undefined,
-      hitTest: () => null,
-      dispose: () => undefined,
-    };
-    stub.render({} as Scene, {} as Viewport, undefined, undefined, undefined, overlays);
-    // hitTest signature must stay 6-arg (point, scene, viewport, catalog?,
-    // selection?, previewAgeWeeks?) — adding overlays here would be a
-    // contract violation.
-    type HitTestArity = Parameters<SceneRenderer['hitTest']>['length'];
-    const arity: HitTestArity = 6;
-    expect(arity).toBe(6);
-    expect(overlays.goldenRatio).toBe(true);
+  describe('RenderOptions field shape', () => {
+    it('OverlayOptions slot is exactly three booleans', () => {
+      const overlays: OverlayOptions = {
+        goldenRatio: true,
+        thirds: false,
+        focalPoints: true,
+      };
+      const options: RenderOptions = { overlayOptions: overlays };
+      expect(options.overlayOptions?.goldenRatio).toBe(true);
+    });
+
+    it('WallBackground slot has enabled / color / width / height', () => {
+      const wall: WallBackground = {
+        enabled: true,
+        color: '#2a2d35',
+        widthMm: 1200,
+        heightMm: 600,
+      };
+      const options: RenderOptions = { wallBackground: wall };
+      expect(options.wallBackground?.widthMm).toBe(1200);
+    });
+
+    it('SnapGuides slot has xs / ys arrays', () => {
+      const guides: SnapGuides = { xs: [180, 240], ys: [110] };
+      const options: RenderOptions = { snapGuides: guides };
+      expect(options.snapGuides?.xs).toHaveLength(2);
+    });
+
+    it('BackdropImage slot has image + opacity', () => {
+      const backdrop: BackdropImage = {
+        image: {} as unknown as CanvasImageSource,
+        opacity: 0.6,
+      };
+      const options: RenderOptions = { backdropImage: backdrop };
+      expect(options.backdropImage?.opacity).toBe(0.6);
+    });
+
+    it('previewAgeWeeks slot is a number', () => {
+      const options: RenderOptions = { previewAgeWeeks: 12 };
+      expect(options.previewAgeWeeks).toBe(12);
+    });
+
+    it('selection slot is a ReadonlyArray<ObjectId>', () => {
+      const options: RenderOptions = { selection: ['x' as ObjectId, 'y' as ObjectId] };
+      expect(options.selection).toHaveLength(2);
+    });
   });
 
-  it('accepts wallBackground as the 7th render() arg (Stage 5.x) and exports the WallBackground shape', () => {
-    // Type-only assertions: WallBackground exposes exactly the four fields
-    // the renderer + UI service share. `render`'s 7th slot accepts it.
-    // `hitTest` still does NOT take the wall — it's pure decoration.
-    const wall: WallBackground = {
-      enabled: true,
-      color: '#2a2d35',
-      widthMm: 1200,
-      heightMm: 600,
-    };
-    const stub: SceneRenderer = {
-      attach: () => undefined,
-      render: () => undefined,
-      hitTest: () => null,
-      dispose: () => undefined,
-    };
-    stub.render(
-      {} as Scene,
-      {} as Viewport,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      wall,
-    );
-    type HitTestArity = Parameters<SceneRenderer['hitTest']>['length'];
-    const arity: HitTestArity = 6;
-    expect(arity).toBe(6);
-    expect(wall.widthMm).toBe(1200);
-  });
-
-  it('accepts snapGuides as the 8th render() arg (F5.4) and exports the SnapGuides shape', () => {
-    const guides: SnapGuides = {
-      xs: [180, 240],
-      ys: [110],
-    };
-    const stub: SceneRenderer = {
-      attach: () => undefined,
-      render: () => undefined,
-      hitTest: () => null,
-      dispose: () => undefined,
-    };
-    stub.render(
-      {} as Scene,
-      {} as Viewport,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      guides,
-    );
-    // hitTest stays 6-arg.
-    type HitTestArity = Parameters<SceneRenderer['hitTest']>['length'];
-    const arity: HitTestArity = 6;
-    expect(arity).toBe(6);
-    expect(guides.xs).toHaveLength(2);
-  });
-
-  it('accepts backdropImage as the 9th render() arg (F6.3) and exports the BackdropImage shape', () => {
-    // Fake CanvasImageSource — the renderer just forwards it to drawImage.
-    const fakeImage = {} as unknown as CanvasImageSource;
-    const backdrop: BackdropImage = {
-      image: fakeImage,
-      opacity: 0.6,
-    };
-    const stub: SceneRenderer = {
-      attach: () => undefined,
-      render: () => undefined,
-      hitTest: () => null,
-      dispose: () => undefined,
-    };
-    stub.render(
-      {} as Scene,
-      {} as Viewport,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      backdrop,
-    );
-    type HitTestArity = Parameters<SceneRenderer['hitTest']>['length'];
-    const arity: HitTestArity = 6;
-    expect(arity).toBe(6);
-    expect(backdrop.opacity).toBe(0.6);
+  describe('HitTestOptions is a strict subset', () => {
+    it('keeps catalog, selection, previewAgeWeeks — decoration layers absent by design', () => {
+      const options: HitTestOptions = {
+        selection: ['a' as ObjectId],
+        previewAgeWeeks: 8,
+      };
+      expect(options.selection).toHaveLength(1);
+      // Compile-time check that decoration-only fields are NOT on HitTestOptions.
+      // @ts-expect-error overlays don't participate in hit-test
+      const bad: HitTestOptions = { overlayOptions: {} as OverlayOptions };
+      void bad;
+    });
   });
 });

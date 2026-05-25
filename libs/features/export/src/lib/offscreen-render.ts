@@ -102,7 +102,7 @@ export async function renderSceneToImageBytes(
   try {
     renderer.attach(surface);
     const viewport = fitViewport(req.resolution, req.scene);
-    renderer.render(req.scene, viewport, req.catalog);
+    renderer.render(req.scene, viewport, { catalog: req.catalog });
   } finally {
     // Dispose so the renderer's resize listener doesn't leak into the
     // host (production runs against `document` add a real window listener).

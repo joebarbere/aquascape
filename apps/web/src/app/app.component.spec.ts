@@ -25,6 +25,7 @@ import {
 import { createWebPlatform } from '@aquascape/platform/platform-web';
 import type {
   HitResult,
+  RenderOptions,
   RenderSurface,
   SceneRenderer,
   Viewport,
@@ -61,7 +62,7 @@ interface MockResizeObserverClass {
 
 class MockSceneRenderer implements SceneRenderer {
   readonly attach = jest.fn<void, [RenderSurface]>();
-  readonly render = jest.fn<void, [Scene, Viewport]>();
+  readonly render = jest.fn<void, [Scene, Viewport, RenderOptions?]>();
   readonly hitTest = jest.fn<HitResult | null, unknown[]>(() => null);
   readonly dispose = jest.fn<void, []>();
 }
@@ -446,9 +447,9 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     fixture.detectChanges();
 
     const firstCall = renderer.render.mock.calls[0]!;
-    // Index 5 is the OverlayOptions slot (scene, viewport, catalog,
-    // selection, previewAge, overlayOptions).
-    expect(firstCall[5]).toEqual({
+    // Post-refactor: render() args are (scene, viewport, options).
+    // OverlayOptions lives on options.overlayOptions.
+    expect(firstCall[2]?.overlayOptions).toEqual({
       goldenRatio: false,
       thirds: false,
       focalPoints: false,
@@ -469,7 +470,7 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     // Effect runs synchronously in TestBed; the call must have happened.
     expect(renderer.render).toHaveBeenCalled();
     const lastArgs = renderer.render.mock.calls.at(-1)!;
-    expect(lastArgs[5]).toEqual({
+    expect(lastArgs[2]?.overlayOptions).toEqual({
       goldenRatio: true,
       thirds: false,
       focalPoints: false,
@@ -481,7 +482,7 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     overlays.setFocalPoints(true);
     fixture.detectChanges();
     const finalArgs = renderer.render.mock.calls.at(-1)!;
-    expect(finalArgs[5]).toEqual({
+    expect(finalArgs[2]?.overlayOptions).toEqual({
       goldenRatio: true,
       thirds: true,
       focalPoints: true,
@@ -563,9 +564,8 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     fixture.detectChanges();
 
     const firstCall = renderer.render.mock.calls[0]!;
-    // Index 6 is the WallBackground slot (scene, viewport, catalog,
-    // selection, previewAge, overlayOptions, wallBackground).
-    expect(firstCall[6]).toEqual({
+    // Post-refactor: WallBackground lives on options.wallBackground.
+    expect(firstCall[2]?.wallBackground).toEqual({
       enabled: false,
       color: expect.stringMatching(/^#[0-9a-f]{6,8}$/i),
       widthMm: expect.any(Number),
@@ -581,8 +581,8 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const args = renderer.render.mock.calls[0]!;
-    // Index 7 is the SnapGuides slot.
-    expect(args[7]).toBeUndefined();
+    // Post-refactor: SnapGuides lives on options.snapGuides.
+    expect(args[2]?.snapGuides).toBeUndefined();
   });
 
   it('re-renders with the new wall config when the service updates', () => {
@@ -601,7 +601,7 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
 
     expect(renderer.render).toHaveBeenCalled();
     const finalArgs = renderer.render.mock.calls.at(-1)!;
-    expect(finalArgs[6]).toEqual({
+    expect(finalArgs[2]?.wallBackground).toEqual({
       enabled: true,
       color: '#112233',
       widthMm: 900,

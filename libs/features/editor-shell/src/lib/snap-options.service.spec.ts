@@ -173,15 +173,9 @@ describe('SnapOptionsService', () => {
 
   it('every setter survives a storage.set rejection (in-memory value still updates)', async () => {
     const failing: StorageService = {
-      get<T>(): Promise<T | null> {
-        return Promise.resolve(null);
-      },
-      set<T>(): Promise<void> {
-        return Promise.reject(new Error('set boom'));
-      },
-      remove(): Promise<void> {
-        return Promise.resolve();
-      },
+      get: () => Promise.resolve(null),
+      set: () => Promise.reject(new Error('set boom')),
+      remove: () => Promise.resolve(),
     };
     TestBed.configureTestingModule({
       providers: [{ provide: STORAGE_SERVICE, useValue: failing }],

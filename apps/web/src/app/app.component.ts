@@ -1178,14 +1178,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const rect = canvas.getBoundingClientRect();
     const cssPoint: Vec2 = { x: event.clientX - rect.left, y: event.clientY - rect.top };
 
-    const hit = this.renderer.hitTest(
-      cssPoint,
-      scene,
-      viewport,
-      coreCatalog,
-      this.currentSelection,
-      this.previewTime.previewAgeWeeks() ?? undefined,
-    );
+    const previewAge = this.previewTime.previewAgeWeeks();
+    const hit = this.renderer.hitTest(cssPoint, scene, viewport, {
+      catalog: coreCatalog,
+      selection: this.currentSelection,
+      ...(previewAge !== null ? { previewAgeWeeks: previewAge } : {}),
+    });
 
     // Common: convert the pointer position to world coords.
     const startWorld = canvasCssToWorld(cssPoint, viewport, {
@@ -1628,17 +1626,19 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     // any object — the overlay is its only visual.
     const scenePassed = this.buildPreviewScene(scene);
     const previewAge = this.previewTime.previewAgeWeeks();
-    this.renderer.render(
-      scenePassed,
-      viewport,
-      coreCatalog,
-      this.currentSelection,
-      previewAge ?? undefined,
-      this.overlayOptions.overlays(),
-      this.wallBackground.wall(),
-      this.currentSnapGuides ?? undefined,
-      this.backdropService.backdrop() ?? undefined,
-    );
+    const backdrop = this.backdropService.backdrop();
+    // exactOptionalPropertyTypes: only spread the nullable fields when
+    // they actually have a value. Assigning `undefined` to an optional
+    // field is a TS error under that flag.
+    this.renderer.render(scenePassed, viewport, {
+      catalog: coreCatalog,
+      selection: this.currentSelection,
+      overlayOptions: this.overlayOptions.overlays(),
+      wallBackground: this.wallBackground.wall(),
+      ...(previewAge !== null ? { previewAgeWeeks: previewAge } : {}),
+      ...(this.currentSnapGuides !== null ? { snapGuides: this.currentSnapGuides } : {}),
+      ...(backdrop !== null ? { backdropImage: backdrop } : {}),
+    });
   }
 
   private buildPreviewScene(scene: Scene): Scene {

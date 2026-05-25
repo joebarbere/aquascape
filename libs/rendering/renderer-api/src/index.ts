@@ -172,6 +172,97 @@ export interface SnapGuides {
 }
 
 /**
+ * Optional inputs to `SceneRenderer.render`. Refactored from the original
+ * positional-argument list (which had grown to 9 args by Stage 6) into a
+ * single options bag so call sites read like
+ *
+ *   renderer.render(scene, viewport, { catalog, selection, overlayOptions })
+ *
+ * instead of a long line of `undefined, undefined, undefined, opts`.
+ *
+ * Every field is independently optional. Fields that the renderer treats
+ * as "off / no-op when omitted" are documented per-field; combining flags
+ * doesn't interact (each pass is independent).
+ */
+export interface RenderOptions {
+  /**
+   * Catalog the renderer consults for content lookups (substrate colours
+   * Stage 2 F2.1; hardscape sprites Stage 3 F3.5; plant silhouettes
+   * Stage 4 F4.5). Omit for headless smoke tests + the renderer paints
+   * with implementation-defined fallback colours; the production app
+   * always passes a catalog.
+   */
+  readonly catalog?: Catalog;
+  /**
+   * The currently-selected object ids. Drives the selection-handle pass
+   * (corner squares + rotate dot) painted AFTER scene content. Empty /
+   * omitted → handles aren't painted.
+   */
+  readonly selection?: ReadonlyArray<ObjectId>;
+  /**
+   * F4.4 — overrides every plant's stored `growth.ageWeeks` so the time
+   * slider can preview a future age without mutating the document. No
+   * effect on hardscape or substrate.
+   */
+  readonly previewAgeWeeks?: number;
+  /**
+   * F5.3 — three view-only composition overlay toggles (golden ratio,
+   * thirds, focal points). Painted ON TOP of all scene content but
+   * BENEATH selection handles. No-op when omitted or every flag false.
+   */
+  readonly overlayOptions?: OverlayOptions;
+  /**
+   * Stage 5.x — view-only "room wall" rectangle painted BEHIND the tank
+   * in world-mm coords (between the grid and the tank outline). No-op
+   * when omitted / disabled / zero-sized.
+   */
+  readonly wallBackground?: WallBackground;
+  /**
+   * F5.4 — ephemeral alignment lines painted during a drag when the
+   * dragged position has snapped to a target. Painted ON TOP of overlays
+   * but BENEATH selection handles. No-op when omitted / both arrays empty.
+   */
+  readonly snapGuides?: SnapGuides;
+  /**
+   * F6.3 — pre-decoded photo painted across the full backing buffer,
+   * BEFORE the world transform is applied (so it doesn't zoom with the
+   * scene). No-op when omitted / opacity ≤ 0.
+   */
+  readonly backdropImage?: BackdropImage;
+}
+
+/**
+ * Optional inputs to `SceneRenderer.hitTest`. Same refactor rationale as
+ * `RenderOptions` — keep the call site readable when only some of the
+ * optional inputs are relevant.
+ *
+ * Note: hit-test consumes a STRICT SUBSET of the render-side options.
+ * Decoration-only fields (overlayOptions, wallBackground, snapGuides,
+ * backdropImage) are intentionally absent because none of those layers
+ * is hit-testable — clicking through an overlay should land on whatever
+ * scene content is underneath.
+ */
+export interface HitTestOptions {
+  /** Same as `RenderOptions.catalog`. Falls back to bbox hit-test when omitted. */
+  readonly catalog?: Catalog;
+  /**
+   * Same as `RenderOptions.selection`. When provided, handle hit-test
+   * runs FIRST and handle hits BEAT body hits — clicking the corner
+   * scale square of a selected object returns `'scaleNE'` even when the
+   * body is also under the cursor. Without `selection`, handles aren't
+   * hit-tested at all.
+   */
+  readonly selection?: ReadonlyArray<ObjectId>;
+  /**
+   * Same as `RenderOptions.previewAgeWeeks`. Hit-test bbox respects the
+   * preview age so clicks land where the rendered plant actually is.
+   * Scatter patches always hit-test against the brush polygon (preview
+   * age doesn't change the polygon footprint).
+   */
+  readonly previewAgeWeeks?: number;
+}
+
+/**
  * The renderer contract. Both `renderer-2d` (now) and `renderer-3d`
  * (Stage 10) implement this. Features depend on this interface, never on a
  * concrete renderer.
@@ -202,59 +293,18 @@ export interface SceneRenderer {
    * Paint `scene` at the given `viewport`. Must be idempotent (see
    * invariant above) and must not mutate `scene`.
    *
-   * The optional `catalog` parameter is consulted for content lookups
-   * (substrate colors as of Stage 2 F2.1; later: hardscape sprites, plant
-   * meshes, etc.). When omitted, the renderer paints with implementation-
-   * defined fallback colors so tests + headless smoke runs stay simple —
-   * the production app always passes a catalog.
+   * All optional inputs (catalog, selection, overlays, etc.) live on the
+   * `options` bag. See `RenderOptions` for the per-field semantics +
+   * no-op rules; the renderer's paint passes treat each field
+   * independently so callers can mix any combination.
    *
-   * The optional `previewAgeWeeks` parameter (F4.4) overrides every plant's
-   * stored `growth.ageWeeks` so the time slider can preview a future age
-   * without mutating the document. Has no effect on hardscape or substrate.
+   * Call sites should pass the options inline:
+   *   renderer.render(scene, viewport, { catalog, selection, overlayOptions });
    *
-   * The optional `overlayOptions` parameter (F5.3) toggles three view-only
-   * composition overlays painted ON TOP of all scene content but BENEATH
-   * any selection handles, so selection markers stay readable. Overlays
-   * are decoration — they don't appear in `hitTest`, never mutate the
-   * scene, and add no canvas work when the parameter is omitted or every
-   * flag is false.
-   *
-   * The optional `wallBackground` parameter (Stage 5.x) paints a filled
-   * "room wall" rectangle BEHIND the tank in world-mm coordinates (between
-   * the grid and the tank outline). Centred on the tank's geometric
-   * centre; `widthMm × heightMm` are absolute. Decoration only — not in
-   * `hitTest`, never mutates the scene, true no-op when omitted /
-   * disabled / zero-sized.
-   *
-   * The optional `snapGuides` parameter (Stage 5 F5.4) paints ephemeral
-   * alignment lines for the snap targets that are currently engaged. The
-   * host updates this every pointermove during a drag; on pointerup or
-   * cancel it clears the field and the lines disappear. Painted ON TOP
-   * of every scene object but BENEATH selection handles so the user
-   * can read both the guide AND the handle. No-op when omitted / empty.
-   *
-   * The optional `backdropImage` parameter (Stage 6 F6.3) paints a
-   * pre-decoded photo across the full backing buffer, BEFORE the world
-   * transform is applied. The image is cover-fit (stretches to fill).
-   * No-op when omitted / opacity 0. Painted first so every other layer
-   * (wall, tank, scene objects, overlays, snap guides, handles) sits on
-   * top of it.
-   *
-   * NOTE: the positional argument list is at its sensible limit. The
-   * next addition MUST refactor `render(...)` to an options object;
-   * this comment has been here since the 8th arg landed.
+   * Omitting `options` entirely is equivalent to passing `{}` — every
+   * pass falls back to its no-op behaviour.
    */
-  render(
-    scene: Scene,
-    viewport: Viewport,
-    catalog?: Catalog,
-    selection?: ReadonlyArray<ObjectId>,
-    previewAgeWeeks?: number,
-    overlayOptions?: OverlayOptions,
-    wallBackground?: WallBackground,
-    snapGuides?: SnapGuides,
-    backdropImage?: BackdropImage,
-  ): void;
+  render(scene: Scene, viewport: Viewport, options?: RenderOptions): void;
 
   /**
    * Return the topmost object hit at `point` (canvas CSS pixels) under the
@@ -262,34 +312,18 @@ export interface SceneRenderer {
    * must match the one passed to the most recent `render` call for the
    * result to be consistent with what's on screen.
    *
-   * The optional `catalog` parameter is consulted for object silhouettes
-   * (hardscape entries carry a per-entry polygon in normalized space). When
-   * omitted, the renderer falls back to an axis-aligned-bounding-box test
-   * derived from `transform.scale × naturalSize`-defaults — adequate for
-   * headless smoke tests but visibly looser than the rendered shape.
-   *
-   * The optional `selection` parameter enables **handle hit-testing**: when
-   * the point lands on a painted selection handle of a currently-selected
-   * object, the result's `handle` field is populated (`'translate'`,
-   * `'rotate'`, `'scaleNW'`, etc.). Handle hits BEAT body hits — clicking
-   * the top-right scale square returns `'scaleNE'` even when the body is
-   * under the cursor. Without `selection`, handles aren't hit-tested at all
-   * (handles only paint for selected objects, and the renderer doesn't
-   * track selection between `render` calls).
-   *
-   * The optional `previewAgeWeeks` parameter (F4.4) overrides every plant's
-   * stored `growth.ageWeeks` for hit-test purposes — so when the time slider
-   * is at week 12, clicks land on plants at their week-12 size, matching
-   * what's painted. Single-specimen plants only; scatter patches always
-   * hit-test against the brush polygon.
+   * Optional inputs (catalog, selection, previewAgeWeeks) live on the
+   * `options` bag. See `HitTestOptions` for per-field semantics —
+   * notably that `selection` enables handle hit-testing and that decoration
+   * layers (overlays / wall / snap guides / backdrop) are deliberately
+   * NOT hit-testable, so a click through them lands on whatever scene
+   * content sits underneath.
    */
   hitTest(
     point: Vec2,
     scene: Scene,
     viewport: Viewport,
-    catalog?: Catalog,
-    selection?: ReadonlyArray<ObjectId>,
-    previewAgeWeeks?: number,
+    options?: HitTestOptions,
   ): HitResult | null;
 
   /**

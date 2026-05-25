@@ -96,15 +96,9 @@ describe('BackdropService', () => {
 
     it('setEnabled + setOpacity survive a storage.set rejection', async () => {
       const failing: StorageService = {
-        get<T>(): Promise<T | null> {
-          return Promise.resolve(null);
-        },
-        set<T>(): Promise<void> {
-          return Promise.reject(new Error('set boom'));
-        },
-        remove(): Promise<void> {
-          return Promise.resolve();
-        },
+        get: () => Promise.resolve(null),
+        set: () => Promise.reject(new Error('set boom')),
+        remove: () => Promise.resolve(),
       };
       TestBed.configureTestingModule({
         providers: [{ provide: STORAGE_SERVICE, useValue: failing }],
@@ -322,15 +316,9 @@ describe('BackdropService', () => {
   describe('clear — storage rejection', () => {
     it('still clears the in-memory state when storage.remove rejects', async () => {
       const failing: StorageService = {
-        get<T>(): Promise<T | null> {
-          return Promise.resolve(null);
-        },
-        set<T>(): Promise<void> {
-          return Promise.resolve();
-        },
-        remove(): Promise<void> {
-          return Promise.reject(new Error('remove boom'));
-        },
+        get: () => Promise.resolve(null),
+        set: () => Promise.resolve(),
+        remove: () => Promise.reject(new Error('remove boom')),
       };
       TestBed.configureTestingModule({
         providers: [{ provide: STORAGE_SERVICE, useValue: failing }],
