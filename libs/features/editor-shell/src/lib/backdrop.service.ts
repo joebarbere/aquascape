@@ -191,8 +191,11 @@ export class BackdropService {
  * Default decoder — uses `new Image()` + the modern `.decode()` API
  * (Chromium / Firefox / Safari all support it). The decoded
  * `HTMLImageElement` is a valid `CanvasImageSource`.
+ *
+ * Exported for direct test coverage (the service swaps in a fake decoder
+ * for most tests; this is the production path).
  */
-async function decodeImageElement(dataUrl: string): Promise<CanvasImageSource> {
+export async function decodeImageElement(dataUrl: string): Promise<CanvasImageSource> {
   if (typeof Image === 'undefined') {
     throw new Error('No `Image` constructor available — cannot decode backdrop');
   }
@@ -209,7 +212,8 @@ async function decodeImageElement(dataUrl: string): Promise<CanvasImageSource> {
   return img;
 }
 
-function readFileAsDataUrl(file: File): Promise<string> {
+/** Exported for direct test coverage of the FileReader path. */
+export function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = (): void => reject(new Error('Failed to read file'));

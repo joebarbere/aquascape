@@ -116,6 +116,49 @@ describe('SnapSettingsComponent', () => {
       expect(storage.data.has(STORAGE_KEY_SNAP_TO_OBJECTS)).toBe(false);
     });
 
+    it('the to-grid checkbox flips toGrid + persists', async () => {
+      const { fixture, service, storage } = configure();
+      const cb = inputByAriaLabel(fixture, 'Snap to grid');
+      cb.checked = false;
+      cb.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      await flushPromises();
+      expect(service.toGrid()).toBe(false);
+      expect(storage.data.get('aquascape.ui.snap.toGrid')).toBe(false);
+    });
+
+    it('the to-objects checkbox flips toObjects + persists', async () => {
+      const { fixture, service, storage } = configure();
+      const cb = inputByAriaLabel(fixture, 'Snap to other objects');
+      cb.checked = false;
+      cb.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      await flushPromises();
+      expect(service.toObjects()).toBe(false);
+      expect(storage.data.get('aquascape.ui.snap.toObjects')).toBe(false);
+    });
+
+    it('the tolerance input ignores non-finite values', () => {
+      const { fixture, service } = configure();
+      const before = service.toleranceCssPx();
+      // Simulate a numeric input with NaN (e.g. user typed garbage and the
+      // browser surfaces valueAsNumber === NaN). The handler must early-return
+      // so the service keeps its previous value.
+      fixture.componentInstance.onToleranceChange({
+        target: { valueAsNumber: Number.NaN } as HTMLInputElement,
+      } as unknown as Event);
+      expect(service.toleranceCssPx()).toBe(before);
+    });
+
+    it('the grid-size input ignores non-finite values', () => {
+      const { fixture, service } = configure();
+      const before = service.gridSizeMm();
+      fixture.componentInstance.onGridSizeChange({
+        target: { valueAsNumber: Number.NaN } as HTMLInputElement,
+      } as unknown as Event);
+      expect(service.gridSizeMm()).toBe(before);
+    });
+
     it('grid size input updates service + persists', async () => {
       const { fixture, service, storage } = configure();
       const input = inputByAriaLabel(fixture, 'Grid spacing in millimetres');

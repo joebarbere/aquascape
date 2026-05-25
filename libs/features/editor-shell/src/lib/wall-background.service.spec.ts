@@ -220,4 +220,33 @@ describe('WallBackgroundService', () => {
       expect(storage.data.get(STORAGE_KEY_WALL_COLOR)).toBe(DEFAULT_WALL_COLOR);
     });
   });
+
+  describe('storage.set rejection', () => {
+    it('every setter still updates the in-memory value when storage.set rejects', async () => {
+      const failing: StorageService = {
+        get<T>(): Promise<T | null> {
+          return Promise.resolve(null);
+        },
+        set<T>(): Promise<void> {
+          return Promise.reject(new Error('set boom'));
+        },
+        remove(): Promise<void> {
+          return Promise.resolve();
+        },
+      };
+      TestBed.configureTestingModule({
+        providers: [{ provide: STORAGE_SERVICE, useValue: failing }],
+      });
+      const service = TestBed.inject(WallBackgroundService);
+      service.setEnabled(true);
+      service.setColor('#112233');
+      service.setWidthMm(800);
+      service.setHeightMm(400);
+      await flushPromises();
+      expect(service.enabled()).toBe(true);
+      expect(service.color()).toBe('#112233');
+      expect(service.widthMm()).toBe(800);
+      expect(service.heightMm()).toBe(400);
+    });
+  });
 });

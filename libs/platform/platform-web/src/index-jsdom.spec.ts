@@ -8,10 +8,12 @@
 
 import {
   BrowserDialogService,
+  BrowserDownloadRenderExportService,
   FallbackFileService,
   FileSystemAccessFileService,
   IndexedDbStorageService,
   InMemoryFileService,
+  InMemoryRenderExportService,
   InMemoryStorageService,
   StubDialogService,
   createWebPlatform,
@@ -94,5 +96,28 @@ describe('createWebPlatform (jsdom, capability-detected)', () => {
     expect(platform.fileService).toBeInstanceOf(InMemoryFileService);
     expect(platform.storageService).toBeInstanceOf(InMemoryStorageService);
     expect(platform.dialogService).toBeInstanceOf(StubDialogService);
+  });
+
+  it('picks BrowserDownloadRenderExportService when document + URL.createObjectURL are both present', () => {
+    // jsdom exposes `URL` as the URL parser but NOT `URL.createObjectURL`
+    // (that requires real Blob streaming). Install the missing methods so
+    // the factory picks the real downloader.
+    const fakeGlobal = {
+      document: window.document,
+      URL: {
+        createObjectURL: (_: Blob): string => 'blob:fake',
+        revokeObjectURL: (_: string): void => undefined,
+      },
+    } as unknown as typeof globalThis;
+    const platform = createWebPlatform({ globalRef: fakeGlobal });
+    expect(platform.renderExportService).toBeInstanceOf(BrowserDownloadRenderExportService);
+  });
+
+  it('falls back to InMemoryRenderExportService when URL.createObjectURL is unavailable', () => {
+    // Default jsdom: URL exists as the parser class but createObjectURL is
+    // not a function — the factory's `hasUrl` check is `false` and the
+    // factory hands back the in-memory stub.
+    const platform = createWebPlatform();
+    expect(platform.renderExportService).toBeInstanceOf(InMemoryRenderExportService);
   });
 });

@@ -95,6 +95,20 @@ describe('BrowserDownloadRenderExportService', () => {
     expect((url.createObjectURL.mock.calls[0]?.[0] as Blob).type).toBe('application/json');
   });
 
+  it('derives image/webp for .webp', async () => {
+    const { doc, url } = makeFakes();
+    const svc = new BrowserDownloadRenderExportService(doc, url);
+    await svc.exportPng({ bytes: new Uint8Array([1]), suggestedName: 'x.webp' });
+    expect((url.createObjectURL.mock.calls[0]?.[0] as Blob).type).toBe('image/webp');
+  });
+
+  it('derives text/markdown for .markdown (alternate extension)', async () => {
+    const { doc, url } = makeFakes();
+    const svc = new BrowserDownloadRenderExportService(doc, url);
+    await svc.exportPng({ bytes: new Uint8Array([1]), suggestedName: 'notes.markdown' });
+    expect((url.createObjectURL.mock.calls[0]?.[0] as Blob).type).toBe('text/markdown');
+  });
+
   it('falls back to application/octet-stream for unknown extensions', async () => {
     const { doc, url } = makeFakes();
     const svc = new BrowserDownloadRenderExportService(doc, url);

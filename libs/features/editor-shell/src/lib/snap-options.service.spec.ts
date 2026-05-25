@@ -171,6 +171,38 @@ describe('SnapOptionsService', () => {
     expect(service.toleranceCssPx()).toBe(MAX_TOLERANCE_CSS_PX);
   });
 
+  it('every setter survives a storage.set rejection (in-memory value still updates)', async () => {
+    const failing: StorageService = {
+      get<T>(): Promise<T | null> {
+        return Promise.resolve(null);
+      },
+      set<T>(): Promise<void> {
+        return Promise.reject(new Error('set boom'));
+      },
+      remove(): Promise<void> {
+        return Promise.resolve();
+      },
+    };
+    TestBed.configureTestingModule({
+      providers: [{ provide: STORAGE_SERVICE, useValue: failing }],
+    });
+    const service = TestBed.inject(SnapOptionsService);
+    service.setEnabled(false);
+    service.setToGrid(false);
+    service.setToGuides(false);
+    service.setToObjects(false);
+    service.setGridSizeMm(25);
+    service.setToleranceCssPx(16);
+    await flushPromises();
+    // In-memory state still updated even though every write rejected.
+    expect(service.enabled()).toBe(false);
+    expect(service.toGrid()).toBe(false);
+    expect(service.toGuides()).toBe(false);
+    expect(service.toObjects()).toBe(false);
+    expect(service.gridSizeMm()).toBe(25);
+    expect(service.toleranceCssPx()).toBe(16);
+  });
+
   it('survives a storage rejection (defaults stay)', async () => {
     const failing: StorageService = {
       get(): Promise<never> {

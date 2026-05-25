@@ -12,6 +12,8 @@ import {
   STORAGE_KEY_BACKDROP_DATA_URL,
   STORAGE_KEY_BACKDROP_ENABLED,
   STORAGE_KEY_BACKDROP_OPACITY,
+  decodeImageElement,
+  readFileAsDataUrl,
 } from './backdrop.service';
 
 const SAMPLE_DATA_URL =
@@ -90,6 +92,33 @@ describe('BackdropService', () => {
       const before = service.opacity();
       service.setOpacity(Number.NaN);
       expect(service.opacity()).toBe(before);
+    });
+
+    it('setEnabled + setOpacity survive a storage.set rejection', async () => {
+      const failing: StorageService = {
+        get<T>(): Promise<T | null> {
+          return Promise.resolve(null);
+        },
+        set<T>(): Promise<void> {
+          return Promise.reject(new Error('set boom'));
+        },
+        remove(): Promise<void> {
+          return Promise.resolve();
+        },
+      };
+      TestBed.configureTestingModule({
+        providers: [{ provide: STORAGE_SERVICE, useValue: failing }],
+      });
+      const service = TestBed.inject(BackdropService);
+      service.decoder = async (): Promise<CanvasImageSource> => FAKE_IMAGE;
+      service.setEnabled(true);
+      service.setOpacity(0.25);
+      await service.setImageFromDataUrl(SAMPLE_DATA_URL);
+      await flushPromises();
+      // In-memory state still set despite every storage.set rejecting.
+      expect(service.enabled()).toBe(true);
+      expect(service.opacity()).toBe(0.25);
+      expect(service.image()).toBe(FAKE_IMAGE);
     });
   });
 
@@ -217,6 +246,187 @@ describe('BackdropService', () => {
       expect(service.enabled()).toBe(false);
       expect(service.opacity()).toBe(DEFAULT_BACKDROP_OPACITY);
       expect(service.dataUrl()).toBeNull();
+    });
+  });
+
+  describe('setImageFromFile', () => {
+    it('reads the File as a data URL then commits via the decoder', async () => {
+      const { service } = configure();
+      const file = new File([new Uint8Array([1, 2, 3])], 'photo.png', { type: 'image/png' });
+      // Stub global FileReader so the deterministic data URL flows through.
+      const originalReader = globalThis.FileReader;
+      class FakeFileReader {
+        result: string | null = null;
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        readAsDataURL(_: File): void {
+          this.result = SAMPLE_DATA_URL;
+          if (this.onload !== null) this.onload();
+        }
+      }
+      (globalThis as { FileReader: typeof FileReader }).FileReader =
+        FakeFileReader as unknown as typeof FileReader;
+      try {
+        await service.setImageFromFile(file);
+        expect(service.dataUrl()).toBe(SAMPLE_DATA_URL);
+        expect(service.image()).toBe(FAKE_IMAGE);
+      } finally {
+        globalThis.FileReader = originalReader;
+      }
+    });
+
+    it('propagates a FileReader error', async () => {
+      const { service } = configure();
+      const originalReader = globalThis.FileReader;
+      class FailingReader {
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        readAsDataURL(_: File): void {
+          if (this.onerror !== null) this.onerror();
+        }
+      }
+      (globalThis as { FileReader: typeof FileReader }).FileReader =
+        FailingReader as unknown as typeof FileReader;
+      try {
+        await expect(
+          service.setImageFromFile(new File([], 'x.png', { type: 'image/png' })),
+        ).rejects.toThrow(/Failed to read file/);
+      } finally {
+        globalThis.FileReader = originalReader;
+      }
+    });
+
+    it('propagates a non-string FileReader result', async () => {
+      const { service } = configure();
+      const originalReader = globalThis.FileReader;
+      class WeirdReader {
+        result: ArrayBuffer | null = new ArrayBuffer(8);
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        readAsDataURL(_: File): void {
+          if (this.onload !== null) this.onload();
+        }
+      }
+      (globalThis as { FileReader: typeof FileReader }).FileReader =
+        WeirdReader as unknown as typeof FileReader;
+      try {
+        await expect(
+          service.setImageFromFile(new File([], 'x.png', { type: 'image/png' })),
+        ).rejects.toThrow(/non-string result/);
+      } finally {
+        globalThis.FileReader = originalReader;
+      }
+    });
+  });
+
+  describe('clear — storage rejection', () => {
+    it('still clears the in-memory state when storage.remove rejects', async () => {
+      const failing: StorageService = {
+        get<T>(): Promise<T | null> {
+          return Promise.resolve(null);
+        },
+        set<T>(): Promise<void> {
+          return Promise.resolve();
+        },
+        remove(): Promise<void> {
+          return Promise.reject(new Error('remove boom'));
+        },
+      };
+      TestBed.configureTestingModule({
+        providers: [{ provide: STORAGE_SERVICE, useValue: failing }],
+      });
+      const service = TestBed.inject(BackdropService);
+      service.decoder = async (): Promise<CanvasImageSource> => FAKE_IMAGE;
+      await service.setImageFromDataUrl(SAMPLE_DATA_URL);
+      await service.clear();
+      expect(service.image()).toBeNull();
+      expect(service.dataUrl()).toBeNull();
+    });
+  });
+
+  describe('default helpers', () => {
+    describe('decodeImageElement', () => {
+      it('throws when no Image constructor is available', async () => {
+        const origImage = (globalThis as { Image?: unknown }).Image;
+        delete (globalThis as { Image?: unknown }).Image;
+        try {
+          await expect(decodeImageElement(SAMPLE_DATA_URL)).rejects.toThrow(/No `Image` constructor/);
+        } finally {
+          if (origImage !== undefined) (globalThis as { Image: unknown }).Image = origImage;
+        }
+      });
+
+      it('falls back to onload when Image.decode is unavailable', async () => {
+        // Stub Image with no `.decode` so the onload/onerror fallback path is
+        // exercised. Each `new Image()` returns an object that fires onload
+        // synchronously when src is assigned.
+        const origImage = (globalThis as { Image?: unknown }).Image;
+        class NoDecodeImage {
+          private _src = '';
+          onload: (() => void) | null = null;
+          onerror: (() => void) | null = null;
+          set src(value: string) {
+            this._src = value;
+            queueMicrotask(() => this.onload?.());
+          }
+          get src(): string {
+            return this._src;
+          }
+        }
+        (globalThis as { Image: unknown }).Image = NoDecodeImage as unknown as typeof Image;
+        try {
+          const img = await decodeImageElement(SAMPLE_DATA_URL);
+          expect(img).toBeInstanceOf(NoDecodeImage);
+        } finally {
+          if (origImage !== undefined) (globalThis as { Image: unknown }).Image = origImage;
+          else delete (globalThis as { Image?: unknown }).Image;
+        }
+      });
+
+      it('rejects when the fallback onerror fires', async () => {
+        const origImage = (globalThis as { Image?: unknown }).Image;
+        class FailingImage {
+          private _src = '';
+          onload: (() => void) | null = null;
+          onerror: (() => void) | null = null;
+          set src(value: string) {
+            this._src = value;
+            queueMicrotask(() => this.onerror?.());
+          }
+          get src(): string {
+            return this._src;
+          }
+        }
+        (globalThis as { Image: unknown }).Image = FailingImage as unknown as typeof Image;
+        try {
+          await expect(decodeImageElement(SAMPLE_DATA_URL)).rejects.toThrow(/Image failed to load/);
+        } finally {
+          if (origImage !== undefined) (globalThis as { Image: unknown }).Image = origImage;
+          else delete (globalThis as { Image?: unknown }).Image;
+        }
+      });
+    });
+
+    describe('readFileAsDataUrl', () => {
+      it('returns the FileReader.result string', async () => {
+        const originalReader = globalThis.FileReader;
+        class OK {
+          result: string | null = SAMPLE_DATA_URL;
+          onload: (() => void) | null = null;
+          onerror: (() => void) | null = null;
+          readAsDataURL(_: File): void {
+            if (this.onload !== null) this.onload();
+          }
+        }
+        (globalThis as { FileReader: typeof FileReader }).FileReader =
+          OK as unknown as typeof FileReader;
+        try {
+          const out = await readFileAsDataUrl(new File([], 'x.png', { type: 'image/png' }));
+          expect(out).toBe(SAMPLE_DATA_URL);
+        } finally {
+          globalThis.FileReader = originalReader;
+        }
+      });
     });
   });
 });
