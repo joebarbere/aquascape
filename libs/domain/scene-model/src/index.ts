@@ -13,6 +13,7 @@ export type {
   Substrate,
   SubstrateRegion,
   Layer,
+  LivestockEntry,
   SceneObject,
   HardscapeObject,
   PlantObject,
@@ -44,6 +45,8 @@ export {
   getLayerById,
   getActiveLayer,
   iterateObjects,
+  selectLivestock,
+  selectLivestockById,
 } from './selectors';
 
 // ─── Commands ─────────────────────────────────────────────────────────────
@@ -116,6 +119,20 @@ export {
   setSubstrateRegionProfile,
   validateSubstrateRegion,
 } from './substrate-commands';
+
+// ─── Livestock commands (Stage 7 F7.1) ────────────────────────────────────
+export type {
+  AddLivestockEntryCommand,
+  LivestockCommand,
+  RemoveLivestockEntryCommand,
+  UpdateLivestockQuantityCommand,
+} from './livestock-commands';
+
+export {
+  addLivestockEntry,
+  removeLivestockEntry,
+  updateLivestockQuantity,
+} from './livestock-commands';
 
 // ─── History ──────────────────────────────────────────────────────────────
 export { createHistory } from './history';

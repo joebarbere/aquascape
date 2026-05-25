@@ -13,14 +13,16 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     expect(coreCatalog.entries.length).toBe(CORE_CATALOG_MANIFESTS.length);
   });
 
-  it('ships substrate (Stage 2), hardscape (Stage 3), and plant (Stage 4) kinds', () => {
+  it('ships substrate (Stage 2), hardscape (Stage 3), plant (Stage 4), and livestock (Stage 7 F7.1) kinds', () => {
     expect(coreCatalog.byKind('substrate').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('hardscape').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('plant').length).toBeGreaterThan(0);
+    expect(coreCatalog.byKind('livestock').length).toBeGreaterThan(0);
     expect(
       coreCatalog.byKind('substrate').length +
         coreCatalog.byKind('hardscape').length +
-        coreCatalog.byKind('plant').length,
+        coreCatalog.byKind('plant').length +
+        coreCatalog.byKind('livestock').length,
     ).toBe(coreCatalog.entries.length);
   });
 
@@ -95,5 +97,47 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     // Carpet plants should specify a default scatter density; the planting
     // tool's brush relies on this when no override is supplied.
     expect(entry.defaultDensity).toBeGreaterThan(0);
+  });
+
+  it('ships exactly the 8 seeded livestock species (4 fish + 2 shrimp + 2 snails)', () => {
+    const livestock = coreCatalog.byKind('livestock');
+    expect(livestock.length).toBe(8);
+    const groups = livestock.reduce<Record<string, number>>((acc, entry) => {
+      acc[entry.group] = (acc[entry.group] ?? 0) + 1;
+      return acc;
+    }, {});
+    expect(groups).toEqual({ fish: 4, shrimp: 2, snail: 2 });
+  });
+
+  it('every livestock entry has a valid swatch color, plausible ranges, and a positive adult size', () => {
+    for (const entry of coreCatalog.byKind('livestock')) {
+      expect(entry.color).toMatch(/^#[0-9a-fA-F]{6}$/);
+      expect(entry.adultSize).toBeGreaterThan(0);
+      expect(entry.schoolingMin).toBeGreaterThanOrEqual(1);
+      expect(Number.isInteger(entry.schoolingMin)).toBe(true);
+      // Manifest-author contract: min < max for both windows.
+      expect(entry.temperatureRange.minC).toBeLessThan(entry.temperatureRange.maxC);
+      expect(entry.pHRange.min).toBeLessThan(entry.pHRange.max);
+    }
+  });
+
+  it('the Neon Tetra livestock entry is reachable and shaped like a schooling community fish', () => {
+    const entry = coreCatalog.get({ catalog: 'core', id: 'livestock.fish.neon-tetra' });
+    expect(entry).not.toBeNull();
+    expect(entry?.kind).toBe('livestock');
+    if (entry?.kind !== 'livestock') return;
+    expect(entry.group).toBe('fish');
+    expect(entry.temperament).toBe('peaceful');
+    expect(entry.schoolingMin).toBeGreaterThanOrEqual(6);
+    expect(entry.bioloadClass).toBe('low');
+  });
+
+  it('the Cherry Shrimp livestock entry is reachable and grouped as shrimp', () => {
+    const entry = coreCatalog.get({ catalog: 'core', id: 'livestock.shrimp.neocaridina-davidi' });
+    expect(entry).not.toBeNull();
+    expect(entry?.kind).toBe('livestock');
+    if (entry?.kind !== 'livestock') return;
+    expect(entry.group).toBe('shrimp');
+    expect(entry.temperament).toBe('peaceful');
   });
 });

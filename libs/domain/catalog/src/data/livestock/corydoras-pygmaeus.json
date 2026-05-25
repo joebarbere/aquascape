@@ -1,0 +1,18 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.corydoras-pygmaeus",
+  "version": 1,
+  "name": "Pygmy Corydoras (Corydoras pygmaeus)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 25,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 22, "maxC": 26 },
+  "pHRange": { "min": 6.0, "max": 7.5 },
+  "schoolingMin": 8,
+  "bioloadClass": "low",
+  "color": "#8a8270",
+  "description": "Dwarf cory cat that, unlike most cories, schools in mid-water as often as it sits on the substrate. Needs soft sand or smooth fine gravel — sharp substrate damages barbels. Schooling minimum is conservative; smaller groups are notably less active.",
+  "tags": ["schooler", "nano", "bottom-dweller", "cory", "soft-substrate"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false }
+}

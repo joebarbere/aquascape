@@ -1,0 +1,18 @@
+{
+  "catalog": "core",
+  "id": "livestock.shrimp.caridina-cantonensis",
+  "version": 1,
+  "name": "Crystal Red Shrimp (Caridina cf. cantonensis)",
+  "kind": "livestock",
+  "group": "shrimp",
+  "adultSize": 25,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 20, "maxC": 24 },
+  "pHRange": { "min": 5.5, "max": 6.8 },
+  "schoolingMin": 10,
+  "bioloadClass": "low",
+  "color": "#e8dcd4",
+  "description": "Demanding bee-shrimp lineage; requires soft, slightly acidic water and very stable parameters — mature aquasoil substrate is effectively mandatory. Not compatible with Neocaridina in the same tank (they hybridize into muddy-colored offspring). Schooling minimum is for visible colony behavior.",
+  "tags": ["shrimp", "nano", "advanced", "soft-water", "bee-shrimp"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false }
+}

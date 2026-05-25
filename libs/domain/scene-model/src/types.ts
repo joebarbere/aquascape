@@ -192,6 +192,26 @@ export interface Layer {
   objects: SceneObject[];
 }
 
+// ─── Livestock ────────────────────────────────────────────────────────────
+
+/**
+ * A planned-livestock entry. Mirrors the on-disk `LivestockEntry` from
+ * `aqua-document.ts` minimally — same field set, just re-declared so the
+ * scene-model has no dependency on `@aquascape/domain/document`.
+ *
+ * Livestock entries do NOT live in any layer; the locked-layer guard does
+ * NOT apply to livestock commands. They round-trip through `documentToScene`
+ * / `sceneToDocument` on the `Scene` itself (Stage 7 F7.1 promoted them off
+ * the envelope into the scene so undo/redo via Commands could reach them).
+ */
+export interface LivestockEntry {
+  id: Uuid;
+  ref: CatalogRef;
+  quantity: number;
+  /** Optional link to a DecorObject rendering this species in-scene. */
+  decorObjectId?: Uuid;
+}
+
 // ─── Scene root ───────────────────────────────────────────────────────────
 
 /**
@@ -208,4 +228,13 @@ export interface Scene {
   layers: Layer[];
   /** Deterministic seed for any stochastic operation. */
   seed: number;
+  /**
+   * Planned livestock for the scape. Optional — absent on a fresh scene
+   * stays absent through document round-trips (the marshal layer uses the
+   * spread-trick so the on-disk field is omitted when undefined).
+   *
+   * Lives on the scene (not on the envelope) so livestock mutations can
+   * flow through the Command pipeline with undo/redo support. Stage 7 F7.1.
+   */
+  livestock?: LivestockEntry[];
 }

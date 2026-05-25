@@ -79,6 +79,17 @@ import fluorite from './data/substrates/fluorite.json';
 import silicaSand from './data/substrates/silica-sand.json';
 import tropicaAquasoil from './data/substrates/tropica-aquasoil.json';
 import whiteSand from './data/substrates/white-sand.json';
+// Livestock — fish (Stage 7 F7.1)
+import livestockApistogrammaCacatuoides from './data/livestock/apistogramma-cacatuoides.json';
+import livestockBettaSplendens from './data/livestock/betta-splendens.json';
+import livestockCorydorasPygmaeus from './data/livestock/corydoras-pygmaeus.json';
+import livestockNeonTetra from './data/livestock/neon-tetra.json';
+// Livestock — shrimp
+import livestockCaridinaCantonensis from './data/livestock/caridina-cantonensis.json';
+import livestockNeocaridinaDavidi from './data/livestock/neocaridina-davidi.json';
+// Livestock — snails
+import livestockNeritinaNatalensis from './data/livestock/neritina-natalensis.json';
+import livestockPlanorbellaDuryi from './data/livestock/planorbella-duryi.json';
 import { loadCatalog, type CatalogLoadResult } from './loader';
 
 /** Raw manifest array — exposed so tests + tools can re-load it deliberately. */
@@ -142,6 +153,17 @@ export const CORE_CATALOG_MANIFESTS: readonly unknown[] = [
   plantHygrophilaPolysperma,
   plantAmmannia,
   plantMyriophyllum,
+  // Livestock — fish (Stage 7 F7.1)
+  livestockNeonTetra,
+  livestockBettaSplendens,
+  livestockCorydorasPygmaeus,
+  livestockApistogrammaCacatuoides,
+  // Livestock — shrimp
+  livestockNeocaridinaDavidi,
+  livestockCaridinaCantonensis,
+  // Livestock — snails
+  livestockNeritinaNatalensis,
+  livestockPlanorbellaDuryi,
 ];
 
 /**

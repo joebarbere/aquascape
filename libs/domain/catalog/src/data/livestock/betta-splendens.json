@@ -1,0 +1,18 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.betta-splendens",
+  "version": 1,
+  "name": "Siamese Fighting Fish (Betta splendens)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 65,
+  "temperament": "aggressive",
+  "temperatureRange": { "minC": 24, "maxC": 28 },
+  "pHRange": { "min": 6.0, "max": 7.5 },
+  "schoolingMin": 1,
+  "bioloadClass": "low",
+  "color": "#c92a4a",
+  "description": "Solitary labyrinth fish. Males must be kept alone; even females in 'sororities' frequently fail. Long-finned males are vulnerable to nippy tankmates — pair only with non-nipping community fish. Tolerates a wide pH range but prefers soft, slightly acidic water.",
+  "tags": ["solo", "labyrinth", "centerpiece", "long-fin"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false }
+}

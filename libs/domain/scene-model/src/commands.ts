@@ -30,6 +30,11 @@
 import type { Transform } from '@aquascape/domain/geometry';
 import { identityTransform } from '@aquascape/domain/geometry';
 
+import {
+  applyLivestockCommand,
+  invertLivestockCommand,
+  type LivestockCommand,
+} from './livestock-commands';
 import { getLayerById, getObjectWithLayer } from './selectors';
 import {
   applySubstrateCommand,
@@ -406,6 +411,7 @@ export type Command =
   | SetTankDimensionsCommand
   | SetTankStyleCommand
   | SubstrateCommand
+  | LivestockCommand
   | CompositeCommand;
 
 // ─── Internal helpers ─────────────────────────────────────────────────────
@@ -911,6 +917,14 @@ export function applyCommand(scene: Scene, command: Command): CommandResult {
       return applySubstrateCommand(scene, command);
     }
 
+    case 'AddLivestockEntry':
+    case 'RemoveLivestockEntry':
+    case 'UpdateLivestockQuantity': {
+      // Livestock commands don't target any layer, so the locked-layer guard
+      // doesn't apply. Delegate to the livestock-commands module.
+      return applyLivestockCommand(scene, command);
+    }
+
     case 'Composite': {
       let current = scene;
       for (const child of command.children) {
@@ -1144,6 +1158,12 @@ export function invertCommand(scene: Scene, command: Command): Command {
     case 'SetSubstrateRegionExtent':
     case 'SetSubstrateRegionProfile': {
       return invertSubstrateCommand(scene, command);
+    }
+
+    case 'AddLivestockEntry':
+    case 'RemoveLivestockEntry':
+    case 'UpdateLivestockQuantity': {
+      return invertLivestockCommand(scene, command);
     }
 
     case 'Composite': {

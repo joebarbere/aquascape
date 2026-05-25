@@ -1,0 +1,18 @@
+{
+  "catalog": "core",
+  "id": "livestock.shrimp.neocaridina-davidi",
+  "version": 1,
+  "name": "Cherry Shrimp (Neocaridina davidi)",
+  "kind": "livestock",
+  "group": "shrimp",
+  "adultSize": 30,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 18, "maxC": 28 },
+  "pHRange": { "min": 6.5, "max": 8.0 },
+  "schoolingMin": 10,
+  "bioloadClass": "low",
+  "color": "#c8242a",
+  "description": "Hardy beginner shrimp; selectively bred into many color morphs (cherry, fire, sakura, yellow, blue). Tolerates a wide parameter range but breeding stalls below ~22 °C. Vulnerable to most fish — pair only with truly peaceful, small-mouthed tankmates. Schooling minimum reflects 'visible colony' rather than survival.",
+  "tags": ["shrimp", "nano", "beginner", "cleanup-crew", "breeder"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false }
+}

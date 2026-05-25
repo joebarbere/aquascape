@@ -1,0 +1,18 @@
+{
+  "catalog": "core",
+  "id": "livestock.snail.neritina-natalensis",
+  "version": 1,
+  "name": "Nerite Snail (Neritina natalensis)",
+  "kind": "livestock",
+  "group": "snail",
+  "adultSize": 25,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 22, "maxC": 28 },
+  "pHRange": { "min": 7.0, "max": 8.5 },
+  "schoolingMin": 1,
+  "bioloadClass": "low",
+  "color": "#3a2a18",
+  "description": "Premier algae-eating snail for freshwater; won't reproduce in fresh water (eggs need brackish to hatch) so the population can never crash a tank. Tolerates a wide range; needs harder, slightly alkaline water for shell health. Will lay sterile white egg-spots on hardscape — purely cosmetic.",
+  "tags": ["snail", "algae-eater", "cleanup-crew", "non-breeding"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false }
+}

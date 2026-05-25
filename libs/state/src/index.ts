@@ -78,6 +78,8 @@ export {
   selectTankPresetRef,
   selectSubstrate,
   selectSubstrateRegions,
+  selectLivestock,
+  selectLivestockById,
   selectCanUndo,
   selectCanRedo,
   defaultScene,

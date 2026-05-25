@@ -236,6 +236,104 @@ describe('validateCatalogEntry (plant, Stage 4 F4.1)', () => {
   });
 });
 
+describe('validateCatalogEntry (livestock, Stage 7 F7.1)', () => {
+  const validLivestock = {
+    catalog: 'core',
+    id: 'livestock.fish.test',
+    version: 1,
+    name: 'Test fish',
+    kind: 'livestock',
+    group: 'fish',
+    adultSize: 30,
+    temperament: 'peaceful',
+    temperatureRange: { minC: 22, maxC: 26 },
+    pHRange: { min: 6.0, max: 7.5 },
+    schoolingMin: 6,
+    bioloadClass: 'low',
+    color: '#abcdef',
+  };
+
+  it('accepts a well-formed livestock entry', () => {
+    expect(validateCatalogEntry(validLivestock)).toEqual({ ok: true });
+  });
+
+  it('accepts optional compatibilityFlags', () => {
+    expect(
+      validateCatalogEntry({
+        ...validLivestock,
+        compatibilityFlags: { plantedOK: true, finNipper: false, brackish: false },
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('rejects an unknown group enum value', () => {
+    expect(validateCatalogEntry({ ...validLivestock, group: 'amphibian' }).ok).toBe(false);
+  });
+
+  it('rejects a negative adultSize', () => {
+    expect(validateCatalogEntry({ ...validLivestock, adultSize: -5 }).ok).toBe(false);
+  });
+
+  it('rejects an unknown temperament enum value', () => {
+    expect(validateCatalogEntry({ ...validLivestock, temperament: 'grumpy' }).ok).toBe(false);
+  });
+
+  it('rejects a schoolingMin below 1', () => {
+    expect(validateCatalogEntry({ ...validLivestock, schoolingMin: 0 }).ok).toBe(false);
+  });
+
+  it('rejects a non-integer schoolingMin', () => {
+    expect(validateCatalogEntry({ ...validLivestock, schoolingMin: 6.5 }).ok).toBe(false);
+  });
+
+  it('rejects an unknown bioloadClass enum value', () => {
+    expect(validateCatalogEntry({ ...validLivestock, bioloadClass: 'apocalyptic' }).ok).toBe(false);
+  });
+
+  it('rejects a temperatureRange minC outside [0, 40]', () => {
+    expect(
+      validateCatalogEntry({
+        ...validLivestock,
+        temperatureRange: { minC: -5, maxC: 26 },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateCatalogEntry({
+        ...validLivestock,
+        temperatureRange: { minC: 22, maxC: 99 },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects a pHRange outside [4.0, 9.5]', () => {
+    expect(
+      validateCatalogEntry({
+        ...validLivestock,
+        pHRange: { min: 3.0, max: 7.5 },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateCatalogEntry({
+        ...validLivestock,
+        pHRange: { min: 6.0, max: 12.0 },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects extraneous properties (additionalProperties: false)', () => {
+    expect(validateCatalogEntry({ ...validLivestock, surprise: true }).ok).toBe(false);
+  });
+
+  it('rejects unknown keys in compatibilityFlags (additionalProperties: false)', () => {
+    expect(
+      validateCatalogEntry({
+        ...validLivestock,
+        compatibilityFlags: { plantedOK: true, mystery: true },
+      }).ok,
+    ).toBe(false);
+  });
+});
+
 describe('formatError (defensive fallbacks)', () => {
   it('falls back to "invalid" when an AJV error lacks a message field', () => {
     const out = formatError({

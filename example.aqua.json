@@ -136,8 +136,13 @@
   "livestock": [
     {
       "id": "5e6f7081-2000-4000-8000-000000002000",
-      "ref": { "catalog": "core", "id": "fish.boraras.brigittae", "version": 1 },
+      "ref": { "catalog": "core", "id": "livestock.fish.neon-tetra", "version": 1 },
       "quantity": 12
+    },
+    {
+      "id": "5e6f7081-2000-4000-8000-000000002001",
+      "ref": { "catalog": "core", "id": "livestock.shrimp.neocaridina-davidi", "version": 1 },
+      "quantity": 20
     }
   ],
   "equipment": [

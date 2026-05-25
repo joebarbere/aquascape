@@ -5,8 +5,11 @@ import {
   getObjectById,
   getObjectWithLayer,
   iterateObjects,
+  selectLivestock,
+  selectLivestockById,
 } from './selectors';
 import { makeScene } from './test-fixtures';
+import type { LivestockEntry } from './types';
 
 describe('selectors', () => {
   describe('getObjectById', () => {
@@ -104,6 +107,48 @@ describe('selectors', () => {
       for (const { layer, object } of iterateObjects(scene)) {
         expect(layer.objects).toContain(object);
       }
+    });
+  });
+
+  describe('selectLivestock', () => {
+    it('returns an empty array when scene.livestock is undefined', () => {
+      const scene = makeScene();
+      expect(selectLivestock(scene)).toEqual([]);
+    });
+
+    it('returns the underlying livestock array reference when present', () => {
+      const livestock: LivestockEntry[] = [
+        {
+          id: 'a0000000-0000-4000-8000-000000000001',
+          ref: { catalog: 'core', id: 'fish.boraras.brigittae', version: 1 },
+          quantity: 12,
+        },
+      ];
+      const scene = { ...makeScene(), livestock };
+      expect(selectLivestock(scene)).toBe(livestock);
+    });
+  });
+
+  describe('selectLivestockById', () => {
+    const entry: LivestockEntry = {
+      id: 'a0000000-0000-4000-8000-000000000001',
+      ref: { catalog: 'core', id: 'fish.boraras.brigittae', version: 1 },
+      quantity: 12,
+    };
+
+    it('returns the entry by id', () => {
+      const scene = { ...makeScene(), livestock: [entry] };
+      expect(selectLivestockById(scene, entry.id)).toBe(entry);
+    });
+
+    it('returns null when no entry has the id', () => {
+      const scene = { ...makeScene(), livestock: [entry] };
+      expect(selectLivestockById(scene, 'missing')).toBeNull();
+    });
+
+    it('returns null when livestock is undefined', () => {
+      const scene = makeScene();
+      expect(selectLivestockById(scene, entry.id)).toBeNull();
     });
   });
 });

@@ -2,11 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aquascape.dev/schemas/catalog-entry-v1.json",
   "title": "CatalogEntry",
-  "description": "A single catalog entry. Stages 2 + 3 + 4 ship `substrate` + `hardscape` + `plant`. Future stages add tank / equipment / livestock under the same oneOf.",
+  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 ship `substrate` + `hardscape` + `plant` + `livestock`. Future stages add tank / equipment under the same oneOf.",
   "oneOf": [
     { "$ref": "#/$defs/SubstrateEntry" },
     { "$ref": "#/$defs/HardscapeEntry" },
-    { "$ref": "#/$defs/PlantEntry" }
+    { "$ref": "#/$defs/PlantEntry" },
+    { "$ref": "#/$defs/LivestockEntry" }
   ],
   "$defs": {
     "HexColor": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" },
@@ -149,6 +150,75 @@
           "type": "number",
           "exclusiveMinimum": 0,
           "description": "Suggested scatter density (instances per 100 cm²) when the planting tool's carpet brush drops this plant. Only meaningful for carpet-zone species."
+        }
+      }
+    },
+    "LivestockEntry": {
+      "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }],
+      "type": "object",
+      "required": [
+        "kind",
+        "group",
+        "adultSize",
+        "temperament",
+        "temperatureRange",
+        "pHRange",
+        "schoolingMin",
+        "bioloadClass",
+        "color"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "catalog": true,
+        "id": true,
+        "version": true,
+        "name": true,
+        "description": true,
+        "tags": true,
+        "kind": { "const": "livestock" },
+        "group": { "enum": ["fish", "shrimp", "snail"] },
+        "adultSize": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Typical adult body length in millimetres."
+        },
+        "temperament": { "enum": ["peaceful", "semi-aggressive", "aggressive"] },
+        "temperatureRange": {
+          "type": "object",
+          "required": ["minC", "maxC"],
+          "additionalProperties": false,
+          "properties": {
+            "minC": { "type": "number", "minimum": 0, "maximum": 40 },
+            "maxC": { "type": "number", "minimum": 0, "maximum": 40 }
+          },
+          "description": "Water temperature tolerance window in Celsius. Manifest authors must ensure minC < maxC; JSON Schema cannot enforce cross-field comparisons declaratively."
+        },
+        "pHRange": {
+          "type": "object",
+          "required": ["min", "max"],
+          "additionalProperties": false,
+          "properties": {
+            "min": { "type": "number", "minimum": 4.0, "maximum": 9.5 },
+            "max": { "type": "number", "minimum": 4.0, "maximum": 9.5 }
+          },
+          "description": "Water pH tolerance window. Manifest authors must ensure min < max; JSON Schema cannot enforce cross-field comparisons declaratively."
+        },
+        "schoolingMin": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minimum recommended group size. 1 = solitary / non-schooling."
+        },
+        "bioloadClass": { "enum": ["low", "medium", "high"] },
+        "color": { "$ref": "#/$defs/HexColor" },
+        "compatibilityFlags": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "plantedOK": { "type": "boolean" },
+            "finNipper": { "type": "boolean" },
+            "brackish": { "type": "boolean" }
+          },
+          "description": "Pre-baked answers for the Stage 7 F7.2 compatibility rule engine."
         }
       }
     }

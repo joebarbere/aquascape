@@ -18,10 +18,21 @@ describe('documentToScene', () => {
     expect(scene.seed).toBe(EXAMPLE.meta.seed);
   });
 
-  it('captures meta + optional fields in the envelope', () => {
+  it('puts livestock on the scene (F7.1 promotion)', () => {
+    const { scene } = documentToScene(EXAMPLE);
+    expect(scene.livestock).toEqual(EXAMPLE.livestock);
+  });
+
+  it('omits scene.livestock when the source doc omits it', () => {
+    const noLivestock = structuredClone(EXAMPLE);
+    delete noLivestock.livestock;
+    const { scene } = documentToScene(noLivestock);
+    expect('livestock' in scene).toBe(false);
+  });
+
+  it('captures meta + remaining optional fields in the envelope', () => {
     const { envelope } = documentToScene(EXAMPLE);
     expect(envelope.meta).toEqual(EXAMPLE.meta);
-    expect(envelope.livestock).toEqual(EXAMPLE.livestock);
     expect(envelope.equipment).toEqual(EXAMPLE.equipment);
     expect(envelope.extensions).toEqual(EXAMPLE.extensions);
   });
@@ -33,7 +44,6 @@ describe('documentToScene', () => {
     delete noOptionals.extensions;
     delete noOptionals.renderHistory;
     const { envelope } = documentToScene(noOptionals);
-    expect(envelope.livestock).toBeUndefined();
     expect(envelope.equipment).toBeUndefined();
     expect(envelope.extensions).toBeUndefined();
     expect(envelope.renderHistory).toBeUndefined();
@@ -74,13 +84,30 @@ describe('sceneToDocument', () => {
     expect(sceneToDocument(scene, envelope).format).toBe('aquascape');
   });
 
-  it('omits optional fields from the saved doc when the envelope omits them', () => {
+  it('omits optional fields from the saved doc when the envelope + scene omit them', () => {
     const { scene } = documentToScene(EXAMPLE);
+    // The example does carry livestock — strip it from the scene so the
+    // "omit when absent" path is exercised end-to-end.
+    const { livestock: _l, ...sceneNoLivestock } = scene;
     const envelopeOnlyMeta = { meta: EXAMPLE.meta };
-    const saved = sceneToDocument(scene, envelopeOnlyMeta);
+    const saved = sceneToDocument(sceneNoLivestock, envelopeOnlyMeta);
     expect('livestock' in saved).toBe(false);
     expect('equipment' in saved).toBe(false);
     expect('renderHistory' in saved).toBe(false);
     expect('extensions' in saved).toBe(false);
+  });
+
+  it('saves livestock from the scene, not the envelope (F7.1 asymmetry)', () => {
+    const { scene, envelope } = documentToScene(EXAMPLE);
+    // Mutate scene.livestock; saved doc must reflect scene, not envelope.
+    const editedLivestock = [
+      {
+        id: '99999999-0000-4000-8000-000000099999',
+        ref: { catalog: 'core', id: 'fish.added', version: 1 },
+        quantity: 5,
+      },
+    ];
+    const saved = sceneToDocument({ ...scene, livestock: editedLivestock }, envelope);
+    expect(saved.livestock).toEqual(editedLivestock);
   });
 });

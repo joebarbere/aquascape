@@ -1,5 +1,6 @@
 // Scene selector tests — verify the projections against a known state shape.
 
+import type { LivestockEntry, Scene } from '@aquascape/domain/scene-model';
 import { createHistory, setTankDimensions } from '@aquascape/domain/scene-model';
 
 import { defaultScene } from './default-scene';
@@ -7,6 +8,8 @@ import {
   selectCanRedo,
   selectCanUndo,
   selectHistory,
+  selectLivestock,
+  selectLivestockById,
   selectScene,
   selectSceneState,
   selectTank,
@@ -80,5 +83,48 @@ describe('scene.selectors', () => {
   it('selectSceneState exposes the whole feature slice', () => {
     const root = makeRoot();
     expect(selectSceneState.projector(root.scene)).toBe(root.scene);
+  });
+
+  describe('selectLivestock', () => {
+    it('returns an empty array when scene.livestock is undefined', () => {
+      const scene = defaultScene();
+      expect(selectLivestock.projector(scene)).toEqual([]);
+    });
+
+    it('returns the array when present', () => {
+      const livestock: LivestockEntry[] = [
+        {
+          id: 'a0000000-0000-4000-8000-000000000001',
+          ref: { catalog: 'core', id: 'fish.boraras.brigittae', version: 1 },
+          quantity: 12,
+        },
+      ];
+      const scene: Scene = { ...defaultScene(), livestock };
+      expect(selectLivestock.projector(scene)).toBe(livestock);
+    });
+
+    it('returns an empty array when scene is null (defensive)', () => {
+      expect(selectLivestock.projector(null as unknown as Scene)).toEqual([]);
+    });
+  });
+
+  describe('selectLivestockById', () => {
+    const entry: LivestockEntry = {
+      id: 'a0000000-0000-4000-8000-000000000001',
+      ref: { catalog: 'core', id: 'fish.boraras.brigittae', version: 1 },
+      quantity: 12,
+    };
+
+    it('finds an entry by id', () => {
+      expect(selectLivestockById(entry.id).projector([entry])).toBe(entry);
+    });
+
+    it('returns null when no entry has the id', () => {
+      expect(selectLivestockById('missing').projector([entry])).toBeNull();
+    });
+
+    it('returns null on an empty livestock array', () => {
+      expect(selectLivestockById(entry.id).projector([])).toBeNull();
+    });
   });
 });

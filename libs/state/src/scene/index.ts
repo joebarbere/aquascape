@@ -16,6 +16,8 @@ export {
   selectTankPresetRef,
   selectSubstrate,
   selectSubstrateRegions,
+  selectLivestock,
+  selectLivestockById,
   selectCanUndo,
   selectCanRedo,
 } from './scene.selectors';

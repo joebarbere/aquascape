@@ -1,0 +1,18 @@
+{
+  "catalog": "core",
+  "id": "livestock.snail.planorbella-duryi",
+  "version": 1,
+  "name": "Ramshorn Snail (Planorbella duryi)",
+  "kind": "livestock",
+  "group": "snail",
+  "adultSize": 20,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 18, "maxC": 28 },
+  "pHRange": { "min": 7.0, "max": 8.0 },
+  "schoolingMin": 1,
+  "bioloadClass": "low",
+  "color": "#a13a2a",
+  "description": "Hardy detritivore; reproduces freely in freshwater so populations track food supply (they boom if overfed). Excellent biofilm cleanup but will graze soft new leaves on stressed plants. Comes in red, brown, and blue color morphs; sold and arrives uninvited equally often.",
+  "tags": ["snail", "detritivore", "cleanup-crew", "prolific"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false }
+}

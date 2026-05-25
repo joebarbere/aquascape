@@ -6,7 +6,7 @@
  * `libs/state/` wrap them, they don't reimplement them.
  */
 
-import type { Layer, LayerId, ObjectId, Scene, SceneObject } from './types';
+import type { Layer, LayerId, LivestockEntry, ObjectId, Scene, SceneObject, Uuid } from './types';
 
 /** Find an object by id. O(layers * objects). Returns `null` if missing. */
 export function getObjectById(scene: Scene, id: ObjectId): SceneObject | null {
@@ -73,4 +73,24 @@ export function* iterateObjects(
       yield { layer, object };
     }
   }
+}
+
+/**
+ * Return the scene's livestock entries (Stage 7 F7.1). Returns an empty
+ * array when `scene.livestock` is undefined so callers don't need to guard.
+ * The returned array is the same reference held by the scene when present
+ * — do not mutate it.
+ */
+export function selectLivestock(scene: Scene): LivestockEntry[] {
+  return scene.livestock ?? [];
+}
+
+/** Find a livestock entry by id. O(n). Returns `null` if missing. */
+export function selectLivestockById(scene: Scene, id: Uuid): LivestockEntry | null {
+  const list = scene.livestock;
+  if (list === undefined) return null;
+  for (const entry of list) {
+    if (entry.id === id) return entry;
+  }
+  return null;
 }

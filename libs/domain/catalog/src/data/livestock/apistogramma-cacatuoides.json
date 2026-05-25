@@ -1,0 +1,18 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.apistogramma-cacatuoides",
+  "version": 1,
+  "name": "Cockatoo Dwarf Cichlid (Apistogramma cacatuoides)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 80,
+  "temperament": "semi-aggressive",
+  "temperatureRange": { "minC": 24, "maxC": 29 },
+  "pHRange": { "min": 5.5, "max": 7.5 },
+  "schoolingMin": 1,
+  "bioloadClass": "medium",
+  "color": "#d68a36",
+  "description": "South American dwarf cichlid; the most adaptable Apistogramma for community planted tanks. Sold as a single male or as a 1M/2-3F harem with caves per female. Males defend a small territory and can be pushy with other bottom-dwellers during breeding.",
+  "tags": ["cichlid", "centerpiece", "harem", "south-american"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false }
+}

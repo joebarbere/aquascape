@@ -103,6 +103,7 @@ import {
 } from '@aquascape/features/editor-shell';
 import { HardscapeDragService, HardscapeToolComponent } from '@aquascape/features/hardscape-tool';
 import { LayersPanelComponent } from '@aquascape/features/layers-panel';
+import { LivestockToolComponent } from '@aquascape/features/livestock-equipment';
 import { PlantDragService, PlantingToolComponent } from '@aquascape/features/planting-tool';
 import { SubstrateToolComponent } from '@aquascape/features/substrate-tool';
 import { TankSetupComponent } from '@aquascape/features/tank-setup';
@@ -187,6 +188,7 @@ type DragState =
     EditorShellComponent,
     HardscapeToolComponent,
     LayersPanelComponent,
+    LivestockToolComponent,
     PlantingToolComponent,
     SelectionInspectorComponent,
     SnapSettingsComponent,
@@ -315,6 +317,7 @@ type DragState =
             <aquascape-substrate-tool></aquascape-substrate-tool>
             <aquascape-hardscape-tool></aquascape-hardscape-tool>
             <aquascape-planting-tool></aquascape-planting-tool>
+            <aquascape-livestock-tool></aquascape-livestock-tool>
             <aquascape-composition-overlays></aquascape-composition-overlays>
             <aquascape-snap-settings></aquascape-snap-settings>
             <aquascape-wall-background></aquascape-wall-background>

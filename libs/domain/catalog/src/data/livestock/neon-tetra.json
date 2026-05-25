@@ -1,0 +1,18 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.neon-tetra",
+  "version": 1,
+  "name": "Neon Tetra (Paracheirodon innesi)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 35,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 20, "maxC": 26 },
+  "pHRange": { "min": 5.5, "max": 7.5 },
+  "schoolingMin": 10,
+  "bioloadClass": "low",
+  "color": "#3aa6c8",
+  "description": "Classic community schooling tetra; iridescent blue lateral stripe with a red rear half. Schooling minimum is conservative (some sources cite 6) — keeping ≥ 10 produces tighter, more confident shoaling behavior and reduces stress in mid-size tanks.",
+  "tags": ["schooler", "nano", "community", "tetra", "midwater"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false }
+}

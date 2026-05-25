@@ -137,13 +137,75 @@ export interface PlantEntry extends CatalogEntryBase {
   defaultDensity?: number;
 }
 
+// ─── Livestock (Stage 7 F7.1) ─────────────────────────────────────────────
+
+/**
+ * A livestock species — fish, shrimp, snails the user might stock. F7.1
+ * surfaces these as inventory only: the catalog browser, an inspector
+ * swatch, and a quantity. The canvas is NOT changed — livestock do NOT
+ * paint as silhouettes in F7.1. A future revision can add an optional
+ * spritesheet ref (or a `decorObjectId` link via the document's
+ * `LivestockEntry` envelope) when "decorative fish swimming" rendering
+ * lands.
+ *
+ * - `group` drives the F7.1 UI filter tabs and the F7.2 bioload rules.
+ * - `adultSize` is the typical adult body length in millimetres. Used by
+ *   the inspector + F7.2 bioload estimation.
+ * - `temperament` is advisory for F7.2's compatibility rule engine; not
+ *   enforced anywhere by F7.1 alone.
+ * - `temperatureRange.minC < maxC` and `pHRange.min < max` are CONTRACT
+ *   invariants the manifest author owes the system. The JSON Schema can't
+ *   express cross-field comparisons declaratively (it asserts each bound
+ *   is finite and within plausible aquarium range only); downstream
+ *   consumers should treat the values as advisory and surface "out of
+ *   range" / "incompatible" warnings rather than crashing.
+ * - `schoolingMin` is the minimum recommended group size; `1` means
+ *   solitary / non-schooling. F7.2 surfaces a warning when `quantity <
+ *   schoolingMin`.
+ * - `bioloadClass` is advisory input to F7.2's bioload-vs-volume rule.
+ *   A more precise per-species coefficient may replace it later.
+ * - `color` is a display swatch for the catalog browser; it is NOT a
+ *   rendered silhouette colour (livestock are not painted into the scene
+ *   in F7.1).
+ * - `compatibilityFlags` are optional pre-baked answers for F7.2's rule
+ *   engine ("plays nice with delicate plants?", "nips long fins?",
+ *   "needs brackish water?"). Cheap to declare now so the next sub-feature
+ *   doesn't need a schema bump.
+ */
+export interface LivestockEntry extends CatalogEntryBase {
+  kind: 'livestock';
+  group: 'fish' | 'shrimp' | 'snail';
+  /** Typical adult body length, in millimetres. */
+  adultSize: Millimetres;
+  temperament: 'peaceful' | 'semi-aggressive' | 'aggressive';
+  /** Water temperature tolerance window, in Celsius. minC < maxC (advisory). */
+  temperatureRange: { minC: number; maxC: number };
+  /** Water pH tolerance window. min < max (advisory). */
+  pHRange: { min: number; max: number };
+  /** Minimum recommended group size. 1 = solitary / non-schooling. */
+  schoolingMin: number;
+  /** Advisory bioload bucket consumed by F7.2's bioload-vs-volume rule. */
+  bioloadClass: 'low' | 'medium' | 'high';
+  /** Display swatch in the catalog browser. NOT a rendered silhouette colour. */
+  color: HexColor;
+  /** Pre-baked answers for F7.2's compatibility rule engine. */
+  compatibilityFlags?: {
+    /** True when the species coexists with delicate live plants. */
+    plantedOK?: boolean;
+    /** True when the species is known to nip long fins. */
+    finNipper?: boolean;
+    /** True when the species needs brackish (non-freshwater) water. */
+    brackish?: boolean;
+  };
+}
+
 // ─── Placeholders for later stages ────────────────────────────────────────
 //
 // Each future kind adds a branch here AND a matching schema branch. Until
 // then the loader rejects unknown kinds (verifiable via tests) so a typo'd
 // manifest doesn't silently slip through.
 
-export type CatalogEntry = SubstrateEntry | HardscapeEntry | PlantEntry;
+export type CatalogEntry = SubstrateEntry | HardscapeEntry | PlantEntry | LivestockEntry;
 
 /**
  * Lookup table built from a validated catalog: `(catalog, id) -> entry`.

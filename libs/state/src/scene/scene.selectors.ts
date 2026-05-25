@@ -13,6 +13,7 @@
 // peek at the stack lengths instead so consumers can disable buttons without
 // dispatching speculatively.
 
+import type { LivestockEntry } from '@aquascape/domain/scene-model';
 import { createSelector } from '@ngrx/store';
 
 import { sceneFeature } from './scene.reducer';
@@ -43,6 +44,30 @@ export const selectSubstrateRegions = createSelector(
   selectSubstrate,
   (substrate) => substrate.regions,
 );
+
+/**
+ * Selects the scene's livestock entries (Stage 7 F7.1). Returns an empty
+ * array when `scene.livestock` is undefined so consumers don't need to
+ * guard. NgRx memoizes the projection so the returned reference is stable
+ * across subscriptions when the underlying array is unchanged.
+ */
+export const selectLivestock = createSelector(
+  selectScene,
+  (scene): LivestockEntry[] => scene?.livestock ?? [],
+);
+
+/**
+ * Build a memoized selector for a single livestock entry by id (Stage 7
+ * F7.1). Follows the "entity selector factory" pattern in NgRx — pass an
+ * id, get back a `Selector` you can `store.select` against. Returns `null`
+ * when no entry has that id, mirroring `selectLivestockById` from
+ * `@aquascape/domain/scene-model`.
+ */
+export const selectLivestockById = (id: string) =>
+  createSelector(
+    selectLivestock,
+    (livestock): LivestockEntry | null => livestock.find((e) => e.id === id) ?? null,
+  );
 
 /** True when there is at least one entry in the history's `past` stack. */
 export const selectCanUndo = createSelector(

@@ -1,0 +1,631 @@
+// Livestock inventory side panel. Stage 7 F7.1.
+//
+// Two stacked sections inside one collapsible panel:
+//
+//   1. Browser — paginated tile grid of `coreCatalog.byKind('livestock')`
+//      entries, filtered by group chip (all / fish / shrimp / snail). Click
+//      a tile to dispatch `addLivestockEntry({ entry: { id, ref, quantity:1 } })`.
+//      No drag-out: livestock is *inventory*, not canvas placement.
+//
+//   2. Inventory list — current `selectLivestock()` results as rows with
+//      swatch + species name + `−` / quantity / `+` / `×` controls. Each
+//      `±` dispatches `updateLivestockQuantity`; `×` dispatches
+//      `removeLivestockEntry`. Quantity floor is 1; clicking `−` at qty 1
+//      is a no-op (do not dispatch a rejected command).
+//
+// The component is intentionally named `LivestockToolComponent` even though
+// the feature lib's directory is `livestock-equipment` — F7.3 will add a
+// sibling `EquipmentToolComponent` in the same lib.
+
+import { CommonModule } from '@angular/common';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { Store } from '@ngrx/store';
+
+import { coreCatalog } from '@aquascape/domain/catalog';
+import type { LivestockEntry as CatalogLivestockEntry } from '@aquascape/domain/catalog';
+import {
+  addLivestockEntry,
+  removeLivestockEntry,
+  updateLivestockQuantity,
+} from '@aquascape/domain/scene-model';
+import type { LivestockEntry } from '@aquascape/domain/scene-model';
+import { STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
+import type { StorageService } from '@aquascape/platform/platform-api';
+import { SceneActions, selectLivestock } from '@aquascape/state';
+
+type GroupFilter = 'all' | 'fish' | 'shrimp' | 'snail';
+
+/** Default page size for the browser tile grid. Matches planting-tool. */
+export const LIVESTOCK_TOOL_PAGE_SIZE = 8;
+
+/** StorageService key for the collapsed-state flag. */
+export const LIVESTOCK_TOOL_COLLAPSED_KEY = 'aquascape.ui.collapsed.livestock-equipment';
+
+/** Row record used by the inventory list — joins the scene entry to its catalog data. */
+interface InventoryRow {
+  entry: LivestockEntry;
+  /** Catalog entry resolved from `entry.ref`, or null when the manifest is missing. */
+  catalog: CatalogLivestockEntry | null;
+  /** Display name shown in the row + the row's accessible label. */
+  displayName: string;
+}
+
+@Component({
+  selector: 'aquascape-livestock-tool',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [CommonModule],
+  template: `
+    <section class="livestock-tool" aria-labelledby="livestock-tool-heading">
+      <header class="panel-header">
+        <button
+          type="button"
+          class="panel-header__toggle"
+          [attr.aria-expanded]="!collapsed()"
+          aria-controls="livestock-tool-body"
+          (click)="toggleCollapsed()"
+        >
+          <span
+            class="panel-header__chevron"
+            [class.panel-header__chevron--open]="!collapsed()"
+            aria-hidden="true"
+            >›</span
+          >
+          <h2 id="livestock-tool-heading" class="panel-header__title">Livestock</h2>
+          <span class="panel-header__count" aria-label="entries">{{ inventoryCount() }}</span>
+        </button>
+      </header>
+
+      <div id="livestock-tool-body" class="livestock-tool__body" [hidden]="collapsed()">
+        <!-- ── Browser ─────────────────────────────────────────────────── -->
+        <div class="livestock-tool__filters" role="radiogroup" aria-label="Group filter">
+          @for (g of groups; track g.value) {
+            <button
+              type="button"
+              class="filter"
+              role="radio"
+              [class.active]="filter() === g.value"
+              [attr.aria-checked]="filter() === g.value"
+              (click)="onFilterChange(g.value)"
+            >
+              {{ g.label }}
+            </button>
+          }
+        </div>
+
+        <div class="livestock-tool__grid">
+          @for (entry of pageEntries(); track entry.id) {
+            <button
+              type="button"
+              class="tile"
+              [attr.aria-label]="'Add ' + entry.name + ' to livestock'"
+              [title]="tooltipFor(entry)"
+              (click)="onAdd(entry)"
+            >
+              <span
+                class="tile__swatch"
+                [style.background]="entry.color"
+                aria-hidden="true"
+              ></span>
+              <span class="tile__name">{{ entry.name }}</span>
+              <span class="tile__group" aria-hidden="true">{{ entry.group }}</span>
+            </button>
+          }
+        </div>
+
+        @if (visibleEntries().length === 0) {
+          <p class="livestock-tool__empty">No species match the filter.</p>
+        }
+
+        @if (totalPages() > 1) {
+          <nav class="pager" aria-label="Livestock pages">
+            <button
+              type="button"
+              class="pager__btn"
+              data-testid="livestock-pager-prev"
+              [disabled]="page() <= 1"
+              (click)="prevPage()"
+              aria-label="Previous page"
+            >
+              « Prev
+            </button>
+            <span class="pager__indicator" aria-live="polite">
+              Page {{ page() }} of {{ totalPages() }}
+            </span>
+            <button
+              type="button"
+              class="pager__btn"
+              data-testid="livestock-pager-next"
+              [disabled]="page() >= totalPages()"
+              (click)="nextPage()"
+              aria-label="Next page"
+            >
+              Next »
+            </button>
+          </nav>
+        }
+
+        <!-- ── Inventory list ──────────────────────────────────────────── -->
+        <h3 class="livestock-tool__subheading">Inventory</h3>
+        @if (inventoryRows().length === 0) {
+          <p class="livestock-tool__empty">
+            No livestock yet. Pick a species above to start planning.
+          </p>
+        } @else {
+          <ul class="livestock-tool__list" role="list">
+            @for (row of inventoryRows(); track row.entry.id) {
+              <li class="inv-row" role="listitem" [attr.aria-label]="row.displayName">
+                <span
+                  class="inv-row__swatch"
+                  [style.background]="row.catalog?.color ?? '#888'"
+                  aria-hidden="true"
+                ></span>
+                <span class="inv-row__name">{{ row.displayName }}</span>
+                <div class="inv-row__qty" role="group" aria-label="Quantity">
+                  <button
+                    type="button"
+                    class="qty-btn"
+                    aria-label="Decrease quantity"
+                    [disabled]="row.entry.quantity <= 1"
+                    (click)="onDecrease(row.entry)"
+                  >
+                    −
+                  </button>
+                  <span class="qty-value" aria-live="polite">{{ row.entry.quantity }}</span>
+                  <button
+                    type="button"
+                    class="qty-btn"
+                    aria-label="Increase quantity"
+                    (click)="onIncrease(row.entry)"
+                  >
+                    +
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  class="inv-row__remove"
+                  aria-label="Remove from livestock list"
+                  (click)="onRemove(row.entry)"
+                >
+                  ×
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </section>
+  `,
+  styles: [
+    `
+      :host {
+        display: block;
+        padding: 12px;
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+      }
+      .panel-header {
+        margin: 0 0 8px;
+      }
+      .panel-header__toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        padding: 4px 6px;
+        background: transparent;
+        color: inherit;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        cursor: pointer;
+        font: inherit;
+        text-align: left;
+      }
+      .panel-header__toggle:hover,
+      .panel-header__toggle:focus-visible {
+        background: var(--surface-hover, #f0f0f0);
+        outline: none;
+        border-color: var(--border, #e0e0e0);
+      }
+      .panel-header__chevron {
+        display: inline-block;
+        font-size: 16px;
+        line-height: 1;
+        width: 12px;
+        transition: transform 0.15s ease;
+        transform: rotate(0deg);
+      }
+      .panel-header__chevron--open {
+        transform: rotate(90deg);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .panel-header__chevron {
+          transition: none;
+        }
+      }
+      .panel-header__title {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        flex: 1;
+      }
+      .panel-header__count {
+        color: var(--text-muted, #777);
+        font-variant-numeric: tabular-nums;
+        font-size: 11px;
+        padding: 1px 6px;
+        border-radius: 8px;
+        background: var(--surface, #f1f1f3);
+      }
+      .livestock-tool__filters {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+      }
+      .filter {
+        padding: 4px 10px;
+        background: transparent;
+        color: inherit;
+        border: 1px solid var(--border-strong, #ccc);
+        border-radius: 4px;
+        cursor: pointer;
+        font: inherit;
+      }
+      .filter.active {
+        background: var(--accent, #20232a);
+        color: var(--accent-text, #fff);
+        border-color: var(--accent, #20232a);
+      }
+      .livestock-tool__grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+      }
+      .tile {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 6px;
+        background: var(--surface-2, #fff);
+        color: inherit;
+        border: 1px solid var(--border, #e0e0e0);
+        border-radius: 4px;
+        cursor: pointer;
+        font: inherit;
+      }
+      .tile:hover,
+      .tile:focus-visible {
+        background: var(--surface-hover, #f0f0f0);
+        outline: none;
+      }
+      .tile__swatch {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        border: 1px solid rgba(0, 0, 0, 0.15);
+      }
+      .tile__name {
+        margin-top: 4px;
+        font-size: 11px;
+        text-align: center;
+        line-height: 1.2;
+      }
+      .tile__group {
+        margin-top: 2px;
+        font-size: 10px;
+        color: var(--text-muted, #777);
+        text-transform: capitalize;
+      }
+      .livestock-tool__empty {
+        margin: 8px 0 0;
+        color: var(--text-muted, #777);
+        font-style: italic;
+      }
+      .pager {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .pager__btn {
+        background: transparent;
+        color: inherit;
+        border: 1px solid var(--border-strong, #ccc);
+        border-radius: 4px;
+        padding: 3px 8px;
+        cursor: pointer;
+        font: inherit;
+      }
+      .pager__btn:hover:not(:disabled),
+      .pager__btn:focus-visible:not(:disabled) {
+        background: var(--surface-hover, #f0f0f0);
+        outline: none;
+      }
+      .pager__btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .pager__indicator {
+        font-size: 11px;
+        color: var(--text-muted, #555);
+        font-variant-numeric: tabular-nums;
+      }
+      .livestock-tool__subheading {
+        margin: 12px 0 6px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted, #555);
+      }
+      .livestock-tool__list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .inv-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px;
+        border: 1px solid var(--border, #e0e0e0);
+        border-radius: 4px;
+        background: var(--surface-2, #fff);
+      }
+      .inv-row__swatch {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 1px solid rgba(0, 0, 0, 0.15);
+        flex-shrink: 0;
+      }
+      .inv-row__name {
+        flex: 1;
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .inv-row__qty {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .qty-btn {
+        width: 20px;
+        height: 20px;
+        background: transparent;
+        color: inherit;
+        border: 1px solid var(--border-strong, #ccc);
+        border-radius: 3px;
+        cursor: pointer;
+        font: inherit;
+        line-height: 1;
+        padding: 0;
+      }
+      .qty-btn:hover:not(:disabled),
+      .qty-btn:focus-visible:not(:disabled) {
+        background: var(--surface-hover, #f0f0f0);
+        outline: none;
+      }
+      .qty-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .qty-value {
+        min-width: 18px;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+        font-size: 12px;
+      }
+      .inv-row__remove {
+        width: 20px;
+        height: 20px;
+        background: transparent;
+        color: var(--danger, #b94a4a);
+        border: 1px solid transparent;
+        border-radius: 3px;
+        cursor: pointer;
+        font: inherit;
+        line-height: 1;
+        padding: 0;
+      }
+      .inv-row__remove:hover,
+      .inv-row__remove:focus-visible {
+        background: var(--danger, #b94a4a);
+        color: #fff;
+        outline: none;
+      }
+    `,
+  ],
+})
+export class LivestockToolComponent {
+  private readonly store = inject(Store);
+  private readonly storage = inject<StorageService>(STORAGE_SERVICE);
+
+  readonly groups: ReadonlyArray<{ value: GroupFilter; label: string }> = [
+    { value: 'all', label: 'All' },
+    { value: 'fish', label: 'Fish' },
+    { value: 'shrimp', label: 'Shrimp' },
+    { value: 'snail', label: 'Snails' },
+  ];
+
+  readonly filter = signal<GroupFilter>('all');
+
+  /** Collapsed-panel state. Hydrated from StorageService on construct. */
+  readonly collapsed = signal<boolean>(false);
+
+  /** 1-indexed current page. Resets to 1 on filter change. */
+  readonly page = signal<number>(1);
+
+  /**
+   * Page size as a writable signal so tests can shrink it without standing
+   * up a synthetic catalog. Initialised to the public constant.
+   */
+  readonly pageSize = signal<number>(LIVESTOCK_TOOL_PAGE_SIZE);
+
+  private readonly allEntries: ReadonlyArray<CatalogLivestockEntry> =
+    coreCatalog.byKind('livestock');
+
+  readonly visibleEntries = computed<ReadonlyArray<CatalogLivestockEntry>>(() => {
+    const f = this.filter();
+    if (f === 'all') return this.allEntries;
+    return this.allEntries.filter((e) => e.group === f);
+  });
+
+  readonly totalPages = computed<number>(() => {
+    const n = this.visibleEntries().length;
+    if (n === 0) return 1;
+    return Math.ceil(n / this.pageSize());
+  });
+
+  /** Slice of `visibleEntries` for the current page. */
+  readonly pageEntries = computed<ReadonlyArray<CatalogLivestockEntry>>(() => {
+    const visible = this.visibleEntries();
+    const start = (this.page() - 1) * this.pageSize();
+    return visible.slice(start, start + this.pageSize());
+  });
+
+  // Inventory state is fed from the store via toSignal so OnPush refreshes.
+  // `selectLivestock` returns `LivestockEntry[]`; keep nullable here so the
+  // `initialValue: null` overload of `toSignal` lines up under
+  // `exactOptionalPropertyTypes` (matches the layers-panel pattern).
+  private readonly livestock$ = this.store.select(selectLivestock);
+  private readonly livestockSignal = toSignal<LivestockEntry[] | null>(this.livestock$, {
+    initialValue: null,
+  });
+
+  readonly inventoryRows = computed<ReadonlyArray<InventoryRow>>(() =>
+    (this.livestockSignal() ?? []).map((entry): InventoryRow => {
+      const catalog = coreCatalog.get(entry.ref) as CatalogLivestockEntry | null;
+      const displayName =
+        catalog?.name ?? `Unknown species (catalog: ${entry.ref.id})`;
+      return { entry, catalog, displayName };
+    }),
+  );
+
+  readonly inventoryCount = computed<number>(() => this.inventoryRows().length);
+
+  constructor() {
+    // Hydrate collapsed state. Failures non-fatal.
+    this.storage
+      .get<boolean>(LIVESTOCK_TOOL_COLLAPSED_KEY)
+      .then((stored) => {
+        if (typeof stored === 'boolean') {
+          this.collapsed.set(stored);
+        }
+      })
+      .catch(() => {
+        // Best-effort.
+      });
+
+    // Persist collapsed state on every change. Skip the effect's initial
+    // synchronous pass so we don't immediately overwrite the hydrate.
+    let firstRun = true;
+    effect(() => {
+      const value = this.collapsed();
+      if (firstRun) {
+        firstRun = false;
+        return;
+      }
+      this.storage.set(LIVESTOCK_TOOL_COLLAPSED_KEY, value).catch(() => {
+        // Best-effort.
+      });
+    });
+
+    // Clamp page when the visible list shrinks (e.g. the pageSize signal
+    // grows, or filter changes via a code path that bypasses
+    // `onFilterChange`'s explicit reset). The signal-write inside the
+    // effect needs `allowSignalWrites: true` — same intent as Angular's
+    // documented "derived-state-with-feedback" pattern.
+    effect(
+      () => {
+        const max = this.totalPages();
+        if (this.page() > max) {
+          this.page.set(max);
+        }
+      },
+      { allowSignalWrites: true },
+    );
+  }
+
+  tooltipFor(entry: CatalogLivestockEntry): string {
+    return `${entry.name} — ${entry.group}, schooling min ${entry.schoolingMin}`;
+  }
+
+  // ── Header ────────────────────────────────────────────────────────────
+
+  toggleCollapsed(): void {
+    this.collapsed.update((v) => !v);
+  }
+
+  // ── Filter + pager ────────────────────────────────────────────────────
+
+  onFilterChange(next: GroupFilter): void {
+    this.filter.set(next);
+    // Reset paging on filter change so the user lands on page 1 of the new
+    // (possibly much smaller) filtered list.
+    this.page.set(1);
+  }
+
+  prevPage(): void {
+    this.page.update((p) => Math.max(1, p - 1));
+  }
+
+  nextPage(): void {
+    this.page.update((p) => Math.min(this.totalPages(), p + 1));
+  }
+
+  // ── Inventory dispatch handlers ───────────────────────────────────────
+
+  onAdd(entry: CatalogLivestockEntry): void {
+    const newEntry: LivestockEntry = {
+      id: crypto.randomUUID(),
+      ref: { catalog: entry.catalog, id: entry.id, version: entry.version },
+      quantity: 1,
+    };
+    this.store.dispatch(
+      SceneActions.dispatchCommand({ command: addLivestockEntry(newEntry) }),
+    );
+  }
+
+  onIncrease(entry: LivestockEntry): void {
+    this.store.dispatch(
+      SceneActions.dispatchCommand({
+        command: updateLivestockQuantity(entry.id, entry.quantity + 1),
+      }),
+    );
+  }
+
+  onDecrease(entry: LivestockEntry): void {
+    // Quantity floor is 1. Clicking `−` at qty 1 must NOT dispatch a
+    // rejected command — the underlying validator would return invalid /
+    // we'd pollute the action stream with no-ops.
+    if (entry.quantity <= 1) return;
+    this.store.dispatch(
+      SceneActions.dispatchCommand({
+        command: updateLivestockQuantity(entry.id, entry.quantity - 1),
+      }),
+    );
+  }
+
+  onRemove(entry: LivestockEntry): void {
+    this.store.dispatch(
+      SceneActions.dispatchCommand({ command: removeLivestockEntry(entry.id) }),
+    );
+  }
+}
