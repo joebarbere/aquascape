@@ -119,9 +119,9 @@
     </div>
   </fieldset>
 
-  <!-- Background ──────────────────────────────────────────────────────── -->
+  <!-- Tank Background ─────────────────────────────────────────────────── -->
   <fieldset class="styling__group">
-    <legend id="background-label">Background</legend>
+    <legend id="background-label">Tank Background</legend>
 
     <div role="tablist" aria-labelledby="background-label" class="styling__tablist">
       <button
@@ -173,7 +173,7 @@
 
     @if (isBackgroundTab('none')) {
       <div role="tabpanel" aria-labelledby="bg-tab-none" class="styling__tabpanel">
-        <p data-testid="bg-none-help">No background — the tank renders against the canvas color.</p>
+        <p data-testid="bg-none-help">No tank background — the tank renders against the canvas color.</p>
       </div>
     }
 
@@ -213,9 +213,9 @@
                 : '#000000'
             "
             (input)="onBgSolidNative($any($event.target).value)"
-            aria-label="Background color picker"
+            aria-label="Tank background color picker"
           />
-          <label for="bg-color-hex" class="visually-hidden"> Background color hex value </label>
+          <label for="bg-color-hex" class="visually-hidden"> Tank background color hex value </label>
           <input
             id="bg-color-hex"
             data-testid="bg-color-hex"

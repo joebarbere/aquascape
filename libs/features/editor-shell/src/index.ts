@@ -16,3 +16,27 @@ export {
   CursorPositionService,
   type CursorWorldPosition,
 } from './lib/cursor-position.service';
+export {
+  CompositionOverlaysComponent,
+  COMPOSITION_OVERLAYS_COLLAPSED_KEY,
+} from './lib/composition-overlays.component';
+export {
+  OverlayOptionsService,
+  STORAGE_KEY_OVERLAY_GOLDEN,
+  STORAGE_KEY_OVERLAY_THIRDS,
+  STORAGE_KEY_OVERLAY_FOCAL,
+} from './lib/overlay-options.service';
+export { ViewportService } from './lib/viewport.service';
+export { ZoomControlComponent } from './lib/zoom-control.component';
+export {
+  ZOOM_MULT_MAX,
+  ZOOM_MULT_MIN,
+  ZOOM_STEP_MULT,
+  WHEEL_ZOOM_SENSITIVITY,
+  clampZoomMult,
+  composeViewport,
+  cursorToWorld,
+  formatZoomPercent,
+  panForCursorAnchor,
+  wheelDeltaToZoomFactor,
+} from './lib/zoom-math';

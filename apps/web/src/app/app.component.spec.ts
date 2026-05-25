@@ -46,6 +46,8 @@ import {
   selectStatus,
 } from '@aquascape/state';
 
+import { OverlayOptionsService, ViewportService } from '@aquascape/features/editor-shell';
+
 import { AppComponent } from './app.component';
 import { SCENE_RENDERER } from './renderer.token';
 
@@ -429,5 +431,149 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
     canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 2, clientX: 100, clientY: 100 }));
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  // ─── F5.3 — composition overlays end-to-end through the app shell ──────
+
+  it('passes the current OverlayOptions as the 6th render() argument', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const firstCall = renderer.render.mock.calls[0]!;
+    // Index 5 is the OverlayOptions slot (scene, viewport, catalog,
+    // selection, previewAge, overlayOptions).
+    expect(firstCall[5]).toEqual({
+      goldenRatio: false,
+      thirds: false,
+      focalPoints: false,
+    });
+  });
+
+  it('re-renders with the new overlays when a flag flips on the service', async () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    renderer.render.mockClear();
+
+    const overlays = TestBed.inject(OverlayOptionsService);
+    overlays.setGoldenRatio(true);
+    fixture.detectChanges();
+    // Effect runs synchronously in TestBed; the call must have happened.
+    expect(renderer.render).toHaveBeenCalled();
+    const lastArgs = renderer.render.mock.calls.at(-1)!;
+    expect(lastArgs[5]).toEqual({
+      goldenRatio: true,
+      thirds: false,
+      focalPoints: false,
+    });
+
+    // Flip thirds + focalPoints: another render with updated flags.
+    renderer.render.mockClear();
+    overlays.setThirds(true);
+    overlays.setFocalPoints(true);
+    fixture.detectChanges();
+    const finalArgs = renderer.render.mock.calls.at(-1)!;
+    expect(finalArgs[5]).toEqual({
+      goldenRatio: true,
+      thirds: true,
+      focalPoints: true,
+    });
+  });
+
+  // ─── Stage 5.x — user-controlled viewport zoom ─────────────────────────
+
+  it('re-renders with composed zoom when ViewportService.setZoomMult fires', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const beforeZoom = renderer.render.mock.calls.at(-1)![1].zoom;
+
+    renderer.render.mockClear();
+    const viewport = TestBed.inject(ViewportService);
+    viewport.setZoomMult(2);
+    fixture.detectChanges();
+
+    expect(renderer.render).toHaveBeenCalled();
+    const afterZoom = renderer.render.mock.calls.at(-1)![1].zoom;
+    expect(afterZoom).toBeCloseTo(beforeZoom * 2, 6);
+  });
+
+  it('Fit (reset) restores the original fit-to-window zoom', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const originalZoom = renderer.render.mock.calls.at(-1)![1].zoom;
+
+    const viewport = TestBed.inject(ViewportService);
+    viewport.setZoomMult(3);
+    fixture.detectChanges();
+    expect(renderer.render.mock.calls.at(-1)![1].zoom).toBeCloseTo(originalZoom * 3, 6);
+
+    viewport.reset();
+    fixture.detectChanges();
+    expect(renderer.render.mock.calls.at(-1)![1].zoom).toBeCloseTo(originalZoom, 6);
+  });
+
+  it('Cmd-wheel on canvas updates ViewportService and re-renders', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const viewport = TestBed.inject(ViewportService);
+    expect(viewport.userZoomMult()).toBeNull();
+
+    const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
+    canvas.getBoundingClientRect = (): DOMRect =>
+      ({ left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600, x: 0, y: 0 }) as DOMRect;
+
+    canvas.dispatchEvent(
+      new WheelEvent('wheel', {
+        deltaY: -100, // scroll up = zoom in
+        clientX: 400,
+        clientY: 300,
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    fixture.detectChanges();
+
+    expect(viewport.userZoomMult()).not.toBeNull();
+    expect(viewport.userZoomMult()!).toBeGreaterThan(1);
+  });
+
+  it('plain wheel (no Cmd/Ctrl) does NOT touch zoom — page-scroll preserved', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const viewport = TestBed.inject(ViewportService);
+    const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
+    canvas.getBoundingClientRect = (): DOMRect =>
+      ({ left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600, x: 0, y: 0 }) as DOMRect;
+
+    canvas.dispatchEvent(
+      new WheelEvent('wheel', {
+        deltaY: -100,
+        clientX: 400,
+        clientY: 300,
+        ctrlKey: false,
+        metaKey: false,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    fixture.detectChanges();
+
+    expect(viewport.userZoomMult()).toBeNull();
   });
 });

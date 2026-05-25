@@ -7,7 +7,13 @@
 // Coverage thresholds are intentionally disabled in `jest.config.ts` —
 // there is no runtime code to cover.
 
-import type { RenderSurface, Viewport, HitResult, SceneRenderer } from './index';
+import type {
+  RenderSurface,
+  Viewport,
+  HitResult,
+  SceneRenderer,
+  OverlayOptions,
+} from './index';
 import type { Scene, ObjectId, LayerId } from '@aquascape/domain/scene-model';
 import type { Vec2 } from '@aquascape/domain/geometry';
 
@@ -75,5 +81,30 @@ describe('@aquascape/rendering/renderer-api', () => {
       12,
     );
     expect(hit).toBeNull();
+  });
+
+  it('accepts overlayOptions as the 6th render() arg (F5.3) and exports the OverlayOptions shape', () => {
+    // Type-only assertions: the OverlayOptions shape is exactly three booleans,
+    // and `render()`'s 6th parameter accepts it. `hitTest()` deliberately does
+    // NOT take overlays — they are non-interactive view aids.
+    const overlays: OverlayOptions = {
+      goldenRatio: true,
+      thirds: false,
+      focalPoints: true,
+    };
+    const stub: SceneRenderer = {
+      attach: () => undefined,
+      render: () => undefined,
+      hitTest: () => null,
+      dispose: () => undefined,
+    };
+    stub.render({} as Scene, {} as Viewport, undefined, undefined, undefined, overlays);
+    // hitTest signature must stay 6-arg (point, scene, viewport, catalog?,
+    // selection?, previewAgeWeeks?) — adding overlays here would be a
+    // contract violation.
+    type HitTestArity = Parameters<SceneRenderer['hitTest']>['length'];
+    const arity: HitTestArity = 6;
+    expect(arity).toBe(6);
+    expect(overlays.goldenRatio).toBe(true);
   });
 });

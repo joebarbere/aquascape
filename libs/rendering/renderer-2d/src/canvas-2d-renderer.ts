@@ -37,10 +37,13 @@ import type {
   SubstrateEntry,
 } from '@aquascape/domain/catalog';
 import {
+  focalPoints,
+  goldenRatioLines,
   pointInPolygon,
   project2D,
   sampleCatmullRom,
   seededHash01,
+  thirdsLines,
 } from '@aquascape/domain/geometry';
 import type { Transform, Vec2 } from '@aquascape/domain/geometry';
 import { plantScale, scatterInPolygon } from '@aquascape/domain/growth-sim';
@@ -57,6 +60,7 @@ import type {
 } from '@aquascape/domain/scene-model';
 import type {
   HitResult,
+  OverlayOptions,
   RenderSurface,
   SceneRenderer,
   Viewport,
@@ -98,6 +102,21 @@ const FRAME_RIM_MM = 8;
 const FRAME_BRACE_WIDTH_MM = 10;
 /** Frame fill color when `style.frameColor` is undefined. */
 const DEFAULT_FRAME_COLOR = '#222';
+
+// ─── F5.3 — composition overlay tuning constants ──────────────────────────
+
+/** Stroke color for golden-ratio guide lines (soft gold, low alpha). */
+const OVERLAY_GOLDEN_STROKE = 'rgba(255, 215, 0, 0.45)';
+/** Stroke color for rule-of-thirds guide lines (white, low alpha). */
+const OVERLAY_THIRDS_STROKE = 'rgba(255, 255, 255, 0.45)';
+/** Fill color for golden-ratio focal-point markers (gold, mostly opaque). */
+const OVERLAY_FOCAL_FILL = 'rgba(255, 215, 0, 0.85)';
+/** Guide-line dash pattern in CSS px — short on, short off. */
+const OVERLAY_DASH_CSS_PX = 4;
+/** Guide-line stroke width in CSS px. */
+const OVERLAY_LINE_WIDTH_CSS_PX = 1;
+/** Focal-point marker radius in CSS px. */
+const OVERLAY_FOCAL_RADIUS_CSS_PX = 4;
 
 // ─── Internal types ───────────────────────────────────────────────────────
 
@@ -186,9 +205,19 @@ export class Canvas2DRenderer implements SceneRenderer {
   }
 
   /**
-   * Size the canvas's backing store for the current DPR and write the CSS
-   * size so the host layout sees the logical px. Called from `attach` and
-   * from the resize / DPR listeners. Idempotent.
+   * Size the canvas's backing store for the current DPR. Called from
+   * `attach` and from the resize / DPR listeners. Idempotent.
+   *
+   * Stage 5.x: we deliberately do NOT write `canvas.style.width/height`
+   * here. The host's stylesheet (`apps/web/src/app/app.component.ts`'s
+   * `.scene-canvas { width: 100%; height: 100%; }`) drives the CSS box
+   * size from the layout. If we wrote inline pixel sizes we'd freeze the
+   * canvas at whatever interim dimensions it had on the first `attach`
+   * call — before async-hydrated sidebar/rail widths and recovery-banner
+   * layout settled — and the ResizeObserver would then read back our own
+   * frozen value forever, leaving a tall canvas-host with a short canvas
+   * painted only across its top. The renderer's job is the backing
+   * buffer; the layout's job is the box.
    */
   private syncCanvasSize(): void {
     const s = this.surface;
@@ -198,12 +227,6 @@ export class Canvas2DRenderer implements SceneRenderer {
     const targetH = Math.round(s.height * dpr);
     if (s.canvas.width !== targetW) s.canvas.width = targetW;
     if (s.canvas.height !== targetH) s.canvas.height = targetH;
-    // CSS size — host code may also do this but we own it during attach.
-    const style = s.canvas.style as CSSStyleDeclaration | undefined;
-    if (style !== undefined) {
-      style.width = `${s.width}px`;
-      style.height = `${s.height}px`;
-    }
   }
 
   // ─── render ─────────────────────────────────────────────────────────────
@@ -214,6 +237,7 @@ export class Canvas2DRenderer implements SceneRenderer {
     catalog?: Catalog,
     selection?: ReadonlyArray<ObjectId>,
     previewAgeWeeks?: number,
+    overlayOptions?: OverlayOptions,
   ): void {
     const s = this.surface;
     const ctx = this.ctx;
@@ -288,6 +312,10 @@ export class Canvas2DRenderer implements SceneRenderer {
     const selectedSet = selection !== undefined && selection.length > 0 ? new Set(selection) : null;
     this.drawHardscape(ctx, scene, catalog, oneCssPxInMm);
     this.drawPlants(ctx, scene, catalog, oneCssPxInMm, previewAgeWeeks, scene.seed);
+    // F5.3 — composition overlays paint AFTER plants but BEFORE selection
+    // handles, so handles always sit on top and stay readable when the user
+    // turns guides on.
+    this.drawCompositionOverlays(ctx, scene, oneCssPxInMm, overlayOptions);
     if (selectedSet !== null) {
       this.drawSelectionHandles(ctx, scene, catalog, oneCssPxInMm, selectedSet);
     }
@@ -881,6 +909,121 @@ export class Canvas2DRenderer implements SceneRenderer {
     ctx.arc(0, halfH + stalkLengthMm, handleSizeMm / 2, 0, Math.PI * 2);
     ctx.fillStyle = SELECTION_COLOR;
     ctx.fill();
+    ctx.restore();
+  }
+
+  // ─── F5.3 — Composition overlays ──────────────────────────────────────
+  //
+  // Three view-only guides: golden-ratio lines, rule-of-thirds lines, and
+  // golden-ratio focal-point markers. They paint in the tank's front-face
+  // interior plane (`(0, 0)` to `(tank.width, tank.height)` in world mm),
+  // so the world transform already in place from `render()` projects them
+  // exactly the same way as scene content.
+  //
+  // When `overlayOptions` is omitted or all three flags are false, this is
+  // a true no-op — no save/restore overhead, no canvas state change. The
+  // single early return below guarantees that.
+  //
+  // Each enabled pass is wrapped in its own `save` / `restore` pair so
+  // style state (lineWidth, strokeStyle, lineDash, fillStyle) never leaks
+  // into the selection-handle paint that follows.
+
+  private drawCompositionOverlays(
+    ctx: CanvasRenderingContext2D,
+    scene: Scene,
+    oneCssPxInMm: number,
+    overlayOptions: OverlayOptions | undefined,
+  ): void {
+    if (overlayOptions === undefined) return;
+    if (!overlayOptions.goldenRatio && !overlayOptions.thirds && !overlayOptions.focalPoints) {
+      return;
+    }
+    const tankW = scene.tank.width;
+    const tankH = scene.tank.height;
+    if (tankW <= 0 || tankH <= 0) return;
+
+    if (overlayOptions.goldenRatio) {
+      const { vertical, horizontal } = goldenRatioLines(tankW, tankH);
+      this.paintOverlayGuideLines(
+        ctx,
+        vertical,
+        horizontal,
+        tankW,
+        tankH,
+        OVERLAY_GOLDEN_STROKE,
+        oneCssPxInMm,
+      );
+    }
+    if (overlayOptions.thirds) {
+      const { vertical, horizontal } = thirdsLines(tankW, tankH);
+      this.paintOverlayGuideLines(
+        ctx,
+        vertical,
+        horizontal,
+        tankW,
+        tankH,
+        OVERLAY_THIRDS_STROKE,
+        oneCssPxInMm,
+      );
+    }
+    if (overlayOptions.focalPoints) {
+      const points = focalPoints(tankW, tankH);
+      this.paintOverlayFocalPoints(ctx, points, oneCssPxInMm);
+    }
+  }
+
+  /**
+   * Paint a set of vertical + horizontal guide lines across the tank's
+   * front-face interior rect. Verticals span 0 → tankH, horizontals span
+   * 0 → tankW. World transform is already in place, so we draw in mm.
+   * `lineWidth` and `setLineDash` are scaled by `oneCssPxInMm` so they
+   * look identical at every zoom.
+   */
+  private paintOverlayGuideLines(
+    ctx: CanvasRenderingContext2D,
+    verticals: readonly number[],
+    horizontals: readonly number[],
+    tankW: number,
+    tankH: number,
+    strokeStyle: string,
+    oneCssPxInMm: number,
+  ): void {
+    ctx.save();
+    ctx.lineWidth = OVERLAY_LINE_WIDTH_CSS_PX * oneCssPxInMm;
+    ctx.strokeStyle = strokeStyle;
+    const dashMm = OVERLAY_DASH_CSS_PX * oneCssPxInMm;
+    ctx.setLineDash([dashMm, dashMm]);
+    ctx.beginPath();
+    for (const x of verticals) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, tankH);
+    }
+    for (const y of horizontals) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(tankW, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
+   * Paint the four golden-ratio focal-point markers as small filled circles
+   * (no stroke). `radius` is scaled by `oneCssPxInMm` so the dots stay the
+   * same visual size at every zoom.
+   */
+  private paintOverlayFocalPoints(
+    ctx: CanvasRenderingContext2D,
+    points: ReadonlyArray<Vec2>,
+    oneCssPxInMm: number,
+  ): void {
+    ctx.save();
+    ctx.fillStyle = OVERLAY_FOCAL_FILL;
+    const radiusMm = OVERLAY_FOCAL_RADIUS_CSS_PX * oneCssPxInMm;
+    for (const p of points) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, radiusMm, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   }
 

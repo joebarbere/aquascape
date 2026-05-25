@@ -71,12 +71,18 @@ describe('Canvas2DRenderer.attach', () => {
     expect(canvas.height).toBe(1200);
   });
 
-  it('writes the CSS size in logical pixels', () => {
+  it('does NOT write inline canvas.style.width / .height — host CSS owns the box', () => {
+    // Regression for the "tank centered too high" bug. If the renderer
+    // writes inline pixel sizes on first attach, the canvas freezes at
+    // whatever interim dimensions it had before async-hydrated layout
+    // (sidebar/rail widths, recovery banner) settled, and never grows
+    // back. The renderer's job is the backing buffer; the host CSS
+    // (`.scene-canvas { width: 100%; height: 100%; }`) owns the box.
     const { surface, canvas } = makeSurface(800, 600, 2);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    expect(canvas.style.width).toBe('800px');
-    expect(canvas.style.height).toBe('600px');
+    expect(canvas.style.width).toBe('');
+    expect(canvas.style.height).toBe('');
   });
 
   it('registers a window resize listener', () => {
@@ -2407,5 +2413,382 @@ describe('Canvas2DRenderer.hitTest (plants)', () => {
     const result = r.hitTest({ x: 420, y: 290 }, scene, upright, fakeCatalog, ['p-1' as never]);
     expect(result?.objectId).toBe('p-1');
     expect(result?.handle).toBeUndefined();
+  });
+});
+
+// ─── F5.3 — Composition overlays ──────────────────────────────────────────
+//
+// Three view-only guides: golden-ratio lines, rule-of-thirds lines, and
+// golden-ratio focal-point markers. Positions come from the same
+// `goldenRatioLines` / `thirdsLines` / `focalPoints` helpers the renderer
+// consumes (no magic numbers).
+
+describe('Canvas2DRenderer.render (composition overlays — F5.3)', () => {
+  const TANK_W = 360;
+  const TANK_H = 220;
+
+  const GOLDEN_STROKE = 'rgba(255, 215, 0, 0.45)';
+  const THIRDS_STROKE = 'rgba(255, 255, 255, 0.45)';
+  const FOCAL_FILL = 'rgba(255, 215, 0, 0.85)';
+
+  // Mirror the geometry helpers locally — the renderer calls the same
+  // exports, so we anchor expectations to the same maths instead of
+  // hard-coding numbers.
+  const PHI = (1 + Math.sqrt(5)) / 2;
+  const goldenV = [TANK_W / PHI, TANK_W - TANK_W / PHI].sort((a, b) => a - b);
+  const goldenH = [TANK_H / PHI, TANK_H - TANK_H / PHI].sort((a, b) => a - b);
+  const thirdsV = [TANK_W / 3, (2 * TANK_W) / 3];
+  const thirdsH = [TANK_H / 3, (2 * TANK_H) / 3];
+  const focalPts = [
+    { x: goldenV[0]!, y: goldenH[0]! },
+    { x: goldenV[1]!, y: goldenH[0]! },
+    { x: goldenV[0]!, y: goldenH[1]! },
+    { x: goldenV[1]!, y: goldenH[1]! },
+  ];
+
+  let fakeWindow: FakeWindow;
+
+  beforeEach(() => {
+    fakeWindow = installFakeWindow();
+    void fakeWindow;
+  });
+
+  afterEach(() => {
+    uninstallFakeWindow();
+  });
+
+  function render(
+    overlay: { goldenRatio: boolean; thirds: boolean; focalPoints: boolean } | undefined,
+    viewport: Viewport = upright,
+  ): { ops: RecordedOp[] } {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(
+      makeMinimalScene(TANK_W, TANK_H, TANK_H),
+      viewport,
+      undefined,
+      undefined,
+      undefined,
+      overlay,
+    );
+    return { ops: canvas.context.ops };
+  }
+
+  /** All `set:strokeStyle` values the renderer assigned. */
+  function strokeStyles(ops: RecordedOp[]): string[] {
+    return ops.filter((o) => o.method === 'set:strokeStyle').map((o) => String(o.args[0]));
+  }
+
+  /** All `set:fillStyle` values the renderer assigned. */
+  function fillStyles(ops: RecordedOp[]): string[] {
+    return ops.filter((o) => o.method === 'set:fillStyle').map((o) => String(o.args[0]));
+  }
+
+  it('is a no-op when overlayOptions is omitted', () => {
+    const { ops } = render(undefined);
+    expect(strokeStyles(ops)).not.toContain(GOLDEN_STROKE);
+    expect(strokeStyles(ops)).not.toContain(THIRDS_STROKE);
+    expect(fillStyles(ops)).not.toContain(FOCAL_FILL);
+  });
+
+  it('is a no-op when every overlay flag is false', () => {
+    const { ops } = render({ goldenRatio: false, thirds: false, focalPoints: false });
+    expect(strokeStyles(ops)).not.toContain(GOLDEN_STROKE);
+    expect(strokeStyles(ops)).not.toContain(THIRDS_STROKE);
+    expect(fillStyles(ops)).not.toContain(FOCAL_FILL);
+  });
+
+  it('goldenRatio only — paints 2 verticals + 2 horizontals at the φ positions in tank-mm', () => {
+    const { ops } = render({ goldenRatio: true, thirds: false, focalPoints: false });
+
+    expect(strokeStyles(ops)).toContain(GOLDEN_STROKE);
+    expect(strokeStyles(ops)).not.toContain(THIRDS_STROKE);
+    expect(fillStyles(ops)).not.toContain(FOCAL_FILL);
+
+    // The overlay paint is wrapped in its own save/restore. Find that block
+    // and assert the moveTo/lineTo pairs inside it match the φ positions.
+    const goldenStyleIdx = ops.findIndex(
+      (o) => o.method === 'set:strokeStyle' && o.args[0] === GOLDEN_STROKE,
+    );
+    expect(goldenStyleIdx).toBeGreaterThan(-1);
+    const restoreIdx = ops.findIndex(
+      (o, i) => i > goldenStyleIdx && o.method === 'restore',
+    );
+    expect(restoreIdx).toBeGreaterThan(goldenStyleIdx);
+    const block = ops.slice(goldenStyleIdx, restoreIdx);
+
+    const moves = block.filter((o) => o.method === 'moveTo').map((o) => o.args);
+    const lines = block.filter((o) => o.method === 'lineTo').map((o) => o.args);
+    expect(moves).toHaveLength(4);
+    expect(lines).toHaveLength(4);
+
+    // Verticals span 0 → TANK_H. Horizontals span 0 → TANK_W.
+    expect(moves).toEqual(
+      expect.arrayContaining([
+        [goldenV[0], 0],
+        [goldenV[1], 0],
+        [0, goldenH[0]],
+        [0, goldenH[1]],
+      ]),
+    );
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        [goldenV[0], TANK_H],
+        [goldenV[1], TANK_H],
+        [TANK_W, goldenH[0]],
+        [TANK_W, goldenH[1]],
+      ]),
+    );
+  });
+
+  it('thirds only — paints 2 verticals + 2 horizontals at the 1/3, 2/3 positions', () => {
+    const { ops } = render({ goldenRatio: false, thirds: true, focalPoints: false });
+
+    expect(strokeStyles(ops)).toContain(THIRDS_STROKE);
+    expect(strokeStyles(ops)).not.toContain(GOLDEN_STROKE);
+    expect(fillStyles(ops)).not.toContain(FOCAL_FILL);
+
+    const thirdsStyleIdx = ops.findIndex(
+      (o) => o.method === 'set:strokeStyle' && o.args[0] === THIRDS_STROKE,
+    );
+    const restoreIdx = ops.findIndex(
+      (o, i) => i > thirdsStyleIdx && o.method === 'restore',
+    );
+    const block = ops.slice(thirdsStyleIdx, restoreIdx);
+
+    const moves = block.filter((o) => o.method === 'moveTo').map((o) => o.args);
+    const lines = block.filter((o) => o.method === 'lineTo').map((o) => o.args);
+    expect(moves).toEqual(
+      expect.arrayContaining([
+        [thirdsV[0], 0],
+        [thirdsV[1], 0],
+        [0, thirdsH[0]],
+        [0, thirdsH[1]],
+      ]),
+    );
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        [thirdsV[0], TANK_H],
+        [thirdsV[1], TANK_H],
+        [TANK_W, thirdsH[0]],
+        [TANK_W, thirdsH[1]],
+      ]),
+    );
+  });
+
+  it('focalPoints only — fills 4 dots at the golden-ratio intersections', () => {
+    const { ops } = render({ goldenRatio: false, thirds: false, focalPoints: true });
+
+    expect(fillStyles(ops)).toContain(FOCAL_FILL);
+    expect(strokeStyles(ops)).not.toContain(GOLDEN_STROKE);
+    expect(strokeStyles(ops)).not.toContain(THIRDS_STROKE);
+
+    const focalStyleIdx = ops.findIndex(
+      (o) => o.method === 'set:fillStyle' && o.args[0] === FOCAL_FILL,
+    );
+    const restoreIdx = ops.findIndex(
+      (o, i) => i > focalStyleIdx && o.method === 'restore',
+    );
+    const block = ops.slice(focalStyleIdx, restoreIdx);
+
+    const arcs = block.filter((o) => o.method === 'arc');
+    expect(arcs).toHaveLength(4);
+
+    // Each arc's first two args are (x, y). At zoom = 1, dpr = 1, the
+    // radius is 4 CSS px × (1 mm / px) = 4 mm.
+    const centres = arcs.map((o) => ({ x: o.args[0] as number, y: o.args[1] as number }));
+    for (const pt of focalPts) {
+      expect(
+        centres.some((c) => Math.abs(c.x - pt.x) < 1e-6 && Math.abs(c.y - pt.y) < 1e-6),
+      ).toBe(true);
+    }
+    for (const arc of arcs) {
+      expect(arc.args[2]).toBeCloseTo(4, 6); // radius in mm at zoom = 1
+      expect(arc.args[3]).toBe(0);
+      expect(arc.args[4]).toBeCloseTo(Math.PI * 2, 6);
+    }
+  });
+
+  it('all three overlays on — 8 lines + 4 dots, none of them mixed up', () => {
+    const { ops } = render({ goldenRatio: true, thirds: true, focalPoints: true });
+
+    const moves = ops.filter((o) => o.method === 'moveTo').length;
+    const lines = ops.filter((o) => o.method === 'lineTo').length;
+    // The minor + major grid passes already emit moveTo/lineTo. Verify the
+    // overlay contributes exactly 4 + 4 = 8 additional moveTo / lineTo pairs
+    // by re-rendering with overlays off and diffing.
+    const baseline = render({ goldenRatio: false, thirds: false, focalPoints: false }).ops;
+    const baselineMoves = baseline.filter((o) => o.method === 'moveTo').length;
+    const baselineLines = baseline.filter((o) => o.method === 'lineTo').length;
+    expect(moves - baselineMoves).toBe(8);
+    expect(lines - baselineLines).toBe(8);
+
+    // Focal-point dots: 4 arcs that aren't part of the baseline (grid +
+    // tank + substrate emit zero arcs on the minimal scene).
+    const baselineArcs = baseline.filter((o) => o.method === 'arc').length;
+    const arcs = ops.filter((o) => o.method === 'arc').length;
+    expect(arcs - baselineArcs).toBe(4);
+
+    expect(strokeStyles(ops)).toContain(GOLDEN_STROKE);
+    expect(strokeStyles(ops)).toContain(THIRDS_STROKE);
+    expect(fillStyles(ops)).toContain(FOCAL_FILL);
+  });
+
+  it('line width and dash scale inversely with viewport zoom (look identical on screen)', () => {
+    const zoomed: Viewport = { ...upright, zoom: 2 };
+    const { ops } = render({ goldenRatio: true, thirds: false, focalPoints: false }, zoomed);
+
+    const goldenStyleIdx = ops.findIndex(
+      (o) => o.method === 'set:strokeStyle' && o.args[0] === GOLDEN_STROKE,
+    );
+    // The overlay paint wraps in save / … / restore. The renderer sets
+    // lineWidth BEFORE strokeStyle, so the block window must extend back to
+    // the matching `save()` to capture that op.
+    const saveIdx = ops.findLastIndex(
+      (o, i) => i < goldenStyleIdx && o.method === 'save',
+    );
+    const restoreIdx = ops.findIndex(
+      (o, i) => i > goldenStyleIdx && o.method === 'restore',
+    );
+    const block = ops.slice(saveIdx, restoreIdx);
+
+    // lineWidth = 1 CSS px × (1 mm / 2 px) = 0.5 mm at zoom = 2.
+    const lineWidths = block.filter((o) => o.method === 'set:lineWidth').map((o) => o.args[0]);
+    expect(lineWidths[lineWidths.length - 1]).toBe(0.5);
+
+    // Dash pattern is 4 CSS px on / 4 CSS px off → 2 mm / 2 mm at zoom = 2.
+    const dashes = block.filter((o) => o.method === 'setLineDash').map((o) => o.args[0]);
+    expect(dashes[dashes.length - 1]).toEqual([2, 2]);
+  });
+
+  it('overlay positions are unchanged at non-default zoom (positions are world-mm)', () => {
+    const a = render({ goldenRatio: true, thirds: false, focalPoints: false }).ops;
+    const b = render(
+      { goldenRatio: true, thirds: false, focalPoints: false },
+      { ...upright, zoom: 3 },
+    ).ops;
+
+    function overlayMoves(ops: RecordedOp[]): ReadonlyArray<unknown> {
+      const idx = ops.findIndex(
+        (o) => o.method === 'set:strokeStyle' && o.args[0] === GOLDEN_STROKE,
+      );
+      const end = ops.findIndex((o, i) => i > idx && o.method === 'restore');
+      return ops.slice(idx, end).filter((o) => o.method === 'moveTo').map((o) => o.args);
+    }
+    expect(overlayMoves(a)).toEqual(overlayMoves(b));
+  });
+
+  it('overlay paint sits BENEATH the selection-handle paint (handles win on top)', () => {
+    // Reuse the hardscape spec's tiny triangle fixture: build a scene with
+    // one selected hardscape and overlays on, then verify the last paint-
+    // affecting style change is a handle style, NOT an overlay style.
+    const triEntry = {
+      kind: 'hardscape' as const,
+      id: 'rock.tri',
+      version: 1,
+      name: 'Triangle',
+      catalog: 'core',
+      category: 'rock' as const,
+      naturalSize: { x: 80, y: 60, z: 40 },
+      silhouette: [
+        { x: -40, y: -30 },
+        { x: 40, y: -30 },
+        { x: 0, y: 30 },
+      ],
+      fill: '#444444',
+    };
+    const catalog = {
+      entries: [triEntry] as never,
+      get({ catalog, id }: { catalog: string; id: string }) {
+        return catalog === 'core' && id === 'rock.tri' ? (triEntry as never) : null;
+      },
+      byKind() {
+        return [] as never;
+      },
+    } as never;
+    const scene = {
+      ...makeMinimalScene(TANK_W, TANK_H, TANK_H),
+      layers: [
+        {
+          id: 'L' as never,
+          name: 'L',
+          opacity: 1,
+          visible: true,
+          locked: false,
+          objects: [
+            {
+              kind: 'hardscape' as const,
+              id: 'a' as never,
+              ref: { catalog: 'core', id: 'rock.tri', version: 1 },
+              transform: {
+                position: { x: 180, y: 110, z: 0 },
+                rotation: { x: 0, y: 0, z: 0 },
+                scale: { x: 1, y: 1, z: 1 },
+                flipX: false,
+                flipY: false,
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(
+      scene,
+      upright,
+      catalog,
+      ['a' as never],
+      undefined,
+      { goldenRatio: true, thirds: true, focalPoints: true },
+    );
+    const ops = canvas.context.ops;
+
+    // Last strokeStyle change in the entire op stream MUST NOT be an
+    // overlay colour — the selection-handle paint runs strictly after the
+    // overlay paint.
+    const lastStrokeStyle = strokeStyles(ops).pop();
+    expect(lastStrokeStyle).not.toBe(GOLDEN_STROKE);
+    expect(lastStrokeStyle).not.toBe(THIRDS_STROKE);
+
+    // And: the overlay's `set:strokeStyle` ops appear earlier than the
+    // final handle paint ops (any strokeRect for a corner-handle square).
+    const lastOverlayStyleIdx = Math.max(
+      ops.findLastIndex(
+        (o) => o.method === 'set:strokeStyle' && o.args[0] === GOLDEN_STROKE,
+      ),
+      ops.findLastIndex(
+        (o) => o.method === 'set:strokeStyle' && o.args[0] === THIRDS_STROKE,
+      ),
+      ops.findLastIndex(
+        (o) => o.method === 'set:fillStyle' && o.args[0] === FOCAL_FILL,
+      ),
+    );
+    const lastStrokeRectIdx = ops.findLastIndex((o) => o.method === 'strokeRect');
+    expect(lastStrokeRectIdx).toBeGreaterThan(lastOverlayStyleIdx);
+  });
+
+  it('skips paint entirely when the tank has zero width or height (defensive)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    // Tank.width / height are constrained to be > 0 by validation, but the
+    // overlay code includes a defensive guard. Verify it.
+    const scene = {
+      ...makeMinimalScene(TANK_W, TANK_H, TANK_H),
+      tank: { ...makeMinimalScene(TANK_W, TANK_H, TANK_H).tank, width: 0, height: 0 },
+    };
+    r.render(scene, upright, undefined, undefined, undefined, {
+      goldenRatio: true,
+      thirds: true,
+      focalPoints: true,
+    });
+    const ops = canvas.context.ops;
+    expect(strokeStyles(ops)).not.toContain(GOLDEN_STROKE);
+    expect(strokeStyles(ops)).not.toContain(THIRDS_STROKE);
+    expect(fillStyles(ops)).not.toContain(FOCAL_FILL);
   });
 });

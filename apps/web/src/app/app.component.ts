@@ -71,12 +71,23 @@ import {
   type SceneObject,
 } from '@aquascape/domain/scene-model';
 import {
+  CompositionOverlaysComponent,
   CursorPositionService,
   EditorShellComponent,
+  OverlayOptionsService,
   PreviewTimeService,
   SelectionInspectorComponent,
   StatusBarComponent,
   TimeSliderComponent,
+  ViewportService,
+  ZoomControlComponent,
+  ZOOM_MULT_MAX,
+  ZOOM_MULT_MIN,
+  clampZoomMult,
+  composeViewport,
+  cursorToWorld,
+  panForCursorAnchor,
+  wheelDeltaToZoomFactor,
 } from '@aquascape/features/editor-shell';
 import { HardscapeDragService, HardscapeToolComponent } from '@aquascape/features/hardscape-tool';
 import { LayersPanelComponent } from '@aquascape/features/layers-panel';
@@ -158,6 +169,7 @@ type DragState =
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
+    CompositionOverlaysComponent,
     EditorShellComponent,
     HardscapeToolComponent,
     LayersPanelComponent,
@@ -167,6 +179,7 @@ type DragState =
     SubstrateToolComponent,
     TankSetupComponent,
     TimeSliderComponent,
+    ZoomControlComponent,
   ],
   template: `
     <div
@@ -286,6 +299,7 @@ type DragState =
             <aquascape-substrate-tool></aquascape-substrate-tool>
             <aquascape-hardscape-tool></aquascape-hardscape-tool>
             <aquascape-planting-tool></aquascape-planting-tool>
+            <aquascape-composition-overlays></aquascape-composition-overlays>
           </div>
         </aside>
 
@@ -350,6 +364,9 @@ type DragState =
           }
           <div class="app-status">
             <aquascape-status-bar></aquascape-status-bar>
+          </div>
+          <div class="app-zoom-control">
+            <aquascape-zoom-control></aquascape-zoom-control>
           </div>
           <div class="app-timeslider">
             <aquascape-time-slider></aquascape-time-slider>
@@ -466,6 +483,13 @@ type DragState =
         bottom: 64px;
         z-index: 3;
       }
+      .app-zoom-control {
+        position: absolute;
+        right: 12px;
+        bottom: 100px;
+        z-index: 3;
+        pointer-events: auto;
+      }
       .empty-hint {
         position: absolute;
         top: 50%;
@@ -536,6 +560,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private readonly dragService = inject(HardscapeDragService);
   private readonly plantDragService = inject(PlantDragService);
   private readonly previewTime = inject(PreviewTimeService);
+  private readonly overlayOptions = inject(OverlayOptionsService);
+  private readonly viewportState = inject(ViewportService);
   private readonly cursorPos = inject(CursorPositionService);
   private readonly cdr = inject(ChangeDetectorRef);
 
@@ -551,6 +577,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private currentSelection: readonly ObjectId[] = [];
   private currentViewport: Viewport | null = null;
   private resizeObserver: ResizeObserver | null = null;
+  private wheelZoomCleanup: (() => void) | null = null;
   private attached = false;
 
   private dragState: DragState | null = null;
@@ -639,6 +666,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
     this.ngZone.runOutsideAngular(() => {
       this.installResizeObserver();
+      this.installWheelZoomListener();
       combineLatest([this.store.select(selectScene), this.store.select(selectSelectedIds)])
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(([scene, ids]) => {
@@ -680,6 +708,40 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     if (value === this.previewTimePrevious) return;
     this.previewTimePrevious = value;
+    if (this.currentScene !== null) {
+      this.renderCurrent();
+    }
+  });
+
+  // F5.3 — re-render when any composition-overlay flag flips so the user
+  // sees the guide appear/disappear immediately on toggle. Same pattern as
+  // `previewTimeEffect` above: skip the synchronous first invocation (no
+  // scene yet — the combineLatest below fires the initial render), then
+  // call `renderCurrent()` for any subsequent change.
+  private overlayOptionsFirstRun = true;
+  private readonly overlayOptionsEffect = effect(() => {
+    // Read the signal so Angular tracks the dependency.
+    void this.overlayOptions.overlays();
+    if (this.overlayOptionsFirstRun) {
+      this.overlayOptionsFirstRun = false;
+      return;
+    }
+    if (this.currentScene !== null) {
+      this.renderCurrent();
+    }
+  });
+
+  // Stage 5.x — re-render when the user adjusts zoom or pan (via the
+  // floating ZoomControl or Cmd/Ctrl+wheel on the canvas). Same first-run
+  // guard pattern as the overlay + preview-time effects.
+  private viewportStateFirstRun = true;
+  private readonly viewportStateEffect = effect(() => {
+    void this.viewportState.userZoomMult();
+    void this.viewportState.userPan();
+    if (this.viewportStateFirstRun) {
+      this.viewportStateFirstRun = false;
+      return;
+    }
     if (this.currentScene !== null) {
       this.renderCurrent();
     }
@@ -1455,6 +1517,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       coreCatalog,
       this.currentSelection,
       previewAge ?? undefined,
+      this.overlayOptions.overlays(),
     );
   }
 
@@ -1482,10 +1545,73 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
     }
+    if (this.wheelZoomCleanup !== null) {
+      this.wheelZoomCleanup();
+      this.wheelZoomCleanup = null;
+    }
     if (this.attached) {
       this.renderer.dispose();
       this.attached = false;
     }
+  }
+
+  /**
+   * Cursor-anchored zoom on Cmd/Ctrl + wheel over the canvas. Bound as a
+   * non-passive listener so `preventDefault()` actually stops the page
+   * from scrolling. WITHOUT the modifier the listener is a no-op — the
+   * user's normal page-scroll gesture is preserved.
+   *
+   * The wheel handler reads the live scene/viewport state, computes the
+   * world point under the cursor, applies a multiplicative zoom factor
+   * derived from `deltaY`, then computes the pan that keeps that world
+   * point under the cursor — all via the pure helpers in `zoom-math.ts`.
+   */
+  private installWheelZoomListener(): void {
+    const canvas = this.canvasRef.nativeElement;
+    const handler = (event: WheelEvent): void => {
+      if (!event.ctrlKey && !event.metaKey) return; // honour page scroll
+      const scene = this.currentScene;
+      if (scene === null) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+
+      const def = defaultViewport(
+        { width: rect.width, height: rect.height },
+        { width: scene.tank.width, height: scene.tank.height },
+      );
+      const currentMult = this.viewportState.userZoomMult() ?? 1;
+      const currentPan = this.viewportState.userPan();
+      const currentViewport = composeViewport(def, currentMult, currentPan);
+      const cursor = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      const worldAtCursor = cursorToWorld(cursor, currentViewport, {
+        width: rect.width,
+        height: rect.height,
+      });
+
+      const factor = wheelDeltaToZoomFactor(event.deltaY);
+      const newMult = clampZoomMult(currentMult * factor);
+      // No change at the clamp ceiling/floor — skip the pan update so the
+      // cursor anchor doesn't drift on a no-op zoom.
+      if (newMult === currentMult && (currentMult === ZOOM_MULT_MAX || currentMult === ZOOM_MULT_MIN)) {
+        return;
+      }
+      const effectiveZoom = def.zoom * newMult;
+      const newPan = panForCursorAnchor(
+        cursor,
+        worldAtCursor,
+        { width: rect.width, height: rect.height },
+        effectiveZoom,
+        def.center,
+      );
+      // Run state changes inside Angular zone so the effect fires + the
+      // OnPush component renders.
+      this.ngZone.run(() => this.viewportState.setZoomAndPan(newMult, newPan));
+    };
+    canvas.addEventListener('wheel', handler, { passive: false });
+    this.wheelZoomCleanup = (): void => canvas.removeEventListener('wheel', handler);
   }
 
   private buildSurface(canvas: HTMLCanvasElement): RenderSurface {
@@ -1500,10 +1626,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   private computeViewport(surface: RenderSurface, scene: Scene): Viewport {
-    return defaultViewport(
+    const def = defaultViewport(
       { width: surface.width, height: surface.height },
       { width: scene.tank.width, height: scene.tank.height },
     );
+    return composeViewport(def, this.viewportState.userZoomMult(), this.viewportState.userPan());
   }
 }
 

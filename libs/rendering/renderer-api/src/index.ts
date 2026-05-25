@@ -76,6 +76,31 @@ export interface HitResult {
 }
 
 /**
+ * Stage 5 F5.3 — view-only composition overlays. Three independent toggles
+ * driving a renderer's "guideline" pass.
+ *
+ * - `goldenRatio` — paint the four φ-derived guide lines (two vertical,
+ *   two horizontal) spanning the tank's front-face interior.
+ * - `thirds`      — paint the four rule-of-thirds guide lines spanning the
+ *   tank's front-face interior.
+ * - `focalPoints` — paint the four golden-ratio intersections as small
+ *   markers.
+ *
+ * Overlays are view-only: they are NOT serialised into `Scene` / `.aqua`,
+ * they do NOT participate in `hitTest` (they're decoration, not geometry),
+ * and they are positioned in the tank's front-face interior plane
+ * (`(0, 0)` to `(tank.width, tank.height)` in world mm, same (x, y) plane
+ * as the rendered content). When the `render` parameter is omitted, or
+ * when every flag is false, the overlay pass MUST be a true no-op (no
+ * canvas state change, no save/restore overhead).
+ */
+export interface OverlayOptions {
+  goldenRatio: boolean;
+  thirds: boolean;
+  focalPoints: boolean;
+}
+
+/**
  * The renderer contract. Both `renderer-2d` (now) and `renderer-3d`
  * (Stage 10) implement this. Features depend on this interface, never on a
  * concrete renderer.
@@ -115,6 +140,13 @@ export interface SceneRenderer {
    * The optional `previewAgeWeeks` parameter (F4.4) overrides every plant's
    * stored `growth.ageWeeks` so the time slider can preview a future age
    * without mutating the document. Has no effect on hardscape or substrate.
+   *
+   * The optional `overlayOptions` parameter (F5.3) toggles three view-only
+   * composition overlays painted ON TOP of all scene content but BENEATH
+   * any selection handles, so selection markers stay readable. Overlays
+   * are decoration — they don't appear in `hitTest`, never mutate the
+   * scene, and add no canvas work when the parameter is omitted or every
+   * flag is false.
    */
   render(
     scene: Scene,
@@ -122,6 +154,7 @@ export interface SceneRenderer {
     catalog?: Catalog,
     selection?: ReadonlyArray<ObjectId>,
     previewAgeWeeks?: number,
+    overlayOptions?: OverlayOptions,
   ): void;
 
   /**
