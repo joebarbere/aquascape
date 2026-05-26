@@ -136,6 +136,7 @@ import { Store } from '@ngrx/store';
 
 import { defaultViewport } from './default-viewport';
 import { applyMoveDrag, applyRotateDrag, applyScaleDrag } from './drag-math';
+import { LivestockSimulationService } from './livestock-simulation.service';
 import { SCENE_RENDERER_2D, SCENE_RENDERER_3D } from './renderer.token';
 import {
   boundsFor,
@@ -667,6 +668,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private readonly viewportState = inject(ViewportService);
   private readonly cursorPos = inject(CursorPositionService);
   private readonly cdr = inject(ChangeDetectorRef);
+  // Stage 11 F11.1 Wave 4 — owns the bitECS world for animated fish in
+  // the 3D view. The service persists across 2D↔3D toggles; the renderer
+  // just reads its `getWorld()` each render and steps it in the RAF tick.
+  private readonly livestockSim = inject(LivestockSimulationService);
 
   private readonly fileService: FileService = inject(FILE_SERVICE);
   private readonly dialogService: DialogService = inject(DIALOG_SERVICE);
@@ -1764,6 +1769,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     // (it owns its OrbitControls camera + has no overlay / wall / snap
     // concept yet); passing them is safe. The renderer picks what it
     // wants from the options bag.
+    // Stage 11 F11.1 Wave 4 — only wire the livestock world into the 3D
+    // renderer (the 2D renderer ignores the field, but skipping it on
+    // 2D keeps the options bag minimal in the common case). The
+    // service returns `null` when the scene has no livestock; the
+    // renderer's spread-skip below means the field is absent rather
+    // than set to undefined.
+    const livestockWorld = is3d ? this.livestockSim.getWorld() : null;
     renderer.render(scenePassed, viewport, {
       catalog: coreCatalog,
       selection: this.currentSelection,
@@ -1772,6 +1784,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       ...(previewAge !== null ? { previewAgeWeeks: previewAge } : {}),
       ...(this.currentSnapGuides !== null ? { snapGuides: this.currentSnapGuides } : {}),
       ...(backdrop !== null ? { backdropImage: backdrop } : {}),
+      ...(livestockWorld !== null ? { livestockWorld } : {}),
     });
   }
 

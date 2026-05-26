@@ -62,7 +62,12 @@
 
 import type { Catalog } from '@aquascape/domain/catalog';
 import type { Vec2 } from '@aquascape/domain/geometry';
+import { SIM_DT, type LivestockWorld } from '@aquascape/domain/livestock-ecs';
 import type { Scene } from '@aquascape/domain/scene-model';
+import {
+  buildLivestockMeshes,
+  type LivestockMeshBundle,
+} from '@aquascape/rendering/livestock-renderer-3d';
 import type {
   HitResult,
   HitTestOptions,
@@ -223,6 +228,26 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    * Stored so `dispose()` can detach it before destroying the controls.
    */
   private controlsChangeUnsub: (() => void) | null = null;
+  /**
+   * Stage 11 F11.1 — the bitECS world the RAF loop steps + drains into
+   * the InstancedMesh attributes each frame. Set by `render()` from
+   * `options.livestockWorld`, cleared on `dispose()`. The world itself
+   * is OWNED by the host's `LivestockSimulationService` so it survives
+   * a 2D↔3D toggle (which disposes the renderer + bundle but keeps the
+   * sim alive).
+   */
+  private livestockWorld: LivestockWorld | null = null;
+  /**
+   * Stage 11 F11.1 — cached six-archetype InstancedMesh bundle. Built
+   * lazily the first time `render()` sees a `livestockWorld` and reused
+   * across renders (the bundle is expensive: six BufferGeometries + a
+   * ShaderMaterial). Disposed on `dispose()`.
+   *
+   * The host renderer rebuilds `currentContent` on every `render()`;
+   * the bundle's `Group` is re-added to the new content group each
+   * time (it's just an `Object3D` re-parent, not a GPU rebuild).
+   */
+  private livestockBundle: LivestockMeshBundle | null = null;
 
   /**
    * @param rendererFactory injectable WebGLRenderer factory. The default
@@ -348,12 +373,47 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     const raf = getRaf();
     this.rafShim = raf;
     if (raf === null) return; // Node env without RAF — attach + dispose still work.
+
+    // Stage 11 F11.1 — fixed-dt accumulator drives the ECS at SIM_DT (30 Hz)
+    // independent of the render rate. `dtMs` is clamped to 250 ms so a tab
+    // pause doesn't release a torrent of catch-up steps when the user
+    // returns; the inner `while` is also capped at 4 steps for the same
+    // reason (and the accumulator is dropped entirely if we're still
+    // behind after that — better one visible hitch than a spiral).
+    let lastTime = performance.now();
+    let accumulator = 0;
+    const SIM_DT_MS = SIM_DT * 1000;
+
     const tick = (): void => {
       const r = this.renderer;
       const s = this.threeScene;
       const c = this.camera;
       const ctl = this.controls;
       if (r === null || s === null || c === null) return;
+
+      const now = performance.now();
+      const dtMs = Math.min(now - lastTime, 250);
+      lastTime = now;
+
+      const world = this.livestockWorld;
+      const bundle = this.livestockBundle;
+      if (world !== null && bundle !== null) {
+        accumulator += dtMs;
+        let steps = 0;
+        while (accumulator >= SIM_DT_MS && steps < 4) {
+          world.step(SIM_DT);
+          accumulator -= SIM_DT_MS;
+          steps++;
+        }
+        if (steps === 4 && accumulator > SIM_DT_MS) {
+          // Still behind after the safety cap — drop the residue so we
+          // don't spiral on a slow frame.
+          accumulator = 0;
+        }
+        const alpha = accumulator / SIM_DT_MS;
+        bundle.syncFromSnapshot(world.snapshot(alpha), now / 1000);
+      }
+
       ctl?.update();
       r.render(s, c);
       this.rafHandle = raf.requestAnimationFrame(tick);
@@ -387,6 +447,15 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     //    scenes and keeps idempotency trivial — same input, same graph.
     if (this.currentContent !== null) {
       tScene.remove(this.currentContent);
+      // Stage 11 F11.1 — the livestock bundle's Group is reused across
+      // renders (its GPU resources cost too much to rebuild). Detach it
+      // BEFORE `disposeNode` walks the content tree, otherwise the
+      // bundle's geometries + ShaderMaterial would be disposed on every
+      // re-render. The bundle's own `dispose()` runs on renderer
+      // teardown via the dedicated path below.
+      if (this.livestockBundle !== null) {
+        this.currentContent.remove(this.livestockBundle.group);
+      }
       disposeNode(this.currentContent);
       this.currentContent = null;
     }
@@ -396,6 +465,24 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     content.add(buildSubstrateMeshes(scene, catalog));
     content.add(buildHardscapeMeshes(scene, catalog));
     content.add(buildPlantMeshes(scene, catalog, previewAgeWeeks));
+
+    // Stage 11 F11.1 — livestock InstancedMesh bundle. The world is owned
+    // by the host (apps/web's `LivestockSimulationService`); the renderer
+    // just reads it each frame in the RAF loop and parents the bundle's
+    // Group into the rebuilt content tree. Bundle is cached: building
+    // six BufferGeometries + a ShaderMaterial is expensive, but re-
+    // parenting an existing `Group` is just an `Object3D` move. The
+    // X-mirror applied below mirrors the bundle along with the rest of
+    // the content so fish read left/right-correct without per-instance
+    // adjustment.
+    this.livestockWorld = options.livestockWorld ?? null;
+    if (this.livestockWorld !== null) {
+      if (this.livestockBundle === null) {
+        this.livestockBundle = buildLivestockMeshes({});
+      }
+      content.add(this.livestockBundle.group);
+    }
+
     // **Document → Three.js X-mirror (load-bearing).** The .aqua document
     // uses `+Z = back of tank, +X = right` with the viewer at `-Z`. Three.js
     // is also right-handed, but its default camera looks down `-Z`, so the
@@ -681,9 +768,26 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
 
     if (this.currentContent !== null) {
       if (this.threeScene !== null) this.threeScene.remove(this.currentContent);
+      // Detach the livestock bundle BEFORE `disposeNode` walks the tree
+      // so the bundle's geometries + ShaderMaterial aren't disposed
+      // twice (here AND in `livestockBundle.dispose()` below). The
+      // bundle's own dispose call handles its GPU resources.
+      if (this.livestockBundle !== null) {
+        this.currentContent.remove(this.livestockBundle.group);
+      }
       disposeNode(this.currentContent);
       this.currentContent = null;
     }
+
+    // Stage 11 F11.1 — release the GPU resources behind the livestock
+    // bundle. The world itself is owned by the host (it survives a
+    // 2D↔3D toggle); we just drop our reference here. Idempotent:
+    // `bundle.dispose()` no-ops on a second call.
+    if (this.livestockBundle !== null) {
+      this.livestockBundle.dispose();
+      this.livestockBundle = null;
+    }
+    this.livestockWorld = null;
 
     if (this.lighting !== null) {
       if (this.threeScene !== null) this.threeScene.remove(this.lighting);

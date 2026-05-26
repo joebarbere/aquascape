@@ -34,4 +34,5 @@ adds a view-only overlay) need multiple files — load all of them.
 | [`app-shell.md`](app-shell.md) | `apps/web/src/app/` — composition root, drag state machine, sidebar layout, viewport zoom, per-panel collapse, view-only services (overlays / wall / snap / backdrop / templates / export). |
 | [`catalog.md`](catalog.md) | `libs/domain/catalog/` — adding entry kinds, schema branches, manifest authoring discipline. |
 | [`stage-7-livestock-equipment.md`](stage-7-livestock-equipment.md) | `libs/features/livestock-equipment/`, `libs/domain/stocking/`, or any livestock / equipment command — F7.1 / F7.2 / F7.3. |
+| [`livestock-ecs.md`](livestock-ecs.md) | `libs/domain/livestock-ecs/`, `libs/domain/fish-anatomy/`, `libs/rendering/livestock-renderer-3d/`, `apps/web/src/app/livestock-simulation.service.ts` — Stage 11 ECS world, sim-vs-render rate, determinism rules, system ordering. |
 | [`build-test.md`](build-test.md) | New lib scaffolding, Jest coverage gates, CI selectors, packaging (`pnpm package:desktop`), icons pipeline, app-name + version display, userData path. |

@@ -1,0 +1,19 @@
+{
+  "name": "rendering-livestock-renderer-3d",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/rendering/livestock-renderer-3d/src",
+  "projectType": "library",
+  "tags": ["scope:rendering", "type:lib", "framework:none", "domain:livestock-renderer-3d"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/rendering/livestock-renderer-3d",
+        "main": "libs/rendering/livestock-renderer-3d/src/index.ts",
+        "tsConfig": "libs/rendering/livestock-renderer-3d/tsconfig.lib.json",
+        "assets": ["libs/rendering/livestock-renderer-3d/*.md"]
+      }
+    }
+  }
+}

@@ -772,4 +772,73 @@ describe('AppComponent — 2D / 3D view mode', () => {
     fixture.destroy();
     expect(renderer3d.dispose).toHaveBeenCalledTimes(1);
   });
+
+  // ─── Stage 11 F11.1 Wave 4 — livestockWorld propagation ─────────────────
+
+  it('does NOT pass options.livestockWorld in 2D mode (2D ignores fish)', () => {
+    const renderer = new MockSceneRenderer();
+    const renderer3d = new MockSceneRenderer();
+    // Seed a scene with livestock so the simulation service builds a
+    // world; the 2D render call must STILL omit livestockWorld.
+    const sceneWithFish: Scene = {
+      ...defaultScene(),
+      livestock: [
+        {
+          id: asObjectId('e1'),
+          ref: { catalog: 'core', id: 'livestock.fish.neon-tetra', version: 1 },
+          quantity: 4,
+        },
+      ],
+    };
+    configure(renderer, sceneWithFish, renderer3d);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const firstCall = renderer.render.mock.calls[0]!;
+    expect(firstCall[2]?.livestockWorld).toBeUndefined();
+  });
+
+  it('passes options.livestockWorld in 3D mode when the scene has livestock', () => {
+    const renderer = new MockSceneRenderer();
+    const renderer3d = new MockSceneRenderer();
+    const sceneWithFish: Scene = {
+      ...defaultScene(),
+      livestock: [
+        {
+          id: asObjectId('e1'),
+          ref: { catalog: 'core', id: 'livestock.fish.neon-tetra', version: 1 },
+          quantity: 6,
+        },
+      ],
+    };
+    configure(renderer, sceneWithFish, renderer3d);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const vm = TestBed.inject(ViewModeService);
+    vm.setMode('3d');
+    fixture.detectChanges();
+
+    const lastCall = renderer3d.render.mock.calls.at(-1)!;
+    const world = lastCall[2]?.livestockWorld;
+    expect(world).toBeDefined();
+    // The world should already carry the spawned entities.
+    expect(world!.snapshot(0).entityCount).toBe(6);
+  });
+
+  it('passes no livestockWorld in 3D when the scene has no livestock', () => {
+    const renderer = new MockSceneRenderer();
+    const renderer3d = new MockSceneRenderer();
+    // Default scene has no livestock.
+    configure(renderer, defaultScene(), renderer3d);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const vm = TestBed.inject(ViewModeService);
+    vm.setMode('3d');
+    fixture.detectChanges();
+
+    const lastCall = renderer3d.render.mock.calls.at(-1)!;
+    expect(lastCall[2]?.livestockWorld).toBeUndefined();
+  });
 });

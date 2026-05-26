@@ -1,0 +1,19 @@
+{
+  "name": "domain-livestock-ecs",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/livestock-ecs/src",
+  "projectType": "library",
+  "tags": ["scope:domain", "type:lib", "framework:none", "domain:livestock-ecs"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/domain/livestock-ecs",
+        "main": "libs/domain/livestock-ecs/src/index.ts",
+        "tsConfig": "libs/domain/livestock-ecs/tsconfig.lib.json",
+        "assets": ["libs/domain/livestock-ecs/*.md"]
+      }
+    }
+  }
+}

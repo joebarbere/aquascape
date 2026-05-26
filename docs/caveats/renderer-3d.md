@@ -5,7 +5,18 @@
 ## Scope of v1 (Stage 10 F10.1–F10.3)
 
 - **Read-only / simulation-only.** `hitTest()` returns `null` unconditionally. No selection handles in 3D. No participation in the drag / marquee / inspector pipeline. Editing always happens in 2D; flipping to 3D is for visualisation.
-- **Future scope NOT in v1:** dynamic lighting (day/night cycle), water simulation (refraction / ripples), animated plants (sway / growth-in-motion), fish behaviours, photorealistic textures, shadows. The scene-builder per-element factoring (`tank-mesh.ts` / `substrate-mesh.ts` / etc.) is the seam those land along — one file per scene-element kind, additive changes.
+- **Future scope NOT in v1:** dynamic lighting (day/night cycle), water simulation (refraction / ripples), animated plants (sway / growth-in-motion), fish *behaviours* (steering, schooling, etc. — though F11.1 has already landed static animated fish meshes via the new ECS pipeline; see `livestock-ecs.md`), photorealistic textures, shadows. The scene-builder per-element factoring (`tank-mesh.ts` / `substrate-mesh.ts` / etc.) is the seam those land along — one file per scene-element kind, additive changes.
+
+## ECS-driven livestock content group (Stage 11 F11.1)
+
+`render()` builds the content group from scratch every call (see "Hardscape + plant placement pipeline" below). For livestock that contract changed: the `LivestockMeshBundle` is built **once**, cached on the renderer (`this.livestockBundle`), and only its `bundle.group` gets re-added to each freshly-built content group. The geometries + ShaderMaterial are expensive to construct (six BufferGeometries + a GLSL compile), so we don't reconstruct them on every `render()`.
+
+- The bundle is detached from `currentContent` **before** `disposeNode` walks the content tree, so the dispose pass doesn't release the bundle's geometries.
+- `RenderOptions.livestockWorld` is the contract surface. When present, `render()` lazily builds the bundle, the RAF tick steps the world + syncs the snapshot, and `dispose()` releases the bundle.
+- The RAF loop's fixed-dt accumulator (sim 30 Hz / render 60 Hz with 4-step catch-up cap) is the load-bearing piece — full details in [`livestock-ecs.md`](livestock-ecs.md).
+- The bundle's `Group` is mirrored along with everything else by `applyDocToWorldMirror` — per-instance attributes work correctly through a negative-determinant world matrix because Three.js flips `gl.frontFace` per-mesh.
+
+If you change the dispose discipline here, update both files in the same PR. The two files share a single invariant: every GPU resource attached must be released, no exceptions.
 
 ## Hardscape + plant placement pipeline (Stage 10 v1.1)
 

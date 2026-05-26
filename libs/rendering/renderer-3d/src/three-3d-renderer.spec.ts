@@ -554,3 +554,174 @@ describe('Three3DRenderer — orbit controls', () => {
     raf.uninstall();
   });
 });
+
+// ─── Stage 11 F11.1 Wave 4 — livestock wiring ────────────────────────────
+
+import { SIM_DT, createLivestockWorld, type LivestockWorld } from '@aquascape/domain/livestock-ecs';
+
+describe('Three3DRenderer — livestock wiring', () => {
+  it('omitting livestockWorld leaves the content group fish-free', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(), viewport);
+    const rAny = r as unknown as {
+      currentContent: { children: ReadonlyArray<{ name: string }> } | null;
+      livestockBundle: unknown;
+    };
+    const names = rAny.currentContent!.children.map((c) => c.name);
+    expect(names).not.toContain('aquascape:livestock');
+    expect(rAny.livestockBundle).toBeNull();
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('passing livestockWorld attaches the bundle group to the content tree', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    const world: LivestockWorld = createLivestockWorld(7);
+    world.spawnFish({
+      archetype: 0,
+      speciesId: 1,
+      bodyLengthMm: 35,
+      position: { x: 100, y: 100, z: 100 },
+    });
+    r.render(sceneOf(), viewport, { livestockWorld: world });
+    const rAny = r as unknown as {
+      currentContent: { children: ReadonlyArray<{ name: string }> } | null;
+      livestockBundle: { group: { name: string }; dispose: jest.Mock } | null;
+    };
+    const names = rAny.currentContent!.children.map((c) => c.name);
+    expect(names).toContain('aquascape:livestock');
+    expect(rAny.livestockBundle).not.toBeNull();
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('bundle is built ONCE across multiple renders (cached on the renderer)', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    const world = createLivestockWorld(7);
+    world.spawnFish({ archetype: 0, speciesId: 1, bodyLengthMm: 35, position: { x: 0, y: 0, z: 0 } });
+    r.render(sceneOf(), viewport, { livestockWorld: world });
+    const rAny = r as unknown as { livestockBundle: { group: unknown } | null };
+    const firstBundle = rAny.livestockBundle;
+    r.render(sceneOf(), viewport, { livestockWorld: world });
+    expect(rAny.livestockBundle).toBe(firstBundle);
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('dispose() releases the bundle exactly once and clears the world reference', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    const world = createLivestockWorld(7);
+    world.spawnFish({ archetype: 0, speciesId: 1, bodyLengthMm: 35, position: { x: 0, y: 0, z: 0 } });
+    r.render(sceneOf(), viewport, { livestockWorld: world });
+    const rAny = r as unknown as { livestockBundle: { dispose: jest.Mock } | null };
+    const bundle = rAny.livestockBundle!;
+    const spy = jest.spyOn(bundle, 'dispose');
+    r.dispose();
+    expect(spy).toHaveBeenCalledTimes(1);
+    const rAny2 = r as unknown as { livestockBundle: unknown; livestockWorld: unknown };
+    expect(rAny2.livestockBundle).toBeNull();
+    expect(rAny2.livestockWorld).toBeNull();
+    // Idempotent: a second dispose mustn't blow up.
+    expect(() => r.dispose()).not.toThrow();
+    raf.uninstall();
+  });
+
+  it('RAF tick steps the ECS world at the SIM_DT rate (fixed accumulator)', () => {
+    // Hand-rolled RAF to fire callbacks on demand so we can advance the
+    // sim loop without real timing.
+    const callbacks: Array<(t: number) => void> = [];
+    const g = globalThis as unknown as {
+      requestAnimationFrame?: (cb: (t: number) => void) => number;
+      cancelAnimationFrame?: (h: number) => void;
+      performance?: { now(): number };
+    };
+    const prevReq = g.requestAnimationFrame;
+    const prevCancel = g.cancelAnimationFrame;
+    const prevPerf = g.performance;
+    let fakeNow = 0;
+    g.performance = { now: () => fakeNow } as Performance;
+    g.requestAnimationFrame = ((cb: (t: number) => void) => {
+      callbacks.push(cb);
+      return callbacks.length;
+    }) as never;
+    g.cancelAnimationFrame = (() => undefined) as never;
+
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    const world = createLivestockWorld(7);
+    world.spawnFish({ archetype: 0, speciesId: 1, bodyLengthMm: 35, position: { x: 0, y: 0, z: 0 } });
+    const stepSpy = jest.spyOn(world, 'step');
+    r.render(sceneOf(), viewport, { livestockWorld: world });
+
+    // Drain the initial RAF callback (from attach's startAnimationLoop +
+    // any subsequent re-schedules), advancing simulated time so the
+    // accumulator crosses SIM_DT_MS exactly once.
+    fakeNow += SIM_DT * 1000;
+    const next = callbacks.shift();
+    next?.(fakeNow);
+    expect(stepSpy).toHaveBeenCalledWith(SIM_DT);
+
+    r.dispose();
+    if (prevReq === undefined) delete g.requestAnimationFrame;
+    else g.requestAnimationFrame = prevReq;
+    if (prevCancel === undefined) delete g.cancelAnimationFrame;
+    else g.cancelAnimationFrame = prevCancel;
+    if (prevPerf === undefined) delete g.performance;
+    else g.performance = prevPerf;
+  });
+
+  it('RAF tick caps catch-up steps at 4 after a long pause', () => {
+    const callbacks: Array<(t: number) => void> = [];
+    const g = globalThis as unknown as {
+      requestAnimationFrame?: (cb: (t: number) => void) => number;
+      cancelAnimationFrame?: (h: number) => void;
+      performance?: { now(): number };
+    };
+    const prevReq = g.requestAnimationFrame;
+    const prevCancel = g.cancelAnimationFrame;
+    const prevPerf = g.performance;
+    let fakeNow = 0;
+    g.performance = { now: () => fakeNow } as Performance;
+    g.requestAnimationFrame = ((cb: (t: number) => void) => {
+      callbacks.push(cb);
+      return callbacks.length;
+    }) as never;
+    g.cancelAnimationFrame = (() => undefined) as never;
+
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    const world = createLivestockWorld(1);
+    world.spawnFish({ archetype: 0, speciesId: 1, bodyLengthMm: 35, position: { x: 0, y: 0, z: 0 } });
+    const stepSpy = jest.spyOn(world, 'step');
+    r.render(sceneOf(), viewport, { livestockWorld: world });
+
+    // Jump time forward by 1 second (≈30 sim steps' worth). The clamp
+    // at 250 ms reduces this to 250 ms, then the 4-step cap fires.
+    fakeNow += 1000;
+    const next = callbacks.shift();
+    next?.(fakeNow);
+    expect(stepSpy.mock.calls.length).toBeLessThanOrEqual(4);
+
+    r.dispose();
+    if (prevReq === undefined) delete g.requestAnimationFrame;
+    else g.requestAnimationFrame = prevReq;
+    if (prevCancel === undefined) delete g.cancelAnimationFrame;
+    else g.cancelAnimationFrame = prevCancel;
+    if (prevPerf === undefined) delete g.performance;
+    else g.performance = prevPerf;
+  });
+});

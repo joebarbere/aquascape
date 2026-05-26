@@ -6,8 +6,10 @@
     "paths": {
       "@aquascape/domain/catalog": ["libs/domain/catalog/src/index.ts"],
       "@aquascape/domain/document": ["libs/domain/document/src/index.ts"],
+      "@aquascape/domain/fish-anatomy": ["libs/domain/fish-anatomy/src/index.ts"],
       "@aquascape/domain/geometry": ["libs/domain/geometry/src/index.ts"],
       "@aquascape/domain/growth-sim": ["libs/domain/growth-sim/src/index.ts"],
+      "@aquascape/domain/livestock-ecs": ["libs/domain/livestock-ecs/src/index.ts"],
       "@aquascape/domain/scene-model": ["libs/domain/scene-model/src/index.ts"],
       "@aquascape/domain/stocking": ["libs/domain/stocking/src/index.ts"],
       "@aquascape/features/editor-shell": ["libs/features/editor-shell/src/index.ts"],
@@ -27,6 +29,9 @@
       ],
       "@aquascape/platform/platform-electron": ["libs/platform/platform-electron/src/index.ts"],
       "@aquascape/platform/platform-web": ["libs/platform/platform-web/src/index.ts"],
+      "@aquascape/rendering/livestock-renderer-3d": [
+        "libs/rendering/livestock-renderer-3d/src/index.ts"
+      ],
       "@aquascape/rendering/renderer-2d": ["libs/rendering/renderer-2d/src/index.ts"],
       "@aquascape/rendering/renderer-3d": ["libs/rendering/renderer-3d/src/index.ts"],
       "@aquascape/rendering/renderer-api": ["libs/rendering/renderer-api/src/index.ts"],

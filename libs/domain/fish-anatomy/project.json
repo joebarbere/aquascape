@@ -1,0 +1,19 @@
+{
+  "name": "domain-fish-anatomy",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/fish-anatomy/src",
+  "projectType": "library",
+  "tags": ["scope:domain", "type:lib", "framework:none", "domain:fish-anatomy"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/domain/fish-anatomy",
+        "main": "libs/domain/fish-anatomy/src/index.ts",
+        "tsConfig": "libs/domain/fish-anatomy/tsconfig.lib.json",
+        "assets": ["libs/domain/fish-anatomy/*.md"]
+      }
+    }
+  }
+}

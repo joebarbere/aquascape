@@ -14,6 +14,9 @@ importers:
       '@types/three':
         specifier: ^0.184.1
         version: 0.184.1
+      bitecs:
+        specifier: ^0.3.40
+        version: 0.3.40
       fflate:
         specifier: ^0.8.3
         version: 0.8.3
@@ -202,9 +205,13 @@ importers:
         specifier: ^0.8.3
         version: 0.8.3
 
+  libs/domain/fish-anatomy: {}
+
   libs/domain/geometry: {}
 
   libs/domain/growth-sim: {}
+
+  libs/domain/livestock-ecs: {}
 
   libs/domain/scene-model: {}
 
@@ -234,7 +241,11 @@ importers:
 
   libs/platform/platform-web: {}
 
+  libs/rendering/livestock-renderer-3d: {}
+
   libs/rendering/renderer-2d: {}
+
+  libs/rendering/renderer-3d: {}
 
   libs/rendering/renderer-api: {}
 
@@ -3557,6 +3568,9 @@ packages:
   binary-extensions@2.3.0:
     resolution: {integrity: sha512-Ceh+7ox5qe7LJuLHoY0feh3pHuUDHAcRUeyL2VYghZwfpkNIy/+8Ocg0a3UuSoYzavmylwuLWQOf3hl0jjMMIw==}
     engines: {node: '>=8'}
+
+  bitecs@0.3.40:
+    resolution: {integrity: sha512-wAylY4pNfX8IeIH5phtwt1lUNtHKrkoSNrArI7Ris2Y4nEQWFIVvXdgAuqprEg9bq8Wolmlj0gVfeG6MFmtI2Q==}
 
   bl@4.1.0:
     resolution: {integrity: sha512-1W07cM9gS6DcLperZfFSj+bWLtaPGSOHWhPiGzXmvVJbRLdG82sH/Kn8EtW1VqWVA54AKf2h5k5BbnIbwF3h6w==}
@@ -12405,6 +12419,8 @@ snapshots:
   big.js@5.2.2: {}
 
   binary-extensions@2.3.0: {}
+
+  bitecs@0.3.40: {}
 
   bl@4.1.0:
     dependencies:

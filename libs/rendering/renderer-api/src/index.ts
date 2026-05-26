@@ -26,6 +26,7 @@
 
 import type { Catalog } from '@aquascape/domain/catalog';
 import type { Vec2 } from '@aquascape/domain/geometry';
+import type { LivestockWorld } from '@aquascape/domain/livestock-ecs';
 import type { Scene, ObjectId, LayerId } from '@aquascape/domain/scene-model';
 
 /**
@@ -229,6 +230,19 @@ export interface RenderOptions {
    * scene). No-op when omitted / opacity ≤ 0.
    */
   readonly backdropImage?: BackdropImage;
+  /**
+   * Stage 11 F11.1 — bitECS world the 3D renderer steps + draws each
+   * RAF tick to render animated livestock. The 2D renderer ignores
+   * this field (livestock parity in 2D is deliberately out of scope —
+   * 2D is the authoring surface, 3D is the simulation surface).
+   *
+   * When omitted (or null on the host side), the 3D renderer paints
+   * the static scene exactly as Stage 10 did — no fish, no extra
+   * draw calls. The renderer caches its `LivestockMeshBundle` on
+   * first sight of a world and re-uses it across renders so the six
+   * archetype geometries + ShaderMaterial are built once.
+   */
+  readonly livestockWorld?: LivestockWorld;
 }
 
 /**
