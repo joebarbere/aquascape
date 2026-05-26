@@ -1,0 +1,16 @@
+{
+  "catalog": "core",
+  "id": "equipment.filter.eheim-pro-4-plus-350",
+  "version": 1,
+  "name": "Eheim Pro 4+ 350 (2273)",
+  "kind": "equipment",
+  "category": "filter",
+  "subcategory": "canister",
+  "color": "#1f5b8a",
+  "wattage": 16,
+  "flowRateLph": 1050,
+  "coverageLitres": { "min": 180, "max": 350 },
+  "description": "Premium German-engineered canister filter with pre-filter cartridge and Xtender bypass for extended media-cleaning intervals. Manufacturer-rated pump output is 1050 L/h; effective in-tank turnover after media + plumbing losses is typically lower (real-world tests cite ~600-700 L/h), but we keep the manufacturer figure as the canonical spec.",
+  "tags": ["canister", "premium", "planted", "high-flow", "200L+"],
+  "defaultSettings": { "flowPct": 100 }
+}

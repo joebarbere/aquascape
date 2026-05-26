@@ -1,12 +1,14 @@
 // Scene selector tests — verify the projections against a known state shape.
 
-import type { LivestockEntry, Scene } from '@aquascape/domain/scene-model';
+import type { EquipmentEntry, LivestockEntry, Scene } from '@aquascape/domain/scene-model';
 import { createHistory, setTankDimensions } from '@aquascape/domain/scene-model';
 
 import { defaultScene } from './default-scene';
 import {
   selectCanRedo,
   selectCanUndo,
+  selectEquipment,
+  selectEquipmentById,
   selectHistory,
   selectLivestock,
   selectLivestockById,
@@ -126,6 +128,49 @@ describe('scene.selectors', () => {
 
     it('returns null on an empty livestock array', () => {
       expect(selectLivestockById(entry.id).projector([])).toBeNull();
+    });
+  });
+
+  describe('selectEquipment', () => {
+    it('returns an empty array when scene.equipment is undefined', () => {
+      const scene = defaultScene();
+      expect(selectEquipment.projector(scene)).toEqual([]);
+    });
+
+    it('returns the array when present', () => {
+      const equipment: EquipmentEntry[] = [
+        {
+          id: 'e0000000-0000-4000-8000-000000000001',
+          ref: { catalog: 'core', id: 'filter.canister.eheim-2217', version: 1 },
+          settings: { wattage: 20 },
+        },
+      ];
+      const scene: Scene = { ...defaultScene(), equipment };
+      expect(selectEquipment.projector(scene)).toBe(equipment);
+    });
+
+    it('returns an empty array when scene is null (defensive)', () => {
+      expect(selectEquipment.projector(null as unknown as Scene)).toEqual([]);
+    });
+  });
+
+  describe('selectEquipmentById', () => {
+    const entry: EquipmentEntry = {
+      id: 'e0000000-0000-4000-8000-000000000001',
+      ref: { catalog: 'core', id: 'filter.canister.eheim-2217', version: 1 },
+      settings: { wattage: 20 },
+    };
+
+    it('finds an entry by id', () => {
+      expect(selectEquipmentById(entry.id).projector([entry])).toBe(entry);
+    });
+
+    it('returns null when no entry has the id', () => {
+      expect(selectEquipmentById('missing').projector([entry])).toBeNull();
+    });
+
+    it('returns null on an empty equipment array', () => {
+      expect(selectEquipmentById(entry.id).projector([])).toBeNull();
     });
   });
 

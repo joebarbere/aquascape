@@ -13,6 +13,7 @@ export type {
   CatalogEntry,
   CatalogEntryBase,
   CatalogKind,
+  EquipmentEntry,
   HardscapeEntry,
   HexColor,
   LivestockEntry,

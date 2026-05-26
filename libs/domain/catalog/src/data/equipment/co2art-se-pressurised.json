@@ -1,0 +1,14 @@
+{
+  "catalog": "core",
+  "id": "equipment.co2.co2art-se-pressurised",
+  "version": 1,
+  "name": "CO2Art SE Pressurised CO2 System",
+  "kind": "equipment",
+  "category": "co2",
+  "subcategory": "pressurised",
+  "color": "#3d8a55",
+  "coverageLitres": { "min": 40, "max": 400 },
+  "description": "Complete pressurised CO2 kit (regulator, solenoid, bubble counter, check valve) compatible with disposable and refillable cylinders. Solenoid lets you tie CO2 injection to the lighting timer so you're not gassing fish overnight. Wattage of the solenoid is negligible (~3W) and not separately published.",
+  "tags": ["co2", "pressurised", "regulator", "solenoid", "planted"],
+  "defaultSettings": { "bps": 1, "durationHours": 8, "solenoidEnabled": true }
+}

@@ -90,6 +90,22 @@ import livestockNeocaridinaDavidi from './data/livestock/neocaridina-davidi.json
 // Livestock — snails
 import livestockNeritinaNatalensis from './data/livestock/neritina-natalensis.json';
 import livestockPlanorbellaDuryi from './data/livestock/planorbella-duryi.json';
+// Equipment — filters (Stage 7 F7.3)
+import equipmentEheimPro4Plus350 from './data/equipment/eheim-pro-4-plus-350.json';
+import equipmentFluval207 from './data/equipment/fluval-207.json';
+import equipmentAquaclear50 from './data/equipment/aquaclear-50.json';
+import equipmentAquaneatTripleSponge from './data/equipment/aquaneat-triple-sponge.json';
+// Equipment — heaters
+import equipmentFluvalE300 from './data/equipment/fluval-e300.json';
+import equipmentEheimJager200 from './data/equipment/eheim-jager-200.json';
+import equipmentCobaltNeoTherm100 from './data/equipment/cobalt-neo-therm-100.json';
+// Equipment — lights
+import equipmentTwinstar600s from './data/equipment/twinstar-600s.json';
+import equipmentChihirosWrgbIIPro60 from './data/equipment/chihiros-wrgb-ii-pro-60.json';
+import equipmentFluvalPlant336W from './data/equipment/fluval-plant-3-36w.json';
+// Equipment — CO2
+import equipmentCo2artSePressurised from './data/equipment/co2art-se-pressurised.json';
+import equipmentAdaPollenGlassDiffuser from './data/equipment/ada-pollen-glass-diffuser.json';
 import { loadCatalog, type CatalogLoadResult } from './loader';
 
 /** Raw manifest array — exposed so tests + tools can re-load it deliberately. */
@@ -164,6 +180,23 @@ export const CORE_CATALOG_MANIFESTS: readonly unknown[] = [
   // Livestock — snails
   livestockNeritinaNatalensis,
   livestockPlanorbellaDuryi,
+  // Equipment (Stage 7 F7.3)
+  // Equipment — filters
+  equipmentEheimPro4Plus350,
+  equipmentFluval207,
+  equipmentAquaclear50,
+  equipmentAquaneatTripleSponge,
+  // Equipment — heaters
+  equipmentFluvalE300,
+  equipmentEheimJager200,
+  equipmentCobaltNeoTherm100,
+  // Equipment — lights
+  equipmentTwinstar600s,
+  equipmentChihirosWrgbIIPro60,
+  equipmentFluvalPlant336W,
+  // Equipment — CO2
+  equipmentCo2artSePressurised,
+  equipmentAdaPollenGlassDiffuser,
 ];
 
 /**

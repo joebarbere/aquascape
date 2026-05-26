@@ -14,7 +14,7 @@
 // dispatching speculatively.
 
 import { coreCatalog } from '@aquascape/domain/catalog';
-import type { LivestockEntry } from '@aquascape/domain/scene-model';
+import type { EquipmentEntry, LivestockEntry } from '@aquascape/domain/scene-model';
 import { evaluateStocking, type StockingWarning } from '@aquascape/domain/stocking';
 import { createSelector } from '@ngrx/store';
 
@@ -69,6 +69,29 @@ export const selectLivestockById = (id: string) =>
   createSelector(
     selectLivestock,
     (livestock): LivestockEntry | null => livestock.find((e) => e.id === id) ?? null,
+  );
+
+/**
+ * Selects the scene's equipment entries (Stage 7 F7.3). Returns an empty
+ * array when `scene.equipment` is undefined so consumers don't need to
+ * guard. NgRx memoizes the projection so the returned reference is stable
+ * across subscriptions when the underlying array is unchanged.
+ */
+export const selectEquipment = createSelector(
+  selectScene,
+  (scene): EquipmentEntry[] => scene?.equipment ?? [],
+);
+
+/**
+ * Build a memoized selector for a single equipment entry by id (Stage 7
+ * F7.3). Same entity-selector-factory pattern as `selectLivestockById`.
+ * Returns `null` when no entry has that id, mirroring `selectEquipmentById`
+ * from `@aquascape/domain/scene-model`.
+ */
+export const selectEquipmentById = (id: string) =>
+  createSelector(
+    selectEquipment,
+    (equipment): EquipmentEntry | null => equipment.find((e) => e.id === id) ?? null,
   );
 
 /**

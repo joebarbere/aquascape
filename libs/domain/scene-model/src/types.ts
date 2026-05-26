@@ -212,6 +212,28 @@ export interface LivestockEntry {
   decorObjectId?: Uuid;
 }
 
+// ─── Equipment ────────────────────────────────────────────────────────────
+
+/**
+ * A planned-equipment entry (filter, heater, light, CO2, etc.). Mirrors the
+ * on-disk `EquipmentEntry` from `aqua-document.ts` — same field set, just
+ * re-declared so the scene-model has no dependency on
+ * `@aquascape/domain/document`.
+ *
+ * Equipment entries do NOT live in any layer; the locked-layer guard does
+ * NOT apply to equipment commands. They round-trip through `documentToScene`
+ * / `sceneToDocument` on the `Scene` itself (Stage 7 F7.3 promoted them off
+ * the envelope into the scene so undo/redo via Commands could reach them —
+ * the symmetric follow-up to the F7.1 livestock promotion).
+ */
+export interface EquipmentEntry {
+  id: Uuid;
+  ref: CatalogRef;
+  /** Free-form config keyed by the catalog's defaultSettings shape. */
+  settings?: Record<string, number | string | boolean>;
+  note?: string;
+}
+
 // ─── Scene root ───────────────────────────────────────────────────────────
 
 /**
@@ -237,4 +259,16 @@ export interface Scene {
    * flow through the Command pipeline with undo/redo support. Stage 7 F7.1.
    */
   livestock?: LivestockEntry[];
+  /**
+   * Planned equipment for the scape (filter / heater / light / CO2 / etc.).
+   * Optional — absent on a fresh scene stays absent through document
+   * round-trips (the marshal layer uses the spread-trick so the on-disk
+   * field is omitted when undefined).
+   *
+   * Lives on the scene (not on the envelope) so equipment mutations can
+   * flow through the Command pipeline with undo/redo support. Stage 7 F7.3
+   * — the symmetric follow-up to the F7.1 livestock promotion that closes
+   * the marshal asymmetry CLAUDE.md documents.
+   */
+  equipment?: EquipmentEntry[];
 }

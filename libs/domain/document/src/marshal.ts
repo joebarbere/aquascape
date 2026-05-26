@@ -3,7 +3,7 @@
  *
  * The in-memory `Scene` (from `@aquascape/domain/scene-model`) is the document
  * minus its `format` / `schemaVersion` / `meta` envelope and the optional
- * `equipment` / `renderHistory` / `extensions` bag.
+ * `renderHistory` / `extensions` bag.
  *
  * Splitting the doc into `{ scene, envelope }` keeps `scene-model` ignorant of
  * the on-disk wrapper while still letting load → edit → save be **lossless**:
@@ -12,19 +12,24 @@
  * concrete mechanism for the "don't drop what you don't understand" rule in
  * the document format.
  *
- * **Livestock asymmetry.** As of Stage 7 F7.1, `livestock` lives on the
- * in-memory `Scene` (not on the envelope) so livestock mutations can flow
- * through the Command pipeline with undo/redo. `equipment` / `renderHistory`
- * / `extensions` still ride on the envelope for now; F7.3 will repeat the
- * promotion for equipment.
+ * **Promotion history.** As of Stage 7 F7.3, BOTH `livestock` (promoted in
+ * F7.1) AND `equipment` live on the in-memory `Scene` — they each round-trip
+ * through `Scene.livestock` / `Scene.equipment` so their mutations flow
+ * through the Command pipeline with undo/redo. Only `renderHistory` and
+ * `extensions` still ride on the envelope; both are non-user-editable
+ * carry-throughs (render history is append-only via Stage 9; extensions are
+ * the forward-compat catch-all).
  */
 
-import type { LivestockEntry as SceneLivestockEntry, Scene } from '@aquascape/domain/scene-model';
+import type {
+  EquipmentEntry as SceneEquipmentEntry,
+  LivestockEntry as SceneLivestockEntry,
+  Scene,
+} from '@aquascape/domain/scene-model';
 
 import type {
   AquaDocument,
   DocumentMeta,
-  EquipmentEntry,
   Layer,
   RenderRecord,
 } from './aqua-document';
@@ -34,12 +39,12 @@ import { CURRENT_SCHEMA_VERSION } from './aqua-document';
  * Everything in the document that isn't in the in-memory `Scene`. Held
  * verbatim by the editor so save round-trips preserve unknown extensions.
  *
- * NOTE: `livestock` is intentionally absent — it was promoted to `Scene` in
- * F7.1. See the file header for the asymmetry rationale.
+ * NOTE: `livestock` AND `equipment` are intentionally absent — they were
+ * promoted to `Scene` in F7.1 and F7.3 respectively. See the file header for
+ * the asymmetry rationale.
  */
 export interface DocumentEnvelope {
   meta: DocumentMeta;
-  equipment?: EquipmentEntry[];
   renderHistory?: RenderRecord[];
   extensions?: Record<string, unknown>;
 }
@@ -66,11 +71,17 @@ export function documentToScene(doc: AquaDocument): {
     ...(doc.livestock !== undefined
       ? { livestock: doc.livestock as unknown as SceneLivestockEntry[] }
       : {}),
+    // Equipment lives on the scene too (Stage 7 F7.3) — same pattern as
+    // livestock above, closing the marshal asymmetry that F7.1 had to
+    // leave open. The element-type cast (not `Scene['equipment']`) sidesteps
+    // `exactOptionalPropertyTypes` for the same reason as livestock.
+    ...(doc.equipment !== undefined
+      ? { equipment: doc.equipment as unknown as SceneEquipmentEntry[] }
+      : {}),
   };
 
   const envelope: DocumentEnvelope = {
     meta: doc.meta,
-    ...(doc.equipment !== undefined ? { equipment: doc.equipment } : {}),
     ...(doc.renderHistory !== undefined ? { renderHistory: doc.renderHistory } : {}),
     ...(doc.extensions !== undefined ? { extensions: doc.extensions } : {}),
   };
@@ -97,11 +108,11 @@ export function sceneToDocument(
     tank: scene.tank,
     substrate: scene.substrate,
     layers: scene.layers as unknown as Layer[],
-    // Livestock comes off the scene (F7.1), not the envelope. Equipment +
-    // renderHistory + extensions still ride on the envelope; F7.3 will
-    // repeat the promotion for equipment.
+    // Livestock comes off the scene (F7.1); equipment comes off the scene
+    // too (F7.3). Only `renderHistory` and `extensions` still ride on the
+    // envelope — both are non-user-editable carry-throughs.
     ...(scene.livestock !== undefined ? { livestock: scene.livestock } : {}),
-    ...(envelope.equipment !== undefined ? { equipment: envelope.equipment } : {}),
+    ...(scene.equipment !== undefined ? { equipment: scene.equipment } : {}),
     ...(envelope.renderHistory !== undefined
       ? { renderHistory: envelope.renderHistory }
       : {}),

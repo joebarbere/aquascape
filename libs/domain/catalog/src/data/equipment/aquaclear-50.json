@@ -1,0 +1,16 @@
+{
+  "catalog": "core",
+  "id": "equipment.filter.aquaclear-50",
+  "version": 1,
+  "name": "AquaClear 50 Power Filter",
+  "kind": "equipment",
+  "category": "filter",
+  "subcategory": "hob",
+  "color": "#4a8bc8",
+  "wattage": 6,
+  "flowRateLph": 757,
+  "coverageLitres": { "min": 75, "max": 190 },
+  "description": "Classic hang-on-back filter with a large customisable media basket and adjustable flow control. Long-lived workhorse for community tanks where canister overkill isn't warranted. Manufacturer-rated flow is 200 GPH (757 L/h) at full open.",
+  "tags": ["hob", "hang-on-back", "community", "adjustable", "beginner"],
+  "defaultSettings": { "flowPct": 100 }
+}

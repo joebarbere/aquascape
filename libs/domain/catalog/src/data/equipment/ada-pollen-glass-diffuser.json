@@ -1,0 +1,14 @@
+{
+  "catalog": "core",
+  "id": "equipment.co2.ada-pollen-glass-diffuser",
+  "version": 1,
+  "name": "ADA Pollen Glass Beetle Diffuser",
+  "kind": "equipment",
+  "category": "co2",
+  "subcategory": "diffuser",
+  "color": "#4ea36b",
+  "coverageLitres": { "max": 90 },
+  "description": "Hand-blown glass CO2 diffuser with a fine-pore ceramic disc producing a mist of micro-bubbles that dissolve quickly into the water column. In-tank decorative finish — popular in ADA-style Iwagumi displays. Requires a separate regulator / pressurised system; this entry is the diffuser only.",
+  "tags": ["co2", "diffuser", "glass", "ada", "iwagumi", "nano"],
+  "defaultSettings": { "bps": 1 }
+}

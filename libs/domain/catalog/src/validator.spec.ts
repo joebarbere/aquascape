@@ -334,6 +334,150 @@ describe('validateCatalogEntry (livestock, Stage 7 F7.1)', () => {
   });
 });
 
+describe('validateCatalogEntry (equipment, Stage 7 F7.3)', () => {
+  const validEquipment = {
+    catalog: 'core',
+    id: 'equipment.filter.test',
+    version: 1,
+    name: 'Test filter',
+    kind: 'equipment',
+    category: 'filter',
+    color: '#abcdef',
+  };
+
+  it('accepts a minimal well-formed equipment entry', () => {
+    expect(validateCatalogEntry(validEquipment)).toEqual({ ok: true });
+  });
+
+  it('accepts every optional metadata field together', () => {
+    expect(
+      validateCatalogEntry({
+        ...validEquipment,
+        subcategory: 'canister',
+        wattage: 16,
+        flowRateLph: 1050,
+        coverageLitres: { min: 100, max: 350 },
+        defaultSettings: { flowPct: 100, label: 'main', enabled: true },
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('accepts coverageLitres with only an upper bound', () => {
+    expect(
+      validateCatalogEntry({
+        ...validEquipment,
+        coverageLitres: { max: 30 },
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('accepts coverageLitres with only a lower bound', () => {
+    expect(
+      validateCatalogEntry({
+        ...validEquipment,
+        coverageLitres: { min: 50 },
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('accepts defaultSettings with string + number + boolean values', () => {
+    expect(
+      validateCatalogEntry({
+        ...validEquipment,
+        defaultSettings: {
+          targetTemperatureC: 24,
+          mode: 'auto',
+          solenoidEnabled: true,
+        },
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('rejects an unknown category enum value', () => {
+    expect(validateCatalogEntry({ ...validEquipment, category: 'skimmer' }).ok).toBe(false);
+  });
+
+  it('rejects a negative wattage', () => {
+    expect(validateCatalogEntry({ ...validEquipment, wattage: -10 }).ok).toBe(false);
+  });
+
+  it('rejects a zero wattage (exclusiveMinimum 0)', () => {
+    expect(validateCatalogEntry({ ...validEquipment, wattage: 0 }).ok).toBe(false);
+  });
+
+  it('rejects a negative flowRateLph', () => {
+    expect(validateCatalogEntry({ ...validEquipment, flowRateLph: -50 }).ok).toBe(false);
+  });
+
+  it('rejects a non-integer coverageLitres.min', () => {
+    expect(
+      validateCatalogEntry({
+        ...validEquipment,
+        coverageLitres: { min: 50.5, max: 200 },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects a zero coverageLitres.max', () => {
+    expect(
+      validateCatalogEntry({
+        ...validEquipment,
+        coverageLitres: { max: 0 },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects a defaultSettings value with the wrong type (array)', () => {
+    expect(
+      validateCatalogEntry({
+        ...validEquipment,
+        defaultSettings: { schedule: [1, 2, 3] },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects a defaultSettings value with the wrong type (object)', () => {
+    expect(
+      validateCatalogEntry({
+        ...validEquipment,
+        defaultSettings: { nested: { wattage: 10 } },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects a defaultSettings value with the wrong type (null)', () => {
+    expect(
+      validateCatalogEntry({
+        ...validEquipment,
+        defaultSettings: { value: null },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects a missing color', () => {
+    const { color: _color, ...rest } = validEquipment;
+    expect(validateCatalogEntry(rest).ok).toBe(false);
+  });
+
+  it('rejects a missing category', () => {
+    const { category: _category, ...rest } = validEquipment;
+    expect(validateCatalogEntry(rest).ok).toBe(false);
+  });
+
+  it('rejects extraneous properties (additionalProperties: false)', () => {
+    expect(validateCatalogEntry({ ...validEquipment, surprise: true }).ok).toBe(false);
+  });
+
+  it('rejects unknown keys in coverageLitres (additionalProperties: false)', () => {
+    expect(
+      validateCatalogEntry({
+        ...validEquipment,
+        coverageLitres: { min: 100, max: 300, optimal: 200 },
+      }).ok,
+    ).toBe(false);
+  });
+});
+
 describe('formatError (defensive fallbacks)', () => {
   it('falls back to "invalid" when an AJV error lacks a message field', () => {
     const out = formatError({

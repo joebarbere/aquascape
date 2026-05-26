@@ -1,0 +1,15 @@
+{
+  "catalog": "core",
+  "id": "equipment.heater.eheim-jager-200",
+  "version": 1,
+  "name": "Eheim Jager TruTemp 200W",
+  "kind": "equipment",
+  "category": "heater",
+  "subcategory": "submersible",
+  "color": "#b85040",
+  "wattage": 200,
+  "coverageLitres": { "min": 150, "max": 200 },
+  "description": "Long-standing analog submersible heater with a thermosafe shut-off and ±0.5 degC accuracy. Glass body, dial thermostat — no display, but legendary reliability in the planted-tank community over decades of production.",
+  "tags": ["heater", "submersible", "analog", "reliable", "classic"],
+  "defaultSettings": { "targetTemperatureC": 24 }
+}

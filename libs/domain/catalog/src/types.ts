@@ -199,13 +199,67 @@ export interface LivestockEntry extends CatalogEntryBase {
   };
 }
 
+// ─── Equipment (Stage 7 F7.3) ─────────────────────────────────────────────
+
+/**
+ * A piece of aquarium equipment — filters, heaters, lights, CO2 systems —
+ * the user might attach to a tank. F7.3 surfaces these as inventory only:
+ * the catalog browser, an inspector swatch, and a settings record. The
+ * canvas is NOT changed — equipment does NOT paint as silhouettes in F7.3.
+ *
+ * - `category` drives the F7.3 UI filter chips and the future F7.4 setup
+ *   sheet's per-category grouping.
+ * - `subcategory` is a free-form secondary classification (e.g. `'canister'`
+ *   / `'hob'` / `'sponge'` / `'internal'` for filters; `'submersible'` for
+ *   heaters; `'led-pendant'` / `'led-clip'` for lights; `'diffuser'` /
+ *   `'pressurised'` for CO2). Reserved for UI-side filter pills.
+ * - `wattage` is the manufacturer-published power draw in watts. Used by
+ *   the inspector + (future F7.4) electrical-load summary. Omitted when
+ *   the manufacturer doesn't publish a figure rather than fabricated.
+ * - `flowRateLph` is filter-specific (litres per hour). Ignored when
+ *   undefined; non-filter equipment leaves it unset.
+ * - `coverageLitres` is the manufacturer's recommended tank-size window.
+ *   Either bound may be omitted (small clip lights often publish only an
+ *   upper bound; large lights only a lower bound). Both values must be
+ *   positive integers when present.
+ * - `defaultSettings` are seed values the future settings UI populates on
+ *   first attach. F7.3 v1 does NOT ship a settings editor — these are
+ *   display-only. The shape mirrors the document-side
+ *   `EquipmentEntry.settings` Record so a future "attach with defaults"
+ *   flow can copy this verbatim into the document.
+ * - `color` is a display swatch for the catalog browser; it is NOT a
+ *   rendered silhouette colour (equipment is not painted into the scene
+ *   in F7.3).
+ */
+export interface EquipmentEntry extends CatalogEntryBase {
+  kind: 'equipment';
+  category: 'filter' | 'heater' | 'light' | 'co2';
+  /** Free-form sub-classification used by future UI filter pills. */
+  subcategory?: string;
+  /** Manufacturer-published power draw, in watts. Integer preferred. */
+  wattage?: number;
+  /** Manufacturer-published flow rate (litres per hour). Filter-specific. */
+  flowRateLph?: number;
+  /** Recommended tank-size window. Either bound is optional. */
+  coverageLitres?: { min?: number; max?: number };
+  /** Seed settings populated on first attach. Display-only in F7.3 v1. */
+  defaultSettings?: Record<string, number | string | boolean>;
+  /** Display swatch in the catalog browser. NOT a rendered silhouette colour. */
+  color: HexColor;
+}
+
 // ─── Placeholders for later stages ────────────────────────────────────────
 //
 // Each future kind adds a branch here AND a matching schema branch. Until
 // then the loader rejects unknown kinds (verifiable via tests) so a typo'd
 // manifest doesn't silently slip through.
 
-export type CatalogEntry = SubstrateEntry | HardscapeEntry | PlantEntry | LivestockEntry;
+export type CatalogEntry =
+  | SubstrateEntry
+  | HardscapeEntry
+  | PlantEntry
+  | LivestockEntry
+  | EquipmentEntry;
 
 /**
  * Lookup table built from a validated catalog: `(catalog, id) -> entry`.

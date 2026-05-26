@@ -1,0 +1,15 @@
+{
+  "catalog": "core",
+  "id": "equipment.light.twinstar-600s",
+  "version": 1,
+  "name": "Twinstar 600S LED",
+  "kind": "equipment",
+  "category": "light",
+  "subcategory": "led-pendant",
+  "color": "#f5e6a8",
+  "wattage": 36,
+  "coverageLitres": { "min": 60, "max": 150 },
+  "description": "Mid-tier LED bar designed for 60 cm planted tanks; balanced spectrum tuned for plant chlorophyll absorption and red-leaf coloration. Sleek slimline housing makes it a popular ADA-style choice for clean Iwagumi layouts.",
+  "tags": ["light", "led", "planted", "high-light", "60cm", "iwagumi"],
+  "defaultSettings": { "photoperiodHours": 8, "intensityPct": 80 }
+}

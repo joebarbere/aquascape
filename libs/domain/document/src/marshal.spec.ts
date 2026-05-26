@@ -30,11 +30,28 @@ describe('documentToScene', () => {
     expect('livestock' in scene).toBe(false);
   });
 
+  it('puts equipment on the scene (F7.3 promotion)', () => {
+    const { scene } = documentToScene(EXAMPLE);
+    expect(scene.equipment).toEqual(EXAMPLE.equipment);
+  });
+
+  it('omits scene.equipment when the source doc omits it', () => {
+    const noEquipment = structuredClone(EXAMPLE);
+    delete noEquipment.equipment;
+    const { scene } = documentToScene(noEquipment);
+    expect('equipment' in scene).toBe(false);
+  });
+
   it('captures meta + remaining optional fields in the envelope', () => {
     const { envelope } = documentToScene(EXAMPLE);
     expect(envelope.meta).toEqual(EXAMPLE.meta);
-    expect(envelope.equipment).toEqual(EXAMPLE.equipment);
     expect(envelope.extensions).toEqual(EXAMPLE.extensions);
+  });
+
+  it('envelope no longer carries equipment (F7.3 promotion)', () => {
+    const { envelope } = documentToScene(EXAMPLE);
+    // After F7.3 the envelope is strictly { meta, renderHistory?, extensions? }.
+    expect('equipment' in envelope).toBe(false);
   });
 
   it('omits optional fields from the envelope when the source doc omits them', () => {
@@ -44,7 +61,6 @@ describe('documentToScene', () => {
     delete noOptionals.extensions;
     delete noOptionals.renderHistory;
     const { envelope } = documentToScene(noOptionals);
-    expect(envelope.equipment).toBeUndefined();
     expect(envelope.extensions).toBeUndefined();
     expect(envelope.renderHistory).toBeUndefined();
   });
@@ -86,11 +102,11 @@ describe('sceneToDocument', () => {
 
   it('omits optional fields from the saved doc when the envelope + scene omit them', () => {
     const { scene } = documentToScene(EXAMPLE);
-    // The example does carry livestock — strip it from the scene so the
-    // "omit when absent" path is exercised end-to-end.
-    const { livestock: _l, ...sceneNoLivestock } = scene;
+    // The example carries livestock + equipment — strip them from the scene
+    // so the "omit when absent" path is exercised end-to-end.
+    const { livestock: _l, equipment: _e, ...sceneNoOptionals } = scene;
     const envelopeOnlyMeta = { meta: EXAMPLE.meta };
-    const saved = sceneToDocument(sceneNoLivestock, envelopeOnlyMeta);
+    const saved = sceneToDocument(sceneNoOptionals, envelopeOnlyMeta);
     expect('livestock' in saved).toBe(false);
     expect('equipment' in saved).toBe(false);
     expect('renderHistory' in saved).toBe(false);
@@ -109,5 +125,19 @@ describe('sceneToDocument', () => {
     ];
     const saved = sceneToDocument({ ...scene, livestock: editedLivestock }, envelope);
     expect(saved.livestock).toEqual(editedLivestock);
+  });
+
+  it('saves equipment from the scene, not the envelope (F7.3 symmetry)', () => {
+    const { scene, envelope } = documentToScene(EXAMPLE);
+    // Mutate scene.equipment; saved doc must reflect scene.
+    const editedEquipment = [
+      {
+        id: '88888888-0000-4000-8000-000000088888',
+        ref: { catalog: 'core', id: 'filter.canister.test', version: 1 },
+        settings: { wattage: 12 },
+      },
+    ];
+    const saved = sceneToDocument({ ...scene, equipment: editedEquipment }, envelope);
+    expect(saved.equipment).toEqual(editedEquipment);
   });
 });

@@ -1,0 +1,16 @@
+{
+  "catalog": "core",
+  "id": "equipment.filter.fluval-207",
+  "version": 1,
+  "name": "Fluval 207 Performance Canister",
+  "kind": "equipment",
+  "category": "filter",
+  "subcategory": "canister",
+  "color": "#2d6fb0",
+  "wattage": 15,
+  "flowRateLph": 780,
+  "coverageLitres": { "max": 220 },
+  "description": "Mid-range canister filter popular with planted-tank hobbyists for its quiet operation and easy priming. Manufacturer-rated pump output is 780 L/h; independent tests typically measure 400-500 L/h with full media baskets, but the published figure is what ships with the product.",
+  "tags": ["canister", "planted", "community", "quiet"],
+  "defaultSettings": { "flowPct": 100 }
+}

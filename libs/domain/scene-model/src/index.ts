@@ -14,6 +14,7 @@ export type {
   SubstrateRegion,
   Layer,
   LivestockEntry,
+  EquipmentEntry,
   SceneObject,
   HardscapeObject,
   PlantObject,
@@ -47,6 +48,8 @@ export {
   iterateObjects,
   selectLivestock,
   selectLivestockById,
+  selectEquipment,
+  selectEquipmentById,
 } from './selectors';
 
 // ─── Commands ─────────────────────────────────────────────────────────────
@@ -133,6 +136,22 @@ export {
   removeLivestockEntry,
   updateLivestockQuantity,
 } from './livestock-commands';
+
+// ─── Equipment commands (Stage 7 F7.3) ────────────────────────────────────
+export type {
+  AddEquipmentEntryCommand,
+  EquipmentCommand,
+  RemoveEquipmentEntryCommand,
+  SetEquipmentNoteCommand,
+  UpdateEquipmentSettingsCommand,
+} from './equipment-commands';
+
+export {
+  addEquipmentEntry,
+  removeEquipmentEntry,
+  setEquipmentNote,
+  updateEquipmentSettings,
+} from './equipment-commands';
 
 // ─── History ──────────────────────────────────────────────────────────────
 export { createHistory } from './history';

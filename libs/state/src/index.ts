@@ -80,6 +80,8 @@ export {
   selectSubstrateRegions,
   selectLivestock,
   selectLivestockById,
+  selectEquipment,
+  selectEquipmentById,
   selectStockingWarnings,
   selectCanUndo,
   selectCanRedo,

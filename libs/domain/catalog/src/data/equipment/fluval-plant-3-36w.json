@@ -1,0 +1,15 @@
+{
+  "catalog": "core",
+  "id": "equipment.light.fluval-plant-3-36w",
+  "version": 1,
+  "name": "Fluval Plant 3.0 36W (61-85 cm)",
+  "kind": "equipment",
+  "category": "light",
+  "subcategory": "led-pendant",
+  "color": "#f8ecb4",
+  "wattage": 32,
+  "coverageLitres": { "min": 80, "max": 200 },
+  "description": "Bluetooth-controlled LED with the FluvalSmart app for programmable sunrise/sunset ramping, cloud cover effects, and per-channel intensity. Manufacturer specifies 32W input draw for the 36W-class fixture; the 36W figure is the LED-array rating, not the wall draw.",
+  "tags": ["light", "led", "bluetooth", "programmable", "planted", "ramping"],
+  "defaultSettings": { "photoperiodHours": 8, "intensityPct": 75 }
+}

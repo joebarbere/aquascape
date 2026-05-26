@@ -1,0 +1,15 @@
+{
+  "catalog": "core",
+  "id": "equipment.heater.cobalt-neo-therm-100",
+  "version": 1,
+  "name": "Cobalt Aquatics Neo-Therm 100W",
+  "kind": "equipment",
+  "category": "heater",
+  "subcategory": "submersible",
+  "color": "#d06856",
+  "wattage": 100,
+  "coverageLitres": { "min": 75, "max": 115 },
+  "description": "Flat-profile digital submersible heater with an integrated LED display and one-touch temperature setting. Shatterproof thermoplastic body makes it a popular choice for tanks with rambunctious cichlids or large pleco species that crack glass heaters.",
+  "tags": ["heater", "submersible", "digital", "shatterproof", "nano", "midsize"],
+  "defaultSettings": { "targetTemperatureC": 24 }
+}

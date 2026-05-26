@@ -1,0 +1,15 @@
+{
+  "catalog": "core",
+  "id": "equipment.heater.fluval-e300",
+  "version": 1,
+  "name": "Fluval E300 Advanced Electronic Heater",
+  "kind": "equipment",
+  "category": "heater",
+  "subcategory": "submersible",
+  "color": "#c25a4a",
+  "wattage": 300,
+  "coverageLitres": { "min": 200, "max": 400 },
+  "description": "Submersible electronic heater with an LCD display, dual temperature sensors, and a fish-guard plastic shroud. Strong choice for medium-to-large tanks where precision matters; the visible readout lets you spot a thermostat failure before livestock notice.",
+  "tags": ["heater", "submersible", "digital", "lcd", "200L+"],
+  "defaultSettings": { "targetTemperatureC": 24 }
+}

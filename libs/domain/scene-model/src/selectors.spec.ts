@@ -5,11 +5,13 @@ import {
   getObjectById,
   getObjectWithLayer,
   iterateObjects,
+  selectEquipment,
+  selectEquipmentById,
   selectLivestock,
   selectLivestockById,
 } from './selectors';
 import { makeScene } from './test-fixtures';
-import type { LivestockEntry } from './types';
+import type { EquipmentEntry, LivestockEntry } from './types';
 
 describe('selectors', () => {
   describe('getObjectById', () => {
@@ -149,6 +151,48 @@ describe('selectors', () => {
     it('returns null when livestock is undefined', () => {
       const scene = makeScene();
       expect(selectLivestockById(scene, entry.id)).toBeNull();
+    });
+  });
+
+  describe('selectEquipment', () => {
+    it('returns an empty array when scene.equipment is undefined', () => {
+      const scene = makeScene();
+      expect(selectEquipment(scene)).toEqual([]);
+    });
+
+    it('returns the underlying equipment array reference when present', () => {
+      const equipment: EquipmentEntry[] = [
+        {
+          id: 'e0000000-0000-4000-8000-000000000001',
+          ref: { catalog: 'core', id: 'filter.canister.eheim-2217', version: 1 },
+          settings: { wattage: 20 },
+        },
+      ];
+      const scene = { ...makeScene(), equipment };
+      expect(selectEquipment(scene)).toBe(equipment);
+    });
+  });
+
+  describe('selectEquipmentById', () => {
+    const entry: EquipmentEntry = {
+      id: 'e0000000-0000-4000-8000-000000000001',
+      ref: { catalog: 'core', id: 'filter.canister.eheim-2217', version: 1 },
+      settings: { wattage: 20 },
+    };
+
+    it('returns the entry by id', () => {
+      const scene = { ...makeScene(), equipment: [entry] };
+      expect(selectEquipmentById(scene, entry.id)).toBe(entry);
+    });
+
+    it('returns null when no entry has the id', () => {
+      const scene = { ...makeScene(), equipment: [entry] };
+      expect(selectEquipmentById(scene, 'missing')).toBeNull();
+    });
+
+    it('returns null when equipment is undefined', () => {
+      const scene = makeScene();
+      expect(selectEquipmentById(scene, entry.id)).toBeNull();
     });
   });
 });

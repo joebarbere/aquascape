@@ -148,8 +148,13 @@
   "equipment": [
     {
       "id": "6f708192-3000-4000-8000-000000003000",
-      "ref": { "catalog": "core", "id": "light.led.ada-aquasky", "version": 1 },
-      "settings": { "intensity": 80, "photoperiodHours": 7 }
+      "ref": { "catalog": "core", "id": "equipment.light.twinstar-600s", "version": 1 },
+      "settings": { "intensityPct": 80, "photoperiodHours": 8 }
+    },
+    {
+      "id": "6f708192-3000-4000-8000-000000003001",
+      "ref": { "catalog": "core", "id": "equipment.filter.fluval-207", "version": 1 },
+      "note": "Pre-filter sponge added for shrimp safety"
     }
   ],
   "extensions": {}

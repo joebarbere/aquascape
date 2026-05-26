@@ -31,6 +31,11 @@ import type { Transform } from '@aquascape/domain/geometry';
 import { identityTransform } from '@aquascape/domain/geometry';
 
 import {
+  applyEquipmentCommand,
+  invertEquipmentCommand,
+  type EquipmentCommand,
+} from './equipment-commands';
+import {
   applyLivestockCommand,
   invertLivestockCommand,
   type LivestockCommand,
@@ -412,6 +417,7 @@ export type Command =
   | SetTankStyleCommand
   | SubstrateCommand
   | LivestockCommand
+  | EquipmentCommand
   | CompositeCommand;
 
 // ─── Internal helpers ─────────────────────────────────────────────────────
@@ -925,6 +931,16 @@ export function applyCommand(scene: Scene, command: Command): CommandResult {
       return applyLivestockCommand(scene, command);
     }
 
+    case 'AddEquipmentEntry':
+    case 'RemoveEquipmentEntry':
+    case 'SetEquipmentNote':
+    case 'UpdateEquipmentSettings': {
+      // Equipment commands don't target any layer, so the locked-layer guard
+      // doesn't apply. Delegate to the equipment-commands module. Stage 7
+      // F7.3 — symmetric follow-up to the F7.1 livestock promotion.
+      return applyEquipmentCommand(scene, command);
+    }
+
     case 'Composite': {
       let current = scene;
       for (const child of command.children) {
@@ -1164,6 +1180,13 @@ export function invertCommand(scene: Scene, command: Command): Command {
     case 'RemoveLivestockEntry':
     case 'UpdateLivestockQuantity': {
       return invertLivestockCommand(scene, command);
+    }
+
+    case 'AddEquipmentEntry':
+    case 'RemoveEquipmentEntry':
+    case 'SetEquipmentNote':
+    case 'UpdateEquipmentSettings': {
+      return invertEquipmentCommand(scene, command);
     }
 
     case 'Composite': {
