@@ -9,7 +9,7 @@
 [![main CI](https://github.com/joebarbere/aquascape/actions/workflows/main.yml/badge.svg)](https://github.com/joebarbere/aquascape/actions/workflows/main.yml)
 [![PR CI](https://github.com/joebarbere/aquascape/actions/workflows/pr.yml/badge.svg)](https://github.com/joebarbere/aquascape/actions/workflows/pr.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
-[![Status: Stages 0–7 + 10 v1 complete](https://img.shields.io/badge/status-stages%200--7%20%2B%2010%20v1%20complete-brightgreen.svg)](#status--roadmap)
+[![Status: Stages 0–7 + 10 complete](https://img.shields.io/badge/status-stages%200--7%20%2B%2010%20complete-brightgreen.svg)](#status--roadmap)
 [![Platform: Web + Electron](https://img.shields.io/badge/platform-web%20%2B%20electron-informational.svg)](#platforms)
 
 </div>
@@ -27,7 +27,7 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 - 🌱 **Deterministic plant-growth simulation** — scrub a time slider to preview weeks 0–52 of growth
 - 📸 **Composite onto a real tank photo** — design against the actual shelf the tank will live on
 - 🤖 **Local + hosted AI render** behind one interface — coming in Stage 9
-- 🧊 **3D renderer** that consumes the same document — shipped in Stage 10 v1 (read-only); animated water + plants + fish are follow-ups
+- 🧊 **3D renderer** that consumes the same document — shipped in Stage 10 (read-only); animated water + plants + fish land in Stage 11
 - 💾 **Lossless `.aqua` document format** with a locked v1 schema + migration chain
 - 🆓 **Truly open-source**, MIT-licensed, no telemetry, no cloud lock-in
 
@@ -102,7 +102,7 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 - **Orbit camera controls** — drag to rotate around the tank, wheel to zoom, two-finger drag to pan
 - Glass tank with frame styling (rimless / framed / braced), substrate extruded from your profile, hardscape + plants rendered as 3D silhouettes with vigour-scaled growth
 - Ambient + directional lighting; the time slider works in 3D too (scrub plant growth over weeks)
-- **Read-only for v1** — editing happens in 2D; flip to 3D to visualise. Future polish: animated water surface, dynamic lighting / day-night cycle, swaying plants, fish behaviours
+- **Read-only in Stage 10** — editing happens in 2D; flip to 3D to visualise. The ambient-scene polish (animated water surface, dynamic lighting / day-night cycle, swaying plants) plus fish behaviours all land in Stage 11 — see [`plans/stage-11-animated-livestock.md`](./plans/stage-11-animated-livestock.md)
 
 ### 📦 Templates
 
@@ -144,7 +144,7 @@ pnpm exec nx run-many -t lint                # module-boundary lint over every p
 
 ## Status & Roadmap
 
-The 11-stage roadmap lives in [`aquascape-development-plan.md`](./aquascape-development-plan.md) §4.
+The roadmap lives in [`aquascape-development-plan.md`](./aquascape-development-plan.md) §4 (Stages 0–10) and is extended by two planned stages in [`plans/`](./plans/).
 
 | Stage | Theme | Status |
 | --- | --- | --- |
@@ -156,10 +156,11 @@ The 11-stage roadmap lives in [`aquascape-development-plan.md`](./aquascape-deve
 | 5 | Templates, snapping, composition overlays | ✅ |
 | 6 | Image export, layout summary, photo backdrop, PWA install, packaged installers | ✅ |
 | 7 | Livestock & equipment + stocking guidance + setup sheet | ✅ |
-| 8 | Community gallery (browse + remix shared layouts) | ⏳ Planned |
-| 9 | AI photorealistic render (local + hosted) | ⏳ Planned |
-| 10 v1 | 3D renderer (Three.js / WebGL — read-only) | ✅ |
-| 10 v2+ | Animated water, dynamic lighting, plant sway, fish behaviours | ⏳ Next |
+| 8 | Community gallery (browse + remix shared layouts) — see [`plans/stage-8-community-gallery/`](./plans/stage-8-community-gallery/) | 📐 Planned |
+| 9 | AI photorealistic render (local + hosted) — see [`plans/stage-9-ai-render/`](./plans/stage-9-ai-render/) | 📐 Planned |
+| 10 | 3D renderer (Three.js / WebGL — read-only) | ✅ |
+| 11 | Animated livestock + ECS-driven behaviors (schooling, territoriality, fear, feeding, flow field, bubbles) **plus** ambient 3D polish — animated water surface, dynamic lighting / day-night cycle, plant sway (substage F11.7). See [`plans/stage-11-animated-livestock.md`](./plans/stage-11-animated-livestock.md) and the [research bibliography](./docs/research/stage-11-livestock-subsystem.md). | 📐 Planned |
+| 12 | Release pipeline — `pnpm release <version>`, electron-builder installers, GitHub Releases. Version scheme + first-release tag are an open decision (tracked inside the plan + a forthcoming ADR-0005); the script ships scheme-agnostic. See [`plans/stage-12-release-pipeline.md`](./plans/stage-12-release-pipeline.md). | 📐 Planned |
 
 ---
 
@@ -195,7 +196,7 @@ libs/
   rendering/
     renderer-api/  The `SceneRenderer` interface contract
     renderer-2d/   Canvas2D implementation (editing surface)
-    renderer-3d/   Three.js implementation (read-only 3D view, Stage 10 v1)
+    renderer-3d/   Three.js implementation (read-only 3D view, Stage 10)
   features/        Angular feature libs (one per tool / panel)
   platform/        platform-api interface + platform-web + platform-electron
   state/           NgRx scene / document / selection slices
@@ -224,7 +225,7 @@ The libs below all ship today. Empty placeholders: `libs/ui/`, `apps/web-e2e/`, 
 #### Rendering
 
 - `libs/rendering/renderer-api/` + `libs/rendering/renderer-2d/` — `SceneRenderer` interface + `Canvas2DRenderer`. Paint order: **backdrop photo** → **wall background** → tank background → grid → tank outline → **substrate** → water tint → frame overlay → **hardscape silhouettes** → **plants** → **composition overlays** → **snap alignment guides** → **selection handles**. `hitTest` is fully wired with handle-beats-body when a selection is supplied. F5.3 overlays accept an `OverlayOptions` parameter on `render()` only (not `hitTest` — they are non-interactive); the call is a true no-op when omitted or when every flag is false. Idempotent, DPR-aware, listener-clean on dispose.
-- `libs/rendering/renderer-3d/` (Stage 10 v1) — `Three3DRenderer` implements the same `SceneRenderer` interface against Three.js + WebGL. Per-element scene builders (`tank-mesh.ts` for the glass box + frame styling, `substrate-mesh.ts` extruding the profile, `hardscape-mesh.ts` + `plant-mesh.ts` extruding the catalog silhouettes, `lighting.ts` for ambient + directional, `camera.ts` for the framed perspective view). OrbitControls binds to the canvas for orbit / zoom / pan. `hitTest` returns `null` (read-only in v1 — no selection or editing in 3D). `Viewport` is 2D-only and the 3D renderer ignores it; OrbitControls is the camera source of truth. Idempotent + leak-safe — the rebuild path disposes prior geometries + materials before swapping.
+- `libs/rendering/renderer-3d/` (Stage 10) — `Three3DRenderer` implements the same `SceneRenderer` interface against Three.js + WebGL. Per-element scene builders (`tank-mesh.ts` for the glass box + frame styling, `substrate-mesh.ts` extruding the profile, `hardscape-mesh.ts` + `plant-mesh.ts` extruding the catalog silhouettes, `lighting.ts` for ambient + directional, `camera.ts` for the framed perspective view). OrbitControls binds to the canvas for orbit / zoom / pan. `hitTest` returns `null` (read-only — no selection or editing in 3D). `Viewport` is 2D-only and the 3D renderer ignores it; OrbitControls is the camera source of truth. Idempotent + leak-safe — the rebuild path disposes prior geometries + materials before swapping.
 
 #### Platform
 
@@ -270,7 +271,7 @@ The libs below all ship today. Empty placeholders: `libs/ui/`, `apps/web-e2e/`, 
 
 ## Contributing & docs
 
-- **The spec:** [`aquascape-development-plan.md`](./aquascape-development-plan.md) — 11-stage roadmap, architectural decisions, feature traceability.
+- **The spec:** [`aquascape-development-plan.md`](./aquascape-development-plan.md) — Stages 0–10 roadmap, architectural decisions, feature traceability. Stages 11 + 12 are extension plans living under [`plans/`](./plans/).
 - **Working on the codebase:** [`CLAUDE.md`](./CLAUDE.md) carries architecture invariants, the Definition of Done, dev commands, and a table mapping each `docs/caveats/*.md` file to its load trigger so you only pull in the gotchas relevant to your area.
 - **Architecture decisions:** [`docs/decisions/`](./docs/decisions/) — the foundational ADRs.
 - **Area gotchas:** [`docs/caveats/`](./docs/caveats/) — when a change touches `libs/domain/document/`, load `docs/caveats/document-format.md`; when it touches `libs/rendering/renderer-2d/`, load `docs/caveats/renderer-2d.md`; etc.

@@ -54,10 +54,6 @@ Plan §"Stage <N>" F<X.Y>; <relevant architecture sections>.
 
 ## Index
 
-### Cross-cutting
-
-- [Release pipeline — versioning, installers, GitHub releases](release-pipeline.md) — first release cuts `v0.1.0`; version scheme covers the full pre-v1 / v1.0 / post-v1 progression.
-
 ### Critical path to v1.0
 
 - **Stage 0 — Foundation & Walking Skeleton** ([dir](stage-0-foundation/))
@@ -133,3 +129,11 @@ Plan §"Stage <N>" F<X.Y>; <relevant architecture sections>.
   - [F10.1 — Three.js renderer](stage-10-3d-renderer/F10.1-threejs-renderer.md)
   - [F10.2 — 2D/3D view toggle](stage-10-3d-renderer/F10.2-2d-3d-view-toggle.md)
   - [F10.3 — 3D assets + fallback](stage-10-3d-renderer/F10.3-3d-assets-and-fallback.md)
+
+- **Stage 11 — Animated livestock + ECS behaviors** ([plan](stage-11-animated-livestock.md))
+  - Substages F11.1–F11.6 inline in the plan: procedural fish meshes + ECS scaffolding, schooling + stratification, territoriality + nipping + fear, feeding + grazing + curiosity, flow field + SDF collision + bubbles, polish + per-species presets + perf budget.
+  - Anchoring research: [`docs/research/stage-11-livestock-subsystem.md`](../docs/research/stage-11-livestock-subsystem.md).
+
+### Cross-cutting
+
+- **Stage 12 — Release pipeline** ([plan](stage-12-release-pipeline.md)) — first release cuts `v0.1.0`; version scheme covers the full pre-v1 / v1.0 / post-v1 progression. Lands when we're ready to ship signed installers; the plan-as-spec is already locked.
