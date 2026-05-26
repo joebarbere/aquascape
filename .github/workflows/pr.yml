@@ -210,7 +210,9 @@ jobs:
       # on the @playwright/test version so we re-download only on bump.
       - name: Read Playwright version
         id: playwright-version
-        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+        run: |
+          version=$(node -p 'require("@playwright/test/package.json").version')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Cache Playwright browsers
         id: playwright-cache

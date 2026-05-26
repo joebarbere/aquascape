@@ -71,8 +71,10 @@ jobs:
       # otherwise actions/cache hits and the install is a no-op.
       - name: Read Playwright version
         id: playwright-version
-        run: echo "version=$(node -p \"require('@playwright/test/package.json').version\")" >> "$GITHUB_OUTPUT"
         shell: bash
+        run: |
+          version=$(node -p 'require("@playwright/test/package.json").version')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
