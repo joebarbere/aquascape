@@ -35,4 +35,5 @@ adds a view-only overlay) need multiple files — load all of them.
 | [`catalog.md`](catalog.md) | `libs/domain/catalog/` — adding entry kinds, schema branches, manifest authoring discipline. |
 | [`stage-7-livestock-equipment.md`](stage-7-livestock-equipment.md) | `libs/features/livestock-equipment/`, `libs/domain/stocking/`, or any livestock / equipment command — F7.1 / F7.2 / F7.3. |
 | [`livestock-ecs.md`](livestock-ecs.md) | `libs/domain/livestock-ecs/`, `libs/domain/fish-anatomy/`, `libs/domain/livestock-behaviors/`, `libs/rendering/livestock-renderer-3d/`, `apps/web/src/app/livestock-simulation.service.ts` — Stage 11 ECS world, ParamStore + tankAabb, sim-vs-render rate, determinism rules, Couzin three-zone schooling, system ordering. |
+| [`e2e.md`](e2e.md) | `apps/web-e2e/`, `apps/web/src/app/debug-hook.ts`, the e2e CI job — Playwright config + dev-server race, debug-hook contract, variance/diff floors, browser cache strategy. |
 | [`build-test.md`](build-test.md) | New lib scaffolding, Jest coverage gates, CI selectors, packaging (`pnpm package:desktop`), icons pipeline, app-name + version display, userData path. |

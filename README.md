@@ -140,6 +140,8 @@ pnpm exec nx graph                           # browse the dependency graph
 pnpm exec nx run-many -t test                # full unit-test suite
 pnpm exec nx test <project> --configuration=ci  # with coverage + threshold gate
 pnpm exec nx run-many -t lint                # module-boundary lint over every project
+pnpm exec playwright install chromium        # one-time, ~150 MB — Playwright browser binaries
+pnpm exec nx run web-e2e:e2e                 # boots `nx serve web` + runs real-browser specs
 ```
 
 ---
@@ -219,7 +221,7 @@ docs/
 <details>
 <summary><strong>Detailed implementation notes per lib</strong> (click to expand)</summary>
 
-The libs below all ship today. Empty placeholders: `libs/ui/`, `apps/web-e2e/`, `apps/desktop-e2e/`.
+The libs below all ship today. Empty placeholders: `libs/ui/`, `apps/desktop-e2e/`.
 
 #### Domain (framework-free pure logic)
 
@@ -284,7 +286,7 @@ The libs below all ship today. Empty placeholders: `libs/ui/`, `apps/web-e2e/`, 
 - **Architecture decisions:** [`docs/decisions/`](./docs/decisions/) — the foundational ADRs.
 - **Area gotchas:** [`docs/caveats/`](./docs/caveats/) — when a change touches `libs/domain/document/`, load `docs/caveats/document-format.md`; when it touches `libs/rendering/renderer-2d/`, load `docs/caveats/renderer-2d.md`; etc.
 
-CI runs `nx affected -t lint test build` plus a per-lib coverage gate on every PR, and the full matrix on every push to `main`. The `document-round-trip` job is required — a format/loader regression fails the PR.
+CI runs `nx affected -t lint test build` plus a per-lib coverage gate, a real-browser Playwright e2e job (chromium, cached binaries, asserts a fish actually paints in 3D), and the `document-round-trip` property suite — on every PR. The full OS matrix runs on every push to `main`. The `document-round-trip` job is required — a format/loader regression fails the PR.
 
 ---
 

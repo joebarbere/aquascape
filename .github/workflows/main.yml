@@ -66,9 +66,30 @@ jobs:
       - name: Build
         run: pnpm exec nx run-many -t build --parallel=3
 
-      # E2E for Stage 0 is opt-in / placeholder. Per the F0.7 spec, Electron e2e
-      # on Windows can be flaky during initial setup — keep continue-on-error
-      # until end of Stage 1, then harden.
+      # Playwright browser binaries — needed by apps/web-e2e on every OS.
+      # Read the version from the lockfile so this re-downloads on a bump,
+      # otherwise actions/cache hits and the install is a no-op.
+      - name: Read Playwright version
+        id: playwright-version
+        run: echo "version=$(node -p \"require('@playwright/test/package.json').version\")" >> "$GITHUB_OUTPUT"
+        shell: bash
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+            ~/AppData/Local/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+        shell: bash
+
+      # E2E: web-e2e is real (Playwright). Electron e2e (apps/desktop-e2e)
+      # is still a placeholder; keep continue-on-error until that lands too,
+      # then split into per-target steps and drop the flag for web-e2e.
       - name: E2E
         continue-on-error: true
         run: pnpm exec nx run-many -t e2e --parallel=1

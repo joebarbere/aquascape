@@ -42,6 +42,7 @@ import {
   HostListener,
   NgZone,
   OnDestroy,
+  OnInit,
   ViewChild,
   computed,
   effect,
@@ -134,6 +135,7 @@ import type {
 import { SceneActions, SelectionActions, selectScene, selectSelectedIds } from '@aquascape/state';
 import { Store } from '@ngrx/store';
 
+import { attachDebugHook, detachDebugHook } from './debug-hook';
 import { defaultViewport } from './default-viewport';
 import { applyMoveDrag, applyRotateDrag, applyScaleDrag } from './drag-math';
 import { LivestockSimulationService } from './livestock-simulation.service';
@@ -645,7 +647,7 @@ type DragState =
     `,
   ],
 })
-export class AppComponent implements AfterViewInit, OnDestroy {
+export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   // Stage 10 F10.3 — two concrete renderers, one active at a time. The
   // `activeRenderer` / `activeCanvas` accessors below resolve which pair
   // is live based on `viewMode.mode()`. Both renderers stay alive (we
@@ -807,6 +809,18 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private mqlTablet: MediaQueryList | null = null;
   private mqlListener: ((e: MediaQueryListEvent) => void) | null = null;
 
+  ngOnInit(): void {
+    // Stage 11 follow-up — wire the read-only Playwright introspection
+    // hook on `window.__aquascape_debug__`. No-op in production (the
+    // function early-returns when `isDevMode()` is false), so this is
+    // safe in every build configuration. See `./debug-hook.ts`.
+    attachDebugHook({
+      store: this.store,
+      livestockSim: this.livestockSim,
+      viewMode: this.viewMode,
+    });
+  }
+
   ngAfterViewInit(): void {
     void this.fileService;
     void this.dialogService;
@@ -966,6 +980,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   });
 
   ngOnDestroy(): void {
+    // Clear the Playwright debug hook BEFORE we tear down the services
+    // it references — otherwise a stray e2e probe between destroy + the
+    // next bootstrap would call into a disposed renderer / world.
+    detachDebugHook();
     this.teardown();
     this.cancelDrag(); // detach any in-flight document listeners
     this.detachHandleListeners();

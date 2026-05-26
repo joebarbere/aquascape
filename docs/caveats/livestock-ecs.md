@@ -76,6 +76,14 @@ F11.2 Wave 2 bumped the catalog manifest from `schemaVersion: 2 → 3` and added
 - **Resolution heuristics:** explicit `tags: ['depth:top'|'depth:mid'|'depth:bottom']` wins; then `group: 'shrimp' | 'snail'` → bottom; then id substring (`'hatchet'/'gourami'/'pencilfish'` → top, `'cory'/'kuhli'/'pleco'/'oto'/'loach'` → bottom); fish/unknown default to mid.
 - **F11.3+ extensions** will add `territory?`, `nipping?`, `fear?`, `feeding?`, `curiosity?` to the same block. They'll land additively, no schema bump per substage; manifest schemaVersion only bumps when a non-additive change forces it.
 
-## Coverage gap
+## Real-browser verification — closed
 
-- **No real-browser smoke test yet.** Component-level specs cover the wiring (3D mode injects `livestockWorld`; service registers behaviours; world `step()` runs at `SIM_DT` from the RAF tick), and the schooling-system phase tests prove the math under headless conditions (polarisation, torus-mill, swarm). **Nothing verifies that a fish pixel actually appears on screen, that the depth bands look right at typical tank sizes, or that the orbit-camera + livestock interact correctly.** The ShaderMaterial's GLSL compile is regex-checked against shader source. Filling this in requires wiring the `apps/web-e2e` Playwright target (still a Stage-0 `nx:noop` placeholder); F11.3+ behaviour visibility is increasingly hard to verify without it — worth landing before F11.3.
+The earlier coverage gap (no test could verify a fish pixel actually paints) is closed. `apps/web-e2e/src/livestock-3d.spec.ts` drives a real chromium against `nx serve web`:
+
+- Toggles to 3D mode via `Ctrl+Shift+3`.
+- Adds tetras through `LivestockToolComponent` (the real user flow — not the debug hook).
+- Asserts via `window.__aquascape_debug__.getEntityCount()` that the ECS world holds the expected entities.
+- Asserts pixel-channel variance on the 3D canvas > 100 (proves not blank — typical scene measures ~7k).
+- Asserts frame-to-frame pixel diff > 50 over 800 ms (proves RAF + ECS + InstancedMesh attribute updates are alive — tail wiggle produces ~500 px diff).
+
+Load `docs/caveats/e2e.md` for the load-bearing details: debug-hook contract, Playwright config + dev-server race, variance/diff floors, CI cache strategy. F11.3+ behaviour specs extend this same spec rather than re-introducing the gap.

@@ -6,10 +6,19 @@
   "tags": ["scope:app", "type:app", "platform:web", "kind:e2e"],
   "implicitDependencies": ["web"],
   "targets": {
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
     "e2e": {
-      "executor": "nx:noop",
+      "executor": "@nx/playwright:playwright",
+      "outputs": ["{workspaceRoot}/dist/.playwright/apps/web-e2e"],
       "options": {
-        "_comment": "Real Playwright e2e target lands in F0.6 / F0.7. Stage 0 placeholder."
+        "config": "apps/web-e2e/playwright.config.ts"
+      },
+      "configurations": {
+        "ci": {
+          "reporter": "blob"
+        }
       }
     }
   }

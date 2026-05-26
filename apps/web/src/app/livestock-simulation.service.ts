@@ -401,16 +401,19 @@ export class LivestockSimulationService implements OnDestroy {
         w: Math.cos(yaw * 0.5),
       };
 
+      // Either species params or spawnFish defaults — never both. Spread the
+      // animation overrides only when present so `exactOptionalPropertyTypes`
+      // doesn't see `undefined` as a value (it forbids explicit `undefined`
+      // even where the field is optional).
       world.spawnFish({
         archetype,
         speciesId: species.speciesId,
         bodyLengthMm,
         position: { x, y, z },
         orientation,
-        // Either species params or spawnFish defaults — never both.
-        tailBeatFreq: anim?.tailBeatFreq,
-        ampHead: anim?.ampHead,
-        ampTail: anim?.ampTail,
+        ...(anim?.tailBeatFreq !== undefined ? { tailBeatFreq: anim.tailBeatFreq } : {}),
+        ...(anim?.ampHead !== undefined ? { ampHead: anim.ampHead } : {}),
+        ...(anim?.ampTail !== undefined ? { ampTail: anim.ampTail } : {}),
         phaseOffset: rPhase * Math.PI * 2,
         behaviorHandleIdx: species.handleIdx,
       });

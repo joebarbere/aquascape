@@ -171,3 +171,68 @@ jobs:
 
       - name: Run document-round-trip property tests
         run: pnpm exec nx test testing -t document-round-trip
+
+  e2e:
+    # Real-browser Playwright e2e for apps/web — boots `nx serve web`, drives
+    # chromium against http://localhost:4200. Covers the F11.1+ "fish actually
+    # render in 3D" path that unit + component tests can't reach (no real
+    # WebGL context in jsdom). See docs/caveats/livestock-ecs.md.
+    name: e2e (web Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: nrwl/nx-set-shas@v4
+        with:
+          main-branch-name: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Playwright browser binaries are ~150 MB; cache between runs keyed
+      # on the @playwright/test version so we re-download only on bump.
+      - name: Read Playwright version
+        id: playwright-version
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright (chromium + system deps)
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Use nx affected so the e2e suite only runs when web-e2e or any of its
+      # dependencies (implicit dep on `web`) changed — keeps PR latency in
+      # check while still gating the load-bearing render path.
+      - name: Run e2e (affected)
+        run: pnpm exec nx affected -t e2e --base=$NX_BASE --head=$NX_HEAD --parallel=1 --configuration=ci
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: dist/.playwright/apps/web-e2e/**
+          if-no-files-found: ignore
+          retention-days: 7
