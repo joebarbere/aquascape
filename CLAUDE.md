@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-**Stages 0–6 complete, Stage 7 F7.1 + F7.2 + F7.3 landed. Next:** F7.4 — extend the F6.2 layout-summary helpers (`libs/features/export/`) with livestock + equipment sections and inline the stocking-warnings list.
+**Stages 0–7 complete. Next:** Stage 8 — Community Gallery (optional/online: browse + remix shared `.aqua` layouts via a pluggable backend interface; the FOSS build hides the gallery behind a capability flag so offline / self-host installs stay gallery-less).
 
 `README.md` carries the long-form story of what shipped; this file only mentions the *next* concrete thing.
 
