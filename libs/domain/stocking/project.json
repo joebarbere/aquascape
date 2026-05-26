@@ -1,0 +1,19 @@
+{
+  "name": "domain-stocking",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/stocking/src",
+  "projectType": "library",
+  "tags": ["scope:domain", "type:lib", "framework:none", "domain:stocking"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/domain/stocking",
+        "main": "libs/domain/stocking/src/index.ts",
+        "tsConfig": "libs/domain/stocking/tsconfig.lib.json",
+        "assets": ["libs/domain/stocking/*.md"]
+      }
+    }
+  }
+}

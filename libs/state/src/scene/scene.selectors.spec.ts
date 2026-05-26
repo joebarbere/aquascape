@@ -11,6 +11,7 @@ import {
   selectLivestock,
   selectLivestockById,
   selectScene,
+  selectStockingWarnings,
   selectSceneState,
   selectTank,
   selectTankPresetRef,
@@ -125,6 +126,33 @@ describe('scene.selectors', () => {
 
     it('returns null on an empty livestock array', () => {
       expect(selectLivestockById(entry.id).projector([])).toBeNull();
+    });
+  });
+
+  describe('selectStockingWarnings', () => {
+    it('returns no warnings on an empty default scene', () => {
+      const scene = defaultScene();
+      expect(selectStockingWarnings.projector(scene)).toEqual([]);
+    });
+
+    it('returns a bioload warning when overstocked', () => {
+      // Default tank is 600 × 360 × 360 mm = 77.76 L. 200 neon tetras
+      // (adult 35 mm, low bioload) → weighted body cm = 200 × 3.5 × 0.5 =
+      // 350 cm; ratio = 350 / 77.76 ≈ 4.5 — well above the 2.5 floor for
+      // "severely overstocked".
+      const scene: Scene = {
+        ...defaultScene(),
+        livestock: [
+          {
+            id: 'a0000000-0000-4000-8000-000000000001',
+            ref: { catalog: 'core', id: 'livestock.fish.neon-tetra', version: 1 },
+            quantity: 200,
+          },
+        ],
+      };
+      const warnings = selectStockingWarnings.projector(scene);
+      expect(warnings.length).toBeGreaterThan(0);
+      expect(warnings.map((w) => w.code)).toContain('bioload-severely-overstocked');
     });
   });
 });

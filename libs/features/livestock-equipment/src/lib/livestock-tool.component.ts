@@ -37,9 +37,10 @@ import {
   updateLivestockQuantity,
 } from '@aquascape/domain/scene-model';
 import type { LivestockEntry } from '@aquascape/domain/scene-model';
+import type { StockingWarning } from '@aquascape/domain/stocking';
 import { STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
 import type { StorageService } from '@aquascape/platform/platform-api';
-import { SceneActions, selectLivestock } from '@aquascape/state';
+import { SceneActions, selectLivestock, selectStockingWarnings } from '@aquascape/state';
 
 type GroupFilter = 'all' | 'fish' | 'shrimp' | 'snail';
 
@@ -197,6 +198,50 @@ interface InventoryRow {
                 >
                   ×
                 </button>
+              </li>
+            }
+          </ul>
+        }
+
+        <!-- ── Stocking guidance (F7.2) ────────────────────────────────── -->
+        @if (warnings().length > 0) {
+          <h3 class="livestock-tool__subheading">Stocking guidance</h3>
+          <ul class="livestock-tool__warnings" role="list">
+            @for (w of warnings(); track w.id) {
+              <li
+                class="warning"
+                [class.warning--error]="w.severity === 'error'"
+                [class.warning--warning]="w.severity === 'warning'"
+                [class.warning--info]="w.severity === 'info'"
+                [attr.role]="w.severity === 'error' ? 'alert' : 'status'"
+                [attr.aria-label]="w.severity + ': ' + w.message"
+              >
+                <button
+                  type="button"
+                  class="warning__toggle"
+                  [attr.aria-expanded]="isExpanded(w.id)"
+                  [attr.aria-controls]="'warning-' + w.id + '-explanation'"
+                  (click)="toggleExpanded(w.id)"
+                >
+                  <span class="warning__icon" aria-hidden="true">{{
+                    severityIcon(w.severity)
+                  }}</span>
+                  <span class="warning__message">{{ w.message }}</span>
+                  <span
+                    class="warning__chevron"
+                    [class.warning__chevron--open]="isExpanded(w.id)"
+                    aria-hidden="true"
+                    >›</span
+                  >
+                </button>
+                @if (isExpanded(w.id)) {
+                  <p
+                    class="warning__explanation"
+                    [id]="'warning-' + w.id + '-explanation'"
+                  >
+                    {{ w.explanation }}
+                  </p>
+                }
               </li>
             }
           </ul>
@@ -450,6 +495,90 @@ interface InventoryRow {
         color: #fff;
         outline: none;
       }
+      .livestock-tool__warnings {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .warning {
+        border: 1px solid var(--border, #e0e0e0);
+        border-left-width: 3px;
+        border-radius: 4px;
+        background: var(--surface-2, #fff);
+        overflow: hidden;
+      }
+      .warning--error {
+        border-left-color: var(--danger, #b94a4a);
+      }
+      .warning--warning {
+        border-left-color: var(--accent-warning, #c98a2b);
+      }
+      .warning--info {
+        border-left-color: var(--accent-info, #4a7fb9);
+      }
+      .warning__toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        padding: 6px 8px;
+        background: transparent;
+        color: inherit;
+        border: none;
+        cursor: pointer;
+        font: inherit;
+        text-align: left;
+      }
+      .warning__toggle:hover,
+      .warning__toggle:focus-visible {
+        background: var(--surface-hover, #f0f0f0);
+        outline: none;
+      }
+      .warning__icon {
+        font-size: 13px;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+      .warning--error .warning__icon {
+        color: var(--danger, #b94a4a);
+      }
+      .warning--warning .warning__icon {
+        color: var(--accent-warning, #c98a2b);
+      }
+      .warning--info .warning__icon {
+        color: var(--accent-info, #4a7fb9);
+      }
+      .warning__message {
+        flex: 1;
+        font-size: 12px;
+      }
+      .warning__chevron {
+        display: inline-block;
+        font-size: 14px;
+        line-height: 1;
+        width: 12px;
+        color: var(--text-muted, #777);
+        transition: transform 0.15s ease;
+        transform: rotate(0deg);
+      }
+      .warning__chevron--open {
+        transform: rotate(90deg);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .warning__chevron {
+          transition: none;
+        }
+      }
+      .warning__explanation {
+        margin: 0;
+        padding: 0 8px 8px 26px;
+        font-size: 11px;
+        line-height: 1.4;
+        color: var(--text-muted, #555);
+      }
     `,
   ],
 })
@@ -519,6 +648,21 @@ export class LivestockToolComponent {
   );
 
   readonly inventoryCount = computed<number>(() => this.inventoryRows().length);
+
+  // Stocking warnings (F7.2). Streamed from the store so the existing
+  // selector memoization carries through; toSignal feeds the template via
+  // a signal source so OnPush refreshes on update. `initialValue: null`
+  // matches the livestock signal pattern under `exactOptionalPropertyTypes`.
+  private readonly warnings$ = this.store.select(selectStockingWarnings);
+  private readonly warningsSignal = toSignal<StockingWarning[] | null>(this.warnings$, {
+    initialValue: null,
+  });
+  readonly warnings = computed<ReadonlyArray<StockingWarning>>(
+    () => this.warningsSignal() ?? [],
+  );
+
+  /** Ids of currently-expanded warning rows. Local UI state — not persisted. */
+  private readonly expandedWarningIds = signal<ReadonlySet<string>>(new Set());
 
   constructor() {
     // Hydrate collapsed state. Failures non-fatal.
@@ -627,5 +771,34 @@ export class LivestockToolComponent {
     this.store.dispatch(
       SceneActions.dispatchCommand({ command: removeLivestockEntry(entry.id) }),
     );
+  }
+
+  // ── Stocking guidance (F7.2) ──────────────────────────────────────────
+
+  isExpanded(warningId: string): boolean {
+    return this.expandedWarningIds().has(warningId);
+  }
+
+  toggleExpanded(warningId: string): void {
+    this.expandedWarningIds.update((set) => {
+      const next = new Set(set);
+      if (next.has(warningId)) {
+        next.delete(warningId);
+      } else {
+        next.add(warningId);
+      }
+      return next;
+    });
+  }
+
+  severityIcon(severity: StockingWarning['severity']): string {
+    switch (severity) {
+      case 'error':
+        return '⚠';
+      case 'warning':
+        return '!';
+      case 'info':
+        return 'ⓘ';
+    }
   }
 }

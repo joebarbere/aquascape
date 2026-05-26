@@ -18,6 +18,7 @@ export {
   selectSubstrateRegions,
   selectLivestock,
   selectLivestockById,
+  selectStockingWarnings,
   selectCanUndo,
   selectCanRedo,
 } from './scene.selectors';

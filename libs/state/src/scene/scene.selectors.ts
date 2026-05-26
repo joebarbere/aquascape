@@ -13,7 +13,9 @@
 // peek at the stack lengths instead so consumers can disable buttons without
 // dispatching speculatively.
 
+import { coreCatalog } from '@aquascape/domain/catalog';
 import type { LivestockEntry } from '@aquascape/domain/scene-model';
+import { evaluateStocking, type StockingWarning } from '@aquascape/domain/stocking';
 import { createSelector } from '@ngrx/store';
 
 import { sceneFeature } from './scene.reducer';
@@ -68,6 +70,25 @@ export const selectLivestockById = (id: string) =>
     selectLivestock,
     (livestock): LivestockEntry | null => livestock.find((e) => e.id === id) ?? null,
   );
+
+/**
+ * Selects the current stocking-guidance warnings (Stage 7 F7.2). Runs the
+ * pure rules engine in `@aquascape/domain/stocking` against the whole
+ * scene + the bundled core catalog. NgRx memoizes the result, so the
+ * returned array reference is stable while the scene's tank/livestock
+ * don't change. The output ordering is deterministic — see
+ * `evaluateStocking` for the sort key.
+ *
+ * Why selectScene (not finer-grained inputs): evaluateStocking only reads
+ * `scene.tank` + `scene.livestock`, but exposing both via composed
+ * selectors would just wrap two already-memoized selectors. The rules
+ * engine runs in < 1 ms on realistic inputs; recomputing on unrelated
+ * scene changes (substrate, layers) is cheap.
+ */
+export const selectStockingWarnings = createSelector(
+  selectScene,
+  (scene): StockingWarning[] => evaluateStocking(scene, coreCatalog),
+);
 
 /** True when there is at least one entry in the history's `past` stack. */
 export const selectCanUndo = createSelector(

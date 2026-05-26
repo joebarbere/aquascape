@@ -6,7 +6,8 @@ import type { LivestockEntry as CatalogLivestockEntry } from '@aquascape/domain/
 import type { LivestockEntry } from '@aquascape/domain/scene-model';
 import { STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
 import type { StorageService } from '@aquascape/platform/platform-api';
-import { SceneActions, selectLivestock } from '@aquascape/state';
+import type { StockingWarning } from '@aquascape/domain/stocking';
+import { SceneActions, selectLivestock, selectStockingWarnings } from '@aquascape/state';
 
 import {
   LIVESTOCK_TOOL_COLLAPSED_KEY,
@@ -53,18 +54,26 @@ function configure(
   options: {
     storage?: FakeStorageService;
     livestock?: LivestockEntry[];
+    warnings?: StockingWarning[];
   } = {},
 ) {
   const storage = options.storage ?? new FakeStorageService();
   const livestockValue = options.livestock ?? [];
+  const warningsValue = options.warnings ?? [];
   TestBed.configureTestingModule({
     imports: [LivestockToolComponent],
     providers: [
       provideMockStore({
-        // `selectLivestock` is always overridden — provideMockStore
-        // selector overrides LEAK across TestBed.resetTestingModule per the
-        // CLAUDE.md gotcha; every configure() call must (re)set it.
-        selectors: [{ selector: selectLivestock, value: livestockValue }],
+        // `selectLivestock` + `selectStockingWarnings` are always overridden —
+        // provideMockStore selector overrides LEAK across
+        // TestBed.resetTestingModule per the CLAUDE.md gotcha; every
+        // configure() call must (re)set BOTH so a prior test's value doesn't
+        // bleed in. The stocking selector chains off `selectScene` which
+        // isn't set in this mock — overriding directly skips that branch.
+        selectors: [
+          { selector: selectLivestock, value: livestockValue },
+          { selector: selectStockingWarnings, value: warningsValue },
+        ],
       }),
       { provide: STORAGE_SERVICE, useValue: storage },
     ],
@@ -505,6 +514,131 @@ describe('LivestockToolComponent — pager', () => {
     fixture.detectChanges();
     expect(component.page()).toBe(component.totalPages());
     expect(component.page()).toBeLessThan(lastPage);
+  });
+
+  // ── Stocking guidance (F7.2) ──────────────────────────────────────────
+
+  describe('stocking guidance section', () => {
+    function makeWarning(
+      overrides: Partial<StockingWarning> = {},
+    ): StockingWarning {
+      return {
+        id: 'w1',
+        severity: 'warning',
+        code: 'schooling-below-minimum',
+        message: 'Schooling below minimum',
+        explanation: 'These fish school in groups; the catalog recommends at least 6.',
+        relatedEntryIds: ['e1'],
+        ...overrides,
+      };
+    }
+
+    it('renders nothing when there are no warnings', () => {
+      const { fixture } = configure({ warnings: [] });
+      const section = fixture.nativeElement.querySelector('.livestock-tool__warnings');
+      expect(section).toBeNull();
+      // The subheading should also not be present in this branch — the
+      // browser subheading "Inventory" is the only one.
+      const headings = Array.from(
+        fixture.nativeElement.querySelectorAll('.livestock-tool__subheading'),
+      ).map((el) => (el as HTMLElement).textContent ?? '');
+      expect(headings).not.toContain('Stocking guidance');
+    });
+
+    it('renders one row per warning with the message', () => {
+      const warnings: StockingWarning[] = [
+        makeWarning({ id: 'w1', message: 'Tank near capacity' }),
+        makeWarning({ id: 'w2', message: 'Temperament mismatch' }),
+      ];
+      const { fixture } = configure({ warnings });
+      const rows = fixture.nativeElement.querySelectorAll('.warning');
+      expect(rows.length).toBe(2);
+      expect((rows[0] as HTMLElement).textContent ?? '').toContain('Tank near capacity');
+      expect((rows[1] as HTMLElement).textContent ?? '').toContain('Temperament mismatch');
+    });
+
+    it('applies the severity-specific CSS class and ARIA role', () => {
+      const warnings: StockingWarning[] = [
+        makeWarning({
+          id: 'e1',
+          severity: 'error',
+          code: 'temperature-incompatible',
+          message: 'Temperature ranges do not overlap',
+        }),
+        makeWarning({ id: 'w1', severity: 'warning', message: 'Warning text' }),
+        makeWarning({ id: 'i1', severity: 'info', message: 'Info text' }),
+      ];
+      const { fixture } = configure({ warnings });
+      const rows = fixture.nativeElement.querySelectorAll('.warning');
+      expect((rows[0] as HTMLElement).classList).toContain('warning--error');
+      expect((rows[0] as HTMLElement).getAttribute('role')).toBe('alert');
+      expect((rows[1] as HTMLElement).classList).toContain('warning--warning');
+      expect((rows[1] as HTMLElement).getAttribute('role')).toBe('status');
+      expect((rows[2] as HTMLElement).classList).toContain('warning--info');
+      expect((rows[2] as HTMLElement).getAttribute('role')).toBe('status');
+    });
+
+    it('expands and collapses the explanation on toggle', () => {
+      const warnings: StockingWarning[] = [
+        makeWarning({ id: 'w1', explanation: 'Detailed rationale here.' }),
+      ];
+      const { fixture } = configure({ warnings });
+      const component = fixture.componentInstance;
+
+      // Collapsed by default — explanation not in the DOM.
+      expect(fixture.nativeElement.querySelector('.warning__explanation')).toBeNull();
+      expect(component.isExpanded('w1')).toBe(false);
+
+      // Click toggle button.
+      const toggle = fixture.nativeElement.querySelector(
+        '.warning__toggle',
+      ) as HTMLButtonElement;
+      toggle.click();
+      fixture.detectChanges();
+
+      const explanation = fixture.nativeElement.querySelector(
+        '.warning__explanation',
+      ) as HTMLElement;
+      expect(explanation).not.toBeNull();
+      expect(explanation.textContent ?? '').toContain('Detailed rationale here.');
+      expect(component.isExpanded('w1')).toBe(true);
+      expect(toggle.getAttribute('aria-expanded')).toBe('true');
+      expect(toggle.getAttribute('aria-controls')).toBe('warning-w1-explanation');
+      expect(explanation.id).toBe('warning-w1-explanation');
+
+      // Click again to collapse.
+      toggle.click();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.warning__explanation')).toBeNull();
+      expect(component.isExpanded('w1')).toBe(false);
+    });
+
+    it('expanding one warning leaves siblings collapsed', () => {
+      const warnings: StockingWarning[] = [
+        makeWarning({ id: 'a' }),
+        makeWarning({ id: 'b' }),
+      ];
+      const { fixture } = configure({ warnings });
+      const component = fixture.componentInstance;
+      const toggles = fixture.nativeElement.querySelectorAll(
+        '.warning__toggle',
+      ) as NodeListOf<HTMLButtonElement>;
+      toggles[0].click();
+      fixture.detectChanges();
+      expect(component.isExpanded('a')).toBe(true);
+      expect(component.isExpanded('b')).toBe(false);
+    });
+
+    it('severityIcon() returns a distinct glyph per severity', () => {
+      const { fixture } = configure();
+      const c = fixture.componentInstance;
+      const icons = new Set([
+        c.severityIcon('error'),
+        c.severityIcon('warning'),
+        c.severityIcon('info'),
+      ]);
+      expect(icons.size).toBe(3);
+    });
   });
 
   it('totalPages() returns 1 when the visible list is empty (n === 0 branch)', () => {

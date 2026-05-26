@@ -38,6 +38,7 @@
       "@aquascape/domain/geometry": ["libs/domain/geometry/src/index.ts"],
       "@aquascape/domain/growth-sim": ["libs/domain/growth-sim/src/index.ts"],
       "@aquascape/domain/scene-model": ["libs/domain/scene-model/src/index.ts"],
+      "@aquascape/domain/stocking": ["libs/domain/stocking/src/index.ts"],
       "@aquascape/features/editor-shell": ["libs/features/editor-shell/src/index.ts"],
       "@aquascape/features/export": ["libs/features/export/src/index.ts"],
       "@aquascape/features/hardscape-tool": ["libs/features/hardscape-tool/src/index.ts"],
