@@ -332,6 +332,174 @@ describe('validateCatalogEntry (livestock, Stage 7 F7.1)', () => {
       }).ok,
     ).toBe(false);
   });
+
+  // ─── F11.2 behavior overrides (catalog manifest schemaVersion 3) ────────
+  describe('behavior overrides (Stage 11 F11.2)', () => {
+    it('accepts a livestock entry with no behavior block (forward-compat with v2 manifests)', () => {
+      expect(validateCatalogEntry(validLivestock)).toEqual({ ok: true });
+    });
+
+    it('accepts an empty behavior block', () => {
+      expect(validateCatalogEntry({ ...validLivestock, behavior: {} }).ok).toBe(true);
+    });
+
+    it('accepts a partial schooling override (single field)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { schooling: { wCoh: 1.5 } },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts a partial depth override', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { depth: { preferredY: 0.88 } },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts a partial animation override', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { animation: { tailBeatFreq: 6.0 } },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts a fully-specified behavior block', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: {
+            schooling: {
+              ZOR: 12,
+              ZOO: 35,
+              ZOA: 90,
+              blindAngle: Math.PI * 0.25,
+              vPref: 55,
+              vMax: 140,
+              turnMax: 2.0,
+              wSep: 1.5,
+              wAli: 1.5,
+              wCoh: 1.0,
+              noise: 0.05,
+            },
+            depth: { preferredY: 0.55, bandWidth: 0.25, returnForce: 60 },
+            animation: { tailBeatFreq: 4.5, ampHead: 0.02, ampTail: 0.12, envelopeExp: 2.5 },
+          },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('rejects a typo at the top of the behavior block (additionalProperties: false)', () => {
+      const result = validateCatalogEntry({
+        ...validLivestock,
+        // typo: should be `schooling`. Must NOT be silently accepted.
+        behavior: { schoolign: { wCoh: 1.5 } },
+      });
+      expect(result.ok).toBe(false);
+    });
+
+    it('rejects a typo inside behavior.schooling (additionalProperties: false)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { schooling: { ZOR: 12, mystery: 99 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects a typo inside behavior.depth (additionalProperties: false)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { depth: { preferredZ: 0.5 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects a typo inside behavior.animation (additionalProperties: false)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { animation: { tailbeat: 4.5 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects depth.preferredY outside [0, 1]', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { depth: { preferredY: 1.5 } },
+        }).ok,
+      ).toBe(false);
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { depth: { preferredY: -0.1 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects depth.bandWidth outside [0, 1]', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { depth: { bandWidth: 2 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects negative schooling weights', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { schooling: { wCoh: -1 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects zero / negative schooling radii (exclusiveMinimum 0)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { schooling: { ZOR: 0 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects animation.tailBeatFreq <= 0', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { animation: { tailBeatFreq: 0 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects animation amplitude outside [0, 1]', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { animation: { ampTail: 1.5 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects blindAngle outside [0, π]', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { schooling: { blindAngle: Math.PI + 0.01 } },
+        }).ok,
+      ).toBe(false);
+    });
+  });
 });
 
 describe('validateCatalogEntry (equipment, Stage 7 F7.3)', () => {

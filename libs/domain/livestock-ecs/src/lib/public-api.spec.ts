@@ -8,9 +8,13 @@ import {
   Archetype,
   BEHAVIOR_MODE,
   BehaviorMode,
+  BehaviorParamsRef,
   BodyLength,
   FISH_ARCHETYPE,
+  Force,
+  NO_BEHAVIOR_HANDLE,
   Orientation,
+  ParamStore,
   Position,
   SIM_DT,
   SIM_HZ,
@@ -19,9 +23,14 @@ import {
   Velocity,
   animationSystem,
   createLivestockWorld,
+  depthSystem,
   kinematicSystem,
+  perceptionSystem,
+  schoolingSystem,
+  steeringIntegrator,
   tickPrng,
 } from '../index';
+import { MID_PRESET } from '@aquascape/domain/livestock-behaviors';
 
 describe('public API surface', () => {
   it('exports SIM constants', () => {
@@ -36,7 +45,7 @@ describe('public API surface', () => {
     expect(BEHAVIOR_MODE.PURSUE).toBe(2);
   });
 
-  it('exposes all eight component slabs as bitECS-shaped objects', () => {
+  it('exposes all component slabs as bitECS-shaped objects', () => {
     for (const c of [
       Position,
       Velocity,
@@ -46,9 +55,23 @@ describe('public API surface', () => {
       Archetype,
       AnimationPhase,
       BehaviorMode,
+      BehaviorParamsRef,
+      Force,
     ]) {
       expect(c).toBeDefined();
     }
+  });
+
+  it('exposes ParamStore + NO_BEHAVIOR_HANDLE + the F11.2 systems', () => {
+    expect(typeof perceptionSystem).toBe('function');
+    expect(typeof schoolingSystem).toBe('function');
+    expect(typeof depthSystem).toBe('function');
+    expect(typeof steeringIntegrator).toBe('function');
+    expect(NO_BEHAVIOR_HANDLE).toBe(0xffff);
+    const s = new ParamStore();
+    expect(s.size).toBe(0);
+    const h = s.registerSpecies(1, MID_PRESET);
+    expect(s.get(h)?.schooling.ZOA).toBe(MID_PRESET.schooling.ZOA);
   });
 
   it('drives a full spawn → step → snapshot cycle through the public API', () => {

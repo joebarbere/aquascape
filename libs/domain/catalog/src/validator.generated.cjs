@@ -41,7 +41,7 @@ var require_ucs2length = __commonJS({
   }
 });
 
-// node_modules/.cache/aquascape-validators/6dk5yE/entry.cjs
+// node_modules/.cache/aquascape-validators/aTbWKj/entry.cjs
 module.exports = validate20;
 module.exports.default = validate20;
 var schema32 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "material", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "substrate" }, "material": { "enum": ["soil", "sand", "gravel"] }, "color": { "$ref": "#/$defs/HexColor" }, "grainSize": { "type": "number", "exclusiveMinimum": 0 } } };
@@ -1692,7 +1692,7 @@ function validate25(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate25.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema43 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "group", "adultSize", "temperament", "temperatureRange", "pHRange", "schoolingMin", "bioloadClass", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "livestock" }, "group": { "enum": ["fish", "shrimp", "snail"] }, "adultSize": { "type": "number", "exclusiveMinimum": 0, "description": "Typical adult body length in millimetres." }, "temperament": { "enum": ["peaceful", "semi-aggressive", "aggressive"] }, "temperatureRange": { "type": "object", "required": ["minC", "maxC"], "additionalProperties": false, "properties": { "minC": { "type": "number", "minimum": 0, "maximum": 40 }, "maxC": { "type": "number", "minimum": 0, "maximum": 40 } }, "description": "Water temperature tolerance window in Celsius. Manifest authors must ensure minC < maxC; JSON Schema cannot enforce cross-field comparisons declaratively." }, "pHRange": { "type": "object", "required": ["min", "max"], "additionalProperties": false, "properties": { "min": { "type": "number", "minimum": 4, "maximum": 9.5 }, "max": { "type": "number", "minimum": 4, "maximum": 9.5 } }, "description": "Water pH tolerance window. Manifest authors must ensure min < max; JSON Schema cannot enforce cross-field comparisons declaratively." }, "schoolingMin": { "type": "integer", "minimum": 1, "description": "Minimum recommended group size. 1 = solitary / non-schooling." }, "bioloadClass": { "enum": ["low", "medium", "high"] }, "color": { "$ref": "#/$defs/HexColor" }, "compatibilityFlags": { "type": "object", "additionalProperties": false, "properties": { "plantedOK": { "type": "boolean" }, "finNipper": { "type": "boolean" }, "brackish": { "type": "boolean" } }, "description": "Pre-baked answers for the Stage 7 F7.2 compatibility rule engine." } } };
+var schema43 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "group", "adultSize", "temperament", "temperatureRange", "pHRange", "schoolingMin", "bioloadClass", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "livestock" }, "group": { "enum": ["fish", "shrimp", "snail"] }, "adultSize": { "type": "number", "exclusiveMinimum": 0, "description": "Typical adult body length in millimetres." }, "temperament": { "enum": ["peaceful", "semi-aggressive", "aggressive"] }, "temperatureRange": { "type": "object", "required": ["minC", "maxC"], "additionalProperties": false, "properties": { "minC": { "type": "number", "minimum": 0, "maximum": 40 }, "maxC": { "type": "number", "minimum": 0, "maximum": 40 } }, "description": "Water temperature tolerance window in Celsius. Manifest authors must ensure minC < maxC; JSON Schema cannot enforce cross-field comparisons declaratively." }, "pHRange": { "type": "object", "required": ["min", "max"], "additionalProperties": false, "properties": { "min": { "type": "number", "minimum": 4, "maximum": 9.5 }, "max": { "type": "number", "minimum": 4, "maximum": 9.5 } }, "description": "Water pH tolerance window. Manifest authors must ensure min < max; JSON Schema cannot enforce cross-field comparisons declaratively." }, "schoolingMin": { "type": "integer", "minimum": 1, "description": "Minimum recommended group size. 1 = solitary / non-schooling." }, "bioloadClass": { "enum": ["low", "medium", "high"] }, "color": { "$ref": "#/$defs/HexColor" }, "compatibilityFlags": { "type": "object", "additionalProperties": false, "properties": { "plantedOK": { "type": "boolean" }, "finNipper": { "type": "boolean" }, "brackish": { "type": "boolean" } }, "description": "Pre-baked answers for the Stage 7 F7.2 compatibility rule engine." }, "behavior": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.2 per-species overrides for the schooling + vertical-stratification + animation params. Every subfield is optional; absent fields fall back to the per-group preset via `resolveBehavior()` in `@aquascape/domain/livestock-behaviors`. Manifests authored before schemaVersion 3 lack this block entirely and load unchanged.", "properties": { "schooling": { "type": "object", "additionalProperties": false, "description": "Couzin 2002 three-zone + Reynolds 1987 weighted steering. Distances in millimetres; speeds in mm/sec.", "properties": { "ZOR": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of repulsion radius (mm). Below this, neighbours push us away." }, "ZOO": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of orientation radius (mm). Between ZOR and ZOO, headings align." }, "ZOA": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of attraction radius (mm). Between ZOO and ZOA, steer toward centroid." }, "blindAngle": { "type": "number", "minimum": 0, "maximum": 3.141592653589793, "description": "Blind cone behind the fish (radians, total angle subtended). Range [0, \u03C0]." }, "vPref": { "type": "number", "exclusiveMinimum": 0, "description": "Preferred cruise speed (mm/sec)." }, "vMax": { "type": "number", "exclusiveMinimum": 0, "description": "Hard cap on instantaneous speed (mm/sec)." }, "turnMax": { "type": "number", "exclusiveMinimum": 0, "description": "Maximum heading change (rad/sec)." }, "wSep": { "type": "number", "minimum": 0, "description": "Reynolds separation weight." }, "wAli": { "type": "number", "minimum": 0, "description": "Reynolds alignment weight." }, "wCoh": { "type": "number", "minimum": 0, "description": "Reynolds cohesion weight." }, "noise": { "type": "number", "minimum": 0, "description": "Per-tick noise magnitude as a fraction of vPref. Typical 0..0.2." } } }, "depth": { "type": "object", "additionalProperties": false, "description": "Vertical-stratification spring centred on a preferred fraction of tank height.", "properties": { "preferredY": { "type": "number", "minimum": 0, "maximum": 1, "description": "Preferred Y as a fraction of tank height (0 = substrate, 1 = waterline)." }, "bandWidth": { "type": "number", "minimum": 0, "maximum": 1, "description": "Band half-width as a fraction of tank height. Inside this, only noise applies." }, "returnForce": { "type": "number", "minimum": 0, "description": "Restoring force magnitude when outside the band (mm/sec\xB2 equivalent)." } } }, "animation": { "type": "object", "additionalProperties": false, "description": "Carangiform tail-beat parameters consumed by the renderer-3d vertex shader.", "properties": { "tailBeatFreq": { "type": "number", "exclusiveMinimum": 0, "description": "Tail-beat frequency (Hz)." }, "ampHead": { "type": "number", "minimum": 0, "maximum": 1, "description": "Amplitude at the head end (fraction of body length)." }, "ampTail": { "type": "number", "minimum": 0, "maximum": 1, "description": "Amplitude at the tail tip (fraction of body length)." }, "envelopeExp": { "type": "number", "exclusiveMinimum": 0, "description": "Spine envelope exponent in `amp(s) = ampHead + (ampTail\u2212ampHead) * pow(s, env)`." } } } } } } };
 function validate27(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -2388,12 +2388,549 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
+    if (data.behavior !== void 0) {
+      let data25 = data.behavior;
+      if (data25 && typeof data25 == "object" && !Array.isArray(data25)) {
+        for (const key4 in data25) {
+          if (!(key4 === "schooling" || key4 === "depth" || key4 === "animation")) {
+            const err65 = { instancePath: instancePath + "/behavior", schemaPath: "#/properties/behavior/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key4 }, message: "must NOT have additional properties" };
+            if (vErrors === null) {
+              vErrors = [err65];
+            } else {
+              vErrors.push(err65);
+            }
+            errors++;
+          }
+        }
+        if (data25.schooling !== void 0) {
+          let data26 = data25.schooling;
+          if (data26 && typeof data26 == "object" && !Array.isArray(data26)) {
+            for (const key5 in data26) {
+              if (!func5.call(schema43.properties.behavior.properties.schooling.properties, key5)) {
+                const err66 = { instancePath: instancePath + "/behavior/schooling", schemaPath: "#/properties/behavior/properties/schooling/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key5 }, message: "must NOT have additional properties" };
+                if (vErrors === null) {
+                  vErrors = [err66];
+                } else {
+                  vErrors.push(err66);
+                }
+                errors++;
+              }
+            }
+            if (data26.ZOR !== void 0) {
+              let data27 = data26.ZOR;
+              if (typeof data27 == "number" && isFinite(data27)) {
+                if (data27 <= 0 || isNaN(data27)) {
+                  const err67 = { instancePath: instancePath + "/behavior/schooling/ZOR", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOR/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err67];
+                  } else {
+                    vErrors.push(err67);
+                  }
+                  errors++;
+                }
+              } else {
+                const err68 = { instancePath: instancePath + "/behavior/schooling/ZOR", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOR/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err68];
+                } else {
+                  vErrors.push(err68);
+                }
+                errors++;
+              }
+            }
+            if (data26.ZOO !== void 0) {
+              let data28 = data26.ZOO;
+              if (typeof data28 == "number" && isFinite(data28)) {
+                if (data28 <= 0 || isNaN(data28)) {
+                  const err69 = { instancePath: instancePath + "/behavior/schooling/ZOO", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOO/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err69];
+                  } else {
+                    vErrors.push(err69);
+                  }
+                  errors++;
+                }
+              } else {
+                const err70 = { instancePath: instancePath + "/behavior/schooling/ZOO", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOO/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err70];
+                } else {
+                  vErrors.push(err70);
+                }
+                errors++;
+              }
+            }
+            if (data26.ZOA !== void 0) {
+              let data29 = data26.ZOA;
+              if (typeof data29 == "number" && isFinite(data29)) {
+                if (data29 <= 0 || isNaN(data29)) {
+                  const err71 = { instancePath: instancePath + "/behavior/schooling/ZOA", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOA/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err71];
+                  } else {
+                    vErrors.push(err71);
+                  }
+                  errors++;
+                }
+              } else {
+                const err72 = { instancePath: instancePath + "/behavior/schooling/ZOA", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOA/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err72];
+                } else {
+                  vErrors.push(err72);
+                }
+                errors++;
+              }
+            }
+            if (data26.blindAngle !== void 0) {
+              let data30 = data26.blindAngle;
+              if (typeof data30 == "number" && isFinite(data30)) {
+                if (data30 > 3.141592653589793 || isNaN(data30)) {
+                  const err73 = { instancePath: instancePath + "/behavior/schooling/blindAngle", schemaPath: "#/properties/behavior/properties/schooling/properties/blindAngle/maximum", keyword: "maximum", params: { comparison: "<=", limit: 3.141592653589793 }, message: "must be <= 3.141592653589793" };
+                  if (vErrors === null) {
+                    vErrors = [err73];
+                  } else {
+                    vErrors.push(err73);
+                  }
+                  errors++;
+                }
+                if (data30 < 0 || isNaN(data30)) {
+                  const err74 = { instancePath: instancePath + "/behavior/schooling/blindAngle", schemaPath: "#/properties/behavior/properties/schooling/properties/blindAngle/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err74];
+                  } else {
+                    vErrors.push(err74);
+                  }
+                  errors++;
+                }
+              } else {
+                const err75 = { instancePath: instancePath + "/behavior/schooling/blindAngle", schemaPath: "#/properties/behavior/properties/schooling/properties/blindAngle/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err75];
+                } else {
+                  vErrors.push(err75);
+                }
+                errors++;
+              }
+            }
+            if (data26.vPref !== void 0) {
+              let data31 = data26.vPref;
+              if (typeof data31 == "number" && isFinite(data31)) {
+                if (data31 <= 0 || isNaN(data31)) {
+                  const err76 = { instancePath: instancePath + "/behavior/schooling/vPref", schemaPath: "#/properties/behavior/properties/schooling/properties/vPref/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err76];
+                  } else {
+                    vErrors.push(err76);
+                  }
+                  errors++;
+                }
+              } else {
+                const err77 = { instancePath: instancePath + "/behavior/schooling/vPref", schemaPath: "#/properties/behavior/properties/schooling/properties/vPref/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err77];
+                } else {
+                  vErrors.push(err77);
+                }
+                errors++;
+              }
+            }
+            if (data26.vMax !== void 0) {
+              let data32 = data26.vMax;
+              if (typeof data32 == "number" && isFinite(data32)) {
+                if (data32 <= 0 || isNaN(data32)) {
+                  const err78 = { instancePath: instancePath + "/behavior/schooling/vMax", schemaPath: "#/properties/behavior/properties/schooling/properties/vMax/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err78];
+                  } else {
+                    vErrors.push(err78);
+                  }
+                  errors++;
+                }
+              } else {
+                const err79 = { instancePath: instancePath + "/behavior/schooling/vMax", schemaPath: "#/properties/behavior/properties/schooling/properties/vMax/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err79];
+                } else {
+                  vErrors.push(err79);
+                }
+                errors++;
+              }
+            }
+            if (data26.turnMax !== void 0) {
+              let data33 = data26.turnMax;
+              if (typeof data33 == "number" && isFinite(data33)) {
+                if (data33 <= 0 || isNaN(data33)) {
+                  const err80 = { instancePath: instancePath + "/behavior/schooling/turnMax", schemaPath: "#/properties/behavior/properties/schooling/properties/turnMax/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err80];
+                  } else {
+                    vErrors.push(err80);
+                  }
+                  errors++;
+                }
+              } else {
+                const err81 = { instancePath: instancePath + "/behavior/schooling/turnMax", schemaPath: "#/properties/behavior/properties/schooling/properties/turnMax/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err81];
+                } else {
+                  vErrors.push(err81);
+                }
+                errors++;
+              }
+            }
+            if (data26.wSep !== void 0) {
+              let data34 = data26.wSep;
+              if (typeof data34 == "number" && isFinite(data34)) {
+                if (data34 < 0 || isNaN(data34)) {
+                  const err82 = { instancePath: instancePath + "/behavior/schooling/wSep", schemaPath: "#/properties/behavior/properties/schooling/properties/wSep/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err82];
+                  } else {
+                    vErrors.push(err82);
+                  }
+                  errors++;
+                }
+              } else {
+                const err83 = { instancePath: instancePath + "/behavior/schooling/wSep", schemaPath: "#/properties/behavior/properties/schooling/properties/wSep/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err83];
+                } else {
+                  vErrors.push(err83);
+                }
+                errors++;
+              }
+            }
+            if (data26.wAli !== void 0) {
+              let data35 = data26.wAli;
+              if (typeof data35 == "number" && isFinite(data35)) {
+                if (data35 < 0 || isNaN(data35)) {
+                  const err84 = { instancePath: instancePath + "/behavior/schooling/wAli", schemaPath: "#/properties/behavior/properties/schooling/properties/wAli/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err84];
+                  } else {
+                    vErrors.push(err84);
+                  }
+                  errors++;
+                }
+              } else {
+                const err85 = { instancePath: instancePath + "/behavior/schooling/wAli", schemaPath: "#/properties/behavior/properties/schooling/properties/wAli/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err85];
+                } else {
+                  vErrors.push(err85);
+                }
+                errors++;
+              }
+            }
+            if (data26.wCoh !== void 0) {
+              let data36 = data26.wCoh;
+              if (typeof data36 == "number" && isFinite(data36)) {
+                if (data36 < 0 || isNaN(data36)) {
+                  const err86 = { instancePath: instancePath + "/behavior/schooling/wCoh", schemaPath: "#/properties/behavior/properties/schooling/properties/wCoh/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err86];
+                  } else {
+                    vErrors.push(err86);
+                  }
+                  errors++;
+                }
+              } else {
+                const err87 = { instancePath: instancePath + "/behavior/schooling/wCoh", schemaPath: "#/properties/behavior/properties/schooling/properties/wCoh/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err87];
+                } else {
+                  vErrors.push(err87);
+                }
+                errors++;
+              }
+            }
+            if (data26.noise !== void 0) {
+              let data37 = data26.noise;
+              if (typeof data37 == "number" && isFinite(data37)) {
+                if (data37 < 0 || isNaN(data37)) {
+                  const err88 = { instancePath: instancePath + "/behavior/schooling/noise", schemaPath: "#/properties/behavior/properties/schooling/properties/noise/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err88];
+                  } else {
+                    vErrors.push(err88);
+                  }
+                  errors++;
+                }
+              } else {
+                const err89 = { instancePath: instancePath + "/behavior/schooling/noise", schemaPath: "#/properties/behavior/properties/schooling/properties/noise/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err89];
+                } else {
+                  vErrors.push(err89);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err90 = { instancePath: instancePath + "/behavior/schooling", schemaPath: "#/properties/behavior/properties/schooling/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            if (vErrors === null) {
+              vErrors = [err90];
+            } else {
+              vErrors.push(err90);
+            }
+            errors++;
+          }
+        }
+        if (data25.depth !== void 0) {
+          let data38 = data25.depth;
+          if (data38 && typeof data38 == "object" && !Array.isArray(data38)) {
+            for (const key6 in data38) {
+              if (!(key6 === "preferredY" || key6 === "bandWidth" || key6 === "returnForce")) {
+                const err91 = { instancePath: instancePath + "/behavior/depth", schemaPath: "#/properties/behavior/properties/depth/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key6 }, message: "must NOT have additional properties" };
+                if (vErrors === null) {
+                  vErrors = [err91];
+                } else {
+                  vErrors.push(err91);
+                }
+                errors++;
+              }
+            }
+            if (data38.preferredY !== void 0) {
+              let data39 = data38.preferredY;
+              if (typeof data39 == "number" && isFinite(data39)) {
+                if (data39 > 1 || isNaN(data39)) {
+                  const err92 = { instancePath: instancePath + "/behavior/depth/preferredY", schemaPath: "#/properties/behavior/properties/depth/properties/preferredY/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
+                  if (vErrors === null) {
+                    vErrors = [err92];
+                  } else {
+                    vErrors.push(err92);
+                  }
+                  errors++;
+                }
+                if (data39 < 0 || isNaN(data39)) {
+                  const err93 = { instancePath: instancePath + "/behavior/depth/preferredY", schemaPath: "#/properties/behavior/properties/depth/properties/preferredY/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err93];
+                  } else {
+                    vErrors.push(err93);
+                  }
+                  errors++;
+                }
+              } else {
+                const err94 = { instancePath: instancePath + "/behavior/depth/preferredY", schemaPath: "#/properties/behavior/properties/depth/properties/preferredY/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err94];
+                } else {
+                  vErrors.push(err94);
+                }
+                errors++;
+              }
+            }
+            if (data38.bandWidth !== void 0) {
+              let data40 = data38.bandWidth;
+              if (typeof data40 == "number" && isFinite(data40)) {
+                if (data40 > 1 || isNaN(data40)) {
+                  const err95 = { instancePath: instancePath + "/behavior/depth/bandWidth", schemaPath: "#/properties/behavior/properties/depth/properties/bandWidth/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
+                  if (vErrors === null) {
+                    vErrors = [err95];
+                  } else {
+                    vErrors.push(err95);
+                  }
+                  errors++;
+                }
+                if (data40 < 0 || isNaN(data40)) {
+                  const err96 = { instancePath: instancePath + "/behavior/depth/bandWidth", schemaPath: "#/properties/behavior/properties/depth/properties/bandWidth/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err96];
+                  } else {
+                    vErrors.push(err96);
+                  }
+                  errors++;
+                }
+              } else {
+                const err97 = { instancePath: instancePath + "/behavior/depth/bandWidth", schemaPath: "#/properties/behavior/properties/depth/properties/bandWidth/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err97];
+                } else {
+                  vErrors.push(err97);
+                }
+                errors++;
+              }
+            }
+            if (data38.returnForce !== void 0) {
+              let data41 = data38.returnForce;
+              if (typeof data41 == "number" && isFinite(data41)) {
+                if (data41 < 0 || isNaN(data41)) {
+                  const err98 = { instancePath: instancePath + "/behavior/depth/returnForce", schemaPath: "#/properties/behavior/properties/depth/properties/returnForce/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err98];
+                  } else {
+                    vErrors.push(err98);
+                  }
+                  errors++;
+                }
+              } else {
+                const err99 = { instancePath: instancePath + "/behavior/depth/returnForce", schemaPath: "#/properties/behavior/properties/depth/properties/returnForce/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err99];
+                } else {
+                  vErrors.push(err99);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err100 = { instancePath: instancePath + "/behavior/depth", schemaPath: "#/properties/behavior/properties/depth/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            if (vErrors === null) {
+              vErrors = [err100];
+            } else {
+              vErrors.push(err100);
+            }
+            errors++;
+          }
+        }
+        if (data25.animation !== void 0) {
+          let data42 = data25.animation;
+          if (data42 && typeof data42 == "object" && !Array.isArray(data42)) {
+            for (const key7 in data42) {
+              if (!(key7 === "tailBeatFreq" || key7 === "ampHead" || key7 === "ampTail" || key7 === "envelopeExp")) {
+                const err101 = { instancePath: instancePath + "/behavior/animation", schemaPath: "#/properties/behavior/properties/animation/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key7 }, message: "must NOT have additional properties" };
+                if (vErrors === null) {
+                  vErrors = [err101];
+                } else {
+                  vErrors.push(err101);
+                }
+                errors++;
+              }
+            }
+            if (data42.tailBeatFreq !== void 0) {
+              let data43 = data42.tailBeatFreq;
+              if (typeof data43 == "number" && isFinite(data43)) {
+                if (data43 <= 0 || isNaN(data43)) {
+                  const err102 = { instancePath: instancePath + "/behavior/animation/tailBeatFreq", schemaPath: "#/properties/behavior/properties/animation/properties/tailBeatFreq/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err102];
+                  } else {
+                    vErrors.push(err102);
+                  }
+                  errors++;
+                }
+              } else {
+                const err103 = { instancePath: instancePath + "/behavior/animation/tailBeatFreq", schemaPath: "#/properties/behavior/properties/animation/properties/tailBeatFreq/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err103];
+                } else {
+                  vErrors.push(err103);
+                }
+                errors++;
+              }
+            }
+            if (data42.ampHead !== void 0) {
+              let data44 = data42.ampHead;
+              if (typeof data44 == "number" && isFinite(data44)) {
+                if (data44 > 1 || isNaN(data44)) {
+                  const err104 = { instancePath: instancePath + "/behavior/animation/ampHead", schemaPath: "#/properties/behavior/properties/animation/properties/ampHead/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
+                  if (vErrors === null) {
+                    vErrors = [err104];
+                  } else {
+                    vErrors.push(err104);
+                  }
+                  errors++;
+                }
+                if (data44 < 0 || isNaN(data44)) {
+                  const err105 = { instancePath: instancePath + "/behavior/animation/ampHead", schemaPath: "#/properties/behavior/properties/animation/properties/ampHead/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err105];
+                  } else {
+                    vErrors.push(err105);
+                  }
+                  errors++;
+                }
+              } else {
+                const err106 = { instancePath: instancePath + "/behavior/animation/ampHead", schemaPath: "#/properties/behavior/properties/animation/properties/ampHead/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err106];
+                } else {
+                  vErrors.push(err106);
+                }
+                errors++;
+              }
+            }
+            if (data42.ampTail !== void 0) {
+              let data45 = data42.ampTail;
+              if (typeof data45 == "number" && isFinite(data45)) {
+                if (data45 > 1 || isNaN(data45)) {
+                  const err107 = { instancePath: instancePath + "/behavior/animation/ampTail", schemaPath: "#/properties/behavior/properties/animation/properties/ampTail/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
+                  if (vErrors === null) {
+                    vErrors = [err107];
+                  } else {
+                    vErrors.push(err107);
+                  }
+                  errors++;
+                }
+                if (data45 < 0 || isNaN(data45)) {
+                  const err108 = { instancePath: instancePath + "/behavior/animation/ampTail", schemaPath: "#/properties/behavior/properties/animation/properties/ampTail/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err108];
+                  } else {
+                    vErrors.push(err108);
+                  }
+                  errors++;
+                }
+              } else {
+                const err109 = { instancePath: instancePath + "/behavior/animation/ampTail", schemaPath: "#/properties/behavior/properties/animation/properties/ampTail/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err109];
+                } else {
+                  vErrors.push(err109);
+                }
+                errors++;
+              }
+            }
+            if (data42.envelopeExp !== void 0) {
+              let data46 = data42.envelopeExp;
+              if (typeof data46 == "number" && isFinite(data46)) {
+                if (data46 <= 0 || isNaN(data46)) {
+                  const err110 = { instancePath: instancePath + "/behavior/animation/envelopeExp", schemaPath: "#/properties/behavior/properties/animation/properties/envelopeExp/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err110];
+                  } else {
+                    vErrors.push(err110);
+                  }
+                  errors++;
+                }
+              } else {
+                const err111 = { instancePath: instancePath + "/behavior/animation/envelopeExp", schemaPath: "#/properties/behavior/properties/animation/properties/envelopeExp/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err111];
+                } else {
+                  vErrors.push(err111);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err112 = { instancePath: instancePath + "/behavior/animation", schemaPath: "#/properties/behavior/properties/animation/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            if (vErrors === null) {
+              vErrors = [err112];
+            } else {
+              vErrors.push(err112);
+            }
+            errors++;
+          }
+        }
+      } else {
+        const err113 = { instancePath: instancePath + "/behavior", schemaPath: "#/properties/behavior/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        if (vErrors === null) {
+          vErrors = [err113];
+        } else {
+          vErrors.push(err113);
+        }
+        errors++;
+      }
+    }
   } else {
-    const err65 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+    const err114 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
     if (vErrors === null) {
-      vErrors = [err65];
+      vErrors = [err114];
     } else {
-      vErrors.push(err65);
+      vErrors.push(err114);
     }
     errors++;
   }

@@ -60,6 +60,67 @@ describe('loadCatalog', () => {
   });
 });
 
+describe('loadCatalog — schemaVersion 3 forward-compat (F11.2)', () => {
+  // A "v2-shaped" livestock manifest: every existing required field, NO
+  // `behavior` block. The schemaVersion 2 → 3 bump is additive — these
+  // manifests must continue to load with zero errors and zero warnings.
+  const v2ShapedLivestock = {
+    catalog: 'core',
+    id: 'livestock.fish.legacy',
+    version: 1,
+    name: 'Legacy fish manifest (no behavior block)',
+    kind: 'livestock' as const,
+    group: 'fish' as const,
+    adultSize: 30,
+    temperament: 'peaceful' as const,
+    temperatureRange: { minC: 22, maxC: 26 },
+    pHRange: { min: 6.0, max: 7.5 },
+    schoolingMin: 6,
+    bioloadClass: 'low' as const,
+    color: '#abcdef',
+  };
+
+  // A "v3-shaped" livestock manifest: same as above plus a partial behavior
+  // override. Both must coexist in a single catalog load.
+  const v3ShapedLivestock = {
+    ...v2ShapedLivestock,
+    id: 'livestock.fish.modern',
+    name: 'Modern fish manifest (with behavior block)',
+    behavior: { schooling: { wCoh: 1.5 } },
+  };
+
+  it('accepts a v2-shaped livestock manifest with no behavior block', () => {
+    const result = loadCatalog([v2ShapedLivestock]);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([]);
+    expect(result.catalog.entries.length).toBe(1);
+  });
+
+  it('accepts a v3-shaped livestock manifest with a partial behavior block', () => {
+    const result = loadCatalog([v3ShapedLivestock]);
+    expect(result.errors).toEqual([]);
+    expect(result.catalog.entries.length).toBe(1);
+  });
+
+  it('co-loads v2 and v3 livestock manifests in the same catalog', () => {
+    const result = loadCatalog([v2ShapedLivestock, v3ShapedLivestock]);
+    expect(result.errors).toEqual([]);
+    expect(result.catalog.entries.length).toBe(2);
+  });
+
+  it('rejects a behavior block with an unknown subkey (typo guard)', () => {
+    const broken = {
+      ...v2ShapedLivestock,
+      id: 'livestock.fish.broken',
+      // typo: should be `schooling`.
+      behavior: { schoolign: { wCoh: 1.5 } },
+    };
+    const result = loadCatalog([broken]);
+    expect(result.errors.length).toBe(1);
+    expect(result.catalog.entries.length).toBe(0);
+  });
+});
+
 describe('emptyCatalog', () => {
   it('returns a usable empty catalog', () => {
     const empty = emptyCatalog();

@@ -26,6 +26,8 @@ export {
   Archetype,
   AnimationPhase,
   BehaviorMode,
+  BehaviorParamsRef,
+  Force,
   FISH_ARCHETYPE,
   BEHAVIOR_MODE,
   type FishArchetypeId,
@@ -37,13 +39,25 @@ export {
   createLivestockWorld,
   SIM_DT,
   SIM_HZ,
+  type CreateLivestockWorldOpts,
   type LivestockWorld,
   type SpawnOpts,
+  type TankAabb,
   type WorldSnapshot,
 } from './lib/world';
 
+// ─── Per-species behaviour table (F11.2) ──────────────────────────────────
+export { ParamStore, NO_BEHAVIOR_HANDLE } from './lib/param-store';
+
 // ─── Systems (exported for renderer / tests; normally run via world.step) ──
-export { kinematicSystem, animationSystem } from './lib/systems';
+export {
+  animationSystem,
+  depthSystem,
+  kinematicSystem,
+  perceptionSystem,
+  schoolingSystem,
+  steeringIntegrator,
+} from './lib/systems';
 
 // ─── Deterministic PRNG ──────────────────────────────────────────────────
 export { tickPrng } from './lib/prng';

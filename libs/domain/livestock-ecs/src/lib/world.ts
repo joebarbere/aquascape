@@ -1,12 +1,20 @@
 /**
  * Livestock ECS world factory — the single object the renderer's RAF loop
- * pokes each frame (Stage 11 F11.1).
+ * pokes each frame (Stage 11 F11.1 + F11.2).
  *
  * The accumulator + interpolation logic that drives `step()` lives in the
- * *caller* (the renderer's RAF loop in Wave 4). Reason: the renderer knows
- * how many sim ticks elapsed since the last frame, so it must own that
- * outer loop. The ECS lib just exposes a single fixed-dt `step()` and a
- * snapshot taker — both stateless w.r.t. real time.
+ * *caller* (the renderer's RAF loop). Reason: the renderer knows how many
+ * sim ticks elapsed since the last frame, so it must own that outer loop.
+ * The ECS lib just exposes a single fixed-dt `step()` and a snapshot
+ * taker — both stateless w.r.t. real time.
+ *
+ * F11.2 adds three pieces to the world:
+ *   1. A `ParamStore` of per-species `ResolvedBehavior` rows.
+ *   2. A `tankAabb` describing the interior box (mm), so DepthSystem can
+ *      scale `preferredY` and SteeringIntegrator can clamp Velocity at
+ *      the glass.
+ *   3. A `SpatialGrid` rebuilt by PerceptionSystem each tick. Its cell
+ *      size tracks `paramStore.maxNeighbourRadius()`.
  */
 import {
   addComponent,
@@ -16,23 +24,69 @@ import {
   removeEntity,
   type IWorld,
 } from 'bitecs';
+import type { ResolvedBehavior } from '@aquascape/domain/livestock-behaviors';
 import {
   AnimationPhase,
   Archetype,
   BehaviorMode,
+  BehaviorParamsRef,
   BEHAVIOR_MODE,
   BodyLength,
+  Force,
   Orientation,
   Position,
   SpeciesId,
   Velocity,
 } from './components';
-import { animationSystem, kinematicSystem } from './systems';
+import { NO_BEHAVIOR_HANDLE, ParamStore } from './param-store';
+import { SpatialGrid } from './spatial-grid';
+import {
+  animationSystem,
+  depthSystem,
+  kinematicSystem,
+  perceptionSystem,
+  schoolingSystem,
+  steeringIntegrator,
+} from './systems';
 
 /** Fixed simulation time-step, in seconds. 30 Hz — matches the plan. */
 export const SIM_DT = 1 / 30;
 /** Convenience reciprocal of `SIM_DT`. */
 export const SIM_HZ = 30;
+
+/**
+ * Floor for the SpatialGrid cell size. The grid throws on `cellSize <= 0`,
+ * so when no species has been registered yet (maxNeighbourRadius = 0) we
+ * still need a positive cell. 50 mm is a sensible "no school yet, single
+ * fish meandering" default — small enough that any future registration
+ * with a real ZOA will tighten it.
+ */
+const FALLBACK_GRID_CELL_MM = 50;
+
+/**
+ * Tank interior axis-aligned bounding box (canonical mm coords —
+ * front-bottom-left = origin, +x right, +y up, +z back). Carried by the
+ * world so DepthSystem + SteeringIntegrator + KinematicSystem can read it
+ * without a per-entity closure.
+ */
+export interface TankAabb {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  minZ: number;
+  maxZ: number;
+}
+
+/** Default AABB used when the caller didn't pass one (tests, mostly). */
+const DEFAULT_TANK_AABB: TankAabb = {
+  minX: 0,
+  maxX: 1000,
+  minY: 0,
+  maxY: 400,
+  minZ: 0,
+  maxZ: 400,
+};
 
 export interface SpawnOpts {
   /** `FISH_ARCHETYPE.*` — drives renderer InstancedMesh selection. */
@@ -53,6 +107,13 @@ export interface SpawnOpts {
   ampTail?: number;
   /** Initial phase offset in radians. Default 0. */
   phaseOffset?: number;
+  /**
+   * Behaviour-params handle from `registerSpeciesBehavior`. Default
+   * `NO_BEHAVIOR_HANDLE` → behaviour systems skip this entity (degenerate
+   * static-Velocity-0 path that preserves F11.1's wiggle-in-place
+   * acceptance criteria).
+   */
+  behaviorHandleIdx?: number;
 }
 
 /**
@@ -83,16 +144,37 @@ export interface LivestockWorld {
   readonly seed: number;
   /** Increments by 1 on every `step()` call. */
   tickCounter: number;
+  /**
+   * Per-species `ResolvedBehavior` rows. Behaviour systems read via
+   * `BehaviorParamsRef.handleIdx`; populated through
+   * `registerSpeciesBehavior`.
+   */
+  readonly paramStore: ParamStore;
+  /** Spatial broad-phase rebuilt by PerceptionSystem each tick. */
+  spatialGrid: SpatialGrid;
+  /**
+   * Mutable tank interior AABB (canonical mm coords). DepthSystem reads
+   * the height; SteeringIntegrator + KinematicSystem clamp Position
+   * inside the box. Update via `setTankAabb`.
+   */
+  tankAabb: TankAabb;
   /** Add a new fish entity. Returns the bitECS entity id. */
   spawnFish(opts: SpawnOpts): number;
   /** Remove an entity. No-op if the id is unknown. */
   despawn(eid: number): void;
+  /** Replace the tank AABB; future ticks read the new bounds. */
+  setTankAabb(aabb: TankAabb): void;
+  /**
+   * Register (or re-register) a species' ResolvedBehavior. Returns the
+   * stable handle index to pass back via `SpawnOpts.behaviorHandleIdx`.
+   */
+  registerSpeciesBehavior(speciesId: number, behavior: ResolvedBehavior): number;
   /** Run one sim tick of duration `dt` (callers pass `SIM_DT`). */
   step(dt: number): void;
   /**
    * Build a renderer snapshot. `alpha` is the accumulator/SIM_DT
-   * interpolation factor (reserved for Wave 4; F11.1 leaves Velocity = 0 so
-   * the returned positions are identical regardless of `alpha`).
+   * interpolation factor (reserved for future sub-tick lerping; F11.2's
+   * snapshot still copies the post-step Position directly).
    */
   snapshot(alpha: number): WorldSnapshot;
   /** Tear down the world. Currently drops references; pooled arrays are GC'd. */
@@ -131,13 +213,46 @@ function growPool(pool: SnapshotPool, needed: number): SnapshotPool {
 }
 
 /**
+ * Pick a SpatialGrid cell size from the paramStore's current max
+ * neighbour radius. Falls back to a default when nothing is registered
+ * yet (the grid constructor rejects cellSize ≤ 0).
+ */
+function pickCellSize(store: ParamStore): number {
+  const max = store.maxNeighbourRadius();
+  return max > 0 ? max : FALLBACK_GRID_CELL_MM;
+}
+
+/**
+ * Optional construction flags. Currently only `tankAabb`; left as an
+ * options bag so future fields (e.g. F11.5 SDF) don't require breaking
+ * changes again.
+ */
+export interface CreateLivestockWorldOpts {
+  tankAabb?: TankAabb;
+}
+
+/**
  * Build a fresh ECS world. The same `seed` must reproduce the same snapshot
  * given the same `SpawnOpts` and `step()` count — this is the load-bearing
  * invariant for the entire stage.
+ *
+ * The `opts.tankAabb` defaults to a generic 1000 × 400 × 400 mm interior;
+ * the `LivestockSimulationService` always passes a real one derived from
+ * `scene.tank`. Tests that don't care about boundary behaviour can omit it.
  */
-export function createLivestockWorld(seed: number): LivestockWorld {
+export function createLivestockWorld(
+  seed: number,
+  opts: CreateLivestockWorldOpts = {},
+): LivestockWorld {
   const ecs = createWorld();
+  const paramStore = new ParamStore();
   let pool = makeSnapshotPool(64);
+  // Monotonic spawn counter — stamped on every `spawnFish` call. The
+  // determinism contract requires a stable per-entity key for tickPrng
+  // draws, and bitECS' raw entity ids are module-global so two worlds
+  // built in the same process get distinct id ranges. spawnIndex starts
+  // at 0 in every fresh world.
+  let nextSpawnIndex = 0;
 
   // `tickCounter` and `seed` live on the world object so `tickPrng(world,…)`
   // can read them without a closure variable per tick.
@@ -145,6 +260,9 @@ export function createLivestockWorld(seed: number): LivestockWorld {
     ecs,
     seed: seed | 0,
     tickCounter: 0,
+    paramStore,
+    spatialGrid: new SpatialGrid(pickCellSize(paramStore)),
+    tankAabb: opts.tankAabb ?? { ...DEFAULT_TANK_AABB },
 
     spawnFish(opts: SpawnOpts): number {
       const eid = addEntity(ecs);
@@ -158,6 +276,11 @@ export function createLivestockWorld(seed: number): LivestockWorld {
       Velocity.x[eid] = 0;
       Velocity.y[eid] = 0;
       Velocity.z[eid] = 0;
+
+      addComponent(ecs, Force, eid);
+      Force.x[eid] = 0;
+      Force.y[eid] = 0;
+      Force.z[eid] = 0;
 
       addComponent(ecs, Orientation, eid);
       const q = opts.orientation ?? { x: 0, y: 0, z: 0, w: 1 };
@@ -184,6 +307,12 @@ export function createLivestockWorld(seed: number): LivestockWorld {
       addComponent(ecs, BehaviorMode, eid);
       BehaviorMode.mode[eid] = BEHAVIOR_MODE.FORAGE;
 
+      addComponent(ecs, BehaviorParamsRef, eid);
+      BehaviorParamsRef.handleIdx[eid] =
+        opts.behaviorHandleIdx === undefined ? NO_BEHAVIOR_HANDLE : opts.behaviorHandleIdx & 0xffff;
+      BehaviorParamsRef.spawnIndex[eid] = nextSpawnIndex;
+      nextSpawnIndex = (nextSpawnIndex + 1) >>> 0;
+
       return eid;
     },
 
@@ -191,18 +320,52 @@ export function createLivestockWorld(seed: number): LivestockWorld {
       removeEntity(ecs, eid);
     },
 
+    setTankAabb(aabb: TankAabb): void {
+      // Defensive copy — callers that hold the prior reference don't need
+      // to worry about us mutating it, and we don't want them mutating
+      // our snapshot of the box behind our back.
+      this.tankAabb = {
+        minX: aabb.minX,
+        maxX: aabb.maxX,
+        minY: aabb.minY,
+        maxY: aabb.maxY,
+        minZ: aabb.minZ,
+        maxZ: aabb.maxZ,
+      };
+    },
+
+    registerSpeciesBehavior(speciesId: number, behavior: ResolvedBehavior): number {
+      const handle = paramStore.registerSpecies(speciesId, behavior);
+      // Rebuild the grid only if the cell size actually moved — the grid
+      // is per-tick disposable (cleared every PerceptionSystem call), so
+      // we can always lazily reallocate without losing inserted state.
+      const newCellSize = pickCellSize(paramStore);
+      if (newCellSize !== this.spatialGrid.cellSizeMm) {
+        this.spatialGrid = new SpatialGrid(newCellSize);
+      }
+      return handle;
+    },
+
     step(dt: number): void {
-      // Schooling / depth / territory / steering systems land in F11.2–F11.4
-      // ahead of these two — write back to Velocity and let Kinematic commit.
+      // F11.2 system order — see docs/caveats/livestock-ecs.md
+      // Perception → Schooling → Depth → SteeringIntegrator → Kinematic → Animation
+      // F11.3+ slots in Fear/Nip/Territory/Feeding between Perception and
+      // Schooling, and Flow/Collision between SteeringIntegrator and
+      // Kinematic. The reserved seats line up with the table in the caveat.
+      perceptionSystem(this);
+      schoolingSystem(this, dt);
+      depthSystem(this, dt);
+      steeringIntegrator(this, dt);
       kinematicSystem(ecs, dt);
+      // Clamp Position to tankAabb after Kinematic — SteeringIntegrator's
+      // projection should prevent escapes, but rounding error can still
+      // nudge a fish a fraction of a mm outside the box.
+      clampPositionToAabb(ecs, this.tankAabb);
       animationSystem(ecs, dt);
       this.tickCounter += 1;
     },
 
     snapshot(_alpha: number): WorldSnapshot {
-      // F11.1 has no steering, so we copy the integrated state straight out.
-      // Wave 4 (steering) will use `_alpha` to lerp Position between the last
-      // two ticks; the API takes it now so the contract is stable.
       const ents = ALL_ENTITIES(ecs);
       const n = ents.length;
       if (n > pool.capacity) pool = growPool(pool, n);
@@ -244,12 +407,37 @@ export function createLivestockWorld(seed: number): LivestockWorld {
     },
 
     dispose(): void {
-      // bitECS has no explicit world destructor in 0.3 — dropping the
-      // reference lets the typed-array slabs GC. We reset the tickCounter
-      // so any leaked reference at least produces a defensible value.
+      // bitECS has no explicit world destructor — dropping the reference
+      // lets the typed-array slabs GC. We reset the tickCounter so any
+      // leaked reference at least produces a defensible value, and clear
+      // the param store + grid so the next world doesn't accidentally
+      // alias a stale species table.
       this.tickCounter = 0;
+      paramStore.clear();
+      this.spatialGrid.clear();
     },
   };
 
   return world;
+}
+
+const positionQuery = defineQuery([Position]);
+
+/**
+ * Clamp every entity's Position to `aabb`. Called after KinematicSystem
+ * so rounding error from the steering projection can't accumulate into
+ * a real escape over many ticks.
+ */
+function clampPositionToAabb(ecs: IWorld, aabb: TankAabb): void {
+  for (const eid of positionQuery(ecs)) {
+    const x = Position.x[eid] as number;
+    const y = Position.y[eid] as number;
+    const z = Position.z[eid] as number;
+    if (x < aabb.minX) Position.x[eid] = aabb.minX;
+    else if (x > aabb.maxX) Position.x[eid] = aabb.maxX;
+    if (y < aabb.minY) Position.y[eid] = aabb.minY;
+    else if (y > aabb.maxY) Position.y[eid] = aabb.maxY;
+    if (z < aabb.minZ) Position.z[eid] = aabb.minZ;
+    else if (z > aabb.maxZ) Position.z[eid] = aabb.maxZ;
+  }
 }

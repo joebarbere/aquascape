@@ -1,0 +1,19 @@
+{
+  "name": "domain-livestock-behaviors",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/livestock-behaviors/src",
+  "projectType": "library",
+  "tags": ["scope:domain", "type:lib", "framework:none", "domain:livestock-behaviors"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/domain/livestock-behaviors",
+        "main": "libs/domain/livestock-behaviors/src/index.ts",
+        "tsConfig": "libs/domain/livestock-behaviors/tsconfig.lib.json",
+        "assets": ["libs/domain/livestock-behaviors/*.md"]
+      }
+    }
+  }
+}

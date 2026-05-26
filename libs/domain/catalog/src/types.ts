@@ -20,6 +20,12 @@
  *   matching the rest of the document format.
  */
 
+import type {
+  AnimationParams,
+  DepthParams,
+  SchoolingParams,
+} from '@aquascape/domain/livestock-behaviors';
+
 /** Linear measurement in millimetres. Integers preferred. */
 export type Millimetres = number;
 
@@ -196,6 +202,29 @@ export interface LivestockEntry extends CatalogEntryBase {
     finNipper?: boolean;
     /** True when the species needs brackish (non-freshwater) water. */
     brackish?: boolean;
+  };
+  /**
+   * Optional per-species overrides for the Stage 11 F11.2 schooling +
+   * vertical-stratification pipeline. Every subfield is optional; absent
+   * fields resolve to the per-group preset via `resolveBehavior()` in
+   * `@aquascape/domain/livestock-behaviors`. Manifest authors only declare
+   * what they want to override (e.g. just `behavior.depth.preferredY = 0.88`
+   * for a slightly-higher-than-default species).
+   *
+   * Schema: catalog manifest schemaVersion 3 introduces this block. v2
+   * manifests load unchanged because every field is optional + additive —
+   * `resolveBehavior()` handles a missing block by falling back to the
+   * group preset.
+   *
+   * The `SchoolingParams` / `DepthParams` / `AnimationParams` types are
+   * imported as `type only` from `@aquascape/domain/livestock-behaviors` so
+   * the catalog runtime bundle never pulls behaviour code in. The dep edge
+   * runs catalog → livestock-behaviors at the type level only.
+   */
+  behavior?: {
+    schooling?: Partial<SchoolingParams>;
+    depth?: Partial<DepthParams>;
+    animation?: Partial<AnimationParams>;
   };
 }
 

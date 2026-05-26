@@ -109,4 +109,14 @@ export class SpatialGrid {
     for (const bucket of this.buckets.values()) n += bucket.length;
     return n;
   }
+
+  /**
+   * Read the cell size set at construction. PerceptionSystem reads this
+   * to decide whether to swap in a fresh grid when the param store's max
+   * neighbour radius has shifted; without it the only alternative is an
+   * `as unknown as { cellSize: number }` cast.
+   */
+  get cellSizeMm(): number {
+    return this.cellSize;
+  }
 }

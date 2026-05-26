@@ -134,6 +134,23 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     expect(entry.bioloadClass).toBe('low');
   });
 
+  it('the Neon Tetra entry carries its F11.2 behavior override (tighter cohesion than the mid preset)', () => {
+    const entry = coreCatalog.get({ catalog: 'core', id: 'livestock.fish.neon-tetra' });
+    expect(entry).not.toBeNull();
+    if (entry?.kind !== 'livestock') return;
+    expect(entry.behavior?.schooling?.wCoh).toBe(1.5);
+  });
+
+  it('only a small handful of livestock entries declare a behavior block (defaults still exercise resolveBehavior)', () => {
+    const annotated = coreCatalog
+      .byKind('livestock')
+      .filter((e) => e.behavior !== undefined);
+    // F11.2 plan: ~1–2 explicit overrides; F11.6 will broaden this. If this
+    // count creeps up before F11.6 lands, the wiring tests for the default
+    // `resolveBehavior` path lose their coverage.
+    expect(annotated.length).toBeLessThanOrEqual(2);
+  });
+
   it('the Cherry Shrimp livestock entry is reachable and grouped as shrimp', () => {
     const entry = coreCatalog.get({ catalog: 'core', id: 'livestock.shrimp.neocaridina-davidi' });
     expect(entry).not.toBeNull();

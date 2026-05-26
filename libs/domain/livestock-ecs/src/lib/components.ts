@@ -54,6 +54,36 @@ export const AnimationPhase = defineComponent({
 export const BehaviorMode = defineComponent({ mode: Types.ui8 });
 
 /**
+ * Per-tick force accumulator (mm/s²). Behaviour systems (Schooling, Depth,
+ * Flow, …) sum into this; SteeringIntegrator drains it into `Velocity` and
+ * resets it to (0,0,0) before the next tick. Keeping the accumulator on a
+ * dedicated component (rather than overwriting Velocity directly) lets the
+ * integrator clamp `|Velocity|`, enforce `turnMax`, and project against the
+ * tank AABB in a single pass after every force is in.
+ */
+export const Force = defineComponent({ x: Types.f32, y: Types.f32, z: Types.f32 });
+
+/**
+ * Indirection from an entity to its species-level `ResolvedBehavior`
+ * bundle. The behaviour data itself lives on the world's `ParamStore` —
+ * one shared row per species, referenced by every entity of that species
+ * via `handleIdx`. This keeps a 200-fish school from carrying 200 copies
+ * of the same 11-float SchoolingParams. Handle 0xffff (= 65535) is treated
+ * as "no behaviour registered" — equivalent to F11.1's static-wiggle path.
+ *
+ * `spawnIndex` is the 0-based, monotonic order in which `spawnFish` was
+ * called for the owning world. Stable across two worlds built from the
+ * same seed + same `SpawnOpts` sequence — used as the key for `tickPrng`
+ * draws so the per-tick RNG stream is reproducible across cold restarts
+ * (bitECS allocates entity ids from a module-global cursor, so the raw
+ * eid is NOT stable across two cold worlds in the same process).
+ */
+export const BehaviorParamsRef = defineComponent({
+  handleIdx: Types.ui16,
+  spawnIndex: Types.ui32,
+});
+
+/**
  * Enum of procedural fish archetypes (F11.1 fish-anatomy library). Stored as
  * a `ui8` on the entity so the renderer can branch its InstancedMesh
  * selection from a flat lookup.

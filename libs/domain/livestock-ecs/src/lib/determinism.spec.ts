@@ -8,8 +8,11 @@
  * (the lint rule should catch it first) or a per-Date.now() seed somewhere,
  * this test will fail on the very next run.
  */
+import { MID_PRESET } from '@aquascape/domain/livestock-behaviors';
 import { FISH_ARCHETYPE, type LivestockWorld } from '../index';
-import { createLivestockWorld } from './world';
+import { createLivestockWorld, type TankAabb } from './world';
+
+const TANK: TankAabb = { minX: 0, maxX: 1000, minY: 0, maxY: 400, minZ: 0, maxZ: 400 };
 
 interface SpawnSpec {
   archetype: number;
@@ -74,6 +77,36 @@ describe('determinism: 1000 ticks × fixed fleet', () => {
     expect(byteEqual(run1.phase, run2.phase)).toBe(true);
     expect(byteEqual(run1.archetype, run2.archetype)).toBe(true);
     expect(byteEqual(run1.scale, run2.scale)).toBe(true);
+  });
+
+  it('1000-tick replay with registered behaviour is byte-identical (F11.2 invariant)', () => {
+    // Same as the F11.1 test, but every fish gets MID_PRESET behaviour
+    // wired in. The Schooling + Depth + Steering systems now drive
+    // Velocity through tickPrng noise — so the byte-identity check
+    // exercises *every* random read the lib makes.
+    function runBehavedFleet(): {
+      position: Float32Array;
+      orientation: Float32Array;
+      phase: Float32Array;
+    } {
+      const w: LivestockWorld = createLivestockWorld(SEED, { tankAabb: TANK });
+      const handle = w.registerSpeciesBehavior(99, MID_PRESET);
+      for (const spec of FLEET) {
+        w.spawnFish({ ...spec, behaviorHandleIdx: handle });
+      }
+      for (let i = 0; i < TICKS; i++) w.step(SIM_DT);
+      const s = w.snapshot(0);
+      return {
+        position: new Float32Array(s.position),
+        orientation: new Float32Array(s.orientation),
+        phase: new Float32Array(s.phase),
+      };
+    }
+    const r1 = runBehavedFleet();
+    const r2 = runBehavedFleet();
+    expect(byteEqual(r1.position, r2.position)).toBe(true);
+    expect(byteEqual(r1.orientation, r2.orientation)).toBe(true);
+    expect(byteEqual(r1.phase, r2.phase)).toBe(true);
   });
 
   it('different seeds still produce identical *static* fields (position w/ v=0, archetype, scale)', () => {

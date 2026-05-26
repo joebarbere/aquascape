@@ -38,6 +38,9 @@
       "@aquascape/domain/fish-anatomy": ["libs/domain/fish-anatomy/src/index.ts"],
       "@aquascape/domain/geometry": ["libs/domain/geometry/src/index.ts"],
       "@aquascape/domain/growth-sim": ["libs/domain/growth-sim/src/index.ts"],
+      "@aquascape/domain/livestock-behaviors": [
+        "libs/domain/livestock-behaviors/src/index.ts"
+      ],
       "@aquascape/domain/livestock-ecs": ["libs/domain/livestock-ecs/src/index.ts"],
       "@aquascape/domain/scene-model": ["libs/domain/scene-model/src/index.ts"],
       "@aquascape/domain/stocking": ["libs/domain/stocking/src/index.ts"],

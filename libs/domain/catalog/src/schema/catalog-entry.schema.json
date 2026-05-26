@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://aquascape.dev/schemas/catalog-entry-v1.json",
+  "$id": "https://aquascape.dev/schemas/catalog-entry-v3.json",
   "title": "CatalogEntry",
-  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 + 7 F7.3 ship `substrate` + `hardscape` + `plant` + `livestock` + `equipment`. Future stages add tank under the same oneOf.",
+  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 + 7 F7.3 ship `substrate` + `hardscape` + `plant` + `livestock` + `equipment`. Future stages add tank under the same oneOf. Manifest schemaVersion 3 (Stage 11 F11.2) adds the optional `behavior` block on `LivestockEntry`; v2 manifests load unchanged because every behavior subfield is optional + additive (`resolveBehavior()` falls back to per-group presets when the block is absent).",
   "oneOf": [
     { "$ref": "#/$defs/SubstrateEntry" },
     { "$ref": "#/$defs/HardscapeEntry" },
@@ -220,6 +220,129 @@
             "brackish": { "type": "boolean" }
           },
           "description": "Pre-baked answers for the Stage 7 F7.2 compatibility rule engine."
+        },
+        "behavior": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Stage 11 F11.2 per-species overrides for the schooling + vertical-stratification + animation params. Every subfield is optional; absent fields fall back to the per-group preset via `resolveBehavior()` in `@aquascape/domain/livestock-behaviors`. Manifests authored before schemaVersion 3 lack this block entirely and load unchanged.",
+          "properties": {
+            "schooling": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Couzin 2002 three-zone + Reynolds 1987 weighted steering. Distances in millimetres; speeds in mm/sec.",
+              "properties": {
+                "ZOR": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Zone of repulsion radius (mm). Below this, neighbours push us away."
+                },
+                "ZOO": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Zone of orientation radius (mm). Between ZOR and ZOO, headings align."
+                },
+                "ZOA": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Zone of attraction radius (mm). Between ZOO and ZOA, steer toward centroid."
+                },
+                "blindAngle": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 3.141592653589793,
+                  "description": "Blind cone behind the fish (radians, total angle subtended). Range [0, π]."
+                },
+                "vPref": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Preferred cruise speed (mm/sec)."
+                },
+                "vMax": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Hard cap on instantaneous speed (mm/sec)."
+                },
+                "turnMax": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Maximum heading change (rad/sec)."
+                },
+                "wSep": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Reynolds separation weight."
+                },
+                "wAli": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Reynolds alignment weight."
+                },
+                "wCoh": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Reynolds cohesion weight."
+                },
+                "noise": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Per-tick noise magnitude as a fraction of vPref. Typical 0..0.2."
+                }
+              }
+            },
+            "depth": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Vertical-stratification spring centred on a preferred fraction of tank height.",
+              "properties": {
+                "preferredY": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Preferred Y as a fraction of tank height (0 = substrate, 1 = waterline)."
+                },
+                "bandWidth": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Band half-width as a fraction of tank height. Inside this, only noise applies."
+                },
+                "returnForce": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Restoring force magnitude when outside the band (mm/sec² equivalent)."
+                }
+              }
+            },
+            "animation": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Carangiform tail-beat parameters consumed by the renderer-3d vertex shader.",
+              "properties": {
+                "tailBeatFreq": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Tail-beat frequency (Hz)."
+                },
+                "ampHead": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Amplitude at the head end (fraction of body length)."
+                },
+                "ampTail": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Amplitude at the tail tip (fraction of body length)."
+                },
+                "envelopeExp": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Spine envelope exponent in `amp(s) = ampHead + (ampTail−ampHead) * pow(s, env)`."
+                }
+              }
+            }
+          }
         }
       }
     },

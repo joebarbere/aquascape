@@ -9,7 +9,7 @@
 [![main CI](https://github.com/joebarbere/aquascape/actions/workflows/main.yml/badge.svg)](https://github.com/joebarbere/aquascape/actions/workflows/main.yml)
 [![PR CI](https://github.com/joebarbere/aquascape/actions/workflows/pr.yml/badge.svg)](https://github.com/joebarbere/aquascape/actions/workflows/pr.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
-[![Status: Stages 0–7 + 10 + F11.1 complete](https://img.shields.io/badge/status-stages%200--7%20%2B%2010%20%2B%20F11.1-brightgreen.svg)](#status--roadmap)
+[![Status: Stages 0–7 + 10 + F11.1–F11.2 complete](https://img.shields.io/badge/status-stages%200--7%20%2B%2010%20%2B%20F11.1--F11.2-brightgreen.svg)](#status--roadmap)
 [![Platform: Web + Electron](https://img.shields.io/badge/platform-web%20%2B%20electron-informational.svg)](#platforms)
 
 </div>
@@ -103,7 +103,8 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 - Glass tank with frame styling (rimless / framed / braced), substrate extruded from your profile, hardscape + plants rendered as 3D silhouettes with vigour-scaled growth
 - Ambient + directional lighting; the time slider works in 3D too (scrub plant growth over weeks)
 - **Read-only in Stage 10** — editing happens in 2D; flip to 3D to visualise. The ambient-scene polish (animated water surface, dynamic lighting / day-night cycle, swaying plants) plus fish behaviours all land in Stage 11 — see [`plans/stage-11-animated-livestock.md`](./plans/stage-11-animated-livestock.md)
-- **F11.1 shipped:** each livestock entry in the document becomes N visible fish in the 3D view, deterministically spawned from `scene.seed`. Six procedural archetypes (slim-tetra / deep-bodied / barb / cory-cylinder / eel / hatchet-wedge) wiggle in place via a carangiform tail-beat vertex shader; species → archetype mapping reads the catalog group. Steering / schooling / collision / current land in F11.2–F11.5.
+- **F11.1 shipped:** each livestock entry in the document becomes N visible fish in the 3D view, deterministically spawned from `scene.seed`. Six procedural archetypes (slim-tetra / deep-bodied / barb / cory-cylinder / eel / hatchet-wedge) wiggle in place via a carangiform tail-beat vertex shader; species → archetype mapping reads the catalog group.
+- **F11.2 shipped:** the fish now swim — Couzin three-zone schooling (ZOR / ZOO / ZOA with blind cone), Reynolds 1987 weighted separation / alignment / cohesion forces, vertical-band stratification (hatchetfish hug the surface, tetras roam mid-water, cories scoot along the substrate), turn-rate-clamped steering integrator. Catalog manifest `schemaVersion: 3` adds an optional `LivestockEntry.behavior` block so manifest authors can override per-species params one field at a time on top of the per-group presets. Collision / flow / bubbles / per-species presets land in F11.3–F11.6.
 
 ### 📦 Templates
 
@@ -161,7 +162,8 @@ The roadmap lives in [`aquascape-development-plan.md`](./aquascape-development-p
 | 9 | AI photorealistic render (local + hosted) — see [`plans/stage-9-ai-render/`](./plans/stage-9-ai-render/) | 📐 Planned |
 | 10 | 3D renderer (Three.js / WebGL — read-only) | ✅ |
 | 11 F11.1 | Animated-livestock foundation — ECS world + six procedural fish archetypes wiggling in place. See [`plans/stage-11-animated-livestock.md`](./plans/stage-11-animated-livestock.md). | ✅ |
-| 11 F11.2–F11.7 | Schooling + stratification (F11.2), territoriality + fear (F11.3), feeding + grazing (F11.4), flow field + collision + bubbles (F11.5), per-species presets + perf budget (F11.6), ambient polish — water surface, day-night, plant sway (F11.7). [Research bibliography](./docs/research/stage-11-livestock-subsystem.md). | 📐 Planned |
+| 11 F11.2 | Schooling + vertical stratification — Couzin three-zone schooling, depth bands, turn-rate-clamped steering; catalog manifest schemaVersion 2 → 3 to host the optional `behavior` block. | ✅ |
+| 11 F11.3–F11.7 | Territoriality + fear (F11.3), feeding + grazing (F11.4), flow field + collision + bubbles (F11.5), per-species presets + perf budget (F11.6), ambient polish — water surface, day-night, plant sway (F11.7). [Research bibliography](./docs/research/stage-11-livestock-subsystem.md). | 📐 Planned |
 | 12 | Release pipeline — `pnpm release <version>`, electron-builder installers, GitHub Releases. Version scheme + first-release tag are an open decision (tracked inside the plan + a forthcoming ADR-0005); the script ships scheme-agnostic. See [`plans/stage-12-release-pipeline.md`](./plans/stage-12-release-pipeline.md). | 📐 Planned |
 
 ---
@@ -194,7 +196,8 @@ libs/
     fish-anatomy/  Six procedural fish archetype geometry generators (Stage 11 F11.1)
     geometry/      Vec2/3, transforms, hit-test, snap helpers
     growth-sim/    Deterministic plant-growth math
-    livestock-ecs/ bitECS world + components + Kinematic/Animation systems + scheduler (Stage 11 F11.1)
+    livestock-behaviors/  Schooling/Depth/Animation param types + per-group presets + resolveBehavior (Stage 11 F11.2)
+    livestock-ecs/ bitECS world + Perception/Schooling/Depth/SteeringIntegrator/Kinematic/Animation systems + ParamStore (Stage 11 F11.1+F11.2)
     scene-model/   Scene/Layer/Object types + Command pipeline + history
     stocking/      Stocking-guidance rules engine (F7.2)
   rendering/

@@ -1,10 +1,12 @@
-// Stage 11 F11.1 Wave 4 — owns the bitECS world that the 3D renderer's RAF
-// loop steps + drains each frame.
+// Stage 11 F11.2 Wave 5 — owns the bitECS world that the 3D renderer's RAF
+// loop steps + drains each frame, and wires the schooling/depth behaviour
+// pipeline (ResolvedBehavior + ParamStore + tankAabb) into the world.
 //
 // RESPONSIBILITIES
 // ----------------
 // 1. Lazily build a `LivestockWorld` seeded from `scene.seed` on first
-//    `getWorld()` (the 3D renderer asks for it on its first paint).
+//    `getWorld()` (the 3D renderer asks for it on its first paint). The
+//    world is constructed with the scene's tank interior AABB.
 // 2. Subscribe to NgRx scene emissions: when `scene.livestock` (or the
 //    seed) changes, re-spawn every entity deterministically. Same
 //    `(seed, livestock)` pair → identical entity counts + initial
@@ -13,18 +15,40 @@
 //    drops its bundle and its reference to the world, but the service
 //    keeps the same `LivestockWorld` instance alive. The next 3D switch
 //    builds a fresh bundle and connects it to the existing world.
+// 4. F11.2: For each unique catalog row referenced in `scene.livestock`,
+//    resolve a `ResolvedBehavior` via `resolveBehavior()` and register
+//    it on the world's ParamStore. The returned `handleIdx` is passed
+//    through to every spawned entity for that species, and the species'
+//    animation params (tailBeatFreq / ampHead / ampTail) come straight
+//    off the resolved behaviour — no hardcoded F11.1 defaults.
+// 5. F11.2: Push the tank interior AABB through to the world on every
+//    spawn pass via `setTankAabb`, so DepthSystem + SteeringIntegrator
+//    + the post-Kinematic clamp track tank resizes without a world rebuild.
+//
+// FALLBACK POLICY (F11.1 static-wiggle preservation)
+// --------------------------------------------------
+// If a catalog row is missing or `resolveBehavior` throws, that entry's
+// entities spawn with `behaviorHandleIdx = NO_BEHAVIOR_HANDLE` so the
+// behaviour systems early-out and the fish wiggles in place at its spawn
+// position. We log a warning + continue (a single console.warn per missing
+// ref, gated on the resolveBehavior failure path). This is the documented
+// "log + skip the behaviour wiring, keep the visual" policy.
 //
 // DETERMINISM
 // -----------
-// Per-entry PRNG = `seededHash01(documentSeed, hash(entry.id), ...)`.
-// `seededHash01` is the workspace's standard deterministic hash (see
-// `docs/caveats/geometry.md`). Sequential random reads partition by an
-// extra integer key, matching the `tickPrng` pattern from livestock-ecs.
-//
-// The document seed lives on `Scene.seed: number` today (not on a
-// separate document envelope) — the marshal layer copies it from
-// `AquaDocument.seed` so by the time the scene reaches NgRx, `scene.seed`
-// is the authoritative source of truth. No schema change needed.
+// - Per-entry spawn PRNG = `seededHash01(documentSeed XOR hash(entry.id), ...)`.
+//   `seededHash01` is the workspace's standard deterministic hash (see
+//   `docs/caveats/geometry.md`).
+// - Iteration order is `scene.livestock` document order, and within each
+//   entry, `0..quantity-1`. Two cold service starts with the same scene
+//   produce identical bitECS spawn sequences, which makes the world's
+//   `spawnIndex` (used as the tickPrng partition key per the
+//   livestock-ecs caveat) stable across runs — that's the 1000-tick
+//   byte-identity gate.
+// - Behaviour registration order matters for the ParamStore handle
+//   numbering. Species are registered in document order on first
+//   encounter, so the same scene reproduces the same handleIdx layout
+//   across cold starts.
 
 import { Injectable, OnDestroy, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -34,22 +58,23 @@ import { Store } from '@ngrx/store';
 import { coreCatalog } from '@aquascape/domain/catalog';
 import type { Catalog, LivestockEntry as CatalogLivestockEntry } from '@aquascape/domain/catalog';
 import { archetypeForSpecies, type FishArchetypeId } from '@aquascape/domain/fish-anatomy';
+import {
+  resolveBehavior,
+  type BehaviorResolutionInput,
+  type ResolvedBehavior,
+} from '@aquascape/domain/livestock-behaviors';
 import { seededHash01 } from '@aquascape/domain/geometry';
 import {
   FISH_ARCHETYPE,
+  NO_BEHAVIOR_HANDLE,
   createLivestockWorld,
   type LivestockWorld,
+  type TankAabb,
 } from '@aquascape/domain/livestock-ecs';
 import type { LivestockEntry, Scene } from '@aquascape/domain/scene-model';
 import { selectScene } from '@aquascape/state';
 
-/** Default tail-beat frequency, Hz. Matches `livestock-ecs/world.ts`. */
-const DEFAULT_TAIL_BEAT_FREQ_HZ = 4;
-/** Default carangiform head amplitude (body-lengths). */
-const DEFAULT_AMP_HEAD = 0.02;
-/** Default carangiform tail amplitude (body-lengths). */
-const DEFAULT_AMP_TAIL = 0.12;
-/** Default body length when the catalog entry can't be resolved (mm). */
+/** Body length when the catalog entry can't be resolved (mm). */
 const FALLBACK_BODY_LENGTH_MM = 35;
 /** Inset from each interior wall so spawned fish never start inside the glass. */
 const SPAWN_WALL_INSET_MM = 20;
@@ -124,6 +149,7 @@ export class LivestockSimulationService implements OnDestroy {
       this.world = null;
     }
     this.lastSpawnKey = null;
+    this.warnedRefs.clear();
   }
 
   // ─── Internal ─────────────────────────────────────────────────────────
@@ -132,10 +158,15 @@ export class LivestockSimulationService implements OnDestroy {
    * React to a new scene from the store. Re-spawn entities only when
    * `(seed, livestock fingerprint)` changes; an unrelated scene
    * mutation (e.g. a plant moved) leaves the existing ECS state alone.
+   *
+   * Tank-AABB changes go through `setTankAabb` without a rebuild — the
+   * world's PRNG state stays untouched, but DepthSystem + SteeringIntegrator
+   * pick up the new bounds on the next tick. (Tests cover this case.)
    */
   private onSceneChanged(scene: Scene): void {
     const livestock = scene.livestock ?? [];
-    const key = this.spawnKey(scene.seed, livestock);
+    const key = this.spawnKey(scene.seed, livestock, scene.tank);
+    const tankAabb = tankAabbFromScene(scene);
 
     // No livestock at all → tear down the world entirely so the
     // renderer's `options.livestockWorld` becomes null and the no-op
@@ -149,9 +180,10 @@ export class LivestockSimulationService implements OnDestroy {
       return;
     }
 
-    // First time we see livestock — build the world.
+    // First time we see livestock — build the world WITH the scene's
+    // tank AABB so DepthSystem reads the real interior height from tick 1.
     if (this.world === null) {
-      this.world = createLivestockWorld(scene.seed);
+      this.world = createLivestockWorld(scene.seed, { tankAabb });
       this.spawnAll(this.world, scene, livestock);
       this.lastSpawnKey = key;
       return;
@@ -165,8 +197,12 @@ export class LivestockSimulationService implements OnDestroy {
     // `seed` is frozen at creation).
     if (this.world.seed !== (scene.seed | 0)) {
       this.world.dispose();
-      this.world = createLivestockWorld(scene.seed);
+      this.world = createLivestockWorld(scene.seed, { tankAabb });
     } else {
+      // Same seed: keep the world, mutate the AABB in place, then
+      // re-spawn entities. setTankAabb + a re-spawn pass is cheaper
+      // than a full world rebuild (no GC, no ParamStore reset).
+      this.world.setTankAabb(tankAabb);
       this.despawnAll(this.world);
     }
     this.spawnAll(this.world, scene, livestock);
@@ -177,11 +213,23 @@ export class LivestockSimulationService implements OnDestroy {
    * Build a stable string fingerprint of the inputs that drive spawn
    * layout. Two scenes with the same fingerprint MUST produce the same
    * spawned-entity set (determinism invariant).
+   *
+   * Tank dimensions are part of the key — they bound the spawn random
+   * draws, so a tank resize must trigger a re-spawn even when seed +
+   * livestock are unchanged.
+   *
+   * NOTE: we do NOT sort the parts. Document-order iteration is
+   * load-bearing for determinism: per the livestock-ecs caveat, the
+   * world's per-entity `spawnIndex` is the tickPrng partition key, and
+   * spawnIndex monotonically increments in the order the service calls
+   * spawnFish. Sorting would silently break replay across cold starts
+   * if the document author re-ordered the livestock array.
    */
-  private spawnKey(seed: number, livestock: readonly LivestockEntry[]): string {
-    const parts = livestock.map((e) => `${e.id}:${e.ref.catalog}/${e.ref.id}@${e.ref.version}:${e.quantity}`);
-    parts.sort();
-    return `${seed | 0}|${parts.join('|')}`;
+  private spawnKey(seed: number, livestock: readonly LivestockEntry[], tank: Scene['tank']): string {
+    const parts = livestock.map(
+      (e) => `${e.id}:${e.ref.catalog}/${e.ref.id}@${e.ref.version}:${e.quantity}`,
+    );
+    return `${seed | 0}|${tank.width}x${tank.height}x${tank.depth}|${parts.join('|')}`;
   }
 
   /** Despawn every fish in the world. Used on re-spawn (same seed). */
@@ -194,32 +242,128 @@ export class LivestockSimulationService implements OnDestroy {
     for (const id of ids) world.despawn(id);
   }
 
-  /** Walk every livestock entry and spawn its quota into the world. */
+  /**
+   * Walk every livestock entry and spawn its quota into the world.
+   *
+   * Behaviour resolution + species registration happens here, NOT in
+   * `spawnEntry`, so we can dedupe by `ref.id` and call
+   * `world.registerSpeciesBehavior(...)` exactly once per unique
+   * species in the scene. The returned handleIdx is then handed to
+   * `spawnEntry` for every entity in that entry.
+   */
   private spawnAll(world: LivestockWorld, scene: Scene, livestock: readonly LivestockEntry[]): void {
+    // speciesId → handleIdx (or NO_BEHAVIOR_HANDLE for the fallback path).
+    const handleBySpecies = new Map<number, number>();
+
     for (const entry of livestock) {
-      this.spawnEntry(world, scene, entry);
+      const catalogRow = this.catalog.get(entry.ref);
+      const speciesId = speciesIdForRef(entry.ref.id);
+
+      let handleIdx: number;
+      if (handleBySpecies.has(speciesId)) {
+        // Same species already registered for an earlier entry — reuse
+        // the handle (no double registration; ParamStore is idempotent
+        // on speciesId anyway, but this also avoids the work).
+        handleIdx = handleBySpecies.get(speciesId) as number;
+      } else {
+        handleIdx = this.resolveAndRegister(world, catalogRow, entry.ref.id);
+        handleBySpecies.set(speciesId, handleIdx);
+      }
+
+      // Pull the resolved animation params from the ParamStore so each
+      // entity for this species gets the species-level frequency +
+      // amplitudes (NOT the F11.1 hardcoded defaults). When the handle
+      // is NO_BEHAVIOR_HANDLE we fall back to the world's spawnFish
+      // defaults (4 Hz / 0.02 / 0.12) — the behaviour systems early-out
+      // so animation is the only thing that runs anyway.
+      const resolved = handleIdx === NO_BEHAVIOR_HANDLE ? null : world.paramStore.get(handleIdx);
+      this.spawnEntry(world, scene, entry, {
+        speciesId,
+        handleIdx,
+        resolved,
+        catalogRow,
+      });
     }
   }
 
-  /** Spawn `entry.quantity` ECS entities for a single `LivestockEntry`. */
-  private spawnEntry(world: LivestockWorld, scene: Scene, entry: LivestockEntry): void {
-    const catalogRow = this.catalog.get(entry.ref);
-    // The entry could be missing (broken catalog ref). Fall back to a
-    // generic slim-tetra at 35 mm — at worst the user sees a small
-    // tetra-shaped placeholder instead of nothing.
-    const archetype = resolveArchetype(catalogRow);
-    const speciesId = (seededHash01(0, hashStringTo32(entry.ref.id)) * 65535) | 0;
-    const bodyLengthMm = resolveBodyLengthMm(catalogRow);
+  /**
+   * Resolve a catalog row to a ResolvedBehavior and register it on the
+   * world's ParamStore. Returns the handle index for spawnFish.
+   *
+   * Fallback policy (documented + tested):
+   *  - catalogRow === null/undefined → log once (per ref id), return
+   *    NO_BEHAVIOR_HANDLE.
+   *  - resolveBehavior throws → log once, return NO_BEHAVIOR_HANDLE.
+   * Either path leaves the fish on the F11.1 static-wiggle path.
+   */
+  private resolveAndRegister(
+    world: LivestockWorld,
+    catalogRow: unknown,
+    refId: string,
+  ): number {
+    if (catalogRow === null || catalogRow === undefined || !isLivestockRow(catalogRow)) {
+      this.warnOnce(refId, 'missing');
+      return NO_BEHAVIOR_HANDLE;
+    }
+    let resolved: ResolvedBehavior;
+    try {
+      // `BehaviorResolutionInput` is structural; the catalog
+      // LivestockEntry shape carries every field it reads (group,
+      // temperament, schoolingMin, tags, id, behavior). Pass through
+      // directly — no `assertHasBehavior` runtime check.
+      resolved = resolveBehavior(catalogRow as BehaviorResolutionInput);
+    } catch (err) {
+      this.warnOnce(refId, `resolveBehavior failed: ${String(err)}`);
+      return NO_BEHAVIOR_HANDLE;
+    }
+    const speciesId = speciesIdForRef(refId);
+    return world.registerSpeciesBehavior(speciesId, resolved);
+  }
 
-    // Tail-beat frequency / amplitudes come from the catalog's optional
-    // `behavior.animation` block when present (F11.2+ adds the block on
-    // the schema; F11.1's spawning is forward-compatible by reading
-    // through an `unknown` cast). Until the block lands, every spawn
-    // uses the workspace defaults.
-    const behaviorAnim = readBehaviorAnimation(catalogRow);
-    const tailBeatFreq = behaviorAnim?.tailBeatFreq ?? DEFAULT_TAIL_BEAT_FREQ_HZ;
-    const ampHead = behaviorAnim?.ampHead ?? DEFAULT_AMP_HEAD;
-    const ampTail = behaviorAnim?.ampTail ?? DEFAULT_AMP_TAIL;
+  /**
+   * Service-lifetime dedup for the missing-catalog-ref warning. Without
+   * this, every `onSceneChanged` emission (autosave tick, selection
+   * mutation, etc.) re-emits the same warning since spawnAll re-walks
+   * every entry. Cleared on `dispose()` so a new document gets a fresh
+   * warn window for previously-seen-and-now-removed refs.
+   *
+   * NOTE: this does NOT promise the warn fires *exactly once* per ref
+   * across the service's lifetime — only that it fires *at most once*
+   * per re-spawn pass per ref. The store may re-emit the same scene
+   * shape (e.g. after `refreshState` in tests, or an autosave round
+   * trip in prod) and trigger another spawn pass that hasn't yet seen
+   * the ref. That's intentional — the warn is a "you have a broken
+   * doc" signal, and re-emitting it on every document load is fine.
+   */
+  private readonly warnedRefs = new Set<string>();
+  private warnOnce(refId: string, reason: string): void {
+    if (this.warnedRefs.has(refId)) return;
+    this.warnedRefs.add(refId);
+    console.warn(
+      `[livestock-sim] ref "${refId}" — ${reason}. Spawning with NO_BEHAVIOR_HANDLE (static wiggle).`,
+    );
+  }
+
+  /** Spawn `entry.quantity` ECS entities for a single `LivestockEntry`. */
+  private spawnEntry(
+    world: LivestockWorld,
+    scene: Scene,
+    entry: LivestockEntry,
+    species: {
+      speciesId: number;
+      handleIdx: number;
+      resolved: ResolvedBehavior | null;
+      catalogRow: unknown;
+    },
+  ): void {
+    const archetype = resolveArchetype(species.catalogRow);
+    const bodyLengthMm = resolveBodyLengthMm(species.catalogRow);
+
+    // Animation params come from the resolved behaviour. When we're on
+    // the fallback path (NO_BEHAVIOR_HANDLE) `resolved` is null and we
+    // omit the animation fields so spawnFish's own defaults (4 Hz /
+    // 0.02 / 0.12 — matching the F11.1 wiggle look) kick in.
+    const anim = species.resolved?.animation ?? null;
 
     // Per-entry seed: `documentSeed XOR hashOfEntryId`. Reuses
     // `seededHash01` for the partition-by-key trick — each random read
@@ -259,14 +403,16 @@ export class LivestockSimulationService implements OnDestroy {
 
       world.spawnFish({
         archetype,
-        speciesId,
+        speciesId: species.speciesId,
         bodyLengthMm,
         position: { x, y, z },
         orientation,
-        tailBeatFreq,
-        ampHead,
-        ampTail,
+        // Either species params or spawnFish defaults — never both.
+        tailBeatFreq: anim?.tailBeatFreq,
+        ampHead: anim?.ampHead,
+        ampTail: anim?.ampTail,
         phaseOffset: rPhase * Math.PI * 2,
+        behaviorHandleIdx: species.handleIdx,
       });
     }
   }
@@ -319,19 +465,44 @@ function resolveBodyLengthMm(catalogRow: unknown): number {
 }
 
 /**
- * Read the optional `behavior.animation` block from a catalog row when
- * present. F11.1's catalog schema doesn't declare the field yet (F11.2+
- * adds it on the `behavior` block); the cast keeps this forward-
- * compatible without a schema bump in F11.1.
+ * Hash a catalog ref id to a stable 16-bit species id. The bitECS
+ * SpeciesId.id slot is `ui16`, so we squeeze the 32-bit FNV-1a hash
+ * down to that range. Two different ref ids could in principle collide,
+ * but the ParamStore keys by speciesId so a collision means the second
+ * registration would overwrite the first — acceptable for F11.2 (the
+ * catalog has tens of species, not tens of thousands), and the failure
+ * mode is "two species share params" rather than "fish disappear".
  */
-function readBehaviorAnimation(
-  catalogRow: unknown,
-): { tailBeatFreq?: number; ampHead?: number; ampTail?: number } | null {
-  if (catalogRow === null || catalogRow === undefined) return null;
-  const row = catalogRow as {
-    behavior?: { animation?: { tailBeatFreq?: number; ampHead?: number; ampTail?: number } };
+function speciesIdForRef(refId: string): number {
+  return (seededHash01(0, hashStringTo32(refId)) * 65535) | 0;
+}
+
+/**
+ * Narrow an unknown catalog row to a "looks like a livestock entry"
+ * shape so we can safely pass it to `resolveBehavior` (which is
+ * structurally typed). Returns false for hardscape / plant / equipment
+ * rows so the service skips behaviour registration for non-fish refs
+ * that somehow leak through.
+ */
+function isLivestockRow(catalogRow: unknown): boolean {
+  if (catalogRow === null || typeof catalogRow !== 'object') return false;
+  return (catalogRow as { kind?: string }).kind === 'livestock';
+}
+
+/**
+ * Derive the world's tank interior AABB from a scene. Per the document
+ * format caveat, canonical coords place the origin at the front-bottom-
+ * left interior corner, so the AABB is `[0, dim]` on each axis.
+ */
+function tankAabbFromScene(scene: Scene): TankAabb {
+  return {
+    minX: 0,
+    maxX: scene.tank.width,
+    minY: 0,
+    maxY: scene.tank.height,
+    minZ: 0,
+    maxZ: scene.tank.depth,
   };
-  return row.behavior?.animation ?? null;
 }
 
 /**

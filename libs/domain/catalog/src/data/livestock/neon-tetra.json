@@ -14,5 +14,8 @@
   "color": "#3aa6c8",
   "description": "Classic community schooling tetra; iridescent blue lateral stripe with a red rear half. Schooling minimum is conservative (some sources cite 6) — keeping ≥ 10 produces tighter, more confident shoaling behavior and reduces stress in mid-size tanks.",
   "tags": ["schooler", "nano", "community", "tetra", "midwater"],
-  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false }
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false },
+  "behavior": {
+    "schooling": { "wCoh": 1.5 }
+  }
 }
