@@ -32,10 +32,15 @@ import {
   BehaviorParamsRef,
   BEHAVIOR_MODE,
   BodyLength,
+  FearState,
   Force,
+  Hardscape,
+  NippingDrive,
+  NO_ENTITY_REF,
   Orientation,
   Position,
   SpeciesId,
+  Territory,
   Velocity,
 } from './components';
 import { NO_BEHAVIOR_HANDLE, ParamStore } from './param-store';
@@ -43,10 +48,13 @@ import { SpatialGrid } from './spatial-grid';
 import {
   animationSystem,
   depthSystem,
+  fearSystem,
   kinematicSystem,
+  nippingSystem,
   perceptionSystem,
   schoolingSystem,
   steeringIntegrator,
+  territorialSystem,
 } from './systems';
 
 /** Fixed simulation time-step, in seconds. 30 Hz — matches the plan. */
@@ -117,6 +125,19 @@ export interface SpawnOpts {
 }
 
 /**
+ * One hardscape entry passed to `world.registerHardscape`. The catalog
+ * loader fills `coverScore` from category defaults (wood→0.6, rock→0.4,
+ * other→0); the world just stores the value it's given.
+ */
+export interface HardscapeRegistrationEntry {
+  position: { x: number; y: number; z: number };
+  /** Already-defaulted by the catalog loader. Clamped to [0, 1]. */
+  coverScore: number;
+  /** `HARDSCAPE_CATEGORY.*`. */
+  category: number;
+}
+
+/**
  * Renderer-facing snapshot of the world. The returned typed arrays may be
  * *pooled* (recycled on the next `snapshot()` call) — consumers that need
  * the data outside a single InstancedMesh upload must copy.
@@ -137,9 +158,22 @@ export interface WorldSnapshot {
   scale: Float32Array;
 }
 
+/**
+ * Internal API shared between the world factory and the F11.3 systems.
+ * Not part of the public surface — exported via the world object only so
+ * the FearSystem can drain the per-tick startle queue without forcing the
+ * world to import the system or vice-versa.
+ */
+export interface LivestockWorldInternals {
+  /** Per-tick startle queue. FearSystem reads + clears each step. */
+  readonly pendingStartles: Map<number, number>;
+}
+
 export interface LivestockWorld {
   /** Underlying bitECS world. Exposed for tests + future system additions. */
   readonly ecs: IWorld;
+  /** @internal — shared mutable state between world + systems. */
+  readonly __internals: LivestockWorldInternals;
   /** Caller-supplied PRNG seed (typically `document.seed`). Frozen at creation. */
   readonly seed: number;
   /** Increments by 1 on every `step()` call. */
@@ -169,6 +203,36 @@ export interface LivestockWorld {
    * stable handle index to pass back via `SpawnOpts.behaviorHandleIdx`.
    */
   registerSpeciesBehavior(speciesId: number, behavior: ResolvedBehavior): number;
+  /**
+   * Replace the world's hardscape entity set. Tears down every existing
+   * `Hardscape`-tagged entity and rebuilds from `entries` in order. F11.3
+   * fish use this to find territory anchors + fear refuges.
+   *
+   * Re-registration is the chosen rebuild path: hardscape mutation
+   * triggers a livestock re-spawn upstream (same pattern as F11.2 tank
+   * resizes), so callers MUST NOT depend on specific eid values
+   * surviving across re-registrations. bitECS allocates eids from a
+   * module-global cursor, so even a re-registration with identical input
+   * may pick fresh ids.
+   */
+  registerHardscape(entries: ReadonlyArray<HardscapeRegistrationEntry>): void;
+  /** Count of currently registered Hardscape-tagged entities. */
+  getHardscapeCount(): number;
+  /**
+   * Read the territory anchor eid for a given fish entity. Returns null
+   * if the entity has no Territory component (non-territorial species)
+   * or no anchor in range at spawn time. Test + diagnostics surface; the
+   * TerritorialSystem uses the raw Territory slab directly.
+   */
+  getEntityTerritoryAnchor(eid: number): number | null;
+  /**
+   * Inject a startle impulse (predator visibility, sudden light change,
+   * neighbour startle propagation). Adds to the entity's accumulated
+   * risk on the next FearSystem tick. F11.3 has no real predator yet
+   * — this is the seam future systems + tests use to drive REFUGE
+   * transitions.
+   */
+  injectStartle(eid: number, magnitude: number): void;
   /** Run one sim tick of duration `dt` (callers pass `SIM_DT`). */
   step(dt: number): void;
   /**
@@ -254,10 +318,26 @@ export function createLivestockWorld(
   // at 0 in every fresh world.
   let nextSpawnIndex = 0;
 
+  // Per-tick pending startle map. `injectStartle(eid, magnitude)` accumulates
+  // into here; FearSystem drains it on the next step() and clears the map.
+  // A plain Map keyed by number is fine — F11.3 has no real predator, so
+  // population is bounded by however many test/UI calls happen between ticks
+  // (typically ≤ a handful). The map is not iterated in eid order, but
+  // FearSystem applies the accumulated magnitude as a scalar add per entity
+  // so the result is order-independent.
+  const pendingStartles = new Map<number, number>();
+
+  // Hardscape registry — a parallel array kept alongside the bitECS
+  // Hardscape-tagged entities. Lookups (auto-anchor, refuge selection) walk
+  // the bitECS query directly; this list is just the ordered set of live
+  // hardscape eids, used by `getHardscapeCount` + the re-registration path.
+  let hardscapeEids: number[] = [];
+
   // `tickCounter` and `seed` live on the world object so `tickPrng(world,…)`
   // can read them without a closure variable per tick.
   const world: LivestockWorld = {
     ecs,
+    __internals: { pendingStartles },
     seed: seed | 0,
     tickCounter: 0,
     paramStore,
@@ -313,6 +393,41 @@ export function createLivestockWorld(
       BehaviorParamsRef.spawnIndex[eid] = nextSpawnIndex;
       nextSpawnIndex = (nextSpawnIndex + 1) >>> 0;
 
+      // FearState is attached to every fish — fear params are required on
+      // ResolvedBehavior, so FearSystem expects the component slab to be
+      // populated for any entity it processes. Defaults to "no risk, no
+      // refuge" — FearSystem builds up risk from the baseline + injected
+      // startles each tick.
+      addComponent(ecs, FearState, eid);
+      FearState.risk[eid] = 0;
+      FearState.refugeEid[eid] = NO_ENTITY_REF;
+      FearState.emergenceTimer[eid] = 0;
+
+      // Territory + NippingDrive are conditional — only attached when the
+      // resolved behaviour carries non-null params for that system.
+      // Skipping the attach when there are no params keeps the bitECS
+      // queries narrow (TerritorialSystem walks Territory-tagged entities
+      // only).
+      const resolved =
+        opts.behaviorHandleIdx === undefined
+          ? null
+          : paramStore.get(opts.behaviorHandleIdx & 0xffff);
+      if (resolved?.territory) {
+        addComponent(ecs, Territory, eid);
+        const anchor = pickTerritoryAnchor(
+          ecs,
+          hardscapeEids,
+          opts.position,
+          resolved.territory.coreRadius,
+        );
+        Territory.anchorEid[eid] = anchor;
+        Territory.fatigue[eid] = 0;
+      }
+      if (resolved?.nipping) {
+        addComponent(ecs, NippingDrive, eid);
+        NippingDrive.cooldownSec[eid] = 0;
+      }
+
       return eid;
     },
 
@@ -346,13 +461,77 @@ export function createLivestockWorld(
       return handle;
     },
 
+    registerHardscape(entries: ReadonlyArray<HardscapeRegistrationEntry>): void {
+      // Tear down every existing Hardscape-tagged entity. We don't try to
+      // diff — re-registration replaces the whole set (the upstream
+      // contract is that hardscape mutations trigger a livestock re-spawn,
+      // so any caller has already accepted the cost of re-anchoring).
+      for (const eid of hardscapeEids) {
+        removeEntity(ecs, eid);
+      }
+      hardscapeEids = [];
+      for (const entry of entries) {
+        const eid = addEntity(ecs);
+        addComponent(ecs, Position, eid);
+        Position.x[eid] = entry.position.x;
+        Position.y[eid] = entry.position.y;
+        Position.z[eid] = entry.position.z;
+        addComponent(ecs, Hardscape, eid);
+        const cs = entry.coverScore;
+        Hardscape.coverScore[eid] = cs < 0 ? 0 : cs > 1 ? 1 : cs;
+        Hardscape.category[eid] = entry.category & 0xff;
+        hardscapeEids.push(eid);
+      }
+    },
+
+    getHardscapeCount(): number {
+      return hardscapeEids.length;
+    },
+
+    getEntityTerritoryAnchor(eid: number): number | null {
+      // The bitECS slab stores `NO_ENTITY_REF` (0xffffffff) for "no
+      // anchor". We also need to detect entities that have no Territory
+      // component attached at all (non-territorial species). The slab
+      // default for an entity without the component is 0 (a *valid*
+      // eid!), so we have to distinguish via the param store rather
+      // than the raw value alone. Cheaper: check
+      // `hasComponent(ecs, Territory, eid)` — but that requires
+      // importing hasComponent. Since the contract is "non-territorial
+      // → null", and the spawn path only ever stamps Territory when
+      // params.territory is non-null, we infer from the param store.
+      // Either way the public contract is the same.
+      const handle = BehaviorParamsRef.handleIdx[eid];
+      if (handle === undefined) return null;
+      const behavior = paramStore.get(handle);
+      if (!behavior?.territory) return null;
+      const raw = Territory.anchorEid[eid] as number;
+      if (raw === NO_ENTITY_REF) return null;
+      return raw;
+    },
+
+    injectStartle(eid: number, magnitude: number): void {
+      if (magnitude <= 0) return;
+      const prior = pendingStartles.get(eid) ?? 0;
+      pendingStartles.set(eid, prior + magnitude);
+    },
+
     step(dt: number): void {
-      // F11.2 system order — see docs/caveats/livestock-ecs.md
-      // Perception → Schooling → Depth → SteeringIntegrator → Kinematic → Animation
-      // F11.3+ slots in Fear/Nip/Territory/Feeding between Perception and
-      // Schooling, and Flow/Collision between SteeringIntegrator and
-      // Kinematic. The reserved seats line up with the table in the caveat.
+      // F11.3 system order — see docs/caveats/livestock-ecs.md
+      //   Perception → Fear → Nip → Territory →
+      //   (Feeding F11.4) → Schooling → Depth →
+      //   (Flow F11.5) → SteeringIntegrator →
+      //   (Collision F11.5) → Kinematic → Animation
+      //
+      // Priority arbitration is implemented as early-out checks on
+      // BehaviorMode in each downstream system: FearSystem may flip to
+      // REFUGE; once flipped, Nipping/Territory/Schooling skip via
+      // mode-guards so the refuge attraction force is the only thing
+      // SteeringIntegrator sees. PURSUE (set by Nip + Territory) likewise
+      // blocks Schooling so the chase isn't diluted by school cohesion.
       perceptionSystem(this);
+      fearSystem(this, dt);
+      nippingSystem(this, dt);
+      territorialSystem(this, dt);
       schoolingSystem(this, dt);
       depthSystem(this, dt);
       steeringIntegrator(this, dt);
@@ -415,6 +594,8 @@ export function createLivestockWorld(
       this.tickCounter = 0;
       paramStore.clear();
       this.spatialGrid.clear();
+      pendingStartles.clear();
+      hardscapeEids = [];
     },
   };
 
@@ -422,6 +603,45 @@ export function createLivestockWorld(
 }
 
 const positionQuery = defineQuery([Position]);
+
+/**
+ * Auto-anchor assignment helper (F11.3).
+ *
+ * Search the registered hardscape list for the nearest entity within
+ * `2 * coreRadius` of the spawn position. Iteration walks the
+ * `hardscapeEids` array in insertion order — deterministic across
+ * re-spawns within a single world instance (bitECS eids may change but
+ * the list ordering follows `registerHardscape`'s input). Returns 0 when
+ * no hardscape is in range (TerritorialSystem skips fish with anchor 0).
+ *
+ * Currently does NOT consider hardscape category — any hardscape entity
+ * is a valid anchor. F11.3's spec keeps this simple; F11.6 / future
+ * tuning may add a "cave-only" preference for hole-defending species.
+ */
+function pickTerritoryAnchor(
+  _ecs: IWorld,
+  hardscapeEids: ReadonlyArray<number>,
+  position: { x: number; y: number; z: number },
+  coreRadius: number,
+): number {
+  const limitSq = (2 * coreRadius) * (2 * coreRadius);
+  let bestEid = NO_ENTITY_REF;
+  let bestDistSq = Infinity;
+  for (const eid of hardscapeEids) {
+    const hx = Position.x[eid] as number;
+    const hy = Position.y[eid] as number;
+    const hz = Position.z[eid] as number;
+    const dx = hx - position.x;
+    const dy = hy - position.y;
+    const dz = hz - position.z;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 <= limitSq && d2 < bestDistSq) {
+      bestDistSq = d2;
+      bestEid = eid;
+    }
+  }
+  return bestEid;
+}
 
 /**
  * Clamp every entity's Position to `aabb`. Called after KinematicSystem

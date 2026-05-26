@@ -144,6 +144,37 @@ describe('validateCatalogEntry (hardscape, Stage 3 F3.5)', () => {
   it('rejects extraneous properties (additionalProperties: false)', () => {
     expect(validateCatalogEntry({ ...validHardscape, surprise: true }).ok).toBe(false);
   });
+
+  // ─── F11.3 coverScore (additive, no schemaVersion bump) ──────────────────
+  describe('coverScore (Stage 11 F11.3 FearSystem)', () => {
+    it('accepts a hardscape entry with no coverScore (loader fills the default)', () => {
+      expect(validateCatalogEntry(validHardscape)).toEqual({ ok: true });
+    });
+
+    it('accepts coverScore = 0 (sentinel for non-cover decor)', () => {
+      expect(validateCatalogEntry({ ...validHardscape, coverScore: 0 }).ok).toBe(true);
+    });
+
+    it('accepts coverScore = 1 (perfect refuge)', () => {
+      expect(validateCatalogEntry({ ...validHardscape, coverScore: 1 }).ok).toBe(true);
+    });
+
+    it('accepts a mid-range coverScore', () => {
+      expect(validateCatalogEntry({ ...validHardscape, coverScore: 0.5 }).ok).toBe(true);
+    });
+
+    it('rejects coverScore below 0', () => {
+      expect(validateCatalogEntry({ ...validHardscape, coverScore: -0.1 }).ok).toBe(false);
+    });
+
+    it('rejects coverScore above 1', () => {
+      expect(validateCatalogEntry({ ...validHardscape, coverScore: 1.5 }).ok).toBe(false);
+    });
+
+    it('rejects a non-numeric coverScore', () => {
+      expect(validateCatalogEntry({ ...validHardscape, coverScore: 'high' }).ok).toBe(false);
+    });
+  });
 });
 
 describe('validateCatalogEntry (plant, Stage 4 F4.1)', () => {
@@ -498,6 +529,252 @@ describe('validateCatalogEntry (livestock, Stage 7 F7.1)', () => {
           behavior: { schooling: { blindAngle: Math.PI + 0.01 } },
         }).ok,
       ).toBe(false);
+    });
+  });
+
+  // ─── F11.3 behavior extensions (additive, no schemaVersion bump) ─────────
+  describe('behavior overrides (Stage 11 F11.3 — territory / nipping / fear)', () => {
+    // territory ───────────────────────────────────────────────────────────
+    it('accepts a partial behavior.territory object', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { territory: { coreRadius: 60 } },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts a fully-specified behavior.territory object', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: {
+            territory: { coreRadius: 60, displayRadius: 120, aggression: 80, fatigueRate: 0.1 },
+          },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts an explicit null for behavior.territory (opt out)', () => {
+      expect(
+        validateCatalogEntry({ ...validLivestock, behavior: { territory: null } }).ok,
+      ).toBe(true);
+    });
+
+    it('rejects a typo inside behavior.territory (additionalProperties: false)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { territory: { coreRadius: 60, agression: 80 } }, // typo: agression
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects a zero / negative territory radius (exclusiveMinimum 0)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { territory: { coreRadius: 0 } },
+        }).ok,
+      ).toBe(false);
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { territory: { displayRadius: -10 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects an undefined-shaped territory (string instead of object|null)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { territory: 'high' },
+        }).ok,
+      ).toBe(false);
+    });
+
+    // nipping ─────────────────────────────────────────────────────────────
+    it('accepts a partial behavior.nipping object', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { nipping: { groupThreshold: 8 } },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts a fully-specified behavior.nipping object', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: {
+            nipping: { groupThreshold: 8, finFraction: 0.3, rate: 0.05 },
+          },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts an explicit null for behavior.nipping (opt out)', () => {
+      expect(
+        validateCatalogEntry({ ...validLivestock, behavior: { nipping: null } }).ok,
+      ).toBe(true);
+    });
+
+    it('rejects a typo inside behavior.nipping (additionalProperties: false)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { nipping: { groupThreshld: 8 } }, // typo
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects nipping.groupThreshold below 1', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { nipping: { groupThreshold: 0 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects a non-integer nipping.groupThreshold', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { nipping: { groupThreshold: 2.5 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects nipping.finFraction outside [0, 1]', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { nipping: { finFraction: 1.2 } },
+        }).ok,
+      ).toBe(false);
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { nipping: { finFraction: -0.1 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects nipping.rate <= 0', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { nipping: { rate: 0 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    // fear ────────────────────────────────────────────────────────────────
+    it('accepts a partial behavior.fear object', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { fear: { riskBaseline: 0.1 } },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts a fully-specified behavior.fear object', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: {
+            fear: {
+              riskBaseline: 0.05,
+              threshold: 0.7,
+              coverPreference: 'plants',
+              emergenceDelay: 8,
+            },
+          },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('rejects an explicit null for behavior.fear (no opt-out; fear is required at runtime)', () => {
+      expect(
+        validateCatalogEntry({ ...validLivestock, behavior: { fear: null } }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects a typo inside behavior.fear (additionalProperties: false)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { fear: { thresold: 0.5 } }, // typo
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects fear.riskBaseline below 0', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { fear: { riskBaseline: -0.1 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects fear.threshold <= 0', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { fear: { threshold: 0 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects fear.emergenceDelay below 0', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { fear: { emergenceDelay: -1 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects an unknown fear.coverPreference enum value', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { fear: { coverPreference: 'rocks' } }, // not in enum
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('accepts every fear.coverPreference enum value', () => {
+      for (const pref of ['plants', 'caves', 'wood', 'any']) {
+        expect(
+          validateCatalogEntry({
+            ...validLivestock,
+            behavior: { fear: { coverPreference: pref } },
+          }).ok,
+        ).toBe(true);
+      }
+    });
+
+    // co-existence + forward compat ───────────────────────────────────────
+    it('accepts F11.2 + F11.3 subfields together in one behavior block', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: {
+            schooling: { wCoh: 1.5 },
+            depth: { preferredY: 0.4 },
+            animation: { tailBeatFreq: 4 },
+            territory: { coreRadius: 60 },
+            nipping: null,
+            fear: { riskBaseline: 0.1 },
+          },
+        }).ok,
+      ).toBe(true);
     });
   });
 });

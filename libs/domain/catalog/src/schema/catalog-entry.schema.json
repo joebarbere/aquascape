@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aquascape.dev/schemas/catalog-entry-v3.json",
   "title": "CatalogEntry",
-  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 + 7 F7.3 ship `substrate` + `hardscape` + `plant` + `livestock` + `equipment`. Future stages add tank under the same oneOf. Manifest schemaVersion 3 (Stage 11 F11.2) adds the optional `behavior` block on `LivestockEntry`; v2 manifests load unchanged because every behavior subfield is optional + additive (`resolveBehavior()` falls back to per-group presets when the block is absent).",
+  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 + 7 F7.3 ship `substrate` + `hardscape` + `plant` + `livestock` + `equipment`. Future stages add tank under the same oneOf. Manifest schemaVersion 3 (Stage 11 F11.2) adds the optional `behavior` block on `LivestockEntry`; v2 manifests load unchanged because every behavior subfield is optional + additive (`resolveBehavior()` falls back to per-group presets when the block is absent). Stage 11 F11.3 extends the same v3 schema additively with `behavior.territory` / `nipping` / `fear` on livestock and `coverScore` on hardscape — no manifest version bump.",
   "oneOf": [
     { "$ref": "#/$defs/SubstrateEntry" },
     { "$ref": "#/$defs/HardscapeEntry" },
@@ -83,6 +83,12 @@
           "minItems": 3,
           "items": { "$ref": "#/$defs/Vec2" },
           "description": "Convex-ish closed polygon outline in normalized [-1, 1] space. The renderer scales each point by (naturalSize × transform.scale × 0.5) so the silhouette spans the natural footprint at scale 1."
+        },
+        "coverScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Stage 11 F11.3 FearSystem refuge value. When absent, the loader fills it from `category` (wood → 0.6, rock → 0.4, other → 0). JSON Schema's `default` is metadata only — the fill happens in the loader, not in the validator."
         }
       }
     },
@@ -339,6 +345,98 @@
                   "type": "number",
                   "exclusiveMinimum": 0,
                   "description": "Spine envelope exponent in `amp(s) = ampHead + (ampTail−ampHead) * pow(s, env)`."
+                }
+              }
+            },
+            "territory": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "Stage 11 F11.3 territoriality params (Brown 1964 + Adams 2001). All subfields optional — only declared keys override the per-species heuristic; absent keys fall back to the heuristic's defaults.",
+                  "properties": {
+                    "coreRadius": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "description": "Inner defense radius (mm). Non-conspecifics inside this get chased."
+                    },
+                    "displayRadius": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "description": "Outer display radius (mm). Owner posts but does not chase between core and display."
+                    },
+                    "aggression": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "description": "Chase-force magnitude (mm/sec² equivalent). Higher = more aggressive pursuit."
+                    },
+                    "fatigueRate": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "description": "Per-second decay rate of accumulated fatigue. Scales chase force downward over sustained defense."
+                    }
+                  }
+                },
+                {
+                  "type": "null",
+                  "description": "Explicit `null` opts OUT of the per-species heuristic — e.g. a peaceful dwarf cichlid that should NOT inherit the cichlid territory default."
+                }
+              ]
+            },
+            "nipping": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "Stage 11 F11.3 fin-nipping params (Keenleyside 1955 + Magurran 1990). All subfields optional.",
+                  "properties": {
+                    "groupThreshold": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Minimum conspecific count visible nearby to suppress nipping. Below this, the fish nips."
+                    },
+                    "finFraction": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "Minimum fraction of body length the target's longest fin must reach to be a candidate."
+                    },
+                    "rate": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "description": "Per-second Poisson rate at which an eligible nip attempt fires when conditions hold."
+                    }
+                  }
+                },
+                {
+                  "type": "null",
+                  "description": "Explicit `null` opts OUT of the per-species nipping heuristic."
+                }
+              ]
+            },
+            "fear": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Stage 11 F11.3 anti-predator / fear params (Lima & Dill 1990). No `| null` — every fish carries fear; manifest authors can only tune values.",
+              "properties": {
+                "riskBaseline": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Baseline anxiety added to every tick's risk integration. Higher = always-jumpy species."
+                },
+                "threshold": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Risk level above which the FORAGE → REFUGE mode flip fires."
+                },
+                "coverPreference": {
+                  "enum": ["plants", "caves", "wood", "any"],
+                  "description": "Which hardscape coverScore source the species prefers when seeking a refuge. `'any'` = no preference (nearest cover wins)."
+                },
+                "emergenceDelay": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Seconds to wait in REFUGE mode after risk drops below threshold before flipping back to FORAGE."
                 }
               }
             }

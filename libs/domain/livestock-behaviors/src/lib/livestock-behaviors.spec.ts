@@ -5,7 +5,10 @@ import {
   depthBandForSpecies,
   resolveBehavior,
   type BehaviorResolutionInput,
+  type FearParams,
+  type NippingParams,
   type ResolvedBehavior,
+  type TerritoryParams,
 } from '../index';
 
 // Keys we expect every preset / resolved bundle to populate.
@@ -33,6 +36,12 @@ const ANIMATION_KEYS: ReadonlyArray<keyof ResolvedBehavior['animation']> = [
   'ampTail',
   'envelopeExp',
 ];
+const FEAR_KEYS: ReadonlyArray<keyof FearParams> = [
+  'riskBaseline',
+  'threshold',
+  'coverPreference',
+  'emergenceDelay',
+];
 
 function expectFullyPopulated(bundle: ResolvedBehavior): void {
   for (const k of SCHOOLING_KEYS) {
@@ -47,6 +56,13 @@ function expectFullyPopulated(bundle: ResolvedBehavior): void {
     expect(bundle.animation[k]).toBeDefined();
     expect(Number.isFinite(bundle.animation[k])).toBe(true);
   }
+  for (const k of FEAR_KEYS) {
+    expect(bundle.fear[k]).toBeDefined();
+  }
+  expect(Number.isFinite(bundle.fear.riskBaseline)).toBe(true);
+  expect(Number.isFinite(bundle.fear.threshold)).toBe(true);
+  expect(Number.isFinite(bundle.fear.emergenceDelay)).toBe(true);
+  expect(typeof bundle.fear.coverPreference).toBe('string');
 }
 
 describe('presets', () => {
@@ -80,6 +96,48 @@ describe('presets', () => {
   it('the three presets are visually distinct (preferredY ordering)', () => {
     expect(BOTTOM_PRESET.depth.preferredY).toBeLessThan(MID_PRESET.depth.preferredY);
     expect(MID_PRESET.depth.preferredY).toBeLessThan(TOP_PRESET.depth.preferredY);
+  });
+
+  it('every preset has territory: null + nipping: null (species-specific, not band-specific)', () => {
+    expect(TOP_PRESET.territory).toBeNull();
+    expect(TOP_PRESET.nipping).toBeNull();
+    expect(MID_PRESET.territory).toBeNull();
+    expect(MID_PRESET.nipping).toBeNull();
+    expect(BOTTOM_PRESET.territory).toBeNull();
+    expect(BOTTOM_PRESET.nipping).toBeNull();
+  });
+
+  it('TOP_PRESET fear: bold (riskBaseline 0.05, threshold 0.6, plants, 5s emergence)', () => {
+    expect(TOP_PRESET.fear).toEqual<FearParams>({
+      riskBaseline: 0.05,
+      threshold: 0.6,
+      coverPreference: 'plants',
+      emergenceDelay: 5,
+    });
+  });
+
+  it('MID_PRESET fear: average (riskBaseline 0.08, threshold 0.5, plants, 4s emergence)', () => {
+    expect(MID_PRESET.fear).toEqual<FearParams>({
+      riskBaseline: 0.08,
+      threshold: 0.5,
+      coverPreference: 'plants',
+      emergenceDelay: 4,
+    });
+  });
+
+  it('BOTTOM_PRESET fear: skittish (riskBaseline 0.15, threshold 0.4, wood, 8s emergence)', () => {
+    expect(BOTTOM_PRESET.fear).toEqual<FearParams>({
+      riskBaseline: 0.15,
+      threshold: 0.4,
+      coverPreference: 'wood',
+      emergenceDelay: 8,
+    });
+  });
+
+  it('fear ordering by band — bottom triggers earlier + stays hidden longer than top', () => {
+    expect(BOTTOM_PRESET.fear.threshold).toBeLessThan(TOP_PRESET.fear.threshold);
+    expect(BOTTOM_PRESET.fear.emergenceDelay).toBeGreaterThan(TOP_PRESET.fear.emergenceDelay);
+    expect(BOTTOM_PRESET.fear.riskBaseline).toBeGreaterThan(TOP_PRESET.fear.riskBaseline);
   });
 });
 
@@ -226,5 +284,290 @@ describe('resolveBehavior — override merging', () => {
       behavior: { schooling: { vPref: 33 } },
     };
     expect(resolveBehavior(input)).toEqual(resolveBehavior(input));
+  });
+});
+
+describe('resolveBehavior — fear (always-present)', () => {
+  it('top-band species carries TOP_PRESET fear by default', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'marbled-hatchet' });
+    expect(r.fear).toEqual(TOP_PRESET.fear);
+  });
+
+  it('mid-band species carries MID_PRESET fear by default', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'cardinal-tetra' });
+    expect(r.fear).toEqual(MID_PRESET.fear);
+  });
+
+  it('bottom-band species carries BOTTOM_PRESET fear by default', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'Kuhli-Loach' });
+    expect(r.fear).toEqual(BOTTOM_PRESET.fear);
+  });
+
+  it('partial fear override: threshold replaced, all other fields keep preset defaults', () => {
+    const r = resolveBehavior({
+      group: 'fish',
+      id: 'tetra',
+      behavior: { fear: { threshold: 0.9 } },
+    });
+    expect(r.fear.threshold).toBeCloseTo(0.9);
+    expect(r.fear.riskBaseline).toBe(MID_PRESET.fear.riskBaseline);
+    expect(r.fear.coverPreference).toBe(MID_PRESET.fear.coverPreference);
+    expect(r.fear.emergenceDelay).toBe(MID_PRESET.fear.emergenceDelay);
+  });
+
+  it('partial fear override: coverPreference can be set to caves', () => {
+    const r = resolveBehavior({
+      group: 'fish',
+      id: 'kuhli-loach',
+      behavior: { fear: { coverPreference: 'caves' } },
+    });
+    expect(r.fear.coverPreference).toBe('caves');
+    // Other fear fields fall through to the bottom preset.
+    expect(r.fear.threshold).toBe(BOTTOM_PRESET.fear.threshold);
+    expect(r.fear.emergenceDelay).toBe(BOTTOM_PRESET.fear.emergenceDelay);
+  });
+
+  it('fear override does not mutate the shared preset', () => {
+    const before = JSON.parse(JSON.stringify(MID_PRESET.fear));
+    resolveBehavior({
+      group: 'fish',
+      id: 'tetra',
+      behavior: { fear: { riskBaseline: 0.99 } },
+    });
+    expect(MID_PRESET.fear).toEqual(before);
+  });
+});
+
+describe('resolveBehavior — territory heuristic', () => {
+  // Expected defaults from the heuristic table.
+  const expectedTerritory: TerritoryParams = {
+    coreRadius: 80,
+    displayRadius: 150,
+    aggression: 100,
+    fatigueRate: 0.08,
+  };
+
+  it('assigns territory to a German blue ram (cichlid id substring "ram")', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.german-ram' });
+    expect(r.territory).toEqual(expectedTerritory);
+  });
+
+  it('assigns territory to an apistogramma', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.apistogramma-cacatuoides' });
+    expect(r.territory).toEqual(expectedTerritory);
+  });
+
+  it('assigns territory to an angelfish', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.angelfish' });
+    expect(r.territory).toEqual(expectedTerritory);
+  });
+
+  it('assigns territory to a discus', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.discus' });
+    expect(r.territory).toEqual(expectedTerritory);
+  });
+
+  it('assigns territory to a generic cichlid', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.convict-cichlid' });
+    expect(r.territory).toEqual(expectedTerritory);
+  });
+
+  it('assigns territory to a betta', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.betta-splendens' });
+    expect(r.territory).toEqual(expectedTerritory);
+  });
+
+  it('substring matching is case-insensitive', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'CORE/LIVESTOCK.FISH.GERMAN-RAM' });
+    expect(r.territory).toEqual(expectedTerritory);
+  });
+
+  it('returns territory: null for a non-territorial species', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.neon-tetra' });
+    expect(r.territory).toBeNull();
+  });
+
+  it('returns territory: null for a shrimp', () => {
+    const r = resolveBehavior({ group: 'shrimp', id: 'core/livestock.shrimp.neocaridina-ram' });
+    expect(r.territory).toBeNull();
+  });
+
+  it('returns territory: null for a snail even if id contains a hint', () => {
+    const r = resolveBehavior({ group: 'snail', id: 'rambo-nerite' });
+    expect(r.territory).toBeNull();
+  });
+
+  it('returns territory: null when id is missing', () => {
+    const r = resolveBehavior({ group: 'fish' });
+    expect(r.territory).toBeNull();
+  });
+});
+
+describe('resolveBehavior — nipping heuristic', () => {
+  const expectedNipping: NippingParams = {
+    groupThreshold: 8,
+    finFraction: 0.4,
+    rate: 0.5,
+  };
+
+  it('assigns nipping to tigerbarb (no separator)', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.tigerbarb' });
+    expect(r.nipping).toEqual(expectedNipping);
+  });
+
+  it('assigns nipping to tiger-barb (hyphen)', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.tiger-barb' });
+    expect(r.nipping).toEqual(expectedNipping);
+  });
+
+  it('assigns nipping to tiger_barb (underscore)', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.tiger_barb' });
+    expect(r.nipping).toEqual(expectedNipping);
+  });
+
+  it('assigns nipping to a rosybarb', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.rosybarb' });
+    expect(r.nipping).toEqual(expectedNipping);
+  });
+
+  it('substring matching is case-insensitive', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'CORE/LIVESTOCK.FISH.TIGER-BARB' });
+    expect(r.nipping).toEqual(expectedNipping);
+  });
+
+  it('returns nipping: null for a non-nipper barb (cherry barb without a hint match)', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.cherry-barb' });
+    expect(r.nipping).toBeNull();
+  });
+
+  it('returns nipping: null for a shrimp even with a nipper-like name', () => {
+    const r = resolveBehavior({ group: 'shrimp', id: 'core/livestock.shrimp.tigerbarb-shrimp' });
+    expect(r.nipping).toBeNull();
+  });
+
+  it('returns nipping: null when id is missing', () => {
+    const r = resolveBehavior({ group: 'fish' });
+    expect(r.nipping).toBeNull();
+  });
+});
+
+describe('resolveBehavior — territory + nipping override semantics', () => {
+  it('explicit opt-out: behavior.territory: null on a cichlid returns territory: null', () => {
+    const r = resolveBehavior({
+      group: 'fish',
+      id: 'core/livestock.fish.german-ram',
+      behavior: { territory: null },
+    });
+    expect(r.territory).toBeNull();
+  });
+
+  it('explicit opt-out: behavior.nipping: null on a tiger barb returns nipping: null', () => {
+    const r = resolveBehavior({
+      group: 'fish',
+      id: 'core/livestock.fish.tiger-barb',
+      behavior: { nipping: null },
+    });
+    expect(r.nipping).toBeNull();
+  });
+
+  it('partial override of an existing heuristic-derived territory keeps other fields', () => {
+    const r = resolveBehavior({
+      group: 'fish',
+      id: 'core/livestock.fish.angelfish',
+      behavior: { territory: { aggression: 200 } },
+    });
+    expect(r.territory).toEqual({
+      coreRadius: 80,
+      displayRadius: 150,
+      aggression: 200,
+      fatigueRate: 0.08,
+    });
+  });
+
+  it('partial override of an existing heuristic-derived nipping keeps other fields', () => {
+    const r = resolveBehavior({
+      group: 'fish',
+      id: 'core/livestock.fish.tiger-barb',
+      behavior: { nipping: { rate: 1.0 } },
+    });
+    expect(r.nipping).toEqual({
+      groupThreshold: 8,
+      finFraction: 0.4,
+      rate: 1.0,
+    });
+  });
+
+  it('opt-in: a species with no territory heuristic can have one declared via the catalog', () => {
+    const r = resolveBehavior({
+      group: 'fish',
+      id: 'core/livestock.fish.curated-territory-fish',
+      behavior: { territory: { coreRadius: 50, aggression: 30 } },
+    });
+    expect(r.territory).toEqual({
+      coreRadius: 50,
+      displayRadius: 150,
+      aggression: 30,
+      fatigueRate: 0.08,
+    });
+  });
+
+  it('opt-in: a species with no nipping heuristic can have one declared via the catalog', () => {
+    const r = resolveBehavior({
+      group: 'fish',
+      id: 'core/livestock.fish.curated-nipper',
+      behavior: { nipping: { groupThreshold: 4 } },
+    });
+    expect(r.nipping).toEqual({
+      groupThreshold: 4,
+      finFraction: 0.4,
+      rate: 0.5,
+    });
+  });
+
+  it('partial territory override does not mutate the next call', () => {
+    const a = resolveBehavior({
+      group: 'fish',
+      id: 'core/livestock.fish.angelfish',
+      behavior: { territory: { aggression: 9999 } },
+    });
+    (a.territory as TerritoryParams).aggression = -1;
+    const b = resolveBehavior({
+      group: 'fish',
+      id: 'core/livestock.fish.angelfish',
+    });
+    expect(b.territory).toEqual({
+      coreRadius: 80,
+      displayRadius: 150,
+      aggression: 100,
+      fatigueRate: 0.08,
+    });
+  });
+});
+
+describe('resolveBehavior — invertebrate + non-special species sanity', () => {
+  it('a neon tetra resolves to mid preset with no territory + no nipping', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.neon-tetra' });
+    expect(r.territory).toBeNull();
+    expect(r.nipping).toBeNull();
+    expect(r.fear).toEqual(MID_PRESET.fear);
+    expect(r.schooling).toEqual(MID_PRESET.schooling);
+    expect(r.depth).toEqual(MID_PRESET.depth);
+    expect(r.animation).toEqual(MID_PRESET.animation);
+  });
+
+  it('a cherry shrimp resolves to bottom preset with no territory + no nipping', () => {
+    const r = resolveBehavior({ group: 'shrimp', id: 'core/livestock.shrimp.cherry' });
+    expect(r.territory).toBeNull();
+    expect(r.nipping).toBeNull();
+    expect(r.fear).toEqual(BOTTOM_PRESET.fear);
+    expect(r.schooling).toEqual(BOTTOM_PRESET.schooling);
+    expect(r.depth).toEqual(BOTTOM_PRESET.depth);
+  });
+
+  it('a nerite snail resolves to bottom preset with no territory + no nipping', () => {
+    const r = resolveBehavior({ group: 'snail', id: 'core/livestock.snail.nerite' });
+    expect(r.territory).toBeNull();
+    expect(r.nipping).toBeNull();
+    expect(r.fear).toEqual(BOTTOM_PRESET.fear);
   });
 });

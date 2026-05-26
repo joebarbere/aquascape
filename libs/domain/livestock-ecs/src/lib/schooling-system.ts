@@ -30,7 +30,15 @@
  * buffer across ticks).
  */
 import { defineQuery } from 'bitecs';
-import { BehaviorParamsRef, Force, Orientation, Position, Velocity } from './components';
+import {
+  BehaviorMode,
+  BEHAVIOR_MODE,
+  BehaviorParamsRef,
+  Force,
+  Orientation,
+  Position,
+  Velocity,
+} from './components';
 import { tickPrng } from './prng';
 import type { LivestockWorld } from './world';
 
@@ -51,6 +59,13 @@ export function schoolingSystem(world: LivestockWorld, _dt: number): void {
     const handle = BehaviorParamsRef.handleIdx[eid] as number;
     const behavior = store.get(handle);
     if (behavior === null) continue;
+    // F11.3 priority arbitration — REFUGE fish are focused on their
+    // refuge target (FearSystem owns Force); PURSUE fish are chasing
+    // (Nipping / Territorial own Force). Either way, schooling
+    // pressure would dilute the higher-priority steering goal, so we
+    // skip. The BehaviorMode component is always present (every spawn
+    // attaches it), so the lookup is unconditional.
+    if ((BehaviorMode.mode[eid] as number) !== BEHAVIOR_MODE.FORAGE) continue;
     const params = behavior.schooling;
 
     const sx = Position.x[eid] as number;

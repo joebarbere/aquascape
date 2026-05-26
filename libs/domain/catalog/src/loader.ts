@@ -13,8 +13,30 @@
  * id is a warning, not a crash.
  */
 
-import type { Catalog, CatalogEntry, CatalogKind } from './types';
+import type { Catalog, CatalogEntry, CatalogKind, HardscapeEntry } from './types';
 import { type ValidationError, validateCatalogEntry } from './validator';
+
+/**
+ * Default hardscape `coverScore` derived from `category` when the manifest
+ * omits the field. Stage 11 F11.3 FearSystem uses this to find refuges.
+ *
+ * - wood  → 0.6   driftwood + branches read as good cover
+ * - rock  → 0.4   caves + crevices
+ * - other → 0     decor like statues is not cover
+ *
+ * JSON Schema's `default` is metadata-only, so the fill happens here in the
+ * loader instead. The original manifest object is left untouched.
+ */
+function defaultCoverScoreForCategory(category: HardscapeEntry['category']): number {
+  switch (category) {
+    case 'wood':
+      return 0.6;
+    case 'rock':
+      return 0.4;
+    default:
+      return 0;
+  }
+}
 
 /** A single validation failure for a specific entry slot. */
 export interface CatalogLoadError {
@@ -61,8 +83,8 @@ export function loadCatalog(input: readonly unknown[]): CatalogLoadResult {
       return;
     }
     // Safe cast: validateCatalogEntry's success guarantees the shape.
-    const entry = candidate as CatalogEntry;
-    const key = `${entry.catalog}|${entry.id}`;
+    const validated = candidate as CatalogEntry;
+    const key = `${validated.catalog}|${validated.id}`;
     const prior = seen.get(key);
     if (prior !== undefined) {
       prior.push(index);
@@ -70,7 +92,7 @@ export function loadCatalog(input: readonly unknown[]): CatalogLoadResult {
       return;
     }
     seen.set(key, [index]);
-    validEntries.push(entry);
+    validEntries.push(populateDefaults(validated));
   });
 
   const warnings: CatalogLoadWarning[] = [];
@@ -82,6 +104,21 @@ export function loadCatalog(input: readonly unknown[]): CatalogLoadResult {
   }
 
   return { catalog: buildCatalog(validEntries), errors, warnings };
+}
+
+/**
+ * Apply loader-side defaults that the schema can't express. Today this only
+ * fills hardscape `coverScore` from `category`; other kinds pass through
+ * untouched. The original manifest object is never mutated — when a default
+ * is applied we return a shallow clone with the populated field, so the
+ * `CoreCatalog` consumers see a fully-populated entry while the `import`-ed
+ * JSON object stays as-is.
+ */
+function populateDefaults(entry: CatalogEntry): CatalogEntry {
+  if (entry.kind === 'hardscape' && entry.coverScore === undefined) {
+    return { ...entry, coverScore: defaultCoverScoreForCategory(entry.category) };
+  }
+  return entry;
 }
 
 function buildCatalog(entries: readonly CatalogEntry[]): Catalog {

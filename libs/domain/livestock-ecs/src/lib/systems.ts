@@ -19,6 +19,9 @@ export { perceptionSystem } from './perception-system';
 export { schoolingSystem } from './schooling-system';
 export { depthSystem } from './depth-system';
 export { steeringIntegrator } from './steering-integrator';
+export { fearSystem } from './fear-system';
+export { nippingSystem } from './nipping-system';
+export { territorialSystem } from './territorial-system';
 
 const TWO_PI = Math.PI * 2;
 

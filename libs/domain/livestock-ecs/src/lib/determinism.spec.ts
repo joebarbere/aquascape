@@ -8,8 +8,8 @@
  * (the lint rule should catch it first) or a per-Date.now() seed somewhere,
  * this test will fail on the very next run.
  */
-import { MID_PRESET } from '@aquascape/domain/livestock-behaviors';
-import { FISH_ARCHETYPE, type LivestockWorld } from '../index';
+import { MID_PRESET, type ResolvedBehavior } from '@aquascape/domain/livestock-behaviors';
+import { FISH_ARCHETYPE, HARDSCAPE_CATEGORY, type LivestockWorld } from '../index';
 import { createLivestockWorld, type TankAabb } from './world';
 
 const TANK: TankAabb = { minX: 0, maxX: 1000, minY: 0, maxY: 400, minZ: 0, maxZ: 400 };
@@ -107,6 +107,99 @@ describe('determinism: 1000 ticks × fixed fleet', () => {
     expect(byteEqual(r1.position, r2.position)).toBe(true);
     expect(byteEqual(r1.orientation, r2.orientation)).toBe(true);
     expect(byteEqual(r1.phase, r2.phase)).toBe(true);
+  });
+
+  it('F11.3 full system stack — 1000-tick replay with ram + cave + 6 cardinals + 1 betta + 6 tiger barbs is byte-identical', () => {
+    // Mixed-species fixture covering every F11.3 system path:
+    //   - ram (territorial, anchored to cave) → TerritorialSystem
+    //   - 6 cardinals (schooling) → SchoolingSystem
+    //   - 1 betta (slow, long-fin victim) → NippingSystem target
+    //   - 6 tiger barbs (nippers, just below groupThreshold) → NippingSystem
+    //   - every fish has fear params → FearSystem
+    //   - 1 cave hardscape → auto-anchor + refuge target
+    const ramSpecies = 1;
+    const cardinalSpecies = 2;
+    const bettaSpecies = 3;
+    const barbSpecies = 4;
+
+    const ramBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+    ramBehavior.territory = {
+      coreRadius: 80,
+      displayRadius: 150,
+      aggression: 100,
+      fatigueRate: 0.08,
+    };
+    const cardinalBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+    const bettaBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+    const barbBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+    barbBehavior.nipping = {
+      groupThreshold: 8,
+      finFraction: 0.4,
+      rate: 0.5,
+    };
+
+    function runMixedFleet(): {
+      position: Float32Array;
+      orientation: Float32Array;
+    } {
+      const w: LivestockWorld = createLivestockWorld(SEED, { tankAabb: TANK });
+      const ramHandle = w.registerSpeciesBehavior(ramSpecies, ramBehavior);
+      const cardinalHandle = w.registerSpeciesBehavior(cardinalSpecies, cardinalBehavior);
+      const bettaHandle = w.registerSpeciesBehavior(bettaSpecies, bettaBehavior);
+      const barbHandle = w.registerSpeciesBehavior(barbSpecies, barbBehavior);
+      // Hardscape MUST be registered before territorial spawn or the
+      // auto-anchor finds nothing.
+      w.registerHardscape([
+        { position: { x: 500, y: 100, z: 300 }, coverScore: 0.5, category: HARDSCAPE_CATEGORY.ROCK },
+      ]);
+      // Ram anchored near the rock.
+      w.spawnFish({
+        archetype: FISH_ARCHETYPE.DEEP_BODIED,
+        speciesId: ramSpecies,
+        bodyLengthMm: 70,
+        position: { x: 510, y: 100, z: 310 },
+        behaviorHandleIdx: ramHandle,
+      });
+      // 6 cardinal tetras clustered mid-water.
+      for (let i = 0; i < 6; i++) {
+        w.spawnFish({
+          archetype: FISH_ARCHETYPE.SLIM_TETRA,
+          speciesId: cardinalSpecies,
+          bodyLengthMm: 30,
+          position: { x: 200 + i * 20, y: 200, z: 150 },
+          behaviorHandleIdx: cardinalHandle,
+        });
+      }
+      // 1 betta — slow, long-fin (DEEP_BODIED) → barb victim.
+      w.spawnFish({
+        archetype: FISH_ARCHETYPE.DEEP_BODIED,
+        speciesId: bettaSpecies,
+        bodyLengthMm: 60,
+        position: { x: 700, y: 150, z: 200 },
+        behaviorHandleIdx: bettaHandle,
+      });
+      // 6 tiger barbs — one under the group threshold so nipping fires.
+      for (let i = 0; i < 6; i++) {
+        w.spawnFish({
+          archetype: FISH_ARCHETYPE.BARB,
+          speciesId: barbSpecies,
+          bodyLengthMm: 50,
+          position: { x: 650 + i * 15, y: 180, z: 220 + i * 5 },
+          behaviorHandleIdx: barbHandle,
+        });
+      }
+      for (let i = 0; i < TICKS; i++) w.step(SIM_DT);
+      const s = w.snapshot(0);
+      return {
+        position: new Float32Array(s.position),
+        orientation: new Float32Array(s.orientation),
+      };
+    }
+
+    const r1 = runMixedFleet();
+    const r2 = runMixedFleet();
+    expect(byteEqual(r1.position, r2.position)).toBe(true);
+    expect(byteEqual(r1.orientation, r2.orientation)).toBe(true);
   });
 
   it('different seeds still produce identical *static* fields (position w/ v=0, archetype, scale)', () => {

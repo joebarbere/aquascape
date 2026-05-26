@@ -28,10 +28,16 @@ export {
   BehaviorMode,
   BehaviorParamsRef,
   Force,
+  FearState,
+  Hardscape,
+  NippingDrive,
+  Territory,
   FISH_ARCHETYPE,
   BEHAVIOR_MODE,
+  HARDSCAPE_CATEGORY,
   type FishArchetypeId,
   type BehaviorModeId,
+  type HardscapeCategoryId,
 } from './lib/components';
 
 // ─── World factory + scheduler ────────────────────────────────────────────
@@ -40,7 +46,9 @@ export {
   SIM_DT,
   SIM_HZ,
   type CreateLivestockWorldOpts,
+  type HardscapeRegistrationEntry,
   type LivestockWorld,
+  type LivestockWorldInternals,
   type SpawnOpts,
   type TankAabb,
   type WorldSnapshot,
@@ -53,10 +61,13 @@ export { ParamStore, NO_BEHAVIOR_HANDLE } from './lib/param-store';
 export {
   animationSystem,
   depthSystem,
+  fearSystem,
   kinematicSystem,
+  nippingSystem,
   perceptionSystem,
   schoolingSystem,
   steeringIntegrator,
+  territorialSystem,
 } from './lib/systems';
 
 // ─── Deterministic PRNG ──────────────────────────────────────────────────

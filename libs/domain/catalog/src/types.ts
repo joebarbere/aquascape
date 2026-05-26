@@ -23,7 +23,10 @@
 import type {
   AnimationParams,
   DepthParams,
+  FearParams,
+  NippingParams,
   SchoolingParams,
+  TerritoryParams,
 } from '@aquascape/domain/livestock-behaviors';
 
 /** Linear measurement in millimetres. Integers preferred. */
@@ -101,6 +104,20 @@ export interface HardscapeEntry extends CatalogEntryBase {
   color: HexColor;
   /** Closed polygon in normalized `[-1, 1]` space. ≥ 3 points. */
   silhouette: ReadonlyArray<{ x: number; y: number }>;
+  /**
+   * Refuge value for fish in REFUGE mode (Stage 11 F11.3 FearSystem). Range
+   * `[0, 1]` — 0 = not cover, 1 = perfect refuge.
+   *
+   * When absent at load time, the catalog loader fills it from `category`:
+   * - `wood`  → 0.6   (driftwood + branches read as good cover)
+   * - `rock`  → 0.4   (caves + crevices)
+   * - `other` → 0     (decor like statues = not actual cover)
+   *
+   * Plants get a separate runtime-computed coverScore (= 0.5 × density of the
+   * scatter polygon) inside the FearSystem; this field doesn't apply to plant
+   * entries, only to hardscape rocks + wood + decor.
+   */
+  coverScore?: number;
 }
 
 // ─── Plant (Stage 4 F4.1) ─────────────────────────────────────────────────
@@ -225,6 +242,25 @@ export interface LivestockEntry extends CatalogEntryBase {
     schooling?: Partial<SchoolingParams>;
     depth?: Partial<DepthParams>;
     animation?: Partial<AnimationParams>;
+    /**
+     * Stage 11 F11.3 territoriality override. Explicit `null` opts OUT of the
+     * per-species heuristic (e.g. a peaceful dwarf cichlid that shouldn't
+     * inherit the cichlid territory default); a partial object overrides
+     * subfields while keeping the heuristic's other values; absent leaves
+     * `resolveBehavior()` free to pick from the per-species heuristic.
+     */
+    territory?: Partial<TerritoryParams> | null;
+    /**
+     * Stage 11 F11.3 fin-nipping override. Explicit `null` opts OUT of the
+     * per-species nipping heuristic; partial objects override subfields.
+     */
+    nipping?: Partial<NippingParams> | null;
+    /**
+     * Stage 11 F11.3 anti-predator / fear override. No `| null` — every fish
+     * carries fear (Lima & Dill 1990); manifest authors can only tune values,
+     * not opt out.
+     */
+    fear?: Partial<FearParams>;
   };
 }
 

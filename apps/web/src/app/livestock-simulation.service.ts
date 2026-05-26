@@ -1,6 +1,8 @@
-// Stage 11 F11.2 Wave 5 — owns the bitECS world that the 3D renderer's RAF
-// loop steps + drains each frame, and wires the schooling/depth behaviour
-// pipeline (ResolvedBehavior + ParamStore + tankAabb) into the world.
+// Stage 11 F11.2 Wave 5 + F11.3 — owns the bitECS world that the 3D
+// renderer's RAF loop steps + drains each frame, wires the
+// schooling/depth behaviour pipeline (ResolvedBehavior + ParamStore +
+// tankAabb) into the world, AND registers hardscape entries so the
+// world's auto-anchor assignment at spawn time has something to look at.
 //
 // RESPONSIBILITIES
 // ----------------
@@ -8,9 +10,10 @@
 //    `getWorld()` (the 3D renderer asks for it on its first paint). The
 //    world is constructed with the scene's tank interior AABB.
 // 2. Subscribe to NgRx scene emissions: when `scene.livestock` (or the
-//    seed) changes, re-spawn every entity deterministically. Same
-//    `(seed, livestock)` pair → identical entity counts + initial
-//    positions across two re-spawns.
+//    seed, tank, or hardscape) changes, re-spawn every entity
+//    deterministically. Same `(seed, livestock, hardscape)` triple →
+//    identical entity counts + initial positions + anchor assignments
+//    across two re-spawns.
 // 3. PERSIST the world across 2D↔3D toggles. The renderer's `dispose()`
 //    drops its bundle and its reference to the world, but the service
 //    keeps the same `LivestockWorld` instance alive. The next 3D switch
@@ -24,6 +27,21 @@
 // 5. F11.2: Push the tank interior AABB through to the world on every
 //    spawn pass via `setTankAabb`, so DepthSystem + SteeringIntegrator
 //    + the post-Kinematic clamp track tank resizes without a world rebuild.
+// 6. F11.3: Walk `scene.layers[].objects` for `kind === 'hardscape'` items
+//    in document order, build a `HardscapeRegistrationEntry[]` from the
+//    LOADED catalog row (coverScore + category are already defaulted by
+//    the catalog loader — do NOT re-default here), and call
+//    `world.registerHardscape(...)` BEFORE `spawnAll`. The world's
+//    `spawnFish` auto-picks the nearest hardscape within
+//    `2 * coreRadius` of the spawn position as the Territory anchor for
+//    any species whose resolved behaviour carries `territory !== null`.
+//    Hardscape mutations land in the same `scene` signal we already
+//    observe, so the existing tear-down + re-spawn pipeline picks them
+//    up — we only extend the spawnKey fingerprint so the rebuild
+//    actually fires (the prior key only tracked livestock + tank).
+//    Plants are NOT registered here: plant cover is runtime-computed by
+//    FearSystem from scatter density (per the catalog contract), not
+//    treated as a refuge anchor.
 //
 // FALLBACK POLICY (F11.1 static-wiggle preservation)
 // --------------------------------------------------
@@ -56,7 +74,11 @@ import { DestroyRef } from '@angular/core';
 import { Store } from '@ngrx/store';
 
 import { coreCatalog } from '@aquascape/domain/catalog';
-import type { Catalog, LivestockEntry as CatalogLivestockEntry } from '@aquascape/domain/catalog';
+import type {
+  Catalog,
+  HardscapeEntry as CatalogHardscapeEntry,
+  LivestockEntry as CatalogLivestockEntry,
+} from '@aquascape/domain/catalog';
 import { archetypeForSpecies, type FishArchetypeId } from '@aquascape/domain/fish-anatomy';
 import {
   resolveBehavior,
@@ -66,12 +88,14 @@ import {
 import { seededHash01 } from '@aquascape/domain/geometry';
 import {
   FISH_ARCHETYPE,
+  HARDSCAPE_CATEGORY,
   NO_BEHAVIOR_HANDLE,
   createLivestockWorld,
+  type HardscapeRegistrationEntry,
   type LivestockWorld,
   type TankAabb,
 } from '@aquascape/domain/livestock-ecs';
-import type { LivestockEntry, Scene } from '@aquascape/domain/scene-model';
+import type { HardscapeObject, LivestockEntry, Scene } from '@aquascape/domain/scene-model';
 import { selectScene } from '@aquascape/state';
 
 /** Body length when the catalog entry can't be resolved (mm). */
@@ -165,12 +189,19 @@ export class LivestockSimulationService implements OnDestroy {
    */
   private onSceneChanged(scene: Scene): void {
     const livestock = scene.livestock ?? [];
-    const key = this.spawnKey(scene.seed, livestock, scene.tank);
+    // F11.3: hardscape registration entries are derived from the LOADED
+    // catalog (coverScore + category come straight off the catalog row;
+    // the loader has already filled defaults). Built once per
+    // onSceneChanged so the same array drives both the spawnKey
+    // fingerprint and the world.registerHardscape call below.
+    const hardscape = collectHardscape(scene, this.catalog);
+    const key = this.spawnKey(scene.seed, livestock, scene.tank, hardscape);
     const tankAabb = tankAabbFromScene(scene);
 
     // No livestock at all → tear down the world entirely so the
     // renderer's `options.livestockWorld` becomes null and the no-op
-    // path lights up. This also frees the bitECS slab.
+    // path lights up. This also frees the bitECS slab. Hardscape
+    // registration is skipped — without fish there's nothing to anchor.
     if (livestock.length === 0) {
       if (this.world !== null) {
         this.world.dispose();
@@ -184,13 +215,18 @@ export class LivestockSimulationService implements OnDestroy {
     // tank AABB so DepthSystem reads the real interior height from tick 1.
     if (this.world === null) {
       this.world = createLivestockWorld(scene.seed, { tankAabb });
+      // Hardscape MUST be registered before spawnAll so spawnFish's
+      // auto-anchor pass can see refuges within range.
+      this.world.registerHardscape(hardscape);
       this.spawnAll(this.world, scene, livestock);
       this.lastSpawnKey = key;
       return;
     }
 
     // Existing world — re-spawn only if the inputs that determine
-    // entity layout actually changed.
+    // entity layout actually changed (livestock fingerprint, seed,
+    // tank dims, hardscape order/coverScore/category — all baked into
+    // spawnKey).
     if (key === this.lastSpawnKey) return;
 
     // Seed change → must rebuild the world from scratch (the world's
@@ -200,11 +236,18 @@ export class LivestockSimulationService implements OnDestroy {
       this.world = createLivestockWorld(scene.seed, { tankAabb });
     } else {
       // Same seed: keep the world, mutate the AABB in place, then
-      // re-spawn entities. setTankAabb + a re-spawn pass is cheaper
+      // tear down entities. setTankAabb + a re-spawn pass is cheaper
       // than a full world rebuild (no GC, no ParamStore reset).
       this.world.setTankAabb(tankAabb);
       this.despawnAll(this.world);
     }
+    // Hardscape registration runs on EVERY rebuild — even when the
+    // mutation that triggered us was livestock-only. registerHardscape
+    // tears down + replaces the whole hardscape set, so the cost is
+    // bounded by the hardscape count, not the diff. This keeps the
+    // contract simple: post-rebuild, the world's hardscape state
+    // always matches the latest scene.
+    this.world.registerHardscape(hardscape);
     this.spawnAll(this.world, scene, livestock);
     this.lastSpawnKey = key;
   }
@@ -225,11 +268,26 @@ export class LivestockSimulationService implements OnDestroy {
    * spawnFish. Sorting would silently break replay across cold starts
    * if the document author re-ordered the livestock array.
    */
-  private spawnKey(seed: number, livestock: readonly LivestockEntry[], tank: Scene['tank']): string {
+  private spawnKey(
+    seed: number,
+    livestock: readonly LivestockEntry[],
+    tank: Scene['tank'],
+    hardscape: readonly HardscapeRegistrationEntry[],
+  ): string {
     const parts = livestock.map(
       (e) => `${e.id}:${e.ref.catalog}/${e.ref.id}@${e.ref.version}:${e.quantity}`,
     );
-    return `${seed | 0}|${tank.width}x${tank.height}x${tank.depth}|${parts.join('|')}`;
+    // Hardscape is fingerprinted in registration order (which is document
+    // order — `collectHardscape` walks `scene.layers[].objects` without
+    // re-sorting, matching the auto-anchor's order-stable nearest-pick).
+    // Position is rounded to whole mm so sub-millimetre noise in the
+    // transform doesn't fire spurious rebuilds; coverScore is rounded to
+    // 3 decimals to swallow loader-default float wobble.
+    const hardparts = hardscape.map(
+      (h) =>
+        `${h.category}:${Math.round(h.position.x)},${Math.round(h.position.y)},${Math.round(h.position.z)}:${h.coverScore.toFixed(3)}`,
+    );
+    return `${seed | 0}|${tank.width}x${tank.height}x${tank.depth}|${parts.join('|')}|H:${hardparts.join('|')}`;
   }
 
   /** Despawn every fish in the world. Used on re-spawn (same seed). */
@@ -490,6 +548,101 @@ function speciesIdForRef(refId: string): number {
 function isLivestockRow(catalogRow: unknown): boolean {
   if (catalogRow === null || typeof catalogRow !== 'object') return false;
   return (catalogRow as { kind?: string }).kind === 'livestock';
+}
+
+/**
+ * F11.3 — Walk a scene's hardscape SceneObjects and build the
+ * `HardscapeRegistrationEntry[]` the world expects. The catalog row is
+ * the LOADED `CoreCatalog` row (post-loader-fill), so `coverScore` is
+ * already populated from `category` defaults (wood→0.6, rock→0.4,
+ * other→0). We re-default ONLY as a last-ditch defensive fallback for
+ * the case where a test fixture or broken catalog bypasses the loader;
+ * the design contract is "loader fills, service reads".
+ *
+ * Iteration order = document order (`scene.layers` outer, `layer.objects`
+ * inner) — load-bearing for determinism. The auto-anchor pick at
+ * spawn-time is order-stable (first-nearest-wins), so reshuffling
+ * hardscape would silently change anchor assignments and break the
+ * 1000-tick replay invariant.
+ *
+ * Plants are intentionally excluded: per the livestock-ecs caveat,
+ * plant cover is runtime-computed by FearSystem from scatter density,
+ * not registered as a discrete refuge anchor. Decor entries are also
+ * skipped — only `kind === 'hardscape'` SceneObjects make the list.
+ *
+ * `category` mapping: catalog's string union `'rock' | 'wood' | 'other'`
+ * → the integer `HARDSCAPE_CATEGORY.*` the ECS slab stores. Plants would
+ * map to `HARDSCAPE_CATEGORY.PLANT` if they were ever registered here,
+ * but they're not.
+ */
+function collectHardscape(
+  scene: Scene,
+  catalog: Catalog,
+): HardscapeRegistrationEntry[] {
+  const out: HardscapeRegistrationEntry[] = [];
+  for (const layer of scene.layers) {
+    for (const obj of layer.objects) {
+      if (obj.kind !== 'hardscape') continue;
+      const row = catalog.get(obj.ref);
+      const hardscapeRow =
+        row !== null && row.kind === 'hardscape' ? (row as CatalogHardscapeEntry) : null;
+      const category = mapHardscapeCategory(obj, hardscapeRow);
+      // coverScore should be loader-defaulted on `hardscapeRow`; the
+      // `?? defaultCoverScore(...)` is a defensive fallback for the
+      // missing-row path (tests that don't register the entry) — NOT a
+      // re-defaulting of an already-loaded row.
+      const coverScore =
+        hardscapeRow?.coverScore ?? defaultCoverScoreForCategoryInt(category);
+      out.push({
+        position: {
+          x: obj.transform.position.x,
+          y: obj.transform.position.y,
+          z: obj.transform.position.z,
+        },
+        coverScore,
+        category,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Map a hardscape SceneObject + (optional) catalog row to the
+ * `HARDSCAPE_CATEGORY.*` integer. The SceneObject's own `category`
+ * field (Stage 7) wins when present; otherwise we fall back to the
+ * catalog row's category; otherwise OTHER.
+ */
+function mapHardscapeCategory(
+  obj: HardscapeObject,
+  row: CatalogHardscapeEntry | null,
+): number {
+  const str = obj.category ?? row?.category ?? 'other';
+  switch (str) {
+    case 'wood':
+      return HARDSCAPE_CATEGORY.WOOD;
+    case 'rock':
+      return HARDSCAPE_CATEGORY.ROCK;
+    default:
+      return HARDSCAPE_CATEGORY.OTHER;
+  }
+}
+
+/**
+ * Defensive coverScore default used only when the catalog row is missing
+ * entirely. The loader does the real defaulting (see
+ * `libs/domain/catalog/src/loader.ts` → `defaultCoverScoreForCategory`)
+ * — these numbers must stay in sync.
+ */
+function defaultCoverScoreForCategoryInt(category: number): number {
+  switch (category) {
+    case HARDSCAPE_CATEGORY.WOOD:
+      return 0.6;
+    case HARDSCAPE_CATEGORY.ROCK:
+      return 0.4;
+    default:
+      return 0;
+  }
 }
 
 /**

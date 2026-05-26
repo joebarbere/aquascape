@@ -100,8 +100,9 @@ export const FISH_ARCHETYPE = {
 export type FishArchetypeId = (typeof FISH_ARCHETYPE)[keyof typeof FISH_ARCHETYPE];
 
 /**
- * Coarse behavior modes. Reserved for F11.3 — F11.1 spawns every entity in
- * `FORAGE` and never transitions.
+ * Coarse behavior modes. F11.1 spawned every entity in `FORAGE`; F11.3 flips
+ * into `REFUGE` (FearSystem — fleeing toward a hardscape cover anchor) or
+ * `PURSUE` (NippingSystem / TerritorialSystem — brief chase override).
  */
 export const BEHAVIOR_MODE = {
   FORAGE: 0,
@@ -110,3 +111,95 @@ export const BEHAVIOR_MODE = {
 } as const;
 
 export type BehaviorModeId = (typeof BEHAVIOR_MODE)[keyof typeof BEHAVIOR_MODE];
+
+/**
+ * Sentinel stored in `Territory.anchorEid` / `FearState.refugeEid` to mean
+ * "no anchor / no refuge". bitECS allocates entity ids starting at 0, so a
+ * zero would collide with a legitimately-picked entity — we use the max
+ * ui32 value instead. Pick is the same as `0xffffffff >>> 0`; the typed-
+ * array slab is `Types.ui32` so the value round-trips losslessly.
+ */
+export const NO_ENTITY_REF = 0xffffffff;
+
+/**
+ * Territorial anchor + fatigue state (F11.3 TerritorialSystem).
+ *
+ * Attached to every fish whose `ResolvedBehavior.territory !== null`. The
+ * anchor is auto-assigned at spawn time: the nearest hardscape entity within
+ * `2 * coreRadius` of the spawn position. If no hardscape is in range,
+ * `anchorEid = NO_ENTITY_REF` and TerritorialSystem skips the fish.
+ *
+ * Fatigue accumulates while the fish is actively chasing (Adams 2001 +
+ * Brown 1964 — territorial defense is metabolically expensive and aggression
+ * fades over 5–15 seconds of sustained contest). The `fatigueScale =
+ * exp(-fatigue * 0.3)` multiplier on chase magnitude implements the decay.
+ */
+export const Territory = defineComponent({
+  /** bitECS entity id of the defended hardscape entity. `NO_ENTITY_REF` = none. */
+  anchorEid: Types.ui32,
+  /** Accumulated chase fatigue. Recovers when not chasing. */
+  fatigue: Types.f32,
+});
+
+/**
+ * Per-entity nipping drive (F11.3 NippingSystem).
+ *
+ * Attached to fish whose `ResolvedBehavior.nipping !== null` (tiger barbs,
+ * rosy barbs). `cooldownSec` ticks down after each nip attempt — while
+ * positive, the system skips the fish so successive darts don't chain
+ * back-to-back.
+ */
+export const NippingDrive = defineComponent({
+  /** Seconds remaining before the next nip attempt is allowed. */
+  cooldownSec: Types.f32,
+});
+
+/**
+ * Anti-predator / fear state (F11.3 FearSystem).
+ *
+ * Attached to *every* fish — `ResolvedBehavior.fear` is required, not
+ * optional, so every entity carries an integrated risk level. `risk` decays
+ * exponentially each tick (half-life ~1.4 s) so old startles don't echo
+ * forever; once `risk > params.threshold` the mode flips to REFUGE and the
+ * fish steers toward `refugeEid`'s position.
+ *
+ * `emergenceTimer` counts down only once risk has dropped below threshold —
+ * while above threshold, FearSystem resets the timer to `params.emergenceDelay`
+ * each tick. The fish flips back to FORAGE only after the timer reaches 0.
+ */
+export const FearState = defineComponent({
+  /** Integrated risk level. Decays each tick via `exp(-decayRate * dt)`. */
+  risk: Types.f32,
+  /** bitECS entity id of the target hardscape when in REFUGE. `NO_ENTITY_REF` = none. */
+  refugeEid: Types.ui32,
+  /** Seconds remaining until FORAGE re-engages after risk drops. */
+  emergenceTimer: Types.f32,
+});
+
+/**
+ * Tag for hardscape entities (rocks, wood, plants — anything fish navigate
+ * around or hide behind). Lives in the same bitECS world as the fish but on
+ * a separate query. Populated by `world.registerHardscape(...)` and torn
+ * down on the next call. `coverScore` ∈ [0, 1] gates which hardscape entries
+ * are usable refuges; `category` matches `HARDSCAPE_CATEGORY.*` so
+ * FearSystem can honour species `coverPreference`.
+ */
+export const Hardscape = defineComponent({
+  coverScore: Types.f32,
+  category: Types.ui8,
+});
+
+/**
+ * Hardscape category enum. Mirrors the catalog's `HardscapeEntry.category`
+ * (wood/rock/plant/other); the loader maps catalog rows to these integers
+ * before calling `world.registerHardscape`.
+ */
+export const HARDSCAPE_CATEGORY = {
+  WOOD: 0,
+  ROCK: 1,
+  PLANT: 2,
+  OTHER: 3,
+} as const;
+
+export type HardscapeCategoryId =
+  (typeof HARDSCAPE_CATEGORY)[keyof typeof HARDSCAPE_CATEGORY];

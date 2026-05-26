@@ -10,8 +10,12 @@ import {
   BehaviorMode,
   BehaviorParamsRef,
   BodyLength,
+  FearState,
   FISH_ARCHETYPE,
   Force,
+  HARDSCAPE_CATEGORY,
+  Hardscape,
+  NippingDrive,
   NO_BEHAVIOR_HANDLE,
   Orientation,
   ParamStore,
@@ -20,14 +24,18 @@ import {
   SIM_HZ,
   SpatialGrid,
   SpeciesId,
+  Territory,
   Velocity,
   animationSystem,
   createLivestockWorld,
   depthSystem,
+  fearSystem,
   kinematicSystem,
+  nippingSystem,
   perceptionSystem,
   schoolingSystem,
   steeringIntegrator,
+  territorialSystem,
   tickPrng,
 } from '../index';
 import { MID_PRESET } from '@aquascape/domain/livestock-behaviors';
@@ -57,9 +65,23 @@ describe('public API surface', () => {
       BehaviorMode,
       BehaviorParamsRef,
       Force,
+      FearState,
+      Hardscape,
+      NippingDrive,
+      Territory,
     ]) {
       expect(c).toBeDefined();
     }
+  });
+
+  it('exposes the F11.3 enums + systems', () => {
+    expect(HARDSCAPE_CATEGORY.WOOD).toBe(0);
+    expect(HARDSCAPE_CATEGORY.ROCK).toBe(1);
+    expect(HARDSCAPE_CATEGORY.PLANT).toBe(2);
+    expect(HARDSCAPE_CATEGORY.OTHER).toBe(3);
+    expect(typeof fearSystem).toBe('function');
+    expect(typeof nippingSystem).toBe('function');
+    expect(typeof territorialSystem).toBe('function');
   });
 
   it('exposes ParamStore + NO_BEHAVIOR_HANDLE + the F11.2 systems', () => {

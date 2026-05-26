@@ -121,6 +121,72 @@ describe('loadCatalog — schemaVersion 3 forward-compat (F11.2)', () => {
   });
 });
 
+describe('loadCatalog — hardscape coverScore default-fill (F11.3)', () => {
+  // F11.3 FearSystem reads `coverScore` to pick refuges. JSON Schema's
+  // `default` is metadata only, so the loader populates the field when a
+  // manifest omits it. The original manifest object must stay untouched —
+  // only the loaded `CoreCatalog` entry sees the populated value.
+  const baseHardscape = {
+    catalog: 'core',
+    version: 1,
+    name: 'Test',
+    kind: 'hardscape' as const,
+    naturalSize: { width: 100, height: 80, depth: 60 },
+    color: '#abcdef',
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 0, y: 1 },
+    ],
+  };
+  const woodEntry = { ...baseHardscape, id: 'wood.test', category: 'wood' as const };
+  const rockEntry = { ...baseHardscape, id: 'rock.test', category: 'rock' as const };
+  const otherEntry = { ...baseHardscape, id: 'other.test', category: 'other' as const };
+
+  it('fills coverScore = 0.6 for a wood hardscape with no coverScore', () => {
+    const { catalog } = loadCatalog([woodEntry]);
+    const entry = catalog.get({ catalog: 'core', id: 'wood.test' });
+    expect(entry?.kind).toBe('hardscape');
+    if (entry?.kind !== 'hardscape') return;
+    expect(entry.coverScore).toBe(0.6);
+  });
+
+  it('fills coverScore = 0.4 for a rock hardscape with no coverScore', () => {
+    const { catalog } = loadCatalog([rockEntry]);
+    const entry = catalog.get({ catalog: 'core', id: 'rock.test' });
+    if (entry?.kind !== 'hardscape') return;
+    expect(entry.coverScore).toBe(0.4);
+  });
+
+  it('fills coverScore = 0 for an `other` hardscape with no coverScore', () => {
+    const { catalog } = loadCatalog([otherEntry]);
+    const entry = catalog.get({ catalog: 'core', id: 'other.test' });
+    if (entry?.kind !== 'hardscape') return;
+    expect(entry.coverScore).toBe(0);
+  });
+
+  it('preserves an explicit coverScore on a hardscape entry (no overwrite)', () => {
+    const { catalog } = loadCatalog([{ ...woodEntry, coverScore: 0.85 }]);
+    const entry = catalog.get({ catalog: 'core', id: 'wood.test' });
+    if (entry?.kind !== 'hardscape') return;
+    expect(entry.coverScore).toBe(0.85);
+  });
+
+  it('preserves an explicit coverScore = 0 (not treated as missing)', () => {
+    const { catalog } = loadCatalog([{ ...rockEntry, coverScore: 0 }]);
+    const entry = catalog.get({ catalog: 'core', id: 'rock.test' });
+    if (entry?.kind !== 'hardscape') return;
+    expect(entry.coverScore).toBe(0);
+  });
+
+  it('does not mutate the original manifest object', () => {
+    const manifest = { ...rockEntry };
+    expect(manifest.coverScore).toBeUndefined();
+    loadCatalog([manifest]);
+    expect(manifest.coverScore).toBeUndefined();
+  });
+});
+
 describe('emptyCatalog', () => {
   it('returns a usable empty catalog', () => {
     const empty = emptyCatalog();

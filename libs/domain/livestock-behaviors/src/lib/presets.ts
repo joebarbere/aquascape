@@ -1,8 +1,14 @@
-// Per-group behaviour presets for F11.2.
+// Per-group behaviour presets for F11.2 + F11.3.
 //
 // Three named constants (no lookup table) — tree-shakable + obviously
 // deterministic. F11.6 will refine the per-species presets; F11.2 just needs
 // these three groups to read distinctly on screen.
+//
+// F11.3 added `territory`, `nipping`, `fear` to `ResolvedBehavior`. Territory
+// + nipping stay null on every preset — they are species-specific, assigned
+// by the heuristics in `resolve.ts`, not by depth band. Fear is required and
+// varies per band: bottom dwellers are skittish (low threshold, long
+// emergence delay), top dwellers are bold.
 
 import type { ResolvedBehavior } from './params';
 
@@ -37,6 +43,14 @@ export const TOP_PRESET: ResolvedBehavior = {
     ampTail: 0.10,
     envelopeExp: ENVELOPE_EXP,
   },
+  territory: null,
+  nipping: null,
+  fear: {
+    riskBaseline: 0.05,
+    threshold: 0.6,
+    coverPreference: 'plants',
+    emergenceDelay: 5,
+  },
 };
 
 /** Default preset for a mid-water schooler (tetra, rasbora, danio, barb). */
@@ -65,6 +79,14 @@ export const MID_PRESET: ResolvedBehavior = {
     ampTail: 0.12,
     envelopeExp: ENVELOPE_EXP,
   },
+  territory: null,
+  nipping: null,
+  fear: {
+    riskBaseline: 0.08,
+    threshold: 0.5,
+    coverPreference: 'plants',
+    emergenceDelay: 4,
+  },
 };
 
 /** Default preset for a substrate-hugger (cory, kuhli, pleco, oto). */
@@ -92,5 +114,13 @@ export const BOTTOM_PRESET: ResolvedBehavior = {
     ampHead: 0.025,
     ampTail: 0.09,
     envelopeExp: ENVELOPE_EXP,
+  },
+  territory: null,
+  nipping: null,
+  fear: {
+    riskBaseline: 0.15,
+    threshold: 0.4,
+    coverPreference: 'wood',
+    emergenceDelay: 8,
   },
 };

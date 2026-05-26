@@ -21,16 +21,25 @@
 import { TestBed } from '@angular/core/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 
+import { defineQuery } from 'bitecs';
+
 import type { Catalog, CatalogEntry, CatalogKind } from '@aquascape/domain/catalog';
 import { MID_PRESET } from '@aquascape/domain/livestock-behaviors';
 import {
   AnimationPhase,
   BehaviorParamsRef,
+  HARDSCAPE_CATEGORY,
+  Hardscape,
   NO_BEHAVIOR_HANDLE,
   Velocity,
 } from '@aquascape/domain/livestock-ecs';
-import type { LivestockEntry, Scene } from '@aquascape/domain/scene-model';
-import { asObjectId } from '@aquascape/domain/scene-model';
+import type {
+  HardscapeObject,
+  Layer,
+  LivestockEntry,
+  Scene,
+} from '@aquascape/domain/scene-model';
+import { asLayerId, asObjectId, identityTransform } from '@aquascape/domain/scene-model';
 import { defaultScene, selectScene } from '@aquascape/state';
 
 import { LivestockSimulationService } from './livestock-simulation.service';
@@ -612,5 +621,413 @@ describe('LivestockSimulationService — F11.2 determinism with behaviour system
     expect(byteEqual(a.phase, b.phase)).toBe(true);
     expect(byteEqual(a.archetype, b.archetype)).toBe(true);
     expect(byteEqual(a.scale, b.scale)).toBe(true);
+  });
+});
+
+// ─── F11.3 Wave 4 — hardscape registration + auto-anchor wiring ──────────────
+//
+// The Wave 3 ECS work landed `world.registerHardscape(...)` and an automatic
+// territory-anchor pick at `spawnFish` time (nearest hardscape within
+// `2 * coreRadius`). The service is the upstream caller: it walks the scene's
+// hardscape SceneObjects, builds `HardscapeRegistrationEntry[]` from the
+// loaded catalog rows, and calls `registerHardscape` BEFORE `spawnFish` so
+// the auto-anchor pass has something to look at.
+//
+// Tests in this block exercise that pipeline end-to-end through the service:
+//   - hardscape SceneObjects → world.getHardscapeCount()
+//   - coverScore + category flow through from the loaded catalog
+//   - scene mutation that adds a rock triggers re-registration
+//   - cichlid + cave → getEntityTerritoryAnchor !== null
+//   - cichlid + no hardscape → getEntityTerritoryAnchor === null
+//   - 1000-tick replay with hardscape + a cichlid is bit-identical
+
+/** Mint a HardscapeEntry catalog row — minimal fields to satisfy the type. */
+function hardscapeEntry(
+  id: string,
+  opts: { category?: 'rock' | 'wood' | 'other'; coverScore?: number; name?: string } = {},
+): CatalogEntry {
+  const base: CatalogEntry = {
+    catalog: 'core',
+    id,
+    version: 1,
+    name: opts.name ?? id,
+    kind: 'hardscape',
+    category: opts.category ?? 'rock',
+    naturalSize: { width: 100, height: 100, depth: 100 },
+    color: '#7a7d84',
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 1, y: 1 },
+      { x: -1, y: 1 },
+    ],
+  } as CatalogEntry;
+  // Only set coverScore when explicitly requested. Production catalogs are
+  // loader-defaulted; tests that *want* to mirror the loader's behaviour
+  // pass through this helper with `coverScore: 0.4` etc. Tests that want
+  // the missing-coverScore defensive-fallback path leave it absent.
+  if (opts.coverScore !== undefined) {
+    return { ...base, coverScore: opts.coverScore } as CatalogEntry;
+  }
+  return base;
+}
+
+/** Build a hardscape SceneObject at a position with a given catalog ref id. */
+function hardscapeObj(
+  objId: string,
+  refId: string,
+  pos: { x: number; y: number; z: number },
+  category: 'rock' | 'wood' | 'other' = 'rock',
+): HardscapeObject {
+  return {
+    kind: 'hardscape',
+    id: asObjectId(objId),
+    ref: { catalog: 'core', id: refId, version: 1 },
+    category,
+    transform: { ...identityTransform(), position: pos },
+  };
+}
+
+/** Wrap one or more SceneObjects into a single visible Layer. */
+function layerWith(id: string, objects: HardscapeObject[]): Layer {
+  return {
+    id: asLayerId(id),
+    name: 'Hardscape',
+    opacity: 1,
+    visible: true,
+    locked: false,
+    objects,
+  };
+}
+
+/** Compose a scene with both livestock + hardscape, on top of `defaultScene`. */
+function sceneWithHardscape(
+  livestock: LivestockEntry[],
+  hardscape: HardscapeObject[],
+  seed = 42,
+): Scene {
+  const base = defaultScene();
+  return {
+    ...base,
+    seed,
+    livestock,
+    layers: hardscape.length > 0
+      ? [layerWith('11111111-0000-4000-8000-000000000001', hardscape)]
+      : [],
+  };
+}
+
+describe('LivestockSimulationService — F11.3 hardscape registration', () => {
+  it('registers every hardscape SceneObject on the world after a scene with livestock loads', () => {
+    const livestock = [entry('e1', 'livestock.fish.neon-tetra', 4)];
+    const hard = [
+      hardscapeObj('h1', 'hardscape.rock.seiryu', { x: 100, y: 0, z: 100 }),
+      hardscapeObj('h2', 'hardscape.wood.spider', { x: 300, y: 0, z: 200 }, 'wood'),
+      hardscapeObj('h3', 'hardscape.rock.dragon', { x: 500, y: 0, z: 100 }),
+    ];
+    const { service, store } = setup();
+    // Catalog mirrors the loader-defaulted state: every hardscape row has a
+    // coverScore in [0, 1]. The service reads that value verbatim.
+    service.setCatalog(
+      makeCatalog([
+        livestockEntry('livestock.fish.neon-tetra'),
+        hardscapeEntry('hardscape.rock.seiryu', { category: 'rock', coverScore: 0.4 }),
+        hardscapeEntry('hardscape.wood.spider', { category: 'wood', coverScore: 0.6 }),
+        hardscapeEntry('hardscape.rock.dragon', { category: 'rock', coverScore: 0.4 }),
+      ]),
+    );
+    store.overrideSelector(selectScene, sceneWithHardscape(livestock, hard, 7));
+    store.refreshState();
+    const world = service.getWorld()!;
+    expect(world.getHardscapeCount()).toBe(3);
+  });
+
+  it('skips non-hardscape SceneObjects (plants, decor) — only `kind === hardscape` makes the list', () => {
+    const livestock = [entry('e1', 'livestock.fish.neon-tetra', 2)];
+    const hard = [hardscapeObj('h1', 'hardscape.rock.seiryu', { x: 100, y: 0, z: 100 })];
+    const { service, store } = setup();
+    service.setCatalog(
+      makeCatalog([
+        livestockEntry('livestock.fish.neon-tetra'),
+        hardscapeEntry('hardscape.rock.seiryu', { category: 'rock', coverScore: 0.4 }),
+      ]),
+    );
+    // The scene's layer has one hardscape + one decor + one plant. Only the
+    // hardscape should make it to the world.
+    const base = defaultScene();
+    const scene: Scene = {
+      ...base,
+      seed: 7,
+      livestock,
+      layers: [
+        {
+          id: asLayerId('11111111-0000-4000-8000-000000000001'),
+          name: 'mixed',
+          opacity: 1,
+          visible: true,
+          locked: false,
+          objects: [
+            ...hard,
+            {
+              kind: 'decor',
+              id: asObjectId('d1'),
+              ref: { catalog: 'core', id: 'decor.fish.boraras', version: 1 },
+              transform: identityTransform(),
+            },
+            {
+              kind: 'plant',
+              id: asObjectId('p1'),
+              ref: { catalog: 'core', id: 'plant.eleocharis', version: 1 },
+              growth: { ageWeeks: 4, vigor: 1 },
+              transform: identityTransform(),
+            },
+          ],
+        },
+      ],
+    };
+    store.overrideSelector(selectScene, scene);
+    store.refreshState();
+    expect(service.getWorld()!.getHardscapeCount()).toBe(1);
+  });
+
+  it('reads the loaded catalog coverScore verbatim (no re-defaulting on a populated row)', () => {
+    // Manifest authors can override the loader-default; the service must NOT
+    // clobber that with its own default. We mint a wood row with an explicit
+    // 0.7 (the loader fills 0.6 for wood) and assert the world stored 0.7.
+    const livestock = [entry('e1', 'livestock.fish.neon-tetra', 1)];
+    const hard = [
+      hardscapeObj('h-wood', 'hardscape.wood.special', { x: 200, y: 0, z: 150 }, 'wood'),
+    ];
+    const { service, store } = setup();
+    service.setCatalog(
+      makeCatalog([
+        livestockEntry('livestock.fish.neon-tetra'),
+        hardscapeEntry('hardscape.wood.special', { category: 'wood', coverScore: 0.7 }),
+      ]),
+    );
+    store.overrideSelector(selectScene, sceneWithHardscape(livestock, hard, 11));
+    store.refreshState();
+    const world = service.getWorld()!;
+    expect(world.getHardscapeCount()).toBe(1);
+    // Query the world's own ecs for Hardscape entities — this returns only
+    // THIS world's hardscape eids, not module-global slabs polluted by prior
+    // tests' world instances.
+    const eids = defineQuery([Hardscape])(world.ecs);
+    expect(eids.length).toBe(1);
+    const eid = eids[0]!;
+    expect(Hardscape.coverScore[eid]).toBeCloseTo(0.7, 5);
+    expect(Hardscape.category[eid]).toBe(HARDSCAPE_CATEGORY.WOOD);
+  });
+
+  it('falls back to the loader-default coverScore when the catalog row is MISSING entirely', () => {
+    // This is the defensive path: a hardscape SceneObject references a
+    // ref id that isn't in the catalog. The service should still register
+    // it with a category-derived coverScore so FearSystem has a usable
+    // refuge value rather than NaN. The defensive default matches the
+    // catalog loader (wood→0.6, rock→0.4, other→0).
+    const livestock = [entry('e1', 'livestock.fish.neon-tetra', 1)];
+    const hard = [
+      hardscapeObj('h-missing', 'hardscape.rock.unknown', { x: 100, y: 0, z: 100 }, 'rock'),
+    ];
+    const { service, store } = setup();
+    // Catalog deliberately omits the rock row.
+    service.setCatalog(makeCatalog([livestockEntry('livestock.fish.neon-tetra')]));
+    store.overrideSelector(selectScene, sceneWithHardscape(livestock, hard, 7));
+    store.refreshState();
+    const world = service.getWorld()!;
+    expect(world.getHardscapeCount()).toBe(1);
+    const eids = defineQuery([Hardscape])(world.ecs);
+    expect(eids.length).toBe(1);
+    const eid = eids[0]!;
+    expect(Hardscape.coverScore[eid]).toBeCloseTo(0.4, 5);
+    expect(Hardscape.category[eid]).toBe(HARDSCAPE_CATEGORY.ROCK);
+  });
+
+  it('hardscape mutation (new rock added) triggers re-register — count reflects the new scene', () => {
+    const livestock = [entry('e1', 'livestock.fish.neon-tetra', 2)];
+    const initial = [
+      hardscapeObj('h1', 'hardscape.rock.a', { x: 100, y: 0, z: 100 }),
+    ];
+    const { service, store } = setup();
+    service.setCatalog(
+      makeCatalog([
+        livestockEntry('livestock.fish.neon-tetra'),
+        hardscapeEntry('hardscape.rock.a', { category: 'rock', coverScore: 0.4 }),
+        hardscapeEntry('hardscape.rock.b', { category: 'rock', coverScore: 0.4 }),
+      ]),
+    );
+    store.overrideSelector(selectScene, sceneWithHardscape(livestock, initial, 7));
+    store.refreshState();
+    expect(service.getWorld()!.getHardscapeCount()).toBe(1);
+    // Add a second rock to the scene; the service should re-register +
+    // re-spawn (the spawnKey fingerprint now includes the hardscape set).
+    const grown = [
+      ...initial,
+      hardscapeObj('h2', 'hardscape.rock.b', { x: 300, y: 0, z: 200 }),
+    ];
+    store.overrideSelector(selectScene, sceneWithHardscape(livestock, grown, 7));
+    store.refreshState();
+    expect(service.getWorld()!.getHardscapeCount()).toBe(2);
+  });
+
+  it('hardscape removal triggers re-register — count drops', () => {
+    const livestock = [entry('e1', 'livestock.fish.neon-tetra', 2)];
+    const initial = [
+      hardscapeObj('h1', 'hardscape.rock.a', { x: 100, y: 0, z: 100 }),
+      hardscapeObj('h2', 'hardscape.rock.b', { x: 300, y: 0, z: 200 }),
+    ];
+    const { service, store } = setup();
+    service.setCatalog(
+      makeCatalog([
+        livestockEntry('livestock.fish.neon-tetra'),
+        hardscapeEntry('hardscape.rock.a', { category: 'rock', coverScore: 0.4 }),
+        hardscapeEntry('hardscape.rock.b', { category: 'rock', coverScore: 0.4 }),
+      ]),
+    );
+    store.overrideSelector(selectScene, sceneWithHardscape(livestock, initial, 7));
+    store.refreshState();
+    expect(service.getWorld()!.getHardscapeCount()).toBe(2);
+    store.overrideSelector(selectScene, sceneWithHardscape(livestock, [initial[0]!], 7));
+    store.refreshState();
+    expect(service.getWorld()!.getHardscapeCount()).toBe(1);
+  });
+});
+
+describe('LivestockSimulationService — F11.3 auto-anchor assignment', () => {
+  it('territorial species (cichlid id hint) + hardscape within 2 * coreRadius → anchor is non-null', () => {
+    // resolveBehavior assigns DEFAULT_TERRITORY (coreRadius: 80) when the id
+    // contains 'cichlid' / 'ram' / 'apisto' / 'angelfish' / 'discus' / 'betta'.
+    // Spawn-time auto-anchor scans hardscape within 2 * 80 = 160 mm. Tiling
+    // five caves across the spawn region guarantees at least one fish lands
+    // within range no matter how the per-entry PRNG distributes spawn
+    // positions — the assertion that follows is "at least one fish has an
+    // anchor", which is the F11.3 contract surface.
+    const livestock = [entry('e1', 'livestock.fish.cichlid-ram', 12)];
+    const tank = defaultScene().tank;
+    const hard = [
+      hardscapeObj('h1', 'hardscape.rock.cave', { x: tank.width * 0.2, y: tank.height / 2, z: tank.depth / 2 }),
+      hardscapeObj('h2', 'hardscape.rock.cave', { x: tank.width * 0.4, y: tank.height / 2, z: tank.depth / 2 }),
+      hardscapeObj('h3', 'hardscape.rock.cave', { x: tank.width * 0.6, y: tank.height / 2, z: tank.depth / 2 }),
+      hardscapeObj('h4', 'hardscape.rock.cave', { x: tank.width * 0.8, y: tank.height / 2, z: tank.depth / 2 }),
+      hardscapeObj('h5', 'hardscape.rock.cave', { x: tank.width / 2, y: tank.height * 0.3, z: tank.depth / 2 }),
+    ];
+    const { service, store } = setup();
+    service.setCatalog(
+      makeCatalog([
+        livestockEntry('livestock.fish.cichlid-ram', { name: 'Ram' }),
+        hardscapeEntry('hardscape.rock.cave', { category: 'rock', coverScore: 0.4 }),
+      ]),
+    );
+    store.overrideSelector(selectScene, sceneWithHardscape(livestock, hard, 7));
+    store.refreshState();
+    const world = service.getWorld()!;
+    // Enumerate FISH only (entities with BehaviorParamsRef). The snapshot
+    // would also include the 5 hardscape entities, which have no
+    // BehaviorParamsRef → getEntityTerritoryAnchor's "handle is undefined →
+    // null" guard already filters them out, but querying directly is more
+    // honest about the test intent.
+    const fishEids = defineQuery([BehaviorParamsRef])(world.ecs);
+    expect(fishEids.length).toBe(12);
+    let anyAnchored = false;
+    for (const eid of fishEids) {
+      if (world.getEntityTerritoryAnchor(eid) !== null) {
+        anyAnchored = true;
+        break;
+      }
+    }
+    expect(anyAnchored).toBe(true);
+  });
+
+  it('territorial species + NO hardscape → every fish has anchor === null (out-of-range fallback)', () => {
+    const livestock = [entry('e1', 'livestock.fish.cichlid-ram', 4)];
+    const { service, store } = setup();
+    service.setCatalog(
+      makeCatalog([livestockEntry('livestock.fish.cichlid-ram', { name: 'Ram' })]),
+    );
+    store.overrideSelector(selectScene, sceneWithHardscape(livestock, [], 7));
+    store.refreshState();
+    const world = service.getWorld()!;
+    expect(world.getHardscapeCount()).toBe(0);
+    const fishEids = defineQuery([BehaviorParamsRef])(world.ecs);
+    expect(fishEids.length).toBe(4);
+    for (const eid of fishEids) {
+      expect(world.getEntityTerritoryAnchor(eid)).toBeNull();
+    }
+  });
+});
+
+describe('LivestockSimulationService — F11.3 determinism with hardscape + anchors', () => {
+  /** Byte-compare two typed-array views. Returns false on length mismatch. */
+  function byteEqual(a: ArrayBufferView, b: ArrayBufferView): boolean {
+    if (a.byteLength !== b.byteLength) return false;
+    const av = new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
+    const bv = new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
+    for (let i = 0; i < av.length; i++) if (av[i] !== bv[i]) return false;
+    return true;
+  }
+
+  /** Drive the service through `setup` + a hardscape-bearing scene + N ticks. */
+  function runService(
+    livestock: LivestockEntry[],
+    hard: HardscapeObject[],
+    seed: number,
+    ticks: number,
+  ) {
+    const { service, store } = setup();
+    service.setCatalog(
+      makeCatalog([
+        livestockEntry('livestock.fish.cichlid-ram', { name: 'Ram' }),
+        livestockEntry('livestock.fish.neon-tetra'),
+        hardscapeEntry('hardscape.rock.cave', { category: 'rock', coverScore: 0.4 }),
+        hardscapeEntry('hardscape.wood.driftwood', { category: 'wood', coverScore: 0.6 }),
+      ]),
+    );
+    store.overrideSelector(selectScene, sceneWithHardscape(livestock, hard, seed));
+    store.refreshState();
+    const world = service.getWorld()!;
+    const SIM_DT = 1 / 30;
+    for (let i = 0; i < ticks; i++) world.step(SIM_DT);
+    const snap = world.snapshot(0);
+    return {
+      entityCount: snap.entityCount,
+      position: new Float32Array(snap.position),
+      orientation: new Float32Array(snap.orientation),
+      phase: new Float32Array(snap.phase),
+    };
+  }
+
+  it('1000-tick replay with a cichlid + cave is bit-identical across two cold service builds', () => {
+    // The F11.3 gate. Auto-anchor is order-stable (first-nearest-wins) and
+    // hardscape iterates in document order — so identical
+    // (seed, livestock, hardscape) must produce identical anchor
+    // assignments. If the registration order drifted, FearSystem would
+    // pick a different refuge eid, TerritorialSystem would chase from a
+    // different anchor, and Position would diverge well before tick 1000.
+    const tank = defaultScene().tank;
+    const livestock = [
+      entry('e1', 'livestock.fish.cichlid-ram', 3),
+      entry('e2', 'livestock.fish.neon-tetra', 5),
+    ];
+    const hard = [
+      hardscapeObj('h1', 'hardscape.rock.cave', {
+        x: tank.width * 0.3,
+        y: tank.height / 2,
+        z: tank.depth / 2,
+      }),
+      hardscapeObj('h2', 'hardscape.wood.driftwood', {
+        x: tank.width * 0.7,
+        y: tank.height / 2,
+        z: tank.depth / 2,
+      }, 'wood'),
+    ];
+
+    const a = runService(livestock, hard, 0xc0ffee, 1000);
+    TestBed.resetTestingModule();
+    const b = runService(livestock, hard, 0xc0ffee, 1000);
+
+    expect(a.entityCount).toBe(b.entityCount);
+    expect(byteEqual(a.position, b.position)).toBe(true);
+    expect(byteEqual(a.orientation, b.orientation)).toBe(true);
+    expect(byteEqual(a.phase, b.phase)).toBe(true);
   });
 });

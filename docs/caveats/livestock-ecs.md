@@ -2,11 +2,13 @@
 
 **Load this when:** touching `libs/domain/livestock-ecs/`, `libs/domain/fish-anatomy/`, `libs/rendering/livestock-renderer-3d/`, or `apps/web/src/app/livestock-simulation.service.ts`. Cross-load `renderer-3d.md` if your change crosses into the 3D RAF tick or the bundle's dispose surface.
 
-## Scope of F11.1 + F11.2
+## Scope of F11.1 + F11.2 + F11.3
 
 F11.1 shipped six static archetype meshes wiggling in place. F11.2 makes them swim — Perception → Schooling → Depth → SteeringIntegrator now run before Kinematic, and every entity tagged with a `BehaviorParamsRef` resolves Couzin three-zone schooling + vertical-band stratification each tick. Entities with `handleIdx === NO_BEHAVIOR_HANDLE` stay on the F11.1 static-wiggle path (the integrator short-circuits before touching Velocity).
 
-F11.3 territoriality + nipping + fear; F11.4 feeding + grazing + curiosity; F11.5 flow field + hardscape SDF + bubble columns; F11.6 per-species presets + perf budget; F11.7 ambient polish (water surface, day-night, plant sway).
+F11.3 added three behaviour systems — FearSystem, NippingSystem, TerritorialSystem — plus the `Hardscape` tag + `world.registerHardscape(...)` surface. Every fish now carries `FearState` (fear params are required on `ResolvedBehavior`); fish with non-null `territory` get `Territory` + an auto-anchor at spawn; fish with non-null `nipping` get `NippingDrive`. Priority arbitration runs through `BehaviorMode`: FearSystem may flip FORAGE → REFUGE, NippingSystem / TerritorialSystem set PURSUE for one tick. Downstream systems (Nip, Territory, Schooling) early-out when `BehaviorMode !== FORAGE`; DepthSystem always runs.
+
+F11.4 feeding + grazing + curiosity; F11.5 flow field + hardscape SDF + bubble columns; F11.6 per-species presets + perf budget; F11.7 ambient polish (water surface, day-night, plant sway).
 
 ## World lifecycle
 
@@ -23,14 +25,14 @@ F11.3 territoriality + nipping + fear; F11.4 feeding + grazing + curiosity; F11.
 
 ## System ordering (current + reserved)
 
-F11.1 ran only Kinematic + Animation. F11.2 fills in Perception → Schooling → Depth → SteeringIntegrator. The plan reserves these seats in this order for F11.3+; honour it when adding new systems:
+F11.1 ran only Kinematic + Animation. F11.2 fills in Perception → Schooling → Depth → SteeringIntegrator. F11.3 added Fear → Nip → Territory between Perception and Schooling. Honour the seat ordering when adding new systems:
 
 ```
 PerceptionSystem      (F11.2 — rebuilds the SpatialGrid)
 FearSystem            (F11.3 — risk-driven mode flips, runs early so other behaviours read the latest mode)
-NippingSystem         (F11.3)
-TerritorialSystem     (F11.3)
-FeedingSystem         (F11.4)
+NippingSystem         (F11.3 — group-threshold suppression + nip dart)
+TerritorialSystem     (F11.3 — bourgeois rule + fatigue decay)
+FeedingSystem         (F11.4 — reserved seat)
 SchoolingSystem       (F11.2)
 DepthSystem           (F11.2)
 FlowFieldSystem       (F11.5)
@@ -40,7 +42,11 @@ KinematicSystem       (always last among physics — integrates velocity)
 AnimationSystem       (always last overall — purely visual, no state reads)
 ```
 
-"First system with a non-null target wins" — arbitration is by priority, not by force summation, for mode-flipping behaviours (Fear → Nip → Territory → Feeding). Schooling + Depth + Flow are additive forces summed by SteeringIntegrator.
+**"First system with a non-null target wins"** — arbitration is by priority, not by force summation, for mode-flipping behaviours (Fear → Nip → Territory → Feeding). Implemented as **early-out checks on `BehaviorMode`**: FearSystem may flip FORAGE → REFUGE; NippingSystem / TerritorialSystem set PURSUE for exactly one tick (NippingSystem resets PURSUE → FORAGE at the start of its own loop the following tick). SchoolingSystem skips entirely when `mode !== FORAGE` so REFUGE/PURSUE forces aren't diluted. DepthSystem **always** runs — fleeing fish still respect depth bands. Schooling + Depth + Flow are additive forces summed by SteeringIntegrator.
+
+**Hardscape registration:** `world.registerHardscape(entries)` tears down all existing `Hardscape`-tagged entities and adds fresh ones from the input. Re-registration is the chosen rebuild path; hardscape mutations trigger a livestock re-spawn upstream (same pattern as F11.2 tank resizes), so callers MUST NOT depend on specific bitECS eids surviving across re-registrations. Auto-anchor for territorial fish happens at `spawnFish` time — the nearest hardscape within `2 * coreRadius` wins; if none in range, `Territory.anchorEid = NO_ENTITY_REF` (0xffffffff) and TerritorialSystem skips that fish. Hardscape entities live in the same `Position` query as fish, so systems that walk neighbours must filter via `hasComponent(ecs, Hardscape, nid)` to exclude them.
+
+**`NO_ENTITY_REF` sentinel:** bitECS allocates entity ids starting at 0, so 0 is a *valid* eid. The "no anchor / no refuge" sentinel for `Territory.anchorEid` + `FearState.refugeEid` is `0xffffffff` (max ui32). Never compare those slabs against 0.
 
 ## Sim rate vs. render rate
 

@@ -1,8 +1,8 @@
 // Public API for @aquascape/domain/livestock-behaviors.
 //
 // Behaviour-parameter types, per-group presets, and the resolveBehavior()
-// catalog resolver for animated livestock (Plan Stage 11 F11.2 — schooling +
-// vertical stratification).
+// catalog resolver for animated livestock (Plan Stage 11 — F11.2 schooling +
+// vertical stratification, F11.3 territoriality / nipping / fear).
 //
 // DEPENDENCY BUDGET
 // -----------------
@@ -14,8 +14,11 @@ export type {
   AnimationParams,
   DepthBand,
   DepthParams,
+  FearParams,
+  NippingParams,
   ResolvedBehavior,
   SchoolingParams,
+  TerritoryParams,
 } from './lib/params';
 
 export { BOTTOM_PRESET, MID_PRESET, TOP_PRESET } from './lib/presets';

@@ -34,6 +34,34 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     }
   });
 
+  it('every hardscape entry exposes a coverScore in [0, 1] after load (F11.3 loader fill)', () => {
+    for (const entry of coreCatalog.byKind('hardscape')) {
+      // Loader fills the default from `category` when the manifest omits the
+      // field, so every entry in the loaded catalog must have a number here.
+      expect(typeof entry.coverScore).toBe('number');
+      expect(entry.coverScore!).toBeGreaterThanOrEqual(0);
+      expect(entry.coverScore!).toBeLessThanOrEqual(1);
+      // Category-derived defaults: wood → 0.6, rock → 0.4, other → 0.
+      // The annotated Seiryu medium overrides its rock default with 0.5 —
+      // both cases satisfy the assertion below.
+      if (entry.coverScore === undefined) continue;
+    }
+  });
+
+  it('the annotated Seiryu (medium) hardscape entry keeps its explicit coverScore', () => {
+    const entry = coreCatalog.get({ catalog: 'core', id: 'rock.seiryu.medium' });
+    expect(entry).not.toBeNull();
+    if (entry?.kind !== 'hardscape') return;
+    expect(entry.coverScore).toBe(0.5);
+  });
+
+  it('a representative wood hardscape gets the loader-filled coverScore = 0.6', () => {
+    const entry = coreCatalog.get({ catalog: 'core', id: 'wood.spiderwood.medium' });
+    if (entry?.kind !== 'hardscape') return;
+    // Spiderwood manifest doesn't declare coverScore — loader fills 0.6 for wood.
+    expect(entry.coverScore).toBe(0.6);
+  });
+
   it('every hardscape entry has a silhouette polygon and natural size', () => {
     for (const entry of coreCatalog.byKind('hardscape')) {
       expect(entry.silhouette.length).toBeGreaterThanOrEqual(3);
@@ -141,13 +169,28 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     expect(entry.behavior?.schooling?.wCoh).toBe(1.5);
   });
 
+  it('the Apistogramma entry carries its F11.3 territory override', () => {
+    const entry = coreCatalog.get({
+      catalog: 'core',
+      id: 'livestock.fish.apistogramma-cacatuoides',
+    });
+    expect(entry).not.toBeNull();
+    if (entry?.kind !== 'livestock') return;
+    expect(entry.behavior?.territory).toEqual({
+      coreRadius: 60,
+      displayRadius: 120,
+      aggression: 80,
+      fatigueRate: 0.1,
+    });
+  });
+
   it('only a small handful of livestock entries declare a behavior block (defaults still exercise resolveBehavior)', () => {
     const annotated = coreCatalog
       .byKind('livestock')
       .filter((e) => e.behavior !== undefined);
-    // F11.2 plan: ~1–2 explicit overrides; F11.6 will broaden this. If this
-    // count creeps up before F11.6 lands, the wiring tests for the default
-    // `resolveBehavior` path lose their coverage.
+    // F11.2 + F11.3 plan: ~2 explicit overrides total (neon-tetra + apistogramma);
+    // F11.6 will broaden this. If this count creeps up before F11.6 lands, the
+    // wiring tests for the default `resolveBehavior` path lose their coverage.
     expect(annotated.length).toBeLessThanOrEqual(2);
   });
 
