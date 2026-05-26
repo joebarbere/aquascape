@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-**Stages 0–7 complete. Next:** Stage 8 — Community Gallery (optional/online: browse + remix shared `.aqua` layouts via a pluggable backend interface; the FOSS build hides the gallery behind a capability flag so offline / self-host installs stay gallery-less).
+**Stages 0–7 complete. Next:** Stage 10 — 3D renderer (Three.js / WebGL `renderer-3d` lib that drops in over the existing `SceneRenderer` interface and consumes the same canonical 3D coordinates already stored in `.aqua` documents). Stages 8 (community gallery) + 9 (AI render) are still planned but lower priority — the architectural payoff of "one scene model, two renderers" is the bet the plan rides on.
 
 `README.md` carries the long-form story of what shipped; this file only mentions the *next* concrete thing.
 
