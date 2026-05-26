@@ -19,11 +19,27 @@ import { PerspectiveCamera, Vector3 } from 'three';
 /** Field of view, in degrees. 50° reads natural at typical viewing distances. */
 const FOV_DEGREES = 50;
 
-/** Initial camera elevation as a fraction of tank height. */
-const INITIAL_HEIGHT_FRACTION = 0.7;
+/**
+ * Initial 3/4 camera framing. The camera is offset to the LEFT and
+ * ABOVE the tank's geometric centre, then pulled back from the front
+ * — that reveals three faces (front, top, left) and the tank reads
+ * as 3D immediately. A pure straight-on shot looked nearly identical
+ * to the 2D view and didn't sell the mode switch.
+ */
+const INITIAL_OFFSET_X_FRACTION = -0.4;
+const INITIAL_HEIGHT_FRACTION = 1.2;
 
-/** Initial camera distance from front face as a multiple of tank depth. */
-const INITIAL_PULL_BACK_DEPTH_MULT = 2.5;
+/**
+ * Initial camera distance from the front face as a multiple of tank
+ * depth. The camera sits at `z = -tank.depth × multiplier` — NEGATIVE
+ * because the document convention puts the viewer in front of the tank
+ * (`+z = back` per `aqua-document.ts`), so a real-world "standing in
+ * front of the aquarium" view has the camera at negative z looking
+ * toward positive z. The old code mistakenly used POSITIVE z which put
+ * the camera behind the back wall, peering through both glass panes
+ * from the rear — visible only as a dark blur.
+ */
+const INITIAL_PULL_BACK_DEPTH_MULT = 2.2;
 
 /** Near plane in world mm. 10 mm avoids clipping the front glass at typical zooms. */
 const NEAR_PLANE_MM = 10;
@@ -45,11 +61,14 @@ export function buildCamera(tank: Tank, aspect: number): PerspectiveCamera {
   const far = Math.max(tank.depth, 1) * FAR_PLANE_DEPTH_MULT;
   const camera = new PerspectiveCamera(FOV_DEGREES, safeAspect, NEAR_PLANE_MM, far);
 
-  // Tank-centred view from the front-bottom-left-corner origin.
+  // 3/4 view: offset left + above + pulled back so three faces of the
+  // tank (front + left + top) are immediately visible. The lookAt
+  // target stays at the tank's geometric centre so the orbit pivots
+  // around the scene's middle.
   camera.position.set(
-    tank.width / 2,
+    tank.width / 2 + tank.width * INITIAL_OFFSET_X_FRACTION,
     tank.height * INITIAL_HEIGHT_FRACTION,
-    tank.depth * INITIAL_PULL_BACK_DEPTH_MULT,
+    -tank.depth * INITIAL_PULL_BACK_DEPTH_MULT,
   );
   camera.lookAt(new Vector3(tank.width / 2, tank.height / 2, tank.depth / 2));
   return camera;

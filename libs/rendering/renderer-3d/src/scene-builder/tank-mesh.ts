@@ -24,7 +24,6 @@ import {
   LineSegments,
   Mesh,
   MeshBasicMaterial,
-  MeshPhysicalMaterial,
   PlaneGeometry,
 } from 'three';
 
@@ -57,20 +56,26 @@ export function buildTankMesh(tank: Tank): Group {
 }
 
 /**
- * The glass box — translucent, transmissive, two-sided so the user sees
- * both faces from inside the orbit volume. Centred so the box's
- * front-bottom-left interior corner is the world origin.
+ * The glass box — barely-tinted plain transparency. We deliberately do
+ * NOT use `MeshPhysicalMaterial.transmission` here: physical transmission
+ * needs an environment to refract through, and against an empty
+ * dark-blue clear color the glass renders as a near-opaque dark tint
+ * (the symptom that made "I see nothing in 3D" the first reported bug).
+ * `MeshBasicMaterial` with low opacity reads cleanly as "clear glass"
+ * regardless of what's behind it.
+ *
+ * Two-sided so the camera inside an orbit volume sees both faces.
+ * Centred so the box's front-bottom-left interior corner is at the
+ * world origin (matching `aqua-document.ts`).
  */
 function buildGlassBox(tank: Tank): Mesh {
   const geo = new BoxGeometry(tank.width, tank.height, tank.depth);
-  const mat = new MeshPhysicalMaterial({
-    color: 0xa0c8d0,
+  const mat = new MeshBasicMaterial({
+    color: 0xb8d8e0,
     transparent: true,
-    opacity: 0.15,
-    roughness: 0.0,
-    metalness: 0.0,
-    transmission: 0.85,
+    opacity: 0.12,
     side: DoubleSide,
+    depthWrite: false,
   });
   const mesh = new Mesh(geo, mat);
   mesh.name = 'aquascape:tank/glass';
@@ -134,13 +139,15 @@ function buildFrame(tank: Tank, style: TankStyle): Group | null {
 function buildWaterPlane(tank: Tank, style: TankStyle): Mesh | null {
   if (style.waterTint === undefined) return null;
   const geo = new PlaneGeometry(tank.width, tank.depth);
-  const mat = new MeshPhysicalMaterial({
+  // Same lesson as the glass box: against an empty clear color,
+  // `transmission` reads as a dark tint. Plain transparency is
+  // honest about what we can render in v1 without a real environment.
+  const mat = new MeshBasicMaterial({
     color: style.waterTint,
     transparent: true,
-    opacity: 0.3,
-    transmission: 0.7,
-    roughness: 0.1,
+    opacity: 0.2,
     side: DoubleSide,
+    depthWrite: false,
   });
   const mesh = new Mesh(geo, mat);
   mesh.name = 'aquascape:tank/water';

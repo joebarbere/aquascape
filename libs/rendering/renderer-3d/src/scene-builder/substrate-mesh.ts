@@ -28,6 +28,16 @@ const ROUGHNESS = 0.95;
 const MAX_PROFILE_SAMPLES = 400;
 /** Min profile sample count — keeps tiny regions visibly smooth. */
 const MIN_PROFILE_SAMPLES = 8;
+/**
+ * Inset (mm) used to keep the substrate's outer faces from sitting on top
+ * of the glass box's inner faces. Without this, the bottom / front / back
+ * / sides of the extruded substrate are coplanar with the glass walls and
+ * the depth buffer can't decide which fragment wins — the surface flashes
+ * while the camera orbits and stays pixelated once it settles. 0.5 mm is
+ * smaller than a pixel at any orbit distance the user will see and large
+ * enough to defeat depth-buffer precision noise on a 1000+ mm tank.
+ */
+const GLASS_INSET_MM = 0.5;
 
 /**
  * Build a group of substrate meshes, one mesh per region. Empty regions
@@ -57,8 +67,13 @@ function buildRegionMesh(
   tankDepthMm: number,
   catalog: Catalog | undefined,
 ): Mesh | null {
-  const x0 = region.fromX * tankWidthMm;
-  const x1 = region.toX * tankWidthMm;
+  // Inset the substrate from each glass wall it would otherwise touch.
+  // Regions that don't span the wall (fromX > 0 / toX < 1) keep their
+  // authored extent — only the at-the-wall sides need the inset.
+  const x0Raw = region.fromX * tankWidthMm;
+  const x1Raw = region.toX * tankWidthMm;
+  const x0 = region.fromX <= 0 ? GLASS_INSET_MM : x0Raw;
+  const x1 = region.toX >= 1 ? tankWidthMm - GLASS_INSET_MM : x1Raw;
   const widthMm = x1 - x0;
   if (widthMm <= 0) return null;
 
@@ -69,19 +84,26 @@ function buildRegionMesh(
   const profile = sampleCatmullRom(region.profile, samples);
   if (profile.length === 0) return null;
 
+  // Shape's bottom edge sits at y = GLASS_INSET_MM so the extruded
+  // bottom face isn't coplanar with the glass floor. Profile heights
+  // are kept at their authored values (the inset on the bottom is
+  // smaller than a sub-millimetre, invisibly < authored mm precision).
   const shape = new Shape();
-  shape.moveTo(x0, 0);
+  shape.moveTo(x0, GLASS_INSET_MM);
   for (let i = 0; i < profile.length; i++) {
     const p = profile[i]!;
     const x = x0 + p.x * widthMm;
-    const y = Math.max(0, p.y);
+    const y = Math.max(GLASS_INSET_MM, p.y);
     shape.lineTo(x, y);
   }
-  shape.lineTo(x1, 0);
+  shape.lineTo(x1, GLASS_INSET_MM);
   shape.closePath();
 
+  const extrudeDepth = Math.max(0, tankDepthMm - 2 * GLASS_INSET_MM);
+  if (extrudeDepth <= 0) return null;
+
   const geo = new ExtrudeGeometry(shape, {
-    depth: tankDepthMm,
+    depth: extrudeDepth,
     bevelEnabled: false,
     steps: 1,
   });
@@ -90,8 +112,9 @@ function buildRegionMesh(
   const mat = new MeshStandardMaterial({ color, roughness: ROUGHNESS });
   const mesh = new Mesh(geo, mat);
   mesh.name = `aquascape:substrate/${region.id}`;
-  // ExtrudeGeometry along +Z starts at z=0 — no positional offset needed
-  // since the world origin already sits at the tank's front-bottom-left.
+  // Shift the mesh in Z by the inset so the front face sits at
+  // z = GLASS_INSET_MM (and the back face at z = tankDepth - inset).
+  mesh.position.z = GLASS_INSET_MM;
   return mesh;
 }
 

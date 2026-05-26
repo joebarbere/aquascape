@@ -31,6 +31,7 @@ import { provideStoreDevtools } from '@ngrx/store-devtools';
 import { ThemeService } from '@aquascape/features/editor-shell';
 
 import { AppComponent } from './app/app.component';
+import { orbital3DControlsProvider } from './app/renderer.token';
 import { selectPlatform } from './select-platform';
 
 const platform = selectPlatform();
@@ -42,6 +43,13 @@ bootstrapApplication(AppComponent, {
     { provide: DIALOG_SERVICE, useValue: platform.dialogService },
     { provide: STORAGE_SERVICE, useValue: platform.storageService },
     { provide: RENDER_EXPORT_SERVICE, useValue: platform.renderExportService },
+    // Editor-shell's `Orbit3DService` (driving the zoom-control + the
+    // pan/rotate pill in 3D mode) injects `ORBITAL_3D_CONTROLS`. The
+    // binding lives here because it has to point at the same singleton
+    // backing `SCENE_RENDERER_3D` — `Three3DRenderer` implements both
+    // interfaces, so resolving the token via the existing factory is
+    // exactly the renderer instance the canvas pair drives.
+    orbital3DControlsProvider,
     // NgRx runtime: store + effects, then the scene + document + selection
     // features. `provideSelectionStore` is required for the F3.3 selection
     // slice the canvas + inspector + layers-panel read from; without it,

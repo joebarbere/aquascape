@@ -1,0 +1,72 @@
+/**
+ * Pinned regression test for the v1 → v2 migration.
+ *
+ * The fixture under `__fixtures__/example.v1.aqua.json` is a byte-identical
+ * snapshot of `example.aqua.json` from the day v1 was locked. It is NEVER
+ * edited going forward — every future format change adds a new fixture next
+ * to it (e.g. `example.v2.aqua.json`) and a test that loads each in turn.
+ *
+ * The contract for v1 → v2 is:
+ *   1. The v1 fixture loads under the current reader (i.e. v2 is a structural
+ *      superset of v1 — every v1 document is a valid v2 document).
+ *   2. After loading, `schemaVersion === 2` (the migration ran).
+ *   3. Every layer ends up with `zone === undefined` (the migration is a pure
+ *      identity that bumps the version number; it does NOT invent zone values).
+ *   4. The loader reports the single applied step `{ from: 1, to: 2 }`.
+ *   5. Apart from `schemaVersion`, the document is byte-for-byte unchanged
+ *      (no shape rewrites slipped in under the no-op label).
+ */
+
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+import type { AquaDocument } from './aqua-document';
+import { loadAquaDocument } from './serialize';
+
+const V1_FIXTURE_PATH = resolve(__dirname, '__fixtures__/example.v1.aqua.json');
+const V1_FIXTURE_JSON = readFileSync(V1_FIXTURE_PATH, 'utf8');
+const V1_FIXTURE: AquaDocument = JSON.parse(V1_FIXTURE_JSON);
+
+describe('v1 → v2 migration (pinned fixture)', () => {
+  it('loads the v1 fixture successfully under the current (v2) reader', () => {
+    const result = loadAquaDocument(V1_FIXTURE_JSON);
+    expect(result.ok).toBe(true);
+  });
+
+  it('bumps schemaVersion from 1 to 2 on load', () => {
+    expect(V1_FIXTURE.schemaVersion).toBe(1);
+    const result = loadAquaDocument(V1_FIXTURE_JSON);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.schemaVersion).toBe(2);
+  });
+
+  it('reports a single applied step { from: 1, to: 2 }', () => {
+    const result = loadAquaDocument(V1_FIXTURE_JSON);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.migrationSteps).toEqual([{ from: 1, to: 2 }]);
+  });
+
+  it('does NOT invent a zone on any layer (migration is a pure no-op identity)', () => {
+    const result = loadAquaDocument(V1_FIXTURE_JSON);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    for (const layer of result.document.layers) {
+      // The field must be ABSENT, not present-with-undefined — the schema's
+      // `additionalProperties: false` would reject literal undefined, and
+      // "no zone" must round-trip as "no field" to match the v1 baseline.
+      expect('zone' in layer).toBe(false);
+    }
+  });
+
+  it('preserves every other field byte-for-byte (only schemaVersion changed)', () => {
+    const result = loadAquaDocument(V1_FIXTURE_JSON);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Strip the version field from both sides and expect deep equality.
+    const { schemaVersion: _v1Version, ...v1Rest } = V1_FIXTURE;
+    const { schemaVersion: _v2Version, ...migratedRest } = result.document;
+    expect(migratedRest).toEqual(v1Rest);
+  });
+});

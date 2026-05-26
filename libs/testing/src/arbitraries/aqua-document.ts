@@ -288,14 +288,22 @@ const arbSceneObject = (): fc.Arbitrary<SceneObject> =>
 // ─── Layer + Meta + Document ──────────────────────────────────────────────
 
 const arbLayer = (): fc.Arbitrary<Layer> =>
-  fc.record({
-    id: arbUuid(),
-    name: fc.string({ minLength: 1, maxLength: 24 }),
-    opacity: arbFiniteNumber(0, 1),
-    visible: fc.boolean(),
-    locked: fc.boolean(),
-    objects: fc.array(arbSceneObject(), { minLength: 0, maxLength: 4 }),
-  });
+  fc.record(
+    {
+      id: arbUuid(),
+      name: fc.string({ minLength: 1, maxLength: 24 }),
+      opacity: arbFiniteNumber(0, 1),
+      visible: fc.boolean(),
+      locked: fc.boolean(),
+      objects: fc.array(arbSceneObject(), { minLength: 0, maxLength: 4 }),
+      // v2: optional zone hint. Present-or-absent toggled by `requiredKeys`
+      // so the round-trip property exercises both branches.
+      zone: fc.constantFrom('foreground', 'midground', 'background') as fc.Arbitrary<
+        NonNullable<Layer['zone']>
+      >,
+    },
+    { requiredKeys: ['id', 'name', 'opacity', 'visible', 'locked', 'objects'] },
+  );
 
 const arbDocumentMeta = (): fc.Arbitrary<DocumentMeta> =>
   fc.record(

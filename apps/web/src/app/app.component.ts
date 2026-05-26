@@ -82,6 +82,7 @@ import {
   SnapOptionsService,
   SnapSettingsComponent,
   StatusBarComponent,
+  Orbit3DControlsComponent,
   TimeSliderComponent,
   ViewModeService,
   ViewportService,
@@ -196,6 +197,7 @@ type DragState =
     LivestockToolComponent,
     PlantingToolComponent,
     SelectionInspectorComponent,
+    Orbit3DControlsComponent,
     SnapSettingsComponent,
     StatusBarComponent,
     SubstrateToolComponent,
@@ -422,6 +424,7 @@ type DragState =
           </div>
           <div class="app-zoom-control">
             <aquascape-zoom-control></aquascape-zoom-control>
+            <aquascape-orbit-3d-controls></aquascape-orbit-3d-controls>
           </div>
           <div class="app-timeslider">
             <aquascape-time-slider></aquascape-time-slider>
@@ -544,6 +547,10 @@ type DragState =
         bottom: 100px;
         z-index: 3;
         pointer-events: auto;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
       }
       .empty-hint {
         position: absolute;
@@ -572,11 +579,21 @@ type DragState =
         opacity: 0.92;
       }
       .scene-canvas {
+        position: absolute;
+        inset: 0;
         display: block;
         width: 100%;
         height: 100%;
         cursor: crosshair;
         touch-action: none;
+      }
+      /* Stage 10: when stacked inside .app-canvas-host the 2D + 3D canvases
+         must overlap, not flow vertically. position: absolute does that.
+         AND the [hidden] UA rule loses the specificity war to .scene-canvas
+         under Angular view encapsulation, so we add an explicit rule that
+         wins via the !important flag. */
+      .scene-canvas[hidden] {
+        display: none !important;
       }
       .marquee-overlay {
         position: absolute;

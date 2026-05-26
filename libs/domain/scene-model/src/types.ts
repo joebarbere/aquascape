@@ -190,6 +190,15 @@ export interface Layer {
   locked: boolean;
   /** Objects within a layer, ordered back-to-front. */
   objects: SceneObject[];
+  /**
+   * Optional layout-zone hint (mirrors `AquaDocument.Layer.zone`, schema v2).
+   * Influences Z placement in the 3D renderer (Stage 10); the 2D renderer
+   * projects along −z so it is a no-op there but is preserved as authoring
+   * metadata. Omitted = "no zone preference"; the renderer falls back to
+   * each object's own `transform.position.z`. Additive in v2: v1 docs load
+   * with this field absent on every layer.
+   */
+  zone?: 'foreground' | 'midground' | 'background';
 }
 
 // ─── Livestock ────────────────────────────────────────────────────────────

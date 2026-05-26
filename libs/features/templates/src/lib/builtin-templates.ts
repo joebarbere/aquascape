@@ -150,6 +150,7 @@ const IWAGUMI: AquaDocument = {
       opacity: 1,
       visible: true,
       locked: false,
+      zone: 'midground',
       objects: [
         {
           kind: 'hardscape',
@@ -180,6 +181,7 @@ const IWAGUMI: AquaDocument = {
       opacity: 1,
       visible: true,
       locked: false,
+      zone: 'foreground',
       objects: [
         {
           kind: 'plant',
@@ -256,13 +258,14 @@ const DUTCH: AquaDocument = {
       opacity: 1,
       visible: true,
       locked: false,
+      zone: 'background',
       objects: [
         {
           kind: 'plant',
           id: templateUuid('dutch-rotala'),
           ref: { catalog: 'core', id: 'plant.rotala.rotundifolia', version: 1 },
           zone: 'background',
-          transform: makeTransform(200, 220, 1),
+          transform: makeTransform(200, 70, 1),
           growth: { ageWeeks: 8, vigor: 1.1 },
         },
         {
@@ -270,7 +273,7 @@ const DUTCH: AquaDocument = {
           id: templateUuid('dutch-ludwigia'),
           ref: { catalog: 'core', id: 'plant.ludwigia.repens', version: 1 },
           zone: 'background',
-          transform: makeTransform(500, 220, 1),
+          transform: makeTransform(500, 70, 1),
           growth: { ageWeeks: 8, vigor: 1.1 },
         },
         {
@@ -278,7 +281,7 @@ const DUTCH: AquaDocument = {
           id: templateUuid('dutch-pogo'),
           ref: { catalog: 'core', id: 'plant.pogostemon.stellatus', version: 1 },
           zone: 'background',
-          transform: makeTransform(750, 220, 1),
+          transform: makeTransform(750, 70, 1),
           growth: { ageWeeks: 8, vigor: 1.1 },
         },
       ],
@@ -289,13 +292,14 @@ const DUTCH: AquaDocument = {
       opacity: 1,
       visible: true,
       locked: false,
+      zone: 'midground',
       objects: [
         {
           kind: 'plant',
           id: templateUuid('dutch-crypt-wendtii'),
           ref: { catalog: 'core', id: 'plant.cryptocoryne.wendtii', version: 1 },
           zone: 'midground',
-          transform: makeTransform(350, 130, 1),
+          transform: makeTransform(350, 70, 1),
           growth: { ageWeeks: 8, vigor: 1 },
         },
         {
@@ -303,7 +307,7 @@ const DUTCH: AquaDocument = {
           id: templateUuid('dutch-staurogyne'),
           ref: { catalog: 'core', id: 'plant.staurogyne.repens', version: 1 },
           zone: 'midground',
-          transform: makeTransform(600, 110, 1),
+          transform: makeTransform(600, 70, 1),
           growth: { ageWeeks: 8, vigor: 1 },
         },
       ],
@@ -314,6 +318,7 @@ const DUTCH: AquaDocument = {
       opacity: 1,
       visible: true,
       locked: false,
+      zone: 'foreground',
       objects: [
         {
           kind: 'plant',
@@ -390,6 +395,7 @@ const JUNGLE: AquaDocument = {
       opacity: 1,
       visible: true,
       locked: false,
+      zone: 'midground',
       objects: [
         {
           kind: 'hardscape',
@@ -413,13 +419,14 @@ const JUNGLE: AquaDocument = {
       opacity: 1,
       visible: true,
       locked: false,
+      zone: 'background',
       objects: [
         {
           kind: 'plant',
           id: templateUuid('jungle-vallis'),
           ref: { catalog: 'core', id: 'plant.vallisneria.spiralis', version: 1 },
           zone: 'background',
-          transform: makeTransform(550, 200, 1.1),
+          transform: makeTransform(550, 56, 1.1),
           growth: { ageWeeks: 10, vigor: 1.1 },
         },
         {
@@ -427,7 +434,7 @@ const JUNGLE: AquaDocument = {
           id: templateUuid('jungle-jf'),
           ref: { catalog: 'core', id: 'plant.microsorum.pteropus', version: 1 },
           zone: 'midground',
-          transform: makeTransform(300, 160, 1),
+          transform: makeTransform(300, 53, 1),
           growth: { ageWeeks: 12, vigor: 1 },
         },
         {
@@ -435,7 +442,7 @@ const JUNGLE: AquaDocument = {
           id: templateUuid('jungle-anubias'),
           ref: { catalog: 'core', id: 'plant.anubias.barteri', version: 1 },
           zone: 'midground',
-          transform: makeTransform(420, 150, 1),
+          transform: makeTransform(420, 54, 1),
           growth: { ageWeeks: 12, vigor: 1 },
         },
       ],
@@ -446,13 +453,14 @@ const JUNGLE: AquaDocument = {
       opacity: 1,
       visible: true,
       locked: false,
+      zone: 'foreground',
       objects: [
         {
           kind: 'plant',
           id: templateUuid('jungle-crypt1'),
           ref: { catalog: 'core', id: 'plant.cryptocoryne.wendtii', version: 1 },
           zone: 'midground',
-          transform: makeTransform(150, 100, 1),
+          transform: makeTransform(150, 51, 1),
           growth: { ageWeeks: 10, vigor: 1 },
         },
         {
@@ -460,7 +468,7 @@ const JUNGLE: AquaDocument = {
           id: templateUuid('jungle-crypt2'),
           ref: { catalog: 'core', id: 'plant.cryptocoryne.parva', version: 1 },
           zone: 'foreground',
-          transform: makeTransform(370, 80, 0.9),
+          transform: makeTransform(370, 54, 0.9),
           growth: { ageWeeks: 10, vigor: 1 },
         },
       ],
@@ -520,6 +528,7 @@ const BEGINNER: AquaDocument = {
       opacity: 1,
       visible: true,
       locked: false,
+      zone: 'midground',
       objects: [
         {
           kind: 'hardscape',
@@ -536,13 +545,14 @@ const BEGINNER: AquaDocument = {
       opacity: 1,
       visible: true,
       locked: false,
+      zone: 'midground',
       objects: [
         {
           kind: 'plant',
           id: templateUuid('beginner-anubias'),
           ref: { catalog: 'core', id: 'plant.anubias.nana-petite', version: 1 },
           zone: 'midground',
-          transform: makeTransform(150, 80, 1),
+          transform: makeTransform(150, 30, 1),
           growth: { ageWeeks: 12, vigor: 1 },
         },
         {
@@ -550,15 +560,25 @@ const BEGINNER: AquaDocument = {
           id: templateUuid('beginner-jf'),
           ref: { catalog: 'core', id: 'plant.microsorum.pteropus', version: 1 },
           zone: 'midground',
-          transform: makeTransform(210, 90, 0.9),
+          transform: makeTransform(210, 30, 0.9),
           growth: { ageWeeks: 12, vigor: 1 },
         },
+      ],
+    },
+    {
+      id: templateUuid('beginner-fg-layer'),
+      name: 'Foreground',
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zone: 'foreground',
+      objects: [
         {
           kind: 'plant',
           id: templateUuid('beginner-crypt'),
           ref: { catalog: 'core', id: 'plant.cryptocoryne.parva', version: 1 },
           zone: 'foreground',
-          transform: makeTransform(80, 60, 1),
+          transform: makeTransform(80, 30, 1),
           growth: { ageWeeks: 10, vigor: 1 },
         },
       ],

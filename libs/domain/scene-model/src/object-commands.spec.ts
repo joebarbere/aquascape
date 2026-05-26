@@ -5,7 +5,7 @@
 
 import { applyCommand, invertCommand, mirrorObject, reorderObjectInLayer } from './commands';
 import { asObjectId } from './ids';
-import { makeHardscape, makeLayer, makeScene } from './test-fixtures';
+import { makeHardscape, makeLayer, makePlant, makeScene } from './test-fixtures';
 import type { Scene } from './types';
 
 function sceneWithObjects(...ids: string[]): Scene {
@@ -79,6 +79,32 @@ describe('MirrorObject', () => {
     expect(invertCommand(scene, mirrorObject(asObjectId('nope'), 'y'))).toEqual({
       kind: 'Noop',
     });
+  });
+
+  it('rejects axis="y" on plant objects (plants always grow up from the substrate)', () => {
+    const plantId = '11111111-1111-4000-8000-000000000001';
+    const scene: Scene = {
+      ...makeScene(),
+      layers: [makeLayer('layer-plants', 'Plants', [makePlant(plantId)])],
+    };
+    const result = applyCommand(scene, mirrorObject(asObjectId(plantId), 'y'));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('invalid');
+    expect(result.message).toContain('plant');
+  });
+
+  it('still allows axis="x" on plant objects (horizontal mirror is fine)', () => {
+    const plantId = '11111111-1111-4000-8000-000000000002';
+    const scene: Scene = {
+      ...makeScene(),
+      layers: [makeLayer('layer-plants', 'Plants', [makePlant(plantId)])],
+    };
+    const result = applyCommand(scene, mirrorObject(asObjectId(plantId), 'x'));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.scene.layers[0]!.objects[0]!.transform.flipX).toBe(true);
+    expect(result.scene.layers[0]!.objects[0]!.transform.flipY).toBe(false);
   });
 });
 

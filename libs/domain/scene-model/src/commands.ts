@@ -124,6 +124,37 @@ export interface SetLayerLockedCommand {
 }
 
 /**
+ * Set (or clear) a layer's optional `zone` hint. Metadata-only — NOT blocked
+ * by `locked`, matching the existing layer-property convention (rename,
+ * opacity, visibility, locked). Stage 10 / schema v2 follow-up.
+ *
+ * APPLY SEMANTICS
+ *  - Layer-not-found rejects with `'not-found'`.
+ *  - `zone === null` REMOVES the `zone` property entirely (the field is
+ *    optional in the schema; `additionalProperties: false` rejects a literal
+ *    `null`, and JSON.stringify drops `undefined`, so the only way an
+ *    ungrouped layer round-trips identically is for the property to be
+ *    absent). Same pattern as {@link SetObjectGroupIdCommand}.
+ *  - `zone` set to `'foreground' | 'midground' | 'background'` writes the
+ *    field.
+ *  - Any other value rejects with `'invalid'` (defensive — TS catches this
+ *    at compile time for normal callers).
+ *
+ * INVERT SEMANTICS
+ *  - Captures the pre-apply zone into `inverse.previousZone` (the literal
+ *    string, or `undefined` when the field was absent). On replay, an
+ *    `inverse.previousZone === undefined` restores via `zone: null` (i.e.
+ *    REMOVE the property); a captured string is reinstated.
+ */
+export interface SetLayerZoneCommand {
+  kind: 'SetLayerZone';
+  layerId: LayerId;
+  /** New zone, or `null` to remove the property entirely. */
+  zone: 'foreground' | 'midground' | 'background' | null;
+  inverse?: { previousZone: 'foreground' | 'midground' | 'background' | undefined };
+}
+
+/**
  * Reorder layers via a full id-permutation. `order` must be a permutation
  * of the current layer ids (same set, no duplicates). Rejects `invalid`
  * otherwise. (Chose permutation over index-swap so reorder by drag-and-drop
@@ -405,6 +436,7 @@ export type Command =
   | SetLayerOpacityCommand
   | SetLayerVisibilityCommand
   | SetLayerLockedCommand
+  | SetLayerZoneCommand
   | ReorderLayersCommand
   | AddObjectCommand
   | RemoveObjectCommand
@@ -456,6 +488,25 @@ function withGroupId<T extends SceneObject>(obj: T, next: ObjectId | string | nu
   }
   if (obj.groupId === next) return obj;
   return { ...obj, groupId: next as ObjectId };
+}
+
+/**
+ * Return a copy of `layer` with `zone` set to `next`, or with the property
+ * deleted when `next === null`. Same property-absent-vs-null contract as
+ * {@link withGroupId} — JSON.stringify drops `undefined` but not `null`, and
+ * the schema's `additionalProperties: false` would reject a literal `null`.
+ */
+function withZone(
+  layer: Layer,
+  next: 'foreground' | 'midground' | 'background' | null,
+): Layer {
+  if (next === null) {
+    if (layer.zone === undefined) return layer;
+    const { zone: _z, ...rest } = layer;
+    return rest as Layer;
+  }
+  if (layer.zone === next) return layer;
+  return { ...layer, zone: next };
 }
 
 // ─── TankStyle validation ─────────────────────────────────────────────────
@@ -608,6 +659,27 @@ export function applyCommand(scene: Scene, command: Command): CommandResult {
       return ok(replaceLayer(scene, command.layerId, { ...layer, locked: command.locked }));
     }
 
+    case 'SetLayerZone': {
+      const layer = getLayerById(scene, command.layerId);
+      if (layer === null) {
+        return rejected('not-found', `SetLayerZone: layer "${command.layerId}" not found`);
+      }
+      // Not blocked by `locked` (metadata, not content).
+      const next = command.zone;
+      if (
+        next !== null &&
+        next !== 'foreground' &&
+        next !== 'midground' &&
+        next !== 'background'
+      ) {
+        return rejected(
+          'invalid',
+          `SetLayerZone: zone must be 'foreground' | 'midground' | 'background' | null; got "${String(next)}"`,
+        );
+      }
+      return ok(replaceLayer(scene, command.layerId, withZone(layer, next)));
+    }
+
     case 'ReorderLayers': {
       const have = scene.layers.map((l) => l.id);
       if (command.order.length !== have.length) {
@@ -734,6 +806,16 @@ export function applyCommand(scene: Scene, command: Command): CommandResult {
       }
       if (found.layer.locked) {
         return rejected('locked', `MirrorObject: layer "${found.layer.id}" is locked`);
+      }
+      // **Plants never flip vertically.** Roots must stay at the bottom
+      // (a plant with its leaves below its substrate anchor is not a
+      // thing). Reject axis='y' on plant objects; the inspector also
+      // disables the Mirror V button when a plant is selected.
+      if (command.axis === 'y' && found.object.kind === 'plant') {
+        return rejected(
+          'invalid',
+          `MirrorObject: vertical flip is not allowed on plant objects`,
+        );
       }
       const transform: Transform =
         command.axis === 'x'
@@ -1030,6 +1112,23 @@ export function invertCommand(scene: Scene, command: Command): Command {
       };
     }
 
+    case 'SetLayerZone': {
+      const layer = getLayerById(scene, command.layerId);
+      if (layer === null) {
+        return { kind: 'Noop' };
+      }
+      // Capture the pre-apply zone. `undefined` (property absent) round-trips
+      // as `zone: null` on restore — i.e. remove the property again. A
+      // captured string is reinstated verbatim.
+      const previousZone = layer.zone;
+      return {
+        kind: 'SetLayerZone',
+        layerId: command.layerId,
+        zone: previousZone ?? null,
+        inverse: { previousZone },
+      };
+    }
+
     case 'ReorderLayers': {
       // Inverse: reorder back to the current order.
       return { kind: 'ReorderLayers', order: scene.layers.map((l) => l.id) };
@@ -1256,6 +1355,16 @@ export const setLayerLocked = (layerId: LayerId, locked: boolean): SetLayerLocke
   layerId,
   locked,
 });
+
+/**
+ * Build a {@link SetLayerZoneCommand}. Pass `zone: null` to remove the zone
+ * property entirely (round-trips as the field being absent). The `inverse`
+ * envelope is omitted; {@link invertCommand} populates it.
+ */
+export const setLayerZone = (
+  layerId: LayerId,
+  zone: 'foreground' | 'midground' | 'background' | null,
+): SetLayerZoneCommand => ({ kind: 'SetLayerZone', layerId, zone });
 
 export const reorderLayers = (order: LayerId[]): ReorderLayersCommand => ({
   kind: 'ReorderLayers',

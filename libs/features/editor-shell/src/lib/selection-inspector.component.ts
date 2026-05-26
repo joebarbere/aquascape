@@ -81,9 +81,17 @@ const DUPLICATE_OFFSET_MM = 20;
         <button
           type="button"
           (click)="onMirrorV()"
-          [disabled]="selectionLocked()"
-          aria-label="Mirror vertical"
-          title="Mirror vertical"
+          [disabled]="selectionLocked() || selectionHasPlant()"
+          [attr.aria-label]="
+            selectionHasPlant()
+              ? 'Mirror vertical (disabled for plants)'
+              : 'Mirror vertical'
+          "
+          [title]="
+            selectionHasPlant()
+              ? 'Mirror vertical (disabled — plants always grow up)'
+              : 'Mirror vertical'
+          "
         >
           ⥯
         </button>
@@ -265,6 +273,26 @@ export class SelectionInspectorComponent {
       if (!layer.locked) continue;
       for (const obj of layer.objects) {
         if (ids.has(obj.id)) return true;
+      }
+    }
+    return false;
+  };
+
+  /**
+   * True when ANY selected object is a plant. Vertical mirror is disallowed
+   * on plants (roots must stay at the bottom; the `MirrorObject` reducer
+   * also rejects axis='y' on plant kind with `reason: 'invalid'`). The
+   * inspector disables the Mirror V button to surface that constraint in
+   * the UI rather than leaving the user staring at a no-op click.
+   */
+  readonly selectionHasPlant = (): boolean => {
+    const scene = this.sceneState();
+    if (scene === null) return false;
+    const ids = new Set<ObjectId>(this.selectedIdsState());
+    if (ids.size === 0) return false;
+    for (const layer of scene.layers) {
+      for (const obj of layer.objects) {
+        if (ids.has(obj.id) && obj.kind === 'plant') return true;
       }
     }
     return false;

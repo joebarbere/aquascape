@@ -1,5 +1,5 @@
 /**
- * Hardscape mesh builder — Stage 10 F10.1.
+ * Hardscape mesh builder — Stage 10 F10.1 + zone / clamp / noise upgrades.
  *
  * Each `HardscapeObject` becomes one extruded mesh: the catalog silhouette
  * (a `[-1, 1]` normalised polygon) is scaled into world-mm by
@@ -13,11 +13,35 @@
  * Fallback colour `#7a7d84` (mid-grey) matches what a stone-ish hardscape
  * tends to look like; future versions can attach textured materials per
  * catalog entry.
+ *
+ * Position pipeline (in order):
+ *
+ *   1. World X starts at `transform.position.x`.
+ *   2. World Z starts at `transform.position.z`, then is OVERRIDDEN by
+ *      `computeZonedZ(scene, obj.id, layer.id)` when the layer carries
+ *      a `zone` hint (see `layer-zone-z.ts`).
+ *   3. (X, Z) are CLAMPED so the object's scaled AABB stays inside the
+ *      tank (`clampToTank`). Y is excluded — Y is the substrate snap.
+ *   4. Y is set to `substrateHeightAt(scene, X)` so the rock rests on
+ *      the substrate floor.
+ *   5. Geometry vertices get a deterministic per-vertex noise
+ *      displacement (`applyHardscapeNoise`) so the silhouette reads as
+ *      an irregular rock rather than a flat extruded slab.
  */
 
 import type { Catalog, HardscapeEntry } from '@aquascape/domain/catalog';
-import type { CatalogRef, HardscapeObject, Scene } from '@aquascape/domain/scene-model';
+import type {
+  CatalogRef,
+  HardscapeObject,
+  Layer,
+  Scene,
+} from '@aquascape/domain/scene-model';
 import { ExtrudeGeometry, Group, Mesh, MeshStandardMaterial, Shape } from 'three';
+
+import { applyHardscapeNoise, seedFromHardscape } from './hardscape-noise';
+import { computeZonedZ } from './layer-zone-z';
+import { substrateHeightAt } from './substrate-height';
+import { clampToScene } from './tank-clamp';
 
 const FALLBACK_COLOR = '#7a7d84';
 /** Roughness for hardscape — rocks + wood are matte, not glossy. */
@@ -38,7 +62,7 @@ export function buildHardscapeMeshes(scene: Scene, catalog: Catalog | undefined)
     for (const obj of layer.objects) {
       if (obj.kind !== 'hardscape') continue;
       const entry = resolveHardscapeEntry(obj.ref, catalog);
-      const mesh = buildHardscapeMesh(obj, entry);
+      const mesh = buildHardscapeMesh(obj, entry, scene, layer);
       if (mesh !== null) group.add(mesh);
     }
   }
@@ -51,10 +75,16 @@ export function buildHardscapeMeshes(scene: Scene, catalog: Catalog | undefined)
  * extrude). Without a catalog we fall back to a default natural size +
  * a built-in square silhouette so the object still appears (matches the
  * 2D renderer's `HARDSCAPE_FALLBACK_NATURAL_MM` policy).
+ *
+ * `layer` is optional so existing call sites in tests that don't have a
+ * containing-layer reference still work; when omitted, the zone step is
+ * skipped (the object's original `transform.position.z` is used).
  */
 export function buildHardscapeMesh(
   obj: HardscapeObject,
   entry: HardscapeEntry | null,
+  scene?: Scene,
+  layer?: Layer,
 ): Mesh | null {
   const naturalW = entry?.naturalSize.width ?? FALLBACK_NATURAL_MM;
   const naturalH = entry?.naturalSize.height ?? FALLBACK_NATURAL_MM;
@@ -80,28 +110,80 @@ export function buildHardscapeMesh(
     bevelEnabled: false,
     steps: 1,
   });
-  // Centre the extrusion on Z so the object's origin sits at its centre
-  // along depth — `transform.position.z` then describes the object's
-  // centre-of-volume, consistent with x/y where the silhouette is already
-  // centred about (0, 0).
-  geo.translate(0, 0, -naturalD / 2);
+  // Centre the extrusion on Z. X/Y are already centred via the silhouette
+  // being in [-1, 1]; we shift Y up by halfH so the geometry's local
+  // origin sits at the BOTTOM of the silhouette. Combined with the
+  // substrate-rest math below, this lets `mesh.position.y =
+  // substrateHeight` actually plant the bottom of the rock on the floor
+  // (instead of leaving the rock's centre at floor-height, which would
+  // bury half of it).
+  geo.translate(0, halfH, -naturalD / 2);
+
+  // Deterministic per-vertex displacement. Catalog id may be absent
+  // (fallback path); use the obj.ref.id so the seed is still stable.
+  const catalogId = entry?.id ?? obj.ref.id;
+  const seed = seedFromHardscape(catalogId, obj.id);
+  const minNatural = Math.min(naturalW, naturalH, naturalD);
+  applyHardscapeNoise(geo, { seed, minNaturalMm: minNatural });
 
   const color = entry?.color ?? FALLBACK_COLOR;
   const mat = new MeshStandardMaterial({ color, roughness: ROUGHNESS });
   const mesh = new Mesh(geo, mat);
   mesh.name = `aquascape:hardscape/${obj.id}`;
 
-  applyTransform(mesh, obj);
+  if (scene !== undefined) {
+    applyTransform(mesh, obj, scene, layer, {
+      halfW,
+      halfH,
+      halfD: naturalD * 0.5,
+    });
+  }
   return mesh;
 }
 
 /**
- * Apply `obj.transform` to the mesh: position, Z rotation, and scale
- * (signed by flipX / flipY). The flip-as-negative-scale convention
- * matches `composeTransform` in `domain/geometry`.
+ * Apply `obj.transform` to the mesh: position (with Z replaced by the
+ * layer-zone band remap when applicable, XZ clamped to the tank, Y
+ * snapped to the substrate so the rock rests on the floor), Z rotation,
+ * and scale (signed by flipX / flipY). The flip-as-negative-scale
+ * convention matches `composeTransform` in `domain/geometry`.
+ *
+ * **Y-snap policy:** the 2D renderer treats `transform.position.y` as
+ * the silhouette CENTRE in a front-elevation projection. In 3D we
+ * deliberately diverge: world Y is computed as `substrateHeight(x) +
+ * max(0, y_offset_above_floor)`. The geometry was pre-translated so
+ * its local origin sits at the bottom, so this lands the rock's BOTTOM
+ * on the substrate. Cleaner reading than "rock floating mid-tank with
+ * its centre at a height the 2D scene happens to record".
  */
-function applyTransform(mesh: Mesh, obj: HardscapeObject): void {
-  mesh.position.set(obj.transform.position.x, obj.transform.position.y, obj.transform.position.z);
+function applyTransform(
+  mesh: Mesh,
+  obj: HardscapeObject,
+  scene: Scene,
+  layer: Layer | undefined,
+  natural: { halfW: number; halfH: number; halfD: number },
+): void {
+  const x0 = obj.transform.position.x;
+  // Zone Z override happens BEFORE clamping so the clamp pulls a
+  // zone-projected coordinate back inside the tank rather than the
+  // user-authored Z that the zone just overrode.
+  const z0 = layer !== undefined
+    ? computeZonedZ(scene, obj.id, layer.id)
+    : obj.transform.position.z;
+
+  // Scale the half-extents into world space before clamping. flipX/Y
+  // become negative scale; absolute value is what defines the AABB.
+  const scaledHalfX = natural.halfW * Math.abs(obj.transform.scale.x);
+  const scaledHalfZ = natural.halfD * Math.abs(obj.transform.scale.z);
+
+  const clamped = clampToScene(
+    { x: x0, y: 0, z: z0 },
+    { x: scaledHalfX, z: scaledHalfZ },
+    scene,
+  );
+  const floor = substrateHeightAt(scene, clamped.x);
+  mesh.position.set(clamped.x, floor, clamped.z);
+
   // Rotations: the scene-model `Transform.rotation` is a Vec3 of Euler
   // angles (z is the planar "spin" the 2D renderer uses; x/y the
   // out-of-plane tilts that v1's 2D-authored data leaves at 0).

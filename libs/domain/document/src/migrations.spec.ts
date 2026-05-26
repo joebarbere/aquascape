@@ -2,7 +2,7 @@ import { CURRENT_SCHEMA_VERSION, type Migration } from './aqua-document';
 import { AQUA_MIGRATIONS, runMigrations } from './migrations';
 
 describe('runMigrations', () => {
-  it('no-ops on a current-version document with the baseline (empty) chain', () => {
+  it('no-ops on a current-version document (no migration steps applied)', () => {
     const doc = { schemaVersion: CURRENT_SCHEMA_VERSION, payload: 'unchanged' };
     const result = runMigrations(doc);
     expect(result.ok).toBe(true);
@@ -105,9 +105,31 @@ describe('runMigrations', () => {
     });
   });
 
-  it('exports a frozen baseline migration list', () => {
-    expect(AQUA_MIGRATIONS).toEqual([]);
+  it('exports a frozen migration list with the v1 → v2 no-op step', () => {
+    expect(AQUA_MIGRATIONS).toHaveLength(1);
+    expect(AQUA_MIGRATIONS[0]?.from).toBe(1);
+    expect(AQUA_MIGRATIONS[0]?.to).toBe(2);
     expect(Object.isFrozen(AQUA_MIGRATIONS)).toBe(true);
+  });
+
+  it('v1 → v2 step is an identity that only bumps schemaVersion (additive Layer.zone)', () => {
+    const v1 = {
+      format: 'aquascape',
+      schemaVersion: 1,
+      meta: { id: 'x', title: 't', createdAt: 'c', updatedAt: 'u', appVersion: '1.0.0', seed: 1 },
+      tank: { width: 600, height: 360, depth: 360, style: { frame: 'rimless', background: { kind: 'none' } } },
+      substrate: { regions: [] },
+      layers: [{ id: 'l1', name: 'L1', opacity: 1, visible: true, locked: false, objects: [] }],
+    };
+    const step = AQUA_MIGRATIONS[0]!;
+    const v2 = step.migrate(v1) as typeof v1;
+    expect(v2.schemaVersion).toBe(2);
+    // No layer should have gained a zone field — the migration must NOT invent values.
+    for (const layer of v2.layers) {
+      expect('zone' in layer).toBe(false);
+    }
+    // Every other field is preserved unchanged.
+    expect({ ...v2, schemaVersion: 1 }).toEqual(v1);
   });
 
   it('treats null and non-object inputs as version 0', () => {

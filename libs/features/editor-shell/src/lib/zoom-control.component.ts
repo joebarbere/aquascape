@@ -1,19 +1,24 @@
-// Floating zoom control. Stage 5.x.
+// Floating zoom control. Stage 5.x; mode-aware update Stage 10 follow-up.
 //
 // Bottom-right pill above the canvas:  [ − ]  [ 100% ]  [ + ]  [ Fit ]
 //
-// Buttons step the user-zoom multiplier through `ViewportService`. The
-// percentage display reads back from the service. "Fit" resets both
-// overrides (zoom + pan) so the viewport returns to fit-to-window.
+// **In 2D mode** the buttons step the user-zoom multiplier through
+// `ViewportService` and the host translates that signal into renderer
+// calls (plus the cursor-anchored wheel-zoom gesture).
 //
-// This component owns ZERO state of its own — every value comes from
-// `ViewportService` signals. The host (apps/web) is responsible for
-// translating service signals into renderer calls + handling the
-// cursor-anchored wheel-zoom gesture on the canvas (the wheel gesture
-// needs cursor coords + canvas size, both of which live on the host).
+// **In 3D mode** the buttons drive `Orbit3DService` instead — the
+// equivalent of "zoom" is the camera-to-target distance in the 3D
+// renderer's OrbitControls. The same percent semantics apply (100 % =
+// initial framing distance, 200 % = 2× zoomed-in) so the label reads
+// consistently across modes.
+//
+// The component owns ZERO state of its own — every value comes from the
+// active mode's signal. Mode flipping is handled by `ViewModeService`.
 
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 
+import { Orbit3DService } from './orbit-3d.service';
+import { ViewModeService } from './view-mode.service';
 import {
   ZOOM_MULT_MAX,
   ZOOM_MULT_MIN,
@@ -65,7 +70,7 @@ import { ViewportService } from './viewport.service';
         type="button"
         class="zoom-control__fit"
         (click)="onFit()"
-        [disabled]="viewport.isFit()"
+        [disabled]="!canFit()"
         aria-label="Reset zoom to fit window"
         title="Reset zoom to fit window"
       >
@@ -142,30 +147,71 @@ import { ViewportService } from './viewport.service';
 })
 export class ZoomControlComponent {
   readonly viewport = inject(ViewportService);
+  readonly viewMode = inject(ViewModeService);
+  private readonly orbit = inject(Orbit3DService);
 
-  readonly percentLabel = computed<string>(() => formatZoomPercent(this.viewport.userZoomMult()));
+  /** Active zoom fraction — reads from whichever backend matches the mode. */
+  private readonly activeFraction = computed<number | null>(() => {
+    if (this.viewMode.mode() === '3d') return this.orbit.zoomFraction();
+    return this.viewport.userZoomMult();
+  });
+
+  readonly percentLabel = computed<string>(() => formatZoomPercent(this.activeFraction()));
 
   readonly canZoomIn = computed<boolean>(() => {
+    // 3D has no UI cap — OrbitControls clamps internally to its
+    // minDistance/maxDistance bounds — so the button always stays
+    // enabled in 3D. The 2D cap stays at ZOOM_MULT_MAX.
+    if (this.viewMode.mode() === '3d') return true;
     const mult = this.viewport.userZoomMult() ?? 1;
     return mult < ZOOM_MULT_MAX;
   });
 
   readonly canZoomOut = computed<boolean>(() => {
+    if (this.viewMode.mode() === '3d') return true;
     const mult = this.viewport.userZoomMult() ?? 1;
     return mult > ZOOM_MULT_MIN;
   });
 
+  /**
+   * "Fit" → fit-to-window in 2D, reset-to-3/4-view in 3D. Disabled when
+   * already at the default in either mode so the user can tell the
+   * action has nothing to undo.
+   */
+  readonly canFit = computed<boolean>(() => {
+    if (this.viewMode.mode() === '3d') {
+      // Approximate "at default" by zoomFraction ≈ 1. Doesn't account for
+      // pure pan/rotate offsets — but the cost of an extra reset is one
+      // re-frame, so we err on the side of always-clickable in 3D.
+      const frac = this.orbit.zoomFraction();
+      return Math.abs(frac - 1) > 1e-3;
+    }
+    return !this.viewport.isFit();
+  });
+
   onZoomIn(): void {
+    if (this.viewMode.mode() === '3d') {
+      this.orbit.zoomIn();
+      return;
+    }
     const current = this.viewport.userZoomMult() ?? 1;
     this.viewport.setZoomMult(clampZoomMult(current * ZOOM_STEP_MULT));
   }
 
   onZoomOut(): void {
+    if (this.viewMode.mode() === '3d') {
+      this.orbit.zoomOut();
+      return;
+    }
     const current = this.viewport.userZoomMult() ?? 1;
     this.viewport.setZoomMult(clampZoomMult(current / ZOOM_STEP_MULT));
   }
 
   onFit(): void {
+    if (this.viewMode.mode() === '3d') {
+      this.orbit.reset();
+      return;
+    }
     this.viewport.reset();
   }
 }

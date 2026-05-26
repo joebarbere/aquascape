@@ -6,7 +6,13 @@ import { TestBed } from '@angular/core/testing';
 import { Canvas2DRenderer } from '@aquascape/rendering/renderer-2d';
 import { Three3DRenderer } from '@aquascape/rendering/renderer-3d';
 
-import { SCENE_RENDERER_2D, SCENE_RENDERER_3D } from './renderer.token';
+import { ORBITAL_3D_CONTROLS } from '@aquascape/features/editor-shell';
+
+import {
+  SCENE_RENDERER_2D,
+  SCENE_RENDERER_3D,
+  orbital3DControlsProvider,
+} from './renderer.token';
 
 describe('SCENE_RENDERER_2D token', () => {
   it('defaults to a Canvas2DRenderer instance', () => {
@@ -48,5 +54,30 @@ describe('SCENE_RENDERER_3D token', () => {
     expect(two).not.toBe(three);
     expect(two).toBeInstanceOf(Canvas2DRenderer);
     expect(three).toBeInstanceOf(Three3DRenderer);
+  });
+});
+
+describe('orbital3DControlsProvider', () => {
+  it('binds ORBITAL_3D_CONTROLS to the SAME instance as SCENE_RENDERER_3D when the default Three3DRenderer is provided', () => {
+    TestBed.configureTestingModule({ providers: [orbital3DControlsProvider] });
+    const renderer = TestBed.inject(SCENE_RENDERER_3D);
+    const controls = TestBed.inject(ORBITAL_3D_CONTROLS);
+    expect(controls).toBe(renderer);
+  });
+
+  it('binds ORBITAL_3D_CONTROLS to null when SCENE_RENDERER_3D is overridden with a stub that does not implement Orbital3DControls', () => {
+    const stub = {
+      attach: () => undefined,
+      render: () => undefined,
+      hitTest: () => null,
+      dispose: () => undefined,
+    };
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: SCENE_RENDERER_3D, useValue: stub },
+        orbital3DControlsProvider,
+      ],
+    });
+    expect(TestBed.inject(ORBITAL_3D_CONTROLS)).toBeNull();
   });
 });

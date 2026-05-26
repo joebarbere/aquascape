@@ -36,11 +36,24 @@
  *
  * COORDINATE SYSTEM
  * -----------------
- * Three.js convention is right-handed, +Y up, looking down −Z. The `.aqua`
- * document uses the EXACT same convention (+x right, +y up, +z back,
- * origin at the tank's front-bottom-left interior corner). So scene-model
- * coords map 1:1 to Three.js world space — no axis flip, no projection
- * juggle.
+ * The `.aqua` document and Three.js are BOTH right-handed +Y-up, but they
+ * differ on what +Z means: the document treats +Z as "back of tank" with
+ * the viewer at −Z, whereas Three.js's default camera looks down −Z (so
+ * its "front of view" is +Z). When the renderer places the camera in
+ * front of the tank (world −Z) and aims it at world +Z, the lookAt math
+ * lands screen-right on world −X — doc +X (right side of tank) ends up
+ * on screen LEFT.
+ *
+ * To cancel the flip without changing every builder's coordinate
+ * convention, both the content and lighting groups carry a top-level
+ * `scale.x = -1, position.x = tank.width` mirror (`applyDocToWorldMirror`
+ * at the bottom of this file). Three.js's `WebGLRenderer` detects the
+ * negative-determinant world matrix per-mesh and flips `gl.frontFace`
+ * accordingly so winding-order / culling stay correct.
+ *
+ * See `docs/caveats/renderer-3d.md` → "Coordinate system" for the long
+ * explanation, and `three-3d-renderer.spec.ts` → "doc → world X-mirror"
+ * for the regression coverage.
  *
  * The `Viewport` argument to `render` is a 2D framing concept (zoom in
  * CSS-px-per-mm + a world-mm centre + rotation). The 3D renderer
@@ -64,6 +77,8 @@ import {
   Object3D,
   PerspectiveCamera,
   Scene as ThreeScene,
+  Spherical,
+  Vector3,
   WebGLRenderer,
   type BufferGeometry,
   type Material,
@@ -89,10 +104,48 @@ export interface RendererLike {
   setSize(w: number, h: number, updateStyle?: boolean): void;
   render(scene: ThreeScene, camera: PerspectiveCamera): void;
   dispose(): void;
+  /** Optional — real `WebGLRenderer` has it; the test stub may omit. */
+  setClearColor?(color: number, alpha?: number): void;
 }
 
 /** Factory the orchestrator uses to instantiate its renderer. Injectable. */
 export type RendererFactory = (canvas: HTMLCanvasElement) => RendererLike;
+
+/**
+ * Programmatic camera-control surface for the 3D renderer. Exposed
+ * separately from the `SceneRenderer` interface because these operations
+ * only make sense in 3D — the 2D canvas renderer doesn't have a camera
+ * to orbit. The editor-shell's zoom + pan/rotate UI binds to this
+ * surface (the `Three3DRenderer` instance itself implements it; see
+ * `apps/web` for the DI token wiring).
+ *
+ * All deltas use simple unit conventions chosen for button-step UI:
+ * - `zoomBy(factor)`: factor > 1 = zoom in (camera moves closer to
+ *   target); factor < 1 = zoom out. Clamped to OrbitControls's
+ *   min / max distance.
+ * - `panBy(dx, dy)`: deltas are FRACTIONS OF CURRENT CAMERA-TARGET
+ *   DISTANCE — a +0.1 dx pans right by 10% of the current view's
+ *   scale, so button steps feel consistent regardless of zoom level.
+ * - `rotateBy(azimuth, polar)`: radians around the orbit target. Polar
+ *   is clamped to (0, π) so the camera can't flip over the pole.
+ *
+ * `getZoomFraction()` returns 1 at the initial framing distance,
+ * greater than 1 when zoomed in, less than 1 when zoomed out — the same
+ * convention the 2D `ViewportService.userZoomMult` uses, so the zoom
+ * percent label reads consistently across modes.
+ *
+ * `addChangeListener(cb)` fires whenever the camera state changes —
+ * from programmatic calls AND from user mouse/wheel input through
+ * OrbitControls. Returns an unsubscribe function.
+ */
+export interface Orbital3DControls {
+  zoomBy(factor: number): void;
+  panBy(deltaX: number, deltaY: number): void;
+  rotateBy(azimuthDelta: number, polarDelta: number): void;
+  resetView(): void;
+  getZoomFraction(): number;
+  addChangeListener(cb: () => void): () => void;
+}
 
 const defaultRendererFactory: RendererFactory = (canvas) =>
   new WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -132,7 +185,7 @@ function getRaf(): RafLike | null {
   return null;
 }
 
-export class Three3DRenderer implements SceneRenderer {
+export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
   private surface: RenderSurface | null = null;
   private renderer: RendererLike | null = null;
   private threeScene: ThreeScene | null = null;
@@ -151,6 +204,25 @@ export class Three3DRenderer implements SceneRenderer {
   private rafShim: RafLike | null = null;
   /** Injectable factory; tests pass a stub renderer. */
   private readonly rendererFactory: RendererFactory;
+  /**
+   * Last tank rendered, retained so `resetView()` + `getZoomFraction()`
+   * can rebuild the initial camera framing without a fresh `render()`
+   * call. Updated at the end of every `render()`. Null until the first
+   * render.
+   */
+  private lastRenderedTank: { width: number; height: number; depth: number } | null = null;
+  /**
+   * Subscribers notified whenever the camera state changes. Programmatic
+   * orbital-control calls invoke `notifyChange()` directly; user mouse /
+   * wheel input flows through OrbitControls' `'change'` event, which we
+   * wire to `notifyChange()` in `attach()`.
+   */
+  private readonly changeListeners = new Set<() => void>();
+  /**
+   * Unsubscribe handle for the OrbitControls 'change' event listener.
+   * Stored so `dispose()` can detach it before destroying the controls.
+   */
+  private controlsChangeUnsub: (() => void) | null = null;
 
   /**
    * @param rendererFactory injectable WebGLRenderer factory. The default
@@ -164,6 +236,41 @@ export class Three3DRenderer implements SceneRenderer {
   // ─── attach ───────────────────────────────────────────────────────────
 
   attach(surface: RenderSurface): void {
+    // Idempotent re-attach to the same canvas: just sync size + DPR and
+    // keep the existing GL context alive. **This is load-bearing.**
+    // `WebGLRenderer.dispose()` calls `WEBGL_lose_context.loseContext()`
+    // which PERMANENTLY destroys the canvas's GL context — the next
+    // `getContext('webgl2')` returns a lost context that renders nothing.
+    // So calling `attach()` on every renderCurrent() (which the host
+    // does, matching the Canvas2DRenderer's contract) would tear down
+    // the renderer on the second call and leave the user staring at a
+    // blank 3D view. Only do full re-init when the canvas itself
+    // changes (which never happens in the current host, but is still
+    // the correct contract — the canvas pair lives for the app's
+    // lifetime).
+    if (
+      this.surface !== null &&
+      this.surface.canvas === surface.canvas &&
+      this.renderer !== null
+    ) {
+      this.surface = surface;
+      this.renderer.setPixelRatio(surface.devicePixelRatio);
+      this.renderer.setSize(surface.width, surface.height, false);
+      if (this.camera !== null) {
+        const aspect = surface.width === 0 || surface.height === 0
+          ? 1
+          : surface.width / surface.height;
+        this.camera.aspect = aspect;
+        this.camera.updateProjectionMatrix();
+      }
+      // Reuse existing OrbitControls + lighting + content. The next
+      // `render()` call rebuilds the content group from scratch (its
+      // existing contract), and ensureLightingForTank / ensureCameraForTank
+      // handle tank-dimension changes.
+      return;
+    }
+
+    // Canvas changed (or first attach) — full re-init.
     if (this.surface !== null) {
       this.dispose();
     }
@@ -182,6 +289,10 @@ export class Three3DRenderer implements SceneRenderer {
     }
     renderer.setPixelRatio(surface.devicePixelRatio);
     renderer.setSize(surface.width, surface.height, false);
+    // Soft dark-blue clear color so the canvas reads as "3D scene" not
+    // "the renderer is broken" even when the scene is empty. Matches
+    // the 2D renderer's wall-background default in spirit.
+    renderer.setClearColor?.(0x1a2030, 1);
     this.renderer = renderer;
 
     this.threeScene = new ThreeScene();
@@ -204,6 +315,23 @@ export class Three3DRenderer implements SceneRenderer {
     controls.maxDistance = 1000 * ORBIT_MAX_DIST_MULT;
     controls.autoRotate = false;
     this.controls = controls;
+
+    // Forward OrbitControls 'change' (fired on user mouse / wheel input
+    // AND on programmatic `update()`) to our listener set so the editor-
+    // shell zoom percent + orbit UI can re-read state when the user spins
+    // the camera with the mouse. The orbit-controls-stub used in Jest
+    // omits `addEventListener`, so guard the binding.
+    const addListener = (controls as unknown as {
+      addEventListener?: (event: string, cb: () => void) => void;
+    }).addEventListener;
+    const removeListener = (controls as unknown as {
+      removeEventListener?: (event: string, cb: () => void) => void;
+    }).removeEventListener;
+    if (typeof addListener === 'function' && typeof removeListener === 'function') {
+      const onChange = (): void => this.notifyChange();
+      addListener.call(controls, 'change', onChange);
+      this.controlsChangeUnsub = () => removeListener.call(controls, 'change', onChange);
+    }
 
     // Built once on attach because tank dimensions affect the key-light
     // position, but the rig itself is otherwise stable across frames.
@@ -268,8 +396,32 @@ export class Three3DRenderer implements SceneRenderer {
     content.add(buildSubstrateMeshes(scene, catalog));
     content.add(buildHardscapeMeshes(scene, catalog));
     content.add(buildPlantMeshes(scene, catalog, previewAgeWeeks));
+    // **Document → Three.js X-mirror (load-bearing).** The .aqua document
+    // uses `+Z = back of tank, +X = right` with the viewer at `-Z`. Three.js
+    // is also right-handed, but its default camera looks down `-Z`, so the
+    // "viewer-side" of the world is `+Z`. When the renderer places the
+    // camera in front of the tank (at world `-Z`) looking at world `+Z`,
+    // the lookAt-derived camera basis points its screen-right axis at
+    // world `-X` — i.e., doc `+X` (right side of tank) lands on screen
+    // LEFT. Mirroring the scene about its X-midplane cancels that flip:
+    // doc `+X` → world `-X` → screen `+X` (right). The transform is
+    // `scale.x = -1, position.x = tank.width`, applied to both content
+    // and lighting (so the key light's authored "front-top-right" intent
+    // also lands on the user's screen-right). Three.js handles the
+    // negative-determinant world matrix automatically — `WebGLRenderer`
+    // flips `gl.frontFace` per-mesh — so winding-order / culling stays
+    // correct without per-material side adjustments.
+    applyDocToWorldMirror(content, scene.tank.width);
     tScene.add(content);
     this.currentContent = content;
+
+    // Cache the tank dimensions so `resetView()` / `getZoomFraction()`
+    // can rebuild the initial framing without needing the full scene.
+    this.lastRenderedTank = {
+      width: scene.tank.width,
+      height: scene.tank.height,
+      depth: scene.tank.depth,
+    };
 
     // 4) Paint one frame synchronously so render() has a visible effect
     //    even when no animation tick is running (Node tests, headless
@@ -289,6 +441,27 @@ export class Three3DRenderer implements SceneRenderer {
     const ctl = this.controls;
     if (c === null) return;
     const newCenter = tankCenter(scene.tank);
+    // First render: re-frame from scratch against the real tank so the
+    // initial pose is the proper 3/4 view for THIS tank, not the
+    // placeholder framing computed in `attach()`. The placeholder is a
+    // 1 m cube — preserving its offset would land the camera at a wildly
+    // off-axis pose on small tanks. After the first render we switch to
+    // the "preserve orbit pose" path so a tank-resize doesn't yank the
+    // camera away from the user's manual orbit.
+    if (this.lastRenderedTank === null) {
+      const fresh = buildCamera(scene.tank, c.aspect);
+      c.position.copy(fresh.position);
+      if (ctl !== null) {
+        ctl.target.copy(newCenter);
+        ctl.minDistance = Math.max(1, scene.tank.depth * ORBIT_MIN_DIST_MULT);
+        ctl.maxDistance = Math.max(2, scene.tank.depth * ORBIT_MAX_DIST_MULT);
+        ctl.update();
+      } else {
+        c.lookAt(newCenter);
+      }
+      c.updateProjectionMatrix();
+      return;
+    }
     if (ctl !== null && ctl.target.distanceToSquared(newCenter) < 1) return;
     // Move target + camera together so the orbit pose is preserved.
     if (ctl !== null) {
@@ -323,6 +496,11 @@ export class Three3DRenderer implements SceneRenderer {
       this.lighting = null;
     }
     const rig = buildLighting(scene.tank);
+    // Mirror the lighting on the same axis as the content (see the long
+    // comment in `render()`). The key light is authored "front-top-right"
+    // in doc terms; without this mirror it would land on the user's
+    // screen-LEFT and the scene would look lit from the wrong side.
+    applyDocToWorldMirror(rig, scene.tank.width);
     rig.userData['aquascape:lightingTag'] = tag;
     tScene.add(rig);
     this.lighting = rig;
@@ -343,6 +521,145 @@ export class Three3DRenderer implements SceneRenderer {
     return null;
   }
 
+  // ─── orbital 3D controls ──────────────────────────────────────────────
+
+  /**
+   * Multiply the camera's distance to its orbit target by `1 / factor`.
+   * `factor > 1` = zoom IN (camera moves closer); `factor < 1` = zoom OUT.
+   * The resulting distance is clamped to OrbitControls's `minDistance` /
+   * `maxDistance` bounds (which scale with tank depth, see `attach`). No-op
+   * if the renderer hasn't been attached yet, the factor is non-finite, or
+   * the factor is non-positive (would invert direction).
+   */
+  zoomBy(factor: number): void {
+    const c = this.camera;
+    const ctl = this.controls;
+    if (c === null || ctl === null) return;
+    if (!Number.isFinite(factor) || factor <= 0) return;
+    const offset = c.position.clone().sub(ctl.target);
+    const currentDist = offset.length();
+    if (currentDist === 0) return;
+    const targetDist = clampDistance(currentDist / factor, ctl);
+    offset.setLength(targetDist);
+    c.position.copy(ctl.target).add(offset);
+    ctl.update();
+    this.notifyChange();
+  }
+
+  /**
+   * Pan the orbit target + camera together. `deltaX` / `deltaY` are
+   * fractions of the current camera-target distance — so a `+0.1` dx
+   * shifts the view right by ~10 % of the visible scene regardless of
+   * zoom level, which is what makes button-step pan feel consistent.
+   * The translation happens in the camera's local right / up basis so it
+   * always reads as "shift the picture left/right/up/down".
+   */
+  panBy(deltaX: number, deltaY: number): void {
+    const c = this.camera;
+    const ctl = this.controls;
+    if (c === null || ctl === null) return;
+    if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) return;
+    const offset = c.position.clone().sub(ctl.target);
+    const distance = offset.length();
+    if (distance === 0) return;
+    // Camera local right axis: `up × forward` (with forward = target-eye,
+    // i.e. -offset). Equivalently: `up × -offset` = `offset × up`.
+    const right = new Vector3().crossVectors(offset, c.up).normalize();
+    if (right.lengthSq() === 0) return;
+    const up = new Vector3().crossVectors(right, offset).normalize();
+    const panVec = new Vector3()
+      .addScaledVector(right, deltaX * distance)
+      .addScaledVector(up, deltaY * distance);
+    ctl.target.add(panVec);
+    c.position.add(panVec);
+    ctl.update();
+    this.notifyChange();
+  }
+
+  /**
+   * Rotate the camera around the orbit target by `azimuthDelta` (around
+   * the Y axis) and `polarDelta` (around the local X axis through the
+   * target). Both are in radians. Polar is clamped to `[ε, π - ε]` so the
+   * camera can't flip past the pole and end up upside-down.
+   */
+  rotateBy(azimuthDelta: number, polarDelta: number): void {
+    const c = this.camera;
+    const ctl = this.controls;
+    if (c === null || ctl === null) return;
+    if (!Number.isFinite(azimuthDelta) || !Number.isFinite(polarDelta)) return;
+    const offset = c.position.clone().sub(ctl.target);
+    const spherical = new Spherical().setFromVector3(offset);
+    spherical.theta += azimuthDelta;
+    spherical.phi = Math.max(
+      POLAR_EPSILON,
+      Math.min(Math.PI - POLAR_EPSILON, spherical.phi + polarDelta),
+    );
+    offset.setFromSpherical(spherical);
+    c.position.copy(ctl.target).add(offset);
+    c.lookAt(ctl.target);
+    ctl.update();
+    this.notifyChange();
+  }
+
+  /**
+   * Reset the camera to the initial 3/4-view framing for the last-
+   * rendered tank. No-op if `render()` has never been called (no tank
+   * dimensions to frame against).
+   */
+  resetView(): void {
+    const tank = this.lastRenderedTank;
+    const c = this.camera;
+    const ctl = this.controls;
+    if (tank === null || c === null) return;
+    const fresh = buildCamera({ ...tank, style: PLACEHOLDER_STYLE }, c.aspect);
+    c.position.copy(fresh.position);
+    if (ctl !== null) {
+      ctl.target.copy(tankCenter({ ...tank, style: PLACEHOLDER_STYLE }));
+      ctl.update();
+    } else {
+      c.lookAt(tankCenter({ ...tank, style: PLACEHOLDER_STYLE }));
+    }
+    c.updateProjectionMatrix();
+    this.notifyChange();
+  }
+
+  /**
+   * Current zoom fraction, with `1` at the initial framing distance. The
+   * editor-shell uses this to drive the zoom percent label so the 3D mode
+   * reads the same as 2D ("100%" = default, "200%" = 2× zoom). Returns
+   * `1` when no tank has been rendered or when the renderer is detached.
+   */
+  getZoomFraction(): number {
+    const tank = this.lastRenderedTank;
+    const c = this.camera;
+    const ctl = this.controls;
+    if (tank === null || c === null) return 1;
+    const initialCam = buildCamera({ ...tank, style: PLACEHOLDER_STYLE }, c.aspect);
+    const initialTarget = tankCenter({ ...tank, style: PLACEHOLDER_STYLE });
+    const initialDist = initialCam.position.distanceTo(initialTarget);
+    const currentTarget = ctl !== null ? ctl.target : initialTarget;
+    const currentDist = c.position.distanceTo(currentTarget);
+    if (currentDist === 0) return 1;
+    return initialDist / currentDist;
+  }
+
+  /**
+   * Subscribe to camera-state changes. The callback fires after any
+   * programmatic orbital-control call (`zoomBy` / `panBy` / `rotateBy` /
+   * `resetView`) AND after user mouse / wheel interaction routed through
+   * OrbitControls' `'change'` event. Returns an unsubscribe function.
+   */
+  addChangeListener(cb: () => void): () => void {
+    this.changeListeners.add(cb);
+    return () => {
+      this.changeListeners.delete(cb);
+    };
+  }
+
+  private notifyChange(): void {
+    for (const cb of this.changeListeners) cb();
+  }
+
   // ─── dispose ──────────────────────────────────────────────────────────
 
   dispose(): void {
@@ -351,6 +668,11 @@ export class Three3DRenderer implements SceneRenderer {
     }
     this.rafHandle = null;
     this.rafShim = null;
+
+    if (this.controlsChangeUnsub !== null) {
+      this.controlsChangeUnsub();
+      this.controlsChangeUnsub = null;
+    }
 
     if (this.controls !== null) {
       this.controls.dispose();
@@ -377,6 +699,10 @@ export class Three3DRenderer implements SceneRenderer {
     this.threeScene = null;
     this.camera = null;
     this.surface = null;
+    this.lastRenderedTank = null;
+    // changeListeners deliberately retained — subscribers (e.g. the
+    // editor-shell's Orbit3DService) outlive a single attach/dispose
+    // cycle. The listener set is small + cheap to keep.
   }
 }
 
@@ -413,3 +739,40 @@ const PLACEHOLDER_STYLE = {
   frame: 'rimless' as const,
   background: { kind: 'none' as const },
 };
+
+/**
+ * Smallest polar offset from the pole to leave at the rotation extremes.
+ * `OrbitControls` uses ~1e-6 internally; ours is a touch larger so a UI
+ * button-press stop doesn't sit visually on the singularity (where the
+ * camera basis math gets noisy).
+ */
+const POLAR_EPSILON = 0.01;
+
+/**
+ * Clamp `distance` to OrbitControls's `[minDistance, maxDistance]`
+ * window. Defensive against non-finite bounds in stub controls used by
+ * tests.
+ */
+function clampDistance(distance: number, ctl: OrbitControls): number {
+  const min = Number.isFinite(ctl.minDistance) ? ctl.minDistance : 0;
+  const max = Number.isFinite(ctl.maxDistance) ? ctl.maxDistance : Infinity;
+  if (distance < min) return min;
+  if (distance > max) return max;
+  return distance;
+}
+
+/**
+ * Apply the document → Three.js X-mirror transform to a group: reflect
+ * about the tank's X-midplane (`scale.x = -1, position.x = tank.width`).
+ * Combined with the camera's `_x = world (-X, 0, +Z)` orientation, this
+ * cancels the otherwise-visible left/right flip between 2D and 3D —
+ * doc `+X` (right side of tank) lands on screen `+X` (right side of view).
+ *
+ * Three.js's `WebGLRenderer` detects the negative-determinant world
+ * matrix per-mesh and flips `gl.frontFace` accordingly, so triangle
+ * winding / culling stays correct without per-material side adjustments.
+ */
+function applyDocToWorldMirror(group: Object3D, tankWidthMm: number): void {
+  group.scale.x = -1;
+  group.position.x = tankWidthMm;
+}

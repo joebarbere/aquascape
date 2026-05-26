@@ -15,12 +15,23 @@
  */
 
 import type { Tank } from '@aquascape/domain/scene-model';
-import { AmbientLight, DirectionalLight, Group, Vector3 } from 'three';
+import { AmbientLight, DirectionalLight, Group, HemisphereLight, Vector3 } from 'three';
 
-/** Ambient fill — keeps shaded faces readable. */
-const AMBIENT_INTENSITY = 0.45;
+/**
+ * Ambient fill — keeps shaded faces readable. v1 deliberately leans
+ * bright because we don't have a HemisphereLight or environment map yet,
+ * so without strong ambient the underside / back of every mesh would
+ * read as a featureless dark blob against the dark clear color.
+ */
+const AMBIENT_INTENSITY = 0.7;
 /** Directional key light intensity. */
-const KEY_INTENSITY = 0.8;
+const KEY_INTENSITY = 1.0;
+/**
+ * Soft "sky fill" hemisphere light — bluish from above, warm earthy from
+ * below. Cheap and reads a lot more natural than a single directional
+ * key against pure ambient, which is what v1 shipped initially.
+ */
+const HEMI_INTENSITY = 0.4;
 
 /**
  * Build the v1 lighting group. The group contains an ambient + one
@@ -35,10 +46,20 @@ export function buildLighting(tank: Tank): Group {
   ambient.name = 'aquascape:lighting/ambient';
   group.add(ambient);
 
+  // Sky/ground hemisphere — adds soft directional fill (cool from above,
+  // warm earthy from below) without the cost of a real environment map.
+  const hemi = new HemisphereLight(0xcfe6ff, 0x6b5a44, HEMI_INTENSITY);
+  hemi.name = 'aquascape:lighting/hemisphere';
+  group.add(hemi);
+
   const key = new DirectionalLight(0xffffff, KEY_INTENSITY);
   key.name = 'aquascape:lighting/key';
-  // Position relative to the tank — front-top-right of the box.
-  key.position.set(tank.width * 0.7, tank.height * 1.8, tank.depth * 1.2);
+  // Position relative to the tank — front-top-right of the box. Negative
+  // z places the light in FRONT of the front glass (where the viewer
+  // stands) so the visible-to-the-camera faces get the strongest
+  // illumination. The old positive-z position lit the BACK faces only —
+  // a compounding cause of the "dark 3D view" symptom.
+  key.position.set(tank.width * 0.7, tank.height * 1.8, -tank.depth * 1.2);
   // Target the tank centre. DirectionalLight.target is a Object3D that
   // Three.js consults each frame — we set its position and DO NOT add it
   // to the scene here (Three.js handles parented targets transparently

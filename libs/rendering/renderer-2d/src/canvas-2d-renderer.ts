@@ -1225,9 +1225,14 @@ export class Canvas2DRenderer implements SceneRenderer {
       entry.naturalSize.width *
       0.5 *
       growthScale;
+    // **Plant Y is base-anchored and never flipped.** Plants always grow
+    // up from the substrate; `flipY` is ignored (the MirrorObject command
+    // also rejects axis='y' for plants — this is defence in depth). `sy`
+    // is therefore always positive, and the `translate(0, 1)` below moves
+    // the silhouette's base (y = −1 in normalised silhouette coords) to
+    // the world position. Growth then only extends the silhouette upward.
     const sy =
       obj.transform.scale.y *
-      (obj.transform.flipY ? -1 : 1) *
       entry.naturalSize.height *
       0.5 *
       growthScale;
@@ -1236,6 +1241,10 @@ export class Canvas2DRenderer implements SceneRenderer {
       return;
     }
     ctx.scale(sx, sy);
+    // Pre-translate so silhouette y = −1 (root edge) lands at world
+    // (position.x, position.y). With scale already applied, +1 in local
+    // coords moves the origin up by `sy` world-mm.
+    ctx.translate(0, 1);
     pathPolygon(ctx, entry.silhouette);
     ctx.fillStyle = entry.color;
     ctx.fill();
@@ -1289,9 +1298,12 @@ export class Canvas2DRenderer implements SceneRenderer {
     // Per-instance silhouette flip mirrors EACH plant glyph too, so an
     // asymmetric silhouette (e.g. Bucephalandra) visibly flips along with
     // the patch. Symmetric silhouettes (Hairgrass, Vallisneria) stay
-    // invariant. `instanceSx` / `instanceSy` carry the sign.
+    // invariant. `instanceSx` carries the sign. **flipY is ignored for
+    // plants** — vertical mirror is disallowed at the command layer
+    // (`MirrorObject` rejects axis='y' for plant kind) and the renderer
+    // doubles down by keeping the Y scale positive so each carpet sprite
+    // grows up from its scatter-point base.
     const flipSx = obj.transform.flipX ? -1 : 1;
-    const flipSy = obj.transform.flipY ? -1 : 1;
 
     ctx.save();
     ctx.globalAlpha = layerAlpha;
@@ -1302,12 +1314,15 @@ export class Canvas2DRenderer implements SceneRenderer {
       ctx.translate(p.position.x, p.position.y);
       if (p.rotation !== 0) ctx.rotate(p.rotation);
       const instanceSx = entry.naturalSize.width * 0.5 * growthScale * p.jitter * flipSx;
-      const instanceSy = entry.naturalSize.height * 0.5 * growthScale * p.jitter * flipSy;
+      const instanceSy = entry.naturalSize.height * 0.5 * growthScale * p.jitter;
       if (instanceSx === 0 || instanceSy === 0) {
         ctx.restore();
         continue;
       }
       ctx.scale(instanceSx, instanceSy);
+      // Same base-anchor as paintSinglePlant — silhouette y=−1 lands at
+      // the scatter point so each instance grows up from its anchor.
+      ctx.translate(0, 1);
       pathPolygon(ctx, entry.silhouette);
       ctx.fill();
       const meanScale = (Math.abs(instanceSx) + Math.abs(instanceSy)) * 0.5;

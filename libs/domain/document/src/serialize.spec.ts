@@ -79,25 +79,25 @@ describe('loadAquaDocument', () => {
   });
 
   it('runs migrations before validation', () => {
-    const v1 = serializeAquaDocument(EXAMPLE);
-    // Pretend v1 is actually v2 by upgrading to v2 then targeting v2.
+    // EXAMPLE is at the current (v2) schemaVersion. Pretend a v3 reader is
+    // running by injecting a hypothetical v2 → v3 step and targeting v3.
+    // The current schema only constrains `schemaVersion: integer >= 1`, so
+    // a doc whose version was just bumped to 3 still validates — the test's
+    // intent is "validation runs AFTER migration", not the specific shape.
+    const currentVersionDoc = serializeAquaDocument(EXAMPLE);
     const stepUp: Migration = {
-      from: 1,
-      to: 2,
-      migrate: (d) => ({ ...(d as object), schemaVersion: 2 }),
+      from: 2,
+      to: 3,
+      migrate: (d) => ({ ...(d as object), schemaVersion: 3 }),
     };
-    const result = loadAquaDocument(v1, {
+    const result = loadAquaDocument(currentVersionDoc, {
       migrations: [stepUp],
-      targetVersion: 2,
+      targetVersion: 3,
     });
-    // Validation runs *after* migration; the v1 schema validator rejects
-    // schemaVersion=2 fields it doesn't know yet only if they exist —
-    // here only the schemaVersion changed, and the schema allows
-    // `schemaVersion: integer >= 1`, so this passes.
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.migrationSteps).toEqual([{ from: 1, to: 2 }]);
-    expect((result.document as { schemaVersion: number }).schemaVersion).toBe(2);
+    expect(result.migrationSteps).toEqual([{ from: 2, to: 3 }]);
+    expect((result.document as { schemaVersion: number }).schemaVersion).toBe(3);
   });
 
   it('surfaces a migration-failed error when the chain has a gap', () => {

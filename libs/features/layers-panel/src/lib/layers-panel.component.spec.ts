@@ -298,6 +298,87 @@ describe('LayersPanelComponent — actions', () => {
   });
 });
 
+describe('LayersPanelComponent — zone dropdown', () => {
+  it('renders a zone <select> per row with the "—" placeholder when the layer has no zone', () => {
+    const scene = sceneWithLayers([makeLayer('a', 'L1')]);
+    const { fixture } = configure(scene);
+    const select = rowAt(fixture, 0).querySelector('select.zone') as HTMLSelectElement;
+    expect(select).not.toBeNull();
+    expect(select.value).toBe('');
+    const optionValues = Array.from(select.options).map((o) => o.value);
+    expect(optionValues).toEqual(['', 'foreground', 'midground', 'background']);
+    const firstOptionText = (select.options[0] as HTMLOptionElement).textContent?.trim();
+    expect(firstOptionText).toBe('—');
+  });
+
+  it('reflects an existing zone as the selected option', () => {
+    const scene = sceneWithLayers([makeLayer('a', 'L1', { zone: 'background' })]);
+    const { fixture } = configure(scene);
+    const select = rowAt(fixture, 0).querySelector('select.zone') as HTMLSelectElement;
+    expect(select.value).toBe('background');
+  });
+
+  it('exposes a per-row accessible label tied to the select via for/id', () => {
+    const scene = sceneWithLayers([makeLayer('a', 'Carpet')]);
+    const { fixture } = configure(scene);
+    const row = rowAt(fixture, 0);
+    const select = row.querySelector('select.zone') as HTMLSelectElement;
+    const label = row.querySelector('label.visually-hidden') as HTMLLabelElement;
+    expect(select.id).toBe('layer-zone-a');
+    expect(label.getAttribute('for')).toBe('layer-zone-a');
+    expect(label.textContent?.trim()).toBe('Zone for layer Carpet');
+  });
+
+  it('change to a real zone dispatches SetLayerZone with the picked value', () => {
+    const scene = sceneWithLayers([makeLayer('a', 'L1')]);
+    const { fixture, dispatched } = configure(scene);
+    const select = rowAt(fixture, 0).querySelector('select.zone') as HTMLSelectElement;
+    select.value = 'foreground';
+    select.dispatchEvent(new Event('change'));
+    const cmd = dispatched()[0]! as ReturnType<typeof SceneActions.dispatchCommand>;
+    if (cmd.command.kind !== 'SetLayerZone') throw new Error('expected SetLayerZone');
+    expect(String(cmd.command.layerId)).toBe('a');
+    expect(cmd.command.zone).toBe('foreground');
+  });
+
+  it('change to the "—" option dispatches SetLayerZone with null (remove the property)', () => {
+    const scene = sceneWithLayers([makeLayer('a', 'L1', { zone: 'midground' })]);
+    const { fixture, dispatched } = configure(scene);
+    const select = rowAt(fixture, 0).querySelector('select.zone') as HTMLSelectElement;
+    select.value = '';
+    select.dispatchEvent(new Event('change'));
+    const cmd = dispatched()[0]! as ReturnType<typeof SceneActions.dispatchCommand>;
+    if (cmd.command.kind !== 'SetLayerZone') throw new Error('expected SetLayerZone');
+    expect(cmd.command.zone).toBeNull();
+  });
+
+  it('selecting the current value is a no-op (no command dispatched)', () => {
+    const scene = sceneWithLayers([makeLayer('a', 'L1', { zone: 'foreground' })]);
+    const { fixture, dispatched } = configure(scene);
+    const select = rowAt(fixture, 0).querySelector('select.zone') as HTMLSelectElement;
+    select.value = 'foreground';
+    select.dispatchEvent(new Event('change'));
+    expect(dispatched()).toEqual([]);
+  });
+
+  it('change event with a null target is ignored (synthetic event without a target)', () => {
+    const scene = sceneWithLayers([makeLayer('a', 'L1')]);
+    const { fixture, dispatched } = configure(scene);
+    fixture.componentInstance.onZone(scene.layers[0]!, new Event('change'));
+    expect(dispatched()).toEqual([]);
+  });
+
+  it('an unknown value on the select is ignored (defensive guard)', () => {
+    const scene = sceneWithLayers([makeLayer('a', 'L1')]);
+    const { fixture, dispatched } = configure(scene);
+    const select = rowAt(fixture, 0).querySelector('select.zone') as HTMLSelectElement;
+    // Override .value so the synthesised value bypasses the option list.
+    Object.defineProperty(select, 'value', { get: () => 'banana', configurable: true });
+    select.dispatchEvent(new Event('change'));
+    expect(dispatched()).toEqual([]);
+  });
+});
+
 describe('LayersPanelComponent — collapsible header', () => {
   it('renders the header as a button with aria-expanded=true by default', () => {
     const { fixture } = configure(sceneWithLayers([makeLayer('a', 'L1')]));

@@ -1,6 +1,6 @@
 {
   "format": "aquascape",
-  "schemaVersion": 2,
+  "schemaVersion": 1,
   "meta": {
     "id": "8f3b2c1a-4d5e-4a6b-9c8d-0e1f2a3b4c5d",
     "title": "Sprouting Harmony (example)",
@@ -56,7 +56,6 @@
       "opacity": 1,
       "visible": true,
       "locked": false,
-      "zone": "midground",
       "objects": [
         {
           "kind": "hardscape",
@@ -106,7 +105,6 @@
       "opacity": 1,
       "visible": true,
       "locked": false,
-      "zone": "foreground",
       "objects": [
         {
           "kind": "plant",

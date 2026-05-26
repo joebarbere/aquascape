@@ -14,4 +14,4 @@
 // Electron, platform-*, features-*, state, ui. The lib is framework-free so
 // a host (web canvas, headless export pipeline) can drop it in.
 
-export { Three3DRenderer } from './three-3d-renderer';
+export { Three3DRenderer, type Orbital3DControls } from './three-3d-renderer';

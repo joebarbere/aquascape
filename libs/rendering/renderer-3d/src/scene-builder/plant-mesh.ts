@@ -22,7 +22,7 @@
 
 import type { Catalog, PlantEntry } from '@aquascape/domain/catalog';
 import { plantScale, scatterInPolygon } from '@aquascape/domain/growth-sim';
-import type { CatalogRef, PlantObject, Scene } from '@aquascape/domain/scene-model';
+import type { CatalogRef, Layer, PlantObject, Scene } from '@aquascape/domain/scene-model';
 import {
   ExtrudeGeometry,
   Group,
@@ -34,6 +34,10 @@ import {
   Shape,
   Vector3,
 } from 'three';
+
+import { computeZonedZ } from './layer-zone-z';
+import { substrateHeightAt } from './substrate-height';
+import { clampToScene } from './tank-clamp';
 
 /** Plants are matte. */
 const ROUGHNESS = 0.7;
@@ -67,8 +71,8 @@ export function buildPlantMeshes(
       const scale = plantScale(entry.growth, obj.growth, previewAgeWeeks);
       const node =
         obj.scatter !== undefined
-          ? buildScatterPatch(obj, entry, scale, scene.seed)
-          : buildSingleSpecimen(obj, entry, scale);
+          ? buildScatterPatch(obj, entry, scale, scene)
+          : buildSingleSpecimen(obj, entry, scale, scene, layer);
       if (node !== null) group.add(node);
     }
   }
@@ -83,20 +87,47 @@ function buildSingleSpecimen(
   obj: PlantObject,
   entry: PlantEntry,
   growthScale: number,
+  scene: Scene,
+  layer: Layer,
 ): Mesh | null {
   const geo = buildSilhouetteGeometry(entry);
   if (geo === null) return null;
   const mat = new MeshStandardMaterial({ color: entry.color, roughness: ROUGHNESS });
   const mesh = new Mesh(geo, mat);
   mesh.name = `aquascape:plant/${obj.id}`;
-  mesh.position.set(obj.transform.position.x, obj.transform.position.y, obj.transform.position.z);
+  // **Y is snapped to the substrate.** The 2D renderer treats
+  // `transform.position.y` as the silhouette centre; the 3D view reads
+  // better when plants "rise from" the substrate at their XZ position
+  // instead of floating mid-tank. The geometry is pre-translated so its
+  // local origin sits at the bottom of the silhouette (see
+  // `buildSilhouetteGeometry`).
+  //
+  // Position pipeline mirrors hardscape: layer-zone Z override → tank
+  // (X, Z) clamp using the scaled half-extents → substrate Y snap.
+  const x0 = obj.transform.position.x;
+  const z0 = computeZonedZ(scene, obj.id, layer.id);
+  const halfW = entry.naturalSize.width * 0.5;
+  const halfD = entry.naturalSize.depth * 0.5 * DEPTH_MULT;
+  const scaledHalfX = halfW * Math.abs(obj.transform.scale.x) * growthScale;
+  const scaledHalfZ = halfD * Math.abs(obj.transform.scale.z) * growthScale;
+  const clamped = clampToScene(
+    { x: x0, y: 0, z: z0 },
+    { x: scaledHalfX, z: scaledHalfZ },
+    scene,
+  );
+  const floor = substrateHeightAt(scene, clamped.x);
+  mesh.position.set(clamped.x, floor, clamped.z);
   mesh.rotation.set(
     obj.transform.rotation.x,
     obj.transform.rotation.y,
     obj.transform.rotation.z,
   );
   const sx = obj.transform.scale.x * (obj.transform.flipX ? -1 : 1) * growthScale;
-  const sy = obj.transform.scale.y * (obj.transform.flipY ? -1 : 1) * growthScale;
+  // **Plant flipY is ignored — Y is always positive.** Plants must grow
+  // upward from the substrate; flipping vertically would put roots in
+  // the air. The MirrorObject command also rejects axis='y' for plant
+  // kind (`commands.ts`), so this is defence in depth for legacy docs.
+  const sy = obj.transform.scale.y * growthScale;
   const sz = obj.transform.scale.z * growthScale;
   mesh.scale.set(sx, sy, sz);
   return mesh;
@@ -118,11 +149,11 @@ function buildScatterPatch(
   obj: PlantObject,
   entry: PlantEntry,
   growthScale: number,
-  sceneSeed: number,
+  scene: Scene,
 ): Group | InstancedMesh | null {
   const scatter = obj.scatter;
   if (scatter === undefined) return null;
-  const baseSeed = scatter.seed ?? sceneSeed;
+  const baseSeed = scatter.seed ?? scene.seed;
   const seed =
     ((baseSeed ^ (obj.transform.flipX ? SCATTER_FLIP_X_SEED_MIX : 0)) ^
       (obj.transform.flipY ? SCATTER_FLIP_Y_SEED_MIX : 0)) >>>
@@ -136,12 +167,21 @@ function buildScatterPatch(
   if (geo === null) return null;
   const mat = new MeshStandardMaterial({ color: entry.color, roughness: ROUGHNESS });
 
-  // Per-instance scale carries the patch-level growth scale × the per-
-  // instance jitter (which `scatterInPolygon` already varies in [0.85,
-  // 1.15]). flipX / flipY on the parent object apply per-instance so an
-  // asymmetric silhouette mirrors visibly with the patch.
+  // **2D-to-3D scatter polygon reinterpretation.** In 2D the scatter
+  // polygon describes a front-elevation cluster (a "wall of plants" at
+  // a fixed depth). In 3D that reads as plants floating mid-air, which
+  // makes carpets look broken. The natural 3D reinterpretation: the
+  // polygon defines a TOP-DOWN floor patch — x stays as world X
+  // (left-right), y becomes world Z (front-back depth). Each plant lands
+  // at the substrate height beneath its (x, z). This makes Hemianthus /
+  // Eleocharis / Monte Carlo carpets read as actual carpets.
+  //
+  // The 2D view is unchanged; this is a deliberate 3D-only divergence
+  // documented in `docs/caveats/renderer-3d.md`.
+  //
+  // **Plant flipY is ignored — only flipX may flip a sprite.** Plants
+  // always grow upward from their substrate anchor in both 2D and 3D.
   const flipSx = obj.transform.flipX ? -1 : 1;
-  const flipSy = obj.transform.flipY ? -1 : 1;
 
   if (capped.length >= INSTANCED_THRESHOLD) {
     const instanced = new InstancedMesh(geo, mat, capped.length);
@@ -152,9 +192,12 @@ function buildScatterPatch(
     const scl = new Vector3();
     for (let i = 0; i < capped.length; i++) {
       const inst = capped[i]!;
-      pos.set(inst.position.x, inst.position.y, 0);
-      quat.setFromAxisAngle(new Vector3(0, 0, 1), inst.rotation);
-      scl.set(growthScale * inst.jitter * flipSx, growthScale * inst.jitter * flipSy, growthScale);
+      const worldX = inst.position.x;
+      const worldZ = inst.position.y;
+      const worldY = substrateHeightAt(scene, worldX);
+      pos.set(worldX, worldY, worldZ);
+      quat.setFromAxisAngle(new Vector3(0, 1, 0), inst.rotation);
+      scl.set(growthScale * inst.jitter * flipSx, growthScale * inst.jitter, growthScale);
       tmpMat.compose(pos, quat, scl);
       instanced.setMatrixAt(i, tmpMat);
     }
@@ -169,12 +212,17 @@ function buildScatterPatch(
   group.name = `aquascape:plant/${obj.id}`;
   for (let i = 0; i < capped.length; i++) {
     const inst = capped[i]!;
+    const worldX = inst.position.x;
+    const worldZ = inst.position.y;
+    const worldY = substrateHeightAt(scene, worldX);
     const mesh = new Mesh(geo, mat);
-    mesh.position.set(inst.position.x, inst.position.y, 0);
-    mesh.rotation.set(0, 0, inst.rotation);
+    mesh.position.set(worldX, worldY, worldZ);
+    // Plant rotation spins about Y axis (vertical) so the leafy cluster
+    // rotates around its stem instead of tipping over.
+    mesh.rotation.set(0, inst.rotation, 0);
     mesh.scale.set(
       growthScale * inst.jitter * flipSx,
-      growthScale * inst.jitter * flipSy,
+      growthScale * inst.jitter,
       growthScale,
     );
     group.add(mesh);
@@ -208,7 +256,12 @@ function buildSilhouetteGeometry(entry: PlantEntry): ExtrudeGeometry | null {
     bevelEnabled: false,
     steps: 1,
   });
-  geo.translate(0, 0, -depth / 2);
+  // Shift the geometry so its local origin sits at the BOTTOM of the
+  // silhouette (Y) and the CENTRE of the extrusion (Z). This way
+  // `mesh.position.y = substrateHeight` lands the plant's base on the
+  // substrate; without the +halfH shift the plant's centre would be at
+  // floor height and half of it would sink into the substrate.
+  geo.translate(0, halfH, -depth / 2);
   return geo;
 }
 

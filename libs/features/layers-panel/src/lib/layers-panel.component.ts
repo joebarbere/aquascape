@@ -42,6 +42,7 @@ import {
   setLayerLocked,
   setLayerOpacity,
   setLayerVisibility,
+  setLayerZone,
   type Layer,
   type LayerId,
   type Scene,
@@ -141,6 +142,21 @@ function nextLayerName(existing: ReadonlyArray<Layer>): string {
                 (keydown.enter)="onRename(entry.layer, $event); $any($event.target).blur()"
                 aria-label="Layer name"
               />
+              <label class="visually-hidden" [attr.for]="zoneSelectId(entry.layer)">{{
+                zoneAriaLabel(entry.layer)
+              }}</label>
+              <select
+                class="zone"
+                [id]="zoneSelectId(entry.layer)"
+                [value]="entry.layer.zone ?? ''"
+                (change)="onZone(entry.layer, $event)"
+                [title]="zoneAriaLabel(entry.layer)"
+              >
+                <option value="">—</option>
+                <option value="foreground">Foreground</option>
+                <option value="midground">Midground</option>
+                <option value="background">Background</option>
+              </select>
               <input
                 type="range"
                 class="opacity"
@@ -289,13 +305,38 @@ function nextLayerName(existing: ReadonlyArray<Layer>): string {
       }
       .layer-row {
         display: grid;
-        grid-template-columns: auto auto 1fr 80px auto auto auto;
+        grid-template-columns: auto auto 1fr auto 80px auto auto auto;
         gap: 4px;
         align-items: center;
         padding: 3px 4px;
         border-radius: 3px;
         background: var(--surface-2);
         border: 1px solid var(--border);
+      }
+      select.zone {
+        background: var(--surface);
+        color: inherit;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        padding: 1px 4px;
+        font: inherit;
+        font-size: 11px;
+      }
+      select.zone:hover,
+      select.zone:focus-visible {
+        border-color: var(--border-strong);
+        outline: none;
+      }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
       }
       .layer-row.hidden {
         opacity: 0.5;
@@ -464,6 +505,44 @@ export class LayersPanelComponent {
       return;
     }
     this.store.dispatch(SceneActions.dispatchCommand({ command: renameLayer(layer.id, next) }));
+  }
+
+  /**
+   * Per-row zone dropdown. The native `<select>` reports its value as a
+   * string; the empty-string option maps to `null` (== remove the zone
+   * property entirely). One `SetLayerZone` command per change so the undo
+   * stack treats each pick as a single user action — same model as inline
+   * rename.
+   */
+  onZone(layer: Layer, event: Event): void {
+    const select = event.target as HTMLSelectElement | null;
+    if (select === null) return;
+    const raw = select.value;
+    let next: 'foreground' | 'midground' | 'background' | null;
+    if (raw === '') {
+      next = null;
+    } else if (raw === 'foreground' || raw === 'midground' || raw === 'background') {
+      next = raw;
+    } else {
+      // Defensive: an unknown value (shouldn't happen given the fixed option
+      // set) is ignored rather than dispatched as `'invalid'`.
+      return;
+    }
+    // No-op when the value hasn't changed (avoid a spurious undo entry from
+    // re-selecting the current option).
+    const current = layer.zone ?? null;
+    if (current === next) return;
+    this.store.dispatch(SceneActions.dispatchCommand({ command: setLayerZone(layer.id, next) }));
+  }
+
+  /** DOM id for the per-row zone `<select>` (stable per layer id). */
+  zoneSelectId(layer: Layer): string {
+    return `layer-zone-${String(layer.id)}`;
+  }
+
+  /** Accessible label for the zone select (read by screen readers). */
+  zoneAriaLabel(layer: Layer): string {
+    return `Zone for layer ${layer.name}`;
   }
 
   onOpacity(layer: Layer, event: Event): void {

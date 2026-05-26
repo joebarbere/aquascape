@@ -101,12 +101,82 @@ describe('SelectionInspectorComponent', () => {
     expect(cmd.command.axis).toBe('x');
   });
 
-  it('Mirror V dispatches axis=y', () => {
+  it('Mirror V dispatches axis=y for non-plant objects', () => {
     const { fixture, dispatched } = configure(['a'], sceneWithObject('a'));
     buttonByLabel(fixture, 'Mirror vertical')!.click();
     const cmd = dispatched()[0]! as ReturnType<typeof SceneActions.dispatchCommand>;
     if (cmd.command.kind !== 'MirrorObject') throw new Error('expected MirrorObject');
     expect(cmd.command.axis).toBe('y');
+  });
+
+  it('Mirror V button is DISABLED when a plant is selected (plants always grow up)', () => {
+    const base = defaultScene();
+    const plantScene = {
+      ...base,
+      layers: [
+        {
+          id: asLayerId('layer-plants'),
+          name: 'Plants',
+          opacity: 1,
+          visible: true,
+          locked: false,
+          objects: [
+            {
+              kind: 'plant' as const,
+              id: asObjectId('p1'),
+              ref: { catalog: 'core', id: 'plant.x', version: 1 },
+              growth: { ageWeeks: 4, vigor: 1 },
+              transform: {
+                position: { x: 100, y: 30, z: 60 },
+                rotation: { x: 0, y: 0, z: 0 },
+                scale: { x: 1, y: 1, z: 1 },
+                flipX: false,
+                flipY: false,
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const { fixture } = configure(['p1'], plantScene);
+    const btn = buttonByLabel(fixture, 'Mirror vertical');
+    expect(btn).not.toBeNull();
+    expect(btn!.disabled).toBe(true);
+  });
+
+  it('Mirror H button stays ENABLED when a plant is selected (horizontal mirror is fine)', () => {
+    const base = defaultScene();
+    const plantScene = {
+      ...base,
+      layers: [
+        {
+          id: asLayerId('layer-plants'),
+          name: 'Plants',
+          opacity: 1,
+          visible: true,
+          locked: false,
+          objects: [
+            {
+              kind: 'plant' as const,
+              id: asObjectId('p2'),
+              ref: { catalog: 'core', id: 'plant.x', version: 1 },
+              growth: { ageWeeks: 4, vigor: 1 },
+              transform: {
+                position: { x: 100, y: 30, z: 60 },
+                rotation: { x: 0, y: 0, z: 0 },
+                scale: { x: 1, y: 1, z: 1 },
+                flipX: false,
+                flipY: false,
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const { fixture } = configure(['p2'], plantScene);
+    const btn = buttonByLabel(fixture, 'Mirror horizontal');
+    expect(btn).not.toBeNull();
+    expect(btn!.disabled).toBe(false);
   });
 
   it('Delete dispatches RemoveObject + clearSelection', () => {

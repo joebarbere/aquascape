@@ -28,6 +28,12 @@ export {
 } from './lib/overlay-options.service';
 export { ViewportService } from './lib/viewport.service';
 export { ZoomControlComponent } from './lib/zoom-control.component';
+export { Orbit3DService } from './lib/orbit-3d.service';
+export { Orbit3DControlsComponent } from './lib/orbit-3d-controls.component';
+export {
+  ORBITAL_3D_CONTROLS,
+  type Orbital3DControls,
+} from './lib/orbital-3d-controls.token';
 export {
   WallBackgroundComponent,
   WALL_BACKGROUND_COLLAPSED_KEY,

@@ -1,10 +1,18 @@
 /**
- * .aqua document format — TypeScript schema (v1)
+ * .aqua document format — TypeScript schema (v2)
  *
  * This is the canonical, framework-free definition of an Aquascape layout
  * document. It lives in `libs/domain/document` and is the single source of
  * truth that the renderers, the editor, persistence, and migrations all
  * agree on.
+ *
+ * VERSION HISTORY
+ * ---------------
+ * v1 — baseline (Stage 1).
+ * v2 — added optional `Layer.zone` (`'foreground' | 'midground' | 'background'`).
+ *      Additive + optional; the v1 → v2 migration is a no-op identity that
+ *      only bumps `schemaVersion`. v1 documents in the wild keep loading
+ *      transparently and round-trip into v2 with no `zone` invented.
  *
  * DESIGN RULES
  * ------------
@@ -89,7 +97,7 @@ export interface CatalogRef {
 // Document root
 // ─────────────────────────────────────────────────────────────────────────
 
-export const CURRENT_SCHEMA_VERSION = 1 as const;
+export const CURRENT_SCHEMA_VERSION = 2 as const;
 
 export interface AquaDocument {
   /** Magic discriminator; always "aquascape". */
@@ -235,6 +243,17 @@ export interface Layer {
   locked: boolean;
   /** Objects within a layer, ordered back-to-front. */
   objects: SceneObject[];
+  /**
+   * Optional layout-zone hint added in schema v2. Influences Z placement in the
+   * 3D renderer (Stage 10): `'foreground'` parks the layer's objects near the
+   * front glass (low z), `'background'` near the back wall (high z), and
+   * `'midground'` in the middle band. The 2D renderer projects along −z so the
+   * hint is a no-op there; it survives as authoring metadata. Omitted means
+   * "no zone preference" — the renderer falls back to each object's own
+   * `transform.position.z`. Additive in v2: v1 documents load with `zone`
+   * absent on every layer and the migration does not invent values.
+   */
+  zone?: 'foreground' | 'midground' | 'background';
 }
 
 /** Discriminated union over object kinds. */

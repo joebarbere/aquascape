@@ -1917,6 +1917,63 @@ describe('Canvas2DRenderer.render (plants)', () => {
     expect(Math.max(...scalesAtMature)).toBeGreaterThan(Math.max(...scalesAtZero));
   });
 
+  it('single-specimen plant is base-anchored — the post-scale translate(0, 1) puts silhouette y=−1 at position.y', () => {
+    // The renderer's plant pass should:
+    //   1. translate(position.x, position.y)            ← move to anchor
+    //   2. scale(sx, sy) with sy > 0                    ← grow upward
+    //   3. translate(0, 1)                              ← anchor base
+    // Step 3 is the load-bearing fix: without it the silhouette CENTRE
+    // would land at position.y, so the silhouette base (y=-1) would
+    // dangle below position.y by `sy` world-mm — i.e. roots would float
+    // below the authored anchor.
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(sceneWithPlant({ ageWeeks: 12 }), upright, { catalog: fakeCatalog });
+    // Find the contiguous (translate, scale, translate) trio with a
+    // small positive sy and a [0, 1] post-scale anchor translate.
+    let baseAnchorOps = 0;
+    const ops = canvas.context.ops;
+    for (let i = 0; i + 2 < ops.length; i++) {
+      const a = ops[i]!;
+      const b = ops[i + 1]!;
+      const c = ops[i + 2]!;
+      if (
+        a.method === 'translate' &&
+        b.method === 'scale' &&
+        c.method === 'translate' &&
+        Math.abs(b.args[0] as number) > 1 &&
+        Math.abs(b.args[0] as number) < 200 && // per-instance scale (not world transform)
+        (b.args[1] as number) > 0 &&            // sy positive (growth up)
+        (c.args[0] as number) === 0 &&          // x anchor offset is 0
+        (c.args[1] as number) === 1             // y anchor offset is 1 (base)
+      ) {
+        baseAnchorOps++;
+      }
+    }
+    expect(baseAnchorOps).toBeGreaterThan(0);
+  });
+
+  it('plant growth extends ONLY UPWARD — sy is positive even when transform.flipY is true', () => {
+    // Plants always grow up from the substrate; flipY on a plant must be
+    // ignored at the render layer (the MirrorObject command also rejects
+    // axis='y' on plant kind). Confirm sy stays positive across renders
+    // where the document carries flipY: true (defence in depth for any
+    // legacy doc that smuggled flipY through).
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithPlant({ ageWeeks: 12 });
+    scene.layers[0]!.objects[0]!.transform.flipY = true;
+    r.render(scene, upright, { catalog: fakeCatalog });
+    const plantScales = canvas.context.ops
+      .filter((op) => op.method === 'scale')
+      .map((op) => [op.args[0] as number, op.args[1] as number])
+      .filter(([sx, sy]) => Math.abs(sx) > 1 && Math.abs(sx) < 200 && Math.abs(sy) > 1 && Math.abs(sy) < 200);
+    expect(plantScales.length).toBeGreaterThan(0);
+    expect(plantScales.every(([, sy]) => sy > 0)).toBe(true);
+  });
+
   it('honours layer.opacity by setting globalAlpha before painting plants', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
@@ -2070,7 +2127,11 @@ describe('Canvas2DRenderer.render (plants)', () => {
     expect(instanceScales.every(([sx]) => sx < 0)).toBe(true);
   });
 
-  it('Mirror V on a scatter plant flips the silhouette per instance (negative y-scale)', () => {
+  it('Mirror V on a scatter plant IS IGNORED — sy stays positive (plants always grow up)', () => {
+    // Plants never flip vertically. The MirrorObject command rejects
+    // axis='y' on plants, and the renderer doubles down: even if a legacy
+    // document carries `flipY: true` on a plant, sy stays positive so
+    // roots remain at the bottom.
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
@@ -2078,14 +2139,12 @@ describe('Canvas2DRenderer.render (plants)', () => {
     const scales = canvas.context.ops
       .filter((op) => op.method === 'scale')
       .map((op) => [op.args[0], op.args[1]] as [number, number]);
-    // The world-transform `ctx.scale(zoom, -zoom)` lands first with sx=1
-    // for the upright viewport. Filter to per-instance scales (|sx| ≥ 5)
-    // so the world transform doesn't drag the assertion's "every" past.
     const instanceScales = scales.filter(
       ([sx, sy]) => Math.abs(sx) >= 5 && Math.abs(sx) < 100 && Math.abs(sy) >= 5,
     );
     expect(instanceScales.length).toBeGreaterThan(0);
-    expect(instanceScales.every(([, sy]) => sy < 0)).toBe(true);
+    // Every per-instance sy must be POSITIVE despite flipY=true.
+    expect(instanceScales.every(([, sy]) => sy > 0)).toBe(true);
   });
 
   it('Mirror H rearranges instance positions for an asymmetric polygon (visible flip)', () => {

@@ -12,15 +12,16 @@ function tank(width = 600, height = 360, depth = 300): Tank {
 }
 
 describe('camera builder', () => {
-  it('produces a PerspectiveCamera framed in front of the tank', () => {
+  it('produces a PerspectiveCamera framed for a 3/4 view of the tank', () => {
     const cam = buildCamera(tank(600, 360, 300), 16 / 9);
     expect(cam).toBeInstanceOf(PerspectiveCamera);
-    // Sits at tank x centre.
-    expect(cam.position.x).toBeCloseTo(300, 5);
-    // Slightly above vertical centre (INITIAL_HEIGHT_FRACTION = 0.7).
-    expect(cam.position.y).toBeCloseTo(360 * 0.7, 5);
-    // Pulled back 2.5× depth along +Z.
-    expect(cam.position.z).toBeCloseTo(300 * 2.5, 5);
+    // 3/4 view: offset LEFT of tank centre (INITIAL_OFFSET_X_FRACTION = -0.4).
+    expect(cam.position.x).toBeCloseTo(300 + 600 * -0.4, 5);
+    // ABOVE the tank top (INITIAL_HEIGHT_FRACTION = 1.2 × tank.height).
+    expect(cam.position.y).toBeCloseTo(360 * 1.2, 5);
+    // IN FRONT of the tank along -Z (viewer side per the `+z = back`
+    // document convention).
+    expect(cam.position.z).toBeCloseTo(-300 * 2.2, 5);
   });
 
   it('respects supplied aspect ratio', () => {

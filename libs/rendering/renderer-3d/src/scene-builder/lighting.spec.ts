@@ -12,7 +12,7 @@ function tank(width = 600, height = 360, depth = 300): Tank {
 }
 
 describe('lighting builder', () => {
-  it('produces an ambient + directional key light', () => {
+  it('produces an ambient + hemisphere + directional key light', () => {
     const rig = buildLighting(tank());
     const lights = rig.children;
     const ambient = lights.find((l) => l instanceof AmbientLight) as AmbientLight | undefined;
@@ -25,15 +25,16 @@ describe('lighting builder', () => {
     expect(directional?.intensity).toBeGreaterThan(0);
   });
 
-  it('places the key light front-top-right of the tank', () => {
+  it('places the key light in FRONT of the tank, top-right (negative z so the camera-facing faces get the strongest light)', () => {
     const rig = buildLighting(tank(600, 360, 300));
     const directional = rig.children.find(
       (l) => l instanceof DirectionalLight,
     ) as DirectionalLight;
-    // (0.7w, 1.8h, 1.2d).
+    // (0.7w, 1.8h, -1.2d). Was +1.2d — that lit the back faces only,
+    // a compounding cause of the "dark 3D view" symptom.
     expect(directional.position.x).toBeCloseTo(600 * 0.7, 5);
     expect(directional.position.y).toBeCloseTo(360 * 1.8, 5);
-    expect(directional.position.z).toBeCloseTo(300 * 1.2, 5);
+    expect(directional.position.z).toBeCloseTo(-300 * 1.2, 5);
   });
 
   it('targets the key light at the tank centre', () => {
