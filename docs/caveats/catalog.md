@@ -1,0 +1,9 @@
+# Catalog caveats
+
+**Load this when:** touching `libs/domain/catalog/` — adding entry kinds, schema branches, or authoring JSON manifests.
+
+- **Invalid entries are surfaced, never silently dropped** (Plan §3). Duplicate `(catalog, id)` pairs become warnings, first-seen wins.
+- **No fabricated tank presets.** `tank-presets.ts` documents every source. The four UNS sizes (9S, 45F, 75L, 120L) that don't exist in any verifiable source are **explicitly skipped, not invented** — same rule for the ADA Mini-S US/EU discrepancy (we follow ADA-NA spec) and the "5 gal cube" vendor variance.
+- **Catalog growth is data-only.** Drop new JSON manifests into `libs/domain/catalog/src/data/<kind>/`, extend `core-catalog.ts` imports. The loader picks them up at module-import time. The schema's `oneOf` makes adding new `kind`s additive.
+- **Livestock catalog fields are advisory, not enforceable.** `temperatureRange.minC < maxC` (and the equivalent for `pHRange`) is documented in the schema's `description` but the JSON-Schema spec can't express cross-field comparisons declaratively — the manifest authors are trusted. Same pattern other catalog kinds use ("schema is shape, semantics are advisory"). `bioloadClass` is a coarse three-bucket classifier intended as input to F7.2's stocking rules — not a quantitative gallons/fish formula. Don't fabricate species data: pick conservative numbers from well-known hobbyist sources (SeriouslyFish, manufacturer sheets) and document the conservative choice in the entry's `description` field (NOT in `tags`).
+- **Schema edits require validator regen.** `pnpm precompile:validators` regenerates `libs/domain/catalog/src/validator.generated.cjs` (committed). CI fails on a schema edit without regen via `git diff --exit-code` of the generated file.
