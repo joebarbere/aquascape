@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-**Stages 0–7 complete. Next:** Stage 10 — 3D renderer (Three.js / WebGL `renderer-3d` lib that drops in over the existing `SceneRenderer` interface and consumes the same canonical 3D coordinates already stored in `.aqua` documents). Stages 8 (community gallery) + 9 (AI render) are still planned but lower priority — the architectural payoff of "one scene model, two renderers" is the bet the plan rides on.
+**Stages 0–7 + Stage 10 v1 complete.** Stage 10 v1: Three.js `renderer-3d` lib implementing the existing `SceneRenderer` interface (read-only / simulation-only — `hitTest` returns null in 3D, no selection or editing); `ViewModeService` + toolbar `ViewToggleComponent` (segmented 2D | 3D pill, Cmd/Ctrl+Shift+3 keyboard shortcut); `apps/web` hosts two stacked `<canvas>` elements (one per context type — a single canvas can only have one context for its lifetime) with a renderer-swap effect that disposes the prior renderer + attaches the now-active one on mode change. **Next:** Stage 10 follow-ups (dynamic lighting / day-night cycle, water simulation, animated plants + livestock sprites with composited behaviors) or Stages 8 (community gallery) + 9 (AI render) if other priorities surface.
 
 `README.md` carries the long-form story of what shipped; this file only mentions the *next* concrete thing.
 
@@ -81,6 +81,7 @@ Detailed gotchas live in [`docs/caveats/`](docs/caveats/). Load the file(s) for 
 | [`docs/caveats/scene-model.md`](docs/caveats/scene-model.md) | Adding `Command`s, scene/layer/object mutations, undo/redo, the lock-guard policy. |
 | [`docs/caveats/geometry.md`](docs/caveats/geometry.md) | Pure geometry math — transform composition, Catmull-Rom sampling, seeded hashing. |
 | [`docs/caveats/renderer-2d.md`](docs/caveats/renderer-2d.md) | `libs/rendering/renderer-2d/` — paint order, hit-test, selection handles, view-only overlay slots. |
+| [`docs/caveats/renderer-3d.md`](docs/caveats/renderer-3d.md) | `libs/rendering/renderer-3d/` (Stage 10) — Three.js scene builders, OrbitControls, dispose discipline, the 2D ↔ 3D toggle + canvas pair. |
 | [`docs/caveats/growth-sim.md`](docs/caveats/growth-sim.md) | `libs/domain/growth-sim/` — plant growth curve, scatter PRNG. |
 | [`docs/caveats/state-ngrx.md`](docs/caveats/state-ngrx.md) | `libs/state/` — actions, effects, selectors, autosave, recovery, `provideMockStore` testing. |
 | [`docs/caveats/platform.md`](docs/caveats/platform.md) | `libs/platform/*`, IPC contract, capability detection, dev-server race. |

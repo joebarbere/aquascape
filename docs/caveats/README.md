@@ -27,6 +27,7 @@ adds a view-only overlay) need multiple files — load all of them.
 | [`scene-model.md`](scene-model.md) | Adding `Command`s, scene/layer/object mutations, undo/redo, the lock-guard policy. |
 | [`geometry.md`](geometry.md) | Pure geometry math — transform composition, Catmull-Rom sampling, seeded hashing. |
 | [`renderer-2d.md`](renderer-2d.md) | `libs/rendering/renderer-2d/` — paint order, hit-test, selection handles, view-only overlay integration. |
+| [`renderer-3d.md`](renderer-3d.md) | `libs/rendering/renderer-3d/` (Stage 10) — Three.js scene builders, OrbitControls, dispose discipline, the 2D ↔ 3D toggle + canvas pair. |
 | [`growth-sim.md`](growth-sim.md) | `libs/domain/growth-sim/` — plant growth curve, scatter PRNG. |
 | [`state-ngrx.md`](state-ngrx.md) | `libs/state/` — actions, effects, selectors, autosave, recovery, `provideMockStore` testing. |
 | [`platform.md`](platform.md) | `libs/platform/*` or `apps/desktop/` — `platform-api` services, IPC contract, capability detection, dev-server race. |

@@ -38,6 +38,7 @@ import { Store } from '@ngrx/store';
 import { ExportDialogComponent } from './export-dialog.component';
 import { TemplateBrowserComponent, type TemplateInstantiateEvent } from './template-browser.component';
 import { ThemeToggleComponent } from './theme-toggle.component';
+import { ViewToggleComponent } from './view-toggle.component';
 
 @Component({
   selector: 'aquascape-editor-shell',
@@ -48,6 +49,7 @@ import { ThemeToggleComponent } from './theme-toggle.component';
     ExportDialogComponent,
     TemplateBrowserComponent,
     ThemeToggleComponent,
+    ViewToggleComponent,
   ],
   template: `
     <header class="editor-shell" role="banner">
@@ -115,6 +117,11 @@ import { ThemeToggleComponent } from './theme-toggle.component';
         >
           Export
         </button>
+
+        <span class="divider" aria-hidden="true"></span>
+
+        <!-- Stage 10 F10.2: 2D ↔ 3D view-mode segmented control. -->
+        <aquascape-view-toggle></aquascape-view-toggle>
 
         <span class="divider" aria-hidden="true"></span>
 

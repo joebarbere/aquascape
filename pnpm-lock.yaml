@@ -11,9 +11,15 @@ importers:
       '@angular/service-worker':
         specifier: ^18
         version: 18.2.14(@angular/common@18.2.14(@angular/core@18.2.14(rxjs@7.8.2)(zone.js@0.14.10))(rxjs@7.8.2))(@angular/core@18.2.14(rxjs@7.8.2)(zone.js@0.14.10))
+      '@types/three':
+        specifier: ^0.184.1
+        version: 0.184.1
       fflate:
         specifier: ^0.8.3
         version: 0.8.3
+      three:
+        specifier: ^0.184.0
+        version: 0.184.0
       tslib:
         specifier: ^2.6.3
         version: 2.8.1
@@ -202,6 +208,8 @@ importers:
 
   libs/domain/scene-model: {}
 
+  libs/domain/stocking: {}
+
   libs/features/editor-shell: {}
 
   libs/features/export: {}
@@ -209,6 +217,8 @@ importers:
   libs/features/hardscape-tool: {}
 
   libs/features/layers-panel: {}
+
+  libs/features/livestock-equipment: {}
 
   libs/features/planting-tool: {}
 
@@ -1091,6 +1101,9 @@ packages:
   '@develar/schema-utils@2.6.5':
     resolution: {integrity: sha512-0cp4PsWQ/9avqTVMCtZ+GirikIA36ikvjtHweU4/j8yLtgObI0+JUPhYFScgwlteveGB1rt3Cm8UhN04XayDig==}
     engines: {node: '>= 8.9.0'}
+
+  '@dimforge/rapier3d-compat@0.12.0':
+    resolution: {integrity: sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow==}
 
   '@discoveryjs/json-ext@0.6.1':
     resolution: {integrity: sha512-boghen8F0Q8D+0/Q1/1r6DUEieUJ8w2a1gIknExMSHBsJFOr2+0KUfHiVYBvucPwl3+RU5PFBK833FjFCh3BhA==}
@@ -2886,6 +2899,9 @@ packages:
   '@tsconfig/node16@1.0.4':
     resolution: {integrity: sha512-vxhUy4J8lyeyinH7Azl1pdd43GJhZH/tP2weN8TntQblOY+A0XbT8DJk1/oCPuOOyg/Ja757rG0CgHcWC8OfMA==}
 
+  '@tweenjs/tween.js@23.1.3':
+    resolution: {integrity: sha512-vJmvvwFxYuGnF2axRtPYocag6Clbb5YS7kLL+SO/TeVFzHqDIWrNKYtcsPMibjDx9O+bu+psAy9NKfWklassUA==}
+
   '@tybys/wasm-util@0.10.2':
     resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
 
@@ -3033,11 +3049,20 @@ packages:
   '@types/stack-utils@2.0.3':
     resolution: {integrity: sha512-9aEbYZ3TbYMznPdcdr3SmIrLXwC/AKZXQeCf9Pgao5CKb8CyHuEX5jzWPTkvregvhRJHcpRO6BFoGW9ycaOkYw==}
 
+  '@types/stats.js@0.17.4':
+    resolution: {integrity: sha512-jIBvWWShCvlBqBNIZt0KAshWpvSjhkwkEu4ZUcASoAvhmrgAUI2t1dXrjSL4xXVLB4FznPrIsX3nKXFl/Dt4vA==}
+
+  '@types/three@0.184.1':
+    resolution: {integrity: sha512-6q4VdiqVsrTRqmk62/BnlcAvIrnDM0zf2ZDVKI5kZiniWrSaOHaQzmbp+BNzoggc/8tgW412pL//wZIxu2PPTA==}
+
   '@types/tough-cookie@4.0.5':
     resolution: {integrity: sha512-/Ad8+nIOV7Rl++6f1BdKxFSMgmoqEoYbHRpPcx3JEfv8VRsQe9Z4mCXeJBzxs7mbHY/XOZZuXlRNfhpVPbs6ZA==}
 
   '@types/verror@1.10.11':
     resolution: {integrity: sha512-RlDm9K7+o5stv0Co8i8ZRGxDbrTxhJtgjqjFyVh/tXQyl/rYtTKlnTvZ88oSTeYREWurwx20Js4kTuKCsFkUtg==}
+
+  '@types/webxr@0.5.24':
+    resolution: {integrity: sha512-h8fgEd/DpoS9CBrjEQXR+dIDraopAEfu4wYVNY2tEPwk60stPWhvZMf4Foo5FakuQ7HFZoa8WceaWFervK2Ovg==}
 
   '@types/wrap-ansi@3.0.0':
     resolution: {integrity: sha512-ltIpx+kM7g/MLRZfkbL7EsCEjfzCcScLpkg37eXEtx5kmrAKBkTJwd1GIAjDSL8wTpM6Hzn5YO4pSb91BEwu1g==}
@@ -5679,6 +5704,9 @@ packages:
     resolution: {integrity: sha512-8q7VEgMJW4J8tcfVPy8g09NcQwZdbwFEqhe/WZkoIzjn/3TGDwtOCYtXGxA3O8tPzpczCCDgv+P2P5y00ZJOOg==}
     engines: {node: '>= 8'}
 
+  meshoptimizer@1.1.1:
+    resolution: {integrity: sha512-oRFNWJRDA/WTrVj7NWvqa5HqE1t9MYDj2VaWirQCzCCrAd2GHrqR/sQezCxiWATPNlKTcRaPRHPJwIRoPBAp5g==}
+
   methods@1.1.2:
     resolution: {integrity: sha512-iclAHeNqNm68zFtnZ0e+1L2yUIdvzNoauKU4WBA3VvH/vPFieF7qfRlwUZU+DA9P9bPXIS90ulxoUoCH23sV2w==}
     engines: {node: '>= 0.6'}
@@ -7203,6 +7231,9 @@ packages:
     peerDependencies:
       tslib: ^2
 
+  three@0.184.0:
+    resolution: {integrity: sha512-wtTRjG92pM5eUg/KuUnHsqSAlPM296brTOcLgMRqEeylYTh/CdtvKUvCyyCQTzFuStieWxvZb8mVTMvdPyUpxg==}
+
   thunky@1.1.0:
     resolution: {integrity: sha512-eHY7nBftgThBqOyHGVN+l8gF0BucP09fMo0oO/Lb0w1OF80dJv+lDVpXG60WMQvkcxAkNybKsrEIE3ZtKGmPrA==}
 
@@ -7904,7 +7935,7 @@ snapshots:
       watchpack: 2.4.1
       webpack: 5.94.0(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.23.0)(postcss@8.4.41)
       webpack-dev-middleware: 7.4.2(tslib@2.6.3)(webpack@5.94.0(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.23.0)(postcss@8.4.41))
-      webpack-dev-server: 5.2.2(tslib@2.8.1)(webpack@5.107.1(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.28.0)(postcss@8.5.15))
+      webpack-dev-server: 5.2.2(tslib@2.8.1)(webpack@5.88.0(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.28.0)(postcss@8.5.15))
       webpack-merge: 6.0.1
       webpack-subresource-integrity: 5.1.0(webpack@5.94.0(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.23.0)(postcss@8.4.41))
     optionalDependencies:
@@ -7942,7 +7973,7 @@ snapshots:
       '@angular-devkit/architect': 0.1802.21(chokidar@3.6.0)
       rxjs: 7.8.1
       webpack: 5.94.0(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.23.0)(postcss@8.4.41)
-      webpack-dev-server: 5.2.2(tslib@2.8.1)(webpack@5.107.1(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.28.0)(postcss@8.5.15))
+      webpack-dev-server: 5.2.2(tslib@2.8.1)(webpack@5.88.0(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.28.0)(postcss@8.5.15))
     transitivePeerDependencies:
       - chokidar
 
@@ -9500,6 +9531,8 @@ snapshots:
     dependencies:
       ajv: 6.15.0
       ajv-keywords: 3.5.2(ajv@6.15.0)
+
+  '@dimforge/rapier3d-compat@0.12.0': {}
 
   '@discoveryjs/json-ext@0.6.1': {}
 
@@ -11509,6 +11542,8 @@ snapshots:
 
   '@tsconfig/node16@1.0.4': {}
 
+  '@tweenjs/tween.js@23.1.3': {}
+
   '@tybys/wasm-util@0.10.2':
     dependencies:
       tslib: 2.8.1
@@ -11704,10 +11739,23 @@ snapshots:
 
   '@types/stack-utils@2.0.3': {}
 
+  '@types/stats.js@0.17.4': {}
+
+  '@types/three@0.184.1':
+    dependencies:
+      '@dimforge/rapier3d-compat': 0.12.0
+      '@tweenjs/tween.js': 23.1.3
+      '@types/stats.js': 0.17.4
+      '@types/webxr': 0.5.24
+      fflate: 0.8.3
+      meshoptimizer: 1.1.1
+
   '@types/tough-cookie@4.0.5': {}
 
   '@types/verror@1.10.11':
     optional: true
+
+  '@types/webxr@0.5.24': {}
 
   '@types/wrap-ansi@3.0.0': {}
 
@@ -15056,6 +15104,8 @@ snapshots:
 
   merge2@1.4.1: {}
 
+  meshoptimizer@1.1.1: {}
+
   methods@1.1.2: {}
 
   micromatch@4.0.8:
@@ -16673,6 +16723,8 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
+  three@0.184.0: {}
+
   thunky@1.1.0: {}
 
   tinyglobby@0.2.16:
@@ -17013,7 +17065,7 @@ snapshots:
     transitivePeerDependencies:
       - tslib
 
-  webpack-dev-middleware@7.4.2(tslib@2.8.1)(webpack@5.107.1(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.28.0)(postcss@8.5.15)):
+  webpack-dev-middleware@7.4.2(tslib@2.8.1)(webpack@5.88.0(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.28.0)(postcss@8.5.15)):
     dependencies:
       colorette: 2.0.20
       memfs: 4.57.2(tslib@2.8.1)
@@ -17022,7 +17074,7 @@ snapshots:
       range-parser: 1.2.1
       schema-utils: 4.3.3
     optionalDependencies:
-      webpack: 5.107.1(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.28.0)(postcss@8.5.15)
+      webpack: 5.88.0(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.28.0)(postcss@8.5.15)
     transitivePeerDependencies:
       - tslib
 
@@ -17039,7 +17091,7 @@ snapshots:
     transitivePeerDependencies:
       - tslib
 
-  webpack-dev-server@5.2.2(tslib@2.8.1)(webpack@5.107.1(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.28.0)(postcss@8.5.15)):
+  webpack-dev-server@5.2.2(tslib@2.8.1)(webpack@5.88.0(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.28.0)(postcss@8.5.15)):
     dependencies:
       '@types/bonjour': 3.5.13
       '@types/connect-history-api-fallback': 1.5.4
@@ -17067,10 +17119,10 @@ snapshots:
       serve-index: 1.9.2
       sockjs: 0.3.24
       spdy: 4.0.2
-      webpack-dev-middleware: 7.4.2(tslib@2.8.1)(webpack@5.107.1(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.28.0)(postcss@8.5.15))
+      webpack-dev-middleware: 7.4.2(tslib@2.8.1)(webpack@5.88.0(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.28.0)(postcss@8.5.15))
       ws: 8.21.0
     optionalDependencies:
-      webpack: 5.107.1(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.28.0)(postcss@8.5.15)
+      webpack: 5.88.0(@swc/core@1.5.29(@swc/helpers@0.5.21))(esbuild@0.28.0)(postcss@8.5.15)
     transitivePeerDependencies:
       - bufferutil
       - debug

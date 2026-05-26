@@ -86,6 +86,12 @@ export {
   STORAGE_KEY_PERSONAL_TEMPLATES,
 } from './lib/templates.service';
 export { ExportDialogComponent } from './lib/export-dialog.component';
+export { ViewToggleComponent } from './lib/view-toggle.component';
+export {
+  ViewModeService,
+  STORAGE_KEY_VIEW_MODE,
+  type ViewMode,
+} from './lib/view-mode.service';
 export {
   BackdropPanelComponent,
   BACKDROP_PANEL_COLLAPSED_KEY,

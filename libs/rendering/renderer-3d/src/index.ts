@@ -1,4 +1,17 @@
 // Public API for @aquascape/rendering/renderer-3d.
 //
-// Three.js WebGL implementation of SceneRenderer. Plan Stage 10 F10.1.
-export {};
+// Three.js WebGL implementation of `SceneRenderer`. Plan Stage 10 F10.1.
+//
+// The 3D renderer is a READ-ONLY viewer in v1: hitTest returns null, no
+// selection handles, no participation in the editor's drag/marquee/inspector
+// pipeline. The 2D ↔ 3D toolbar toggle that swaps renderers is wired in
+// `apps/web` separately; this lib supplies the renderer implementation only.
+//
+// DEPENDENCY BUDGET
+// -----------------
+// `domain/scene-model`, `domain/geometry`, `domain/catalog`, `domain/growth-
+// sim`, `rendering/renderer-api`. Plus Three.js. NO Angular, NgRx, RxJS,
+// Electron, platform-*, features-*, state, ui. The lib is framework-free so
+// a host (web canvas, headless export pipeline) can drop it in.
+
+export { Three3DRenderer } from './three-3d-renderer';

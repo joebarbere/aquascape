@@ -49,12 +49,13 @@ import {
 
 import {
   OverlayOptionsService,
+  ViewModeService,
   ViewportService,
   WallBackgroundService,
 } from '@aquascape/features/editor-shell';
 
 import { AppComponent } from './app.component';
-import { SCENE_RENDERER } from './renderer.token';
+import { SCENE_RENDERER_2D, SCENE_RENDERER_3D } from './renderer.token';
 
 interface MockResizeObserverClass {
   lastInstance: { trigger(): void } | null;
@@ -67,12 +68,17 @@ class MockSceneRenderer implements SceneRenderer {
   readonly dispose = jest.fn<void, []>();
 }
 
-function configure(mockRenderer: MockSceneRenderer, initialScene = defaultScene()) {
+function configure(
+  mockRenderer: MockSceneRenderer,
+  initialScene = defaultScene(),
+  mockRenderer3d: MockSceneRenderer = new MockSceneRenderer(),
+) {
   const platform = createWebPlatform();
   TestBed.configureTestingModule({
     imports: [AppComponent],
     providers: [
-      { provide: SCENE_RENDERER, useValue: mockRenderer },
+      { provide: SCENE_RENDERER_2D, useValue: mockRenderer },
+      { provide: SCENE_RENDERER_3D, useValue: mockRenderer3d },
       { provide: FILE_SERVICE, useValue: platform.fileService },
       { provide: DIALOG_SERVICE, useValue: platform.dialogService },
       { provide: STORAGE_SERVICE, useValue: platform.storageService },
@@ -117,8 +123,15 @@ describe('AppComponent', () => {
 
     const surface = renderer.attach.mock.calls[0]?.[0];
     expect(surface).toBeDefined();
+    // Stage 10 F10.3 — apps/web ships two stacked canvases. The 2D
+    // renderer paints into the FIRST one (the [aria-label] suffix is
+    // the load-bearing identifier; querySelector('canvas') would also
+    // pick the 2D canvas since it's first in the template, but the
+    // attribute selector is more explicit and survives template churn).
     expect(surface!.canvas).toBe(
-      (fixture.nativeElement as HTMLElement).querySelector('canvas') as HTMLCanvasElement,
+      (fixture.nativeElement as HTMLElement).querySelector(
+        'canvas[aria-label="Aquascape design canvas (2D)"]',
+      ) as HTMLCanvasElement,
     );
     expect(surface!.devicePixelRatio).toBeGreaterThan(0);
 
@@ -149,13 +162,17 @@ describe('AppComponent', () => {
 
   it('disposes the renderer on component destroy', () => {
     const renderer = new MockSceneRenderer();
-    configure(renderer);
+    const renderer3d = new MockSceneRenderer();
+    configure(renderer, defaultScene(), renderer3d);
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
 
     expect(renderer.dispose).not.toHaveBeenCalled();
     fixture.destroy();
     expect(renderer.dispose).toHaveBeenCalled();
+    // The 3D renderer was never attached (default view mode is '2d'),
+    // so its dispose isn't called on the destroy path either.
+    expect(renderer3d.dispose).not.toHaveBeenCalled();
   });
 
   it('re-renders with new tank dimensions when the scene updates', () => {
@@ -634,5 +651,125 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     fixture.detectChanges();
 
     expect(viewport.userZoomMult()).toBeNull();
+  });
+});
+
+// ─── Stage 10 F10.3 — 2D ↔ 3D renderer swap ─────────────────────────────
+
+describe('AppComponent — 2D / 3D view mode', () => {
+  function selectCanvas(
+    fixture: ReturnType<typeof TestBed.createComponent<AppComponent>>,
+    label: '2D' | '3D',
+  ): HTMLCanvasElement | null {
+    return fixture.nativeElement.querySelector(
+      `canvas[aria-label="Aquascape design canvas (${label})"]`,
+    ) as HTMLCanvasElement | null;
+  }
+
+  it('renders both 2D and 3D canvases regardless of mode (only [hidden] toggles)', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    expect(selectCanvas(fixture, '2D')).not.toBeNull();
+    expect(selectCanvas(fixture, '3D')).not.toBeNull();
+  });
+
+  it('defaults to 2D mode — 2D canvas visible, 3D canvas hidden', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const c2 = selectCanvas(fixture, '2D')!;
+    const c3 = selectCanvas(fixture, '3D')!;
+    expect(c2.hidden).toBe(false);
+    expect(c3.hidden).toBe(true);
+  });
+
+  it('flipping mode to 3D hides the 2D canvas and reveals the 3D canvas', () => {
+    const renderer = new MockSceneRenderer();
+    const renderer3d = new MockSceneRenderer();
+    configure(renderer, defaultScene(), renderer3d);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const vm = TestBed.inject(ViewModeService);
+    vm.setMode('3d');
+    fixture.detectChanges();
+
+    expect(selectCanvas(fixture, '2D')!.hidden).toBe(true);
+    expect(selectCanvas(fixture, '3D')!.hidden).toBe(false);
+  });
+
+  it('flipping to 3D attaches the 3D renderer and renders into the 3D canvas', () => {
+    const renderer = new MockSceneRenderer();
+    const renderer3d = new MockSceneRenderer();
+    configure(renderer, defaultScene(), renderer3d);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    expect(renderer3d.attach).not.toHaveBeenCalled();
+
+    const vm = TestBed.inject(ViewModeService);
+    vm.setMode('3d');
+    fixture.detectChanges();
+
+    expect(renderer3d.attach).toHaveBeenCalled();
+    expect(renderer3d.render).toHaveBeenCalled();
+    const surface = renderer3d.attach.mock.calls.at(-1)?.[0];
+    expect(surface).toBeDefined();
+    expect(surface!.canvas).toBe(selectCanvas(fixture, '3D'));
+  });
+
+  it('flipping to 3D disposes the previously-active 2D renderer', () => {
+    const renderer = new MockSceneRenderer();
+    const renderer3d = new MockSceneRenderer();
+    configure(renderer, defaultScene(), renderer3d);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    expect(renderer.dispose).not.toHaveBeenCalled();
+
+    const vm = TestBed.inject(ViewModeService);
+    vm.setMode('3d');
+    fixture.detectChanges();
+
+    expect(renderer.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('the selection inspector is NOT rendered in 3D mode', () => {
+    const renderer = new MockSceneRenderer();
+    const renderer3d = new MockSceneRenderer();
+    configure(renderer, defaultScene(), renderer3d);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('aquascape-selection-inspector')).not.toBeNull();
+
+    const vm = TestBed.inject(ViewModeService);
+    vm.setMode('3d');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('aquascape-selection-inspector')).toBeNull();
+  });
+
+  it('component destroy disposes BOTH renderers if both were attached during the session', () => {
+    const renderer = new MockSceneRenderer();
+    const renderer3d = new MockSceneRenderer();
+    configure(renderer, defaultScene(), renderer3d);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const vm = TestBed.inject(ViewModeService);
+    vm.setMode('3d');
+    fixture.detectChanges();
+    // The 2D renderer was disposed on the swap; only the 3D renderer is
+    // currently attached.
+    expect(renderer.dispose).toHaveBeenCalledTimes(1);
+    expect(renderer3d.dispose).not.toHaveBeenCalled();
+
+    fixture.destroy();
+    expect(renderer3d.dispose).toHaveBeenCalledTimes(1);
   });
 });

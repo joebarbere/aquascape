@@ -24,7 +24,9 @@
   },
   "dependencies": {
     "@angular/service-worker": "^18",
+    "@types/three": "^0.184.1",
     "fflate": "^0.8.3",
+    "three": "^0.184.0",
     "tslib": "^2.6.3"
   },
   "devDependencies": {

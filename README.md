@@ -9,7 +9,7 @@
 [![main CI](https://github.com/joebarbere/aquascape/actions/workflows/main.yml/badge.svg)](https://github.com/joebarbere/aquascape/actions/workflows/main.yml)
 [![PR CI](https://github.com/joebarbere/aquascape/actions/workflows/pr.yml/badge.svg)](https://github.com/joebarbere/aquascape/actions/workflows/pr.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
-[![Status: Stages 0–7 complete](https://img.shields.io/badge/status-stages%200--7%20complete-brightgreen.svg)](#status--roadmap)
+[![Status: Stages 0–7 + 10 v1 complete](https://img.shields.io/badge/status-stages%200--7%20%2B%2010%20v1%20complete-brightgreen.svg)](#status--roadmap)
 [![Platform: Web + Electron](https://img.shields.io/badge/platform-web%20%2B%20electron-informational.svg)](#platforms)
 
 </div>
@@ -27,7 +27,7 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 - 🌱 **Deterministic plant-growth simulation** — scrub a time slider to preview weeks 0–52 of growth
 - 📸 **Composite onto a real tank photo** — design against the actual shelf the tank will live on
 - 🤖 **Local + hosted AI render** behind one interface — coming in Stage 9
-- 🧊 **3D renderer** that consumes the same document — coming in Stage 10
+- 🧊 **3D renderer** that consumes the same document — shipped in Stage 10 v1 (read-only); animated water + plants + fish are follow-ups
 - 💾 **Lossless `.aqua` document format** with a locked v1 schema + migration chain
 - 🆓 **Truly open-source**, MIT-licensed, no telemetry, no cloud lock-in
 
@@ -95,6 +95,15 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 - **Wall background** — a configurable surface behind the tank for room-context visualisation
 - **Geometric-A brand mark** rendered at every dock / favicon / install size
 
+### 🧊 3D view (read-only)
+
+- **One-click toggle** between 2D and 3D in the editor toolbar — segmented `2D | 3D` control, or `Cmd/Ctrl+Shift+3` keyboard shortcut
+- Three.js / WebGL renderer reads the **same** `.aqua` document — every change you make in 2D shows up immediately in 3D
+- **Orbit camera controls** — drag to rotate around the tank, wheel to zoom, two-finger drag to pan
+- Glass tank with frame styling (rimless / framed / braced), substrate extruded from your profile, hardscape + plants rendered as 3D silhouettes with vigour-scaled growth
+- Ambient + directional lighting; the time slider works in 3D too (scrub plant growth over weeks)
+- **Read-only for v1** — editing happens in 2D; flip to 3D to visualise. Future polish: animated water surface, dynamic lighting / day-night cycle, swaying plants, fish behaviours
+
 ### 📦 Templates
 
 - Four built-in starter templates — **Iwagumi** / **Dutch** / **Jungle** / **Beginner**
@@ -149,7 +158,8 @@ The 11-stage roadmap lives in [`aquascape-development-plan.md`](./aquascape-deve
 | 7 | Livestock & equipment + stocking guidance + setup sheet | ✅ |
 | 8 | Community gallery (browse + remix shared layouts) | ⏳ Planned |
 | 9 | AI photorealistic render (local + hosted) | ⏳ Planned |
-| 10 | 3D renderer (Three.js / WebGL) | ⏳ Next |
+| 10 v1 | 3D renderer (Three.js / WebGL — read-only) | ✅ |
+| 10 v2+ | Animated water, dynamic lighting, plant sway, fish behaviours | ⏳ Next |
 
 ---
 
@@ -184,8 +194,8 @@ libs/
     stocking/      Stocking-guidance rules engine (F7.2)
   rendering/
     renderer-api/  The `SceneRenderer` interface contract
-    renderer-2d/   Canvas2D implementation
-    renderer-3d/   Three.js placeholder (Stage 10)
+    renderer-2d/   Canvas2D implementation (editing surface)
+    renderer-3d/   Three.js implementation (read-only 3D view, Stage 10 v1)
   features/        Angular feature libs (one per tool / panel)
   platform/        platform-api interface + platform-web + platform-electron
   state/           NgRx scene / document / selection slices
@@ -200,7 +210,7 @@ docs/
 <details>
 <summary><strong>Detailed implementation notes per lib</strong> (click to expand)</summary>
 
-The libs below all ship today. Empty placeholders: `libs/rendering/renderer-3d/` (Stage 10), `libs/ui/`, `apps/web-e2e/`, `apps/desktop-e2e/`.
+The libs below all ship today. Empty placeholders: `libs/ui/`, `apps/web-e2e/`, `apps/desktop-e2e/`.
 
 #### Domain (framework-free pure logic)
 
@@ -214,6 +224,7 @@ The libs below all ship today. Empty placeholders: `libs/rendering/renderer-3d/`
 #### Rendering
 
 - `libs/rendering/renderer-api/` + `libs/rendering/renderer-2d/` — `SceneRenderer` interface + `Canvas2DRenderer`. Paint order: **backdrop photo** → **wall background** → tank background → grid → tank outline → **substrate** → water tint → frame overlay → **hardscape silhouettes** → **plants** → **composition overlays** → **snap alignment guides** → **selection handles**. `hitTest` is fully wired with handle-beats-body when a selection is supplied. F5.3 overlays accept an `OverlayOptions` parameter on `render()` only (not `hitTest` — they are non-interactive); the call is a true no-op when omitted or when every flag is false. Idempotent, DPR-aware, listener-clean on dispose.
+- `libs/rendering/renderer-3d/` (Stage 10 v1) — `Three3DRenderer` implements the same `SceneRenderer` interface against Three.js + WebGL. Per-element scene builders (`tank-mesh.ts` for the glass box + frame styling, `substrate-mesh.ts` extruding the profile, `hardscape-mesh.ts` + `plant-mesh.ts` extruding the catalog silhouettes, `lighting.ts` for ambient + directional, `camera.ts` for the framed perspective view). OrbitControls binds to the canvas for orbit / zoom / pan. `hitTest` returns `null` (read-only in v1 — no selection or editing in 3D). `Viewport` is 2D-only and the 3D renderer ignores it; OrbitControls is the camera source of truth. Idempotent + leak-safe — the rebuild path disposes prior geometries + materials before swapping.
 
 #### Platform
 

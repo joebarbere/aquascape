@@ -31,6 +31,14 @@ const moduleNameMapper: Record<string, string | string[]> = pathsToModuleNameMap
   { prefix: '<rootDir>/../../' },
 ) as Record<string, string | string[]>;
 
+// Stage 10 F10.3 — redirect Three.js's ESM-only OrbitControls addon to the
+// CJS stub shipped in `renderer-3d/src/__mocks__/`. The renderer-3d's own
+// jest.config.ts wires the same mapping; we duplicate here because apps/web
+// now imports `Three3DRenderer` via the `SCENE_RENDERER_3D` token, and that
+// import path runs OrbitControls' module-level code under jest.
+moduleNameMapper['^three/examples/jsm/controls/OrbitControls$'] =
+  '<rootDir>/../../libs/rendering/renderer-3d/src/__mocks__/orbit-controls-stub.ts';
+
 const config: Config = {
   displayName: 'web',
   preset: 'jest-preset-angular',

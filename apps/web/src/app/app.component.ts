@@ -83,6 +83,7 @@ import {
   SnapSettingsComponent,
   StatusBarComponent,
   TimeSliderComponent,
+  ViewModeService,
   ViewportService,
   WallBackgroundComponent,
   WallBackgroundService,
@@ -134,7 +135,7 @@ import { Store } from '@ngrx/store';
 
 import { defaultViewport } from './default-viewport';
 import { applyMoveDrag, applyRotateDrag, applyScaleDrag } from './drag-math';
-import { SCENE_RENDERER } from './renderer.token';
+import { SCENE_RENDERER_2D, SCENE_RENDERER_3D } from './renderer.token';
 import {
   boundsFor,
   clampPanelWidth,
@@ -349,14 +350,29 @@ type DragState =
         }
 
         <main class="app-canvas-host">
+          <!-- Stage 10 F10.3 — two stacked canvases, ONE always hidden.
+               A canvas may only have ONE context type for its lifetime
+               (getContext 2d precludes any later getContext webgl and
+               vice-versa, a hard browser invariant), so the 2D vs 3D
+               renderer swap requires two real canvas elements. Pointer
+               listeners bind to the 2D canvas only; OrbitControls inside
+               Three3DRenderer owns the 3D canvas pointer events. -->
           <canvas
-            #canvas
+            #canvas2d
             class="scene-canvas"
-            aria-label="Aquascape design canvas"
+            aria-label="Aquascape design canvas (2D)"
             role="img"
+            [hidden]="viewMode.mode() === '3d'"
             (pointerdown)="onCanvasPointerDown($event)"
             (pointermove)="onCanvasPointerMove($event)"
             (pointerleave)="onCanvasPointerLeave()"
+          ></canvas>
+          <canvas
+            #canvas3d
+            class="scene-canvas"
+            aria-label="Aquascape design canvas (3D)"
+            role="img"
+            [hidden]="viewMode.mode() === '2d'"
           ></canvas>
           @if (sceneIsEmpty()) {
             <div class="empty-hint" aria-hidden="true">
@@ -378,7 +394,9 @@ type DragState =
               aria-hidden="true"
             ></div>
           }
-          <aquascape-selection-inspector></aquascape-selection-inspector>
+          @if (viewMode.mode() === '2d') {
+            <aquascape-selection-inspector></aquascape-selection-inspector>
+          }
           @if (paletteDragGhost(); as g) {
             <div
               class="palette-drag-ghost"
@@ -389,7 +407,7 @@ type DragState =
               {{ g.label }}
             </div>
           }
-          @if (dragReadout(); as r) {
+          @if (viewMode.mode() === '2d' && dragReadout(); as r) {
             <div
               class="drag-readout"
               [style.left.px]="r.cssX"
@@ -610,7 +628,15 @@ type DragState =
   ],
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
-  private readonly renderer = inject<SceneRenderer>(SCENE_RENDERER);
+  // Stage 10 F10.3 — two concrete renderers, one active at a time. The
+  // `activeRenderer` / `activeCanvas` accessors below resolve which pair
+  // is live based on `viewMode.mode()`. Both renderers stay alive (we
+  // never `dispose()` the inactive one) so a swap is cheap: the only
+  // per-swap work is one `attach()` on the now-active renderer.
+  private readonly renderer2d = inject<SceneRenderer>(SCENE_RENDERER_2D);
+  private readonly renderer3d = inject<SceneRenderer>(SCENE_RENDERER_3D);
+  readonly viewMode = inject(ViewModeService);
+
   private readonly ngZone = inject(NgZone);
   private readonly destroyRef = inject(DestroyRef);
   private readonly store = inject(Store);
@@ -630,15 +656,47 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private readonly storageService: StorageService = inject(STORAGE_SERVICE);
   private readonly renderExportService: RenderExportService = inject(RENDER_EXPORT_SERVICE);
 
-  @ViewChild('canvas', { static: true })
-  private canvasRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('canvas2d', { static: true })
+  private canvas2dRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('canvas3d', { static: true })
+  private canvas3dRef!: ElementRef<HTMLCanvasElement>;
+
+  /** The renderer currently driving paints. Recomputed per call so a
+   *  view-mode flip immediately picks up the right instance. */
+  private get activeRenderer(): SceneRenderer {
+    return this.viewMode.mode() === '3d' ? this.renderer3d : this.renderer2d;
+  }
+
+  /** The canvas the active renderer paints into. */
+  private get activeCanvas(): HTMLCanvasElement {
+    return this.viewMode.mode() === '3d'
+      ? this.canvas3dRef.nativeElement
+      : this.canvas2dRef.nativeElement;
+  }
+
+  /**
+   * The 2D canvas — pointer interactions (drag, marquee, hit-test, resize-
+   * observer measurement) ONLY happen on this canvas. The 3D canvas is
+   * owned by OrbitControls inside Three3DRenderer; we never bind app-
+   * component listeners to it.
+   */
+  private get canvas2d(): HTMLCanvasElement {
+    return this.canvas2dRef.nativeElement;
+  }
 
   private currentScene: Scene | null = null;
   private currentSelection: readonly ObjectId[] = [];
   private currentViewport: Viewport | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private wheelZoomCleanup: (() => void) | null = null;
-  private attached = false;
+  /**
+   * Per-renderer attach state. Each renderer holds its own GL / 2D context
+   * once attached; we only re-attach when the surface dimensions or DPR
+   * change (the existing code calls `attach` every render — that's a
+   * cheap no-op for both renderers as long as the surface is the same).
+   */
+  private attached2d = false;
+  private attached3d = false;
 
   private dragState: DragState | null = null;
   /** Document-level move/up handlers held so we can remove on cancel/end. */
@@ -853,6 +911,38 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
   });
 
+  // Stage 10 F10.3 — when the user flips 2D ↔ 3D, dispose the previously-
+  // active renderer (so it releases its GL / 2D context) and trigger a
+  // re-render against the now-active renderer + canvas. Both renderers
+  // are `providedIn: 'root'`; the dispose-then-reattach cycle resets
+  // their internal state via `attach()`, so swapping back later works
+  // (e.g. 2D → 3D → 2D paints a clean 2D canvas).
+  //
+  // First-run guard: same pattern as every other view-state effect — the
+  // initial dependency-registering pass would otherwise dispose-then-
+  // attach the 2D renderer redundantly on cold boot before the store's
+  // first emission triggers the genuine first render.
+  private viewModeFirstRun = true;
+  private readonly viewModeEffect = effect(() => {
+    const mode = this.viewMode.mode();
+    if (this.viewModeFirstRun) {
+      this.viewModeFirstRun = false;
+      return;
+    }
+    // Dispose the renderer that was active BEFORE this swap. `mode` is
+    // the new mode → the old one is its opposite.
+    if (mode === '3d' && this.attached2d) {
+      this.renderer2d.dispose();
+      this.attached2d = false;
+    } else if (mode === '2d' && this.attached3d) {
+      this.renderer3d.dispose();
+      this.attached3d = false;
+    }
+    if (this.currentScene !== null) {
+      this.renderCurrent();
+    }
+  });
+
   ngOnDestroy(): void {
     this.teardown();
     this.cancelDrag(); // detach any in-flight document listeners
@@ -912,7 +1002,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   /** Write the host's CSS custom properties for the current width signals. */
   private applyHostWidths(): void {
     const host =
-      (this.canvasRef.nativeElement.ownerDocument?.querySelector(
+      (this.canvas2d.ownerDocument?.querySelector(
         'aquascape-root',
       ) as HTMLElement | null) ?? null;
     if (host === null) return;
@@ -1059,7 +1149,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     // Write straight to the host CSS var — no signal write yet (avoids
     // change-detection per frame). The signal is committed on pointerup.
     const host =
-      (this.canvasRef.nativeElement.ownerDocument?.querySelector(
+      (this.canvas2d.ownerDocument?.querySelector(
         'aquascape-root',
       ) as HTMLElement | null) ?? null;
     if (host !== null) {
@@ -1182,12 +1272,16 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const viewport = this.currentViewport;
     if (scene === null || viewport === null) return;
 
-    const canvas = this.canvasRef.nativeElement;
+    const canvas = this.canvas2d;
     const rect = canvas.getBoundingClientRect();
     const cssPoint: Vec2 = { x: event.clientX - rect.left, y: event.clientY - rect.top };
 
     const previewAge = this.previewTime.previewAgeWeeks();
-    const hit = this.renderer.hitTest(cssPoint, scene, viewport, {
+    // Hit-test always goes through the 2D renderer. The 3D canvas is
+    // `[hidden]` in 3D mode (its pointer events don't fire), and even if
+    // a stray event reached this handler, Three3DRenderer.hitTest returns
+    // null — there's no scene-model interaction in 3D for v1.
+    const hit = this.renderer2d.hitTest(cssPoint, scene, viewport, {
       catalog: coreCatalog,
       selection: this.currentSelection,
       ...(previewAge !== null ? { previewAgeWeeks: previewAge } : {}),
@@ -1259,7 +1353,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   onCanvasPointerMove(event: PointerEvent): void {
     const viewport = this.currentViewport;
     if (viewport === null) return;
-    const rect = this.canvasRef.nativeElement.getBoundingClientRect();
+    const rect = this.canvas2d.getBoundingClientRect();
     const world = canvasCssToWorld(
       { x: event.clientX - rect.left, y: event.clientY - rect.top },
       viewport,
@@ -1305,7 +1399,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   private onDocumentPointerMove(event: PointerEvent): void {
     if (this.dragState === null) return;
-    const canvas = this.canvasRef.nativeElement;
+    const canvas = this.canvas2d;
     const rect = canvas.getBoundingClientRect();
     const cssPoint: Vec2 = { x: event.clientX - rect.left, y: event.clientY - rect.top };
 
@@ -1437,7 +1531,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const scene = this.currentScene;
     const viewport = this.currentViewport;
     if (scene === null || viewport === null) return;
-    const canvas = this.canvasRef.nativeElement;
+    const canvas = this.canvas2d;
     const rect = canvas.getBoundingClientRect();
 
     // Convert the marquee corners to world. y-flip means the canvas-top
@@ -1493,7 +1587,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const scene = this.currentScene;
     const viewport = this.currentViewport;
     if (scene === null || viewport === null) return;
-    const canvas = this.canvasRef.nativeElement;
+    const canvas = this.canvas2d;
     const rect = canvas.getBoundingClientRect();
     if (
       clientX < rect.left ||
@@ -1561,7 +1655,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const scene = this.currentScene;
     const viewport = this.currentViewport;
     if (scene === null || viewport === null) return;
-    const canvas = this.canvasRef.nativeElement;
+    const canvas = this.canvas2d;
     const rect = canvas.getBoundingClientRect();
     if (
       clientX < rect.left ||
@@ -1617,13 +1711,20 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private renderCurrent(): void {
     const scene = this.currentScene;
     if (scene === null) return;
-    const canvas = this.canvasRef.nativeElement;
+    // Stage 10 F10.3 — paint via the renderer the user picked. The 2D
+    // canvas is always the one we read for viewport math (drag / hit-test
+    // / resize-observer live there); the 3D canvas mirrors its layout via
+    // the `[hidden]`-stacked CSS so both have identical CSS-pixel dims.
+    const canvas = this.activeCanvas;
     const surface = this.buildSurface(canvas);
-    if (!this.attached) {
-      this.renderer.attach(surface);
-      this.attached = true;
+    const renderer = this.activeRenderer;
+    const is3d = this.viewMode.mode() === '3d';
+    if (is3d) {
+      renderer.attach(surface);
+      this.attached3d = true;
     } else {
-      this.renderer.attach(surface);
+      renderer.attach(surface);
+      this.attached2d = true;
     }
     const viewport = this.computeViewport(surface, scene);
     this.currentViewport = viewport;
@@ -1632,13 +1733,21 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     // rotate all mutate ONE object's transform; we substitute it in place
     // and leave the rest of the scene untouched. Marquee doesn't change
     // any object — the overlay is its only visual.
+    //
+    // In 3D mode no drag is possible (pointer events don't fire on the 3D
+    // canvas) so `buildPreviewScene` no-ops back to the unchanged scene.
     const scenePassed = this.buildPreviewScene(scene);
     const previewAge = this.previewTime.previewAgeWeeks();
     const backdrop = this.backdropService.backdrop();
     // exactOptionalPropertyTypes: only spread the nullable fields when
     // they actually have a value. Assigning `undefined` to an optional
     // field is a TS error under that flag.
-    this.renderer.render(scenePassed, viewport, {
+    //
+    // Three3DRenderer ignores `Viewport` + most `RenderOptions` fields
+    // (it owns its OrbitControls camera + has no overlay / wall / snap
+    // concept yet); passing them is safe. The renderer picks what it
+    // wants from the options bag.
+    renderer.render(scenePassed, viewport, {
       catalog: coreCatalog,
       selection: this.currentSelection,
       overlayOptions: this.overlayOptions.overlays(),
@@ -1728,7 +1837,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return;
     }
     const viewport = this.currentViewport;
-    const canvas = this.canvasRef.nativeElement;
+    const canvas = this.canvas2d;
     if (viewport === null) {
       this.dragReadout.set(null);
       return;
@@ -1762,7 +1871,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const observer = new Observer(() => {
       this.renderCurrent();
     });
-    observer.observe(this.canvasRef.nativeElement);
+    observer.observe(this.canvas2d);
     this.resizeObserver = observer;
     this.destroyRef.onDestroy(() => this.teardown());
   }
@@ -1776,9 +1885,17 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.wheelZoomCleanup();
       this.wheelZoomCleanup = null;
     }
-    if (this.attached) {
-      this.renderer.dispose();
-      this.attached = false;
+    // Stage 10 F10.3 — dispose both renderers we ever attached. The
+    // unused renderer never had `attach()` called so its `dispose()` is
+    // safe-but-redundant; we track the flags so a future renderer with
+    // a stricter dispose contract doesn't blow up here.
+    if (this.attached2d) {
+      this.renderer2d.dispose();
+      this.attached2d = false;
+    }
+    if (this.attached3d) {
+      this.renderer3d.dispose();
+      this.attached3d = false;
     }
   }
 
@@ -1794,7 +1911,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
    * point under the cursor — all via the pure helpers in `zoom-math.ts`.
    */
   private installWheelZoomListener(): void {
-    const canvas = this.canvasRef.nativeElement;
+    const canvas = this.canvas2d;
     const handler = (event: WheelEvent): void => {
       if (!event.ctrlKey && !event.metaKey) return; // honour page scroll
       const scene = this.currentScene;

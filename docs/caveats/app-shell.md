@@ -37,6 +37,7 @@
 - `aquascape.ui.wall.{enabled, color, widthMm, heightMm}` (Stage 5.x wall background — defaults off / `#2a2d35` / 1200 × 600 mm).
 - `aquascape.ui.snap.{enabled, toGrid, toGuides, toObjects, gridSizeMm, toleranceCssPx}` (F5.4 snap — defaults all on / 10 mm / 8 CSS px).
 - `aquascape.ui.backdrop.{enabled, dataUrl, opacity}` (F6.3 backdrop photo — data URL inlined for per-install persistence, cap `MAX_BACKDROP_BYTES = 8 MB`).
+- `aquascape.ui.viewMode` (Stage 10 — `'2d' | '3d'`, default `'2d'`; flipped via the toolbar segmented control or Cmd/Ctrl+Shift+3 keyboard shortcut).
 - `aquascape.templates.personal` (F5.2 personal templates — JSON array of `TemplateListing`, capped at `MAX_PERSONAL_TEMPLATES = 32`).
 - `aquascape.autosaveDraft` for crash recovery.
 
