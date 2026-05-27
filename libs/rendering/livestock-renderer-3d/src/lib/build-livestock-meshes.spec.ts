@@ -27,7 +27,7 @@ import {
   ShaderMaterial,
 } from 'three';
 import { buildLivestockMeshes, type LivestockMeshBundle } from './build-livestock-meshes';
-import { LIVESTOCK_VERTEX_SHADER } from './shaders';
+import { LIVESTOCK_FOOD_VERTEX_SHADER, LIVESTOCK_VERTEX_SHADER } from './shaders';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -39,6 +39,7 @@ function makeSnapshot(
     phase?: number;
     scale?: number;
   }>,
+  foodSprites: ReadonlyArray<[number, number, number]> = [],
 ): WorldSnapshot {
   const n = entries.length;
   const ids = new Uint32Array(n);
@@ -65,7 +66,26 @@ function makeSnapshot(
     scale[i] = e.scale ?? 30;
   }
 
-  return { entityCount: n, ids, position, orientation, phase, archetype, scale };
+  const fsCount = foodSprites.length;
+  const foodSpritePosition = new Float32Array(fsCount * 3);
+  for (let i = 0; i < fsCount; i++) {
+    const p = foodSprites[i]!;
+    foodSpritePosition[i * 3 + 0] = p[0];
+    foodSpritePosition[i * 3 + 1] = p[1];
+    foodSpritePosition[i * 3 + 2] = p[2];
+  }
+
+  return {
+    entityCount: n,
+    ids,
+    position,
+    orientation,
+    phase,
+    archetype,
+    scale,
+    foodSpriteCount: fsCount,
+    foodSpritePosition,
+  };
 }
 
 function meshForArchetype(bundle: LivestockMeshBundle, archetypeId: number): InstancedMesh {
@@ -100,10 +120,11 @@ describe('buildLivestockMeshes', () => {
     let bundle: LivestockMeshBundle;
     afterEach(() => bundle.dispose());
 
-    it('returns a named Group containing one InstancedMesh per archetype', () => {
+    it('returns a named Group containing one InstancedMesh per archetype + one food sprite mesh', () => {
       bundle = buildLivestockMeshes();
       expect(bundle.group.name).toBe('aquascape:livestock');
-      expect(bundle.group.children).toHaveLength(6);
+      // 6 archetypes + 1 food sprite billboard mesh.
+      expect(bundle.group.children).toHaveLength(7);
       for (const child of bundle.group.children) {
         expect((child as InstancedMesh).isInstancedMesh).toBe(true);
       }
@@ -384,6 +405,223 @@ describe('buildLivestockMeshes', () => {
     });
   });
 
+  describe('food sprite billboards (F11.4 Wave 4)', () => {
+    let bundle: LivestockMeshBundle;
+    afterEach(() => bundle.dispose());
+
+    it('adds a 7th InstancedMesh dedicated to food sprites', () => {
+      bundle = buildLivestockMeshes();
+      expect(bundle.group.children).toHaveLength(7);
+      expect(bundle.foodSpriteMesh.isInstancedMesh).toBe(true);
+      expect(bundle.foodSpriteMesh.name).toBe('aquascape:livestock/food-sprite');
+      // The exposed handle is a sibling under the same group, not a
+      // separate scene-graph node.
+      expect(bundle.group.children).toContain(bundle.foodSpriteMesh);
+    });
+
+    it('uses a 4-vertex quad geometry for the billboard', () => {
+      bundle = buildLivestockMeshes();
+      const geo = bundle.foodSpriteMesh.geometry as BufferGeometry;
+      // PlaneGeometry has 4 vertices + 2 triangles regardless of size.
+      expect(geo.getAttribute('position').count).toBe(4);
+    });
+
+    it('attaches the instancePosition attribute sized to maxFoodSprites', () => {
+      bundle = buildLivestockMeshes({ maxFoodSprites: 32 });
+      const geo = bundle.foodSpriteMesh.geometry as BufferGeometry;
+      const attr = geo.getAttribute('instancePosition') as InstancedBufferAttribute;
+      expect(attr).toBeDefined();
+      expect(attr.count).toBe(32);
+      expect(attr.itemSize).toBe(3);
+      expect(attr.array.length).toBe(32 * 3);
+    });
+
+    it('defaults maxFoodSprites to 64', () => {
+      bundle = buildLivestockMeshes();
+      const geo = bundle.foodSpriteMesh.geometry as BufferGeometry;
+      const attr = geo.getAttribute('instancePosition') as InstancedBufferAttribute;
+      expect(attr.count).toBe(64);
+    });
+
+    it('starts with foodSpriteMesh.count === 0 (no draws until first sync)', () => {
+      bundle = buildLivestockMeshes();
+      expect(bundle.foodSpriteMesh.count).toBe(0);
+    });
+
+    it('disables frustum culling on the food sprite mesh', () => {
+      bundle = buildLivestockMeshes();
+      expect(bundle.foodSpriteMesh.frustumCulled).toBe(false);
+    });
+
+    it('renders transparent + depth-write-off so the soft alpha mask reads cleanly', () => {
+      bundle = buildLivestockMeshes();
+      const mat = bundle.foodSpriteMesh.material as ShaderMaterial;
+      expect(mat.transparent).toBe(true);
+      expect(mat.depthWrite).toBe(false);
+    });
+
+    it('rejects non-positive maxFoodSprites', () => {
+      expect(() => buildLivestockMeshes({ maxFoodSprites: 0 })).toThrow(/maxFoodSprites/);
+      expect(() => buildLivestockMeshes({ maxFoodSprites: -1 })).toThrow(/maxFoodSprites/);
+      expect(() => buildLivestockMeshes({ maxFoodSprites: Infinity })).toThrow(/maxFoodSprites/);
+    });
+
+    it('writes snapshot.foodSpritePosition into the instancePosition attribute', () => {
+      bundle = buildLivestockMeshes({ maxFoodSprites: 16 });
+      const snap = makeSnapshot(
+        [],
+        [
+          [100, 200, 50],
+          [150, 180, 60],
+          [200, 160, 70],
+        ],
+      );
+
+      bundle.syncFromSnapshot(snap, 0);
+
+      expect(bundle.foodSpriteMesh.count).toBe(3);
+      const arr = (
+        bundle.foodSpriteMesh.geometry as BufferGeometry
+      ).getAttribute('instancePosition').array as Float32Array;
+      expect(arr[0]).toBeCloseTo(100, 5);
+      expect(arr[1]).toBeCloseTo(200, 5);
+      expect(arr[2]).toBeCloseTo(50, 5);
+      expect(arr[3]).toBeCloseTo(150, 5);
+      expect(arr[6]).toBeCloseTo(200, 5);
+      expect(arr[8]).toBeCloseTo(70, 5);
+    });
+
+    it('flags the instancePosition attribute as needsUpdate after a non-empty sync', () => {
+      bundle = buildLivestockMeshes({ maxFoodSprites: 4 });
+      const snap = makeSnapshot([], [[1, 2, 3]]);
+      bundle.syncFromSnapshot(snap, 0);
+      const attr = (
+        bundle.foodSpriteMesh.geometry as BufferGeometry
+      ).getAttribute('instancePosition') as InstancedBufferAttribute;
+      // `version` increments per `needsUpdate = true` setter call.
+      expect(attr.version).toBe(1);
+    });
+
+    it('sets foodSpriteMesh.count = 0 when the snapshot has no sprites', () => {
+      bundle = buildLivestockMeshes({ maxFoodSprites: 4 });
+      const populated = makeSnapshot([], [[1, 2, 3]]);
+      bundle.syncFromSnapshot(populated, 0);
+      expect(bundle.foodSpriteMesh.count).toBe(1);
+
+      const empty = makeSnapshot([], []);
+      bundle.syncFromSnapshot(empty, 0.1);
+      expect(bundle.foodSpriteMesh.count).toBe(0);
+    });
+
+    it('clamps to maxFoodSprites and warns once on overflow', () => {
+      bundle = buildLivestockMeshes({ maxFoodSprites: 2 });
+
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+      try {
+        const snap = makeSnapshot(
+          [],
+          [
+            [1, 0, 0],
+            [2, 0, 0],
+            [3, 0, 0],
+            [4, 0, 0],
+          ],
+        );
+
+        bundle.syncFromSnapshot(snap, 0);
+        expect(bundle.foodSpriteMesh.count).toBe(2);
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0]![0]).toMatch(/food sprite count.*exceeds maxFoodSprites/);
+
+        // Second overflow doesn't re-warn.
+        bundle.syncFromSnapshot(snap, 0.5);
+        expect(warn).toHaveBeenCalledTimes(1);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('keeps the fish slabs working when the snapshot also has food sprites', () => {
+      bundle = buildLivestockMeshes({ maxInstancesPerArchetype: 4, maxFoodSprites: 4 });
+      const snap = makeSnapshot(
+        [{ archetype: FISH_ARCHETYPE.SLIM_TETRA }],
+        [[10, 20, 30]],
+      );
+      bundle.syncFromSnapshot(snap, 0);
+      expect(meshForArchetype(bundle, FISH_ARCHETYPE.SLIM_TETRA).count).toBe(1);
+      expect(bundle.foodSpriteMesh.count).toBe(1);
+    });
+
+    it('exposes the food fragment uniform with the chosen colour', () => {
+      bundle = buildLivestockMeshes({ foodColor: 0x123456 });
+      const mat = bundle.foodSpriteMesh.material as ShaderMaterial;
+      const color = mat.uniforms['uFoodColor']!.value as { getHex: () => number };
+      expect(color.getHex()).toBe(0x123456);
+    });
+  });
+
+  describe('food sprite billboard shader', () => {
+    it('contains the view-space billboard formula `mvPosition.xy += position.xy`', () => {
+      // Load-bearing — without this line the quad stays in world-space
+      // orientation and fails to face the camera under orbit.
+      expect(LIVESTOCK_FOOD_VERTEX_SHADER).toMatch(/mvPosition\.xy\s*\+=\s*position\.xy/);
+    });
+
+    it('writes gl_Position from projectionMatrix * mvPosition', () => {
+      expect(LIVESTOCK_FOOD_VERTEX_SHADER).toMatch(
+        /gl_Position\s*=\s*projectionMatrix\s*\*\s*mvPosition/,
+      );
+    });
+
+    it('compiles a ShaderMaterial without throwing (smoke test)', () => {
+      const bundle = buildLivestockMeshes();
+      try {
+        const mat = bundle.foodSpriteMesh.material as ShaderMaterial;
+        expect(mat.vertexShader).toBe(LIVESTOCK_FOOD_VERTEX_SHADER);
+        expect(mat.fragmentShader).toBeDefined();
+        expect(mat.uniforms['uFoodColor']).toBeDefined();
+      } finally {
+        bundle.dispose();
+      }
+    });
+  });
+
+  describe('food sprite dispose', () => {
+    it('disposes the food sprite geometry + material on bundle.dispose()', () => {
+      const bundle = buildLivestockMeshes();
+      const geo = bundle.foodSpriteMesh.geometry as BufferGeometry;
+      const mat = bundle.foodSpriteMesh.material as Material;
+      const geoSpy = jest.spyOn(geo, 'dispose');
+      const matSpy = jest.spyOn(mat, 'dispose');
+
+      bundle.dispose();
+
+      expect(geoSpy).toHaveBeenCalledTimes(1);
+      expect(matSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('detaches the food sprite mesh from the group', () => {
+      const bundle = buildLivestockMeshes();
+      const food = bundle.foodSpriteMesh;
+      expect(bundle.group.children).toContain(food);
+      bundle.dispose();
+      expect(bundle.group.children).not.toContain(food);
+    });
+
+    it('is idempotent for the food sprite slot — second dispose is a no-op', () => {
+      const bundle = buildLivestockMeshes();
+      const geo = bundle.foodSpriteMesh.geometry as BufferGeometry;
+      const mat = bundle.foodSpriteMesh.material as Material;
+      bundle.dispose();
+
+      const geoSpy = jest.spyOn(geo, 'dispose');
+      const matSpy = jest.spyOn(mat, 'dispose');
+      expect(() => bundle.dispose()).not.toThrow();
+      expect(geoSpy).not.toHaveBeenCalled();
+      expect(matSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('dispose', () => {
     it('disposes every geometry and material exactly once', () => {
       const bundle = buildLivestockMeshes();
@@ -421,7 +659,8 @@ describe('buildLivestockMeshes', () => {
 
     it('clears all children from the group after dispose', () => {
       const bundle = buildLivestockMeshes();
-      expect(bundle.group.children).toHaveLength(6);
+      // 6 archetypes + 1 food sprite billboard mesh.
+      expect(bundle.group.children).toHaveLength(7);
       bundle.dispose();
       expect(bundle.group.children).toHaveLength(0);
     });

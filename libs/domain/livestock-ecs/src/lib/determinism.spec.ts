@@ -202,6 +202,77 @@ describe('determinism: 1000 ticks × fixed fleet', () => {
     expect(byteEqual(r1.orientation, r2.orientation)).toBe(true);
   });
 
+  it('F11.4 full stack — 1000-tick replay with oto + rock + 6 cardinals + 2 food sprites is byte-identical', () => {
+    // Adds Feeding + Curiosity into the determinism contract. Includes
+    // an algae-grazer (oto) + a rock with algae, 6 cardinals (schooling),
+    // and 2 food sprites spawned at tick=0. Cover the full F11.4 system
+    // matrix: algae rasping, sprite seeking, sprite consumption,
+    // curiosity Poisson, regrowth scan.
+    const otoSpecies = 1;
+    const cardinalSpecies = 2;
+    const otoBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+    otoBehavior.feeding = {
+      hungerRatePerSec: 1 / 10, // hungry fast
+      threshold: 0.4,
+      category: 'algae-grazer',
+    };
+    otoBehavior.depth.preferredY = 0.2;
+    const cardinalBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+
+    function runMixedFleet(): {
+      position: Float32Array;
+      orientation: Float32Array;
+      foodSpritePosition: Float32Array;
+    } {
+      const w: LivestockWorld = createLivestockWorld(SEED, { tankAabb: TANK });
+      const otoHandle = w.registerSpeciesBehavior(otoSpecies, otoBehavior);
+      const cardinalHandle = w.registerSpeciesBehavior(cardinalSpecies, cardinalBehavior);
+      // Hardscape — one rock so the oto has algae to graze on.
+      w.registerHardscape([
+        {
+          position: { x: 300, y: 80, z: 200 },
+          coverScore: 0.4,
+          category: HARDSCAPE_CATEGORY.ROCK,
+        },
+      ]);
+      // 1 oto near the rock.
+      w.spawnFish({
+        archetype: FISH_ARCHETYPE.CORY_CYLINDER,
+        speciesId: otoSpecies,
+        bodyLengthMm: 40,
+        position: { x: 320, y: 80, z: 220 },
+        behaviorHandleIdx: otoHandle,
+      });
+      // 6 cardinal tetras clustered mid-water.
+      for (let i = 0; i < 6; i++) {
+        w.spawnFish({
+          archetype: FISH_ARCHETYPE.SLIM_TETRA,
+          speciesId: cardinalSpecies,
+          bodyLengthMm: 30,
+          position: { x: 200 + i * 20, y: 200, z: 150 },
+          behaviorHandleIdx: cardinalHandle,
+        });
+      }
+      // 2 food sprites at tick=0 — life is 30s so they survive 900 ticks (30Hz);
+      // the cardinals seek + consume them over the 1000-tick run.
+      w.spawnFoodSprite({ x: 250, y: 300, z: 200 }, 60, 5);
+      w.spawnFoodSprite({ x: 500, y: 250, z: 200 }, 60, 5);
+      for (let i = 0; i < TICKS; i++) w.step(SIM_DT);
+      const s = w.snapshot(0);
+      return {
+        position: new Float32Array(s.position),
+        orientation: new Float32Array(s.orientation),
+        foodSpritePosition: new Float32Array(s.foodSpritePosition),
+      };
+    }
+
+    const r1 = runMixedFleet();
+    const r2 = runMixedFleet();
+    expect(byteEqual(r1.position, r2.position)).toBe(true);
+    expect(byteEqual(r1.orientation, r2.orientation)).toBe(true);
+    expect(byteEqual(r1.foodSpritePosition, r2.foodSpritePosition)).toBe(true);
+  });
+
   it('different seeds still produce identical *static* fields (position w/ v=0, archetype, scale)', () => {
     // With Velocity=0 in F11.1, Position never changes from its spawn value
     // — so the seed only affects fields driven by `tickPrng` (none yet). This

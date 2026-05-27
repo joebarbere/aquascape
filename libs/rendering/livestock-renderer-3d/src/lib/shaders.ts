@@ -124,3 +124,69 @@ void main() {
   gl_FragColor = vec4(rgb, 1.0);
 }
 `;
+
+// ─── Food sprite billboard shaders (F11.4 Wave 4) ────────────────────────
+
+/**
+ * Vertex shader for food-sprite billboards.
+ *
+ * The instanced quad lives in object space with corner positions at
+ * (±half, ±half, 0). To make every sprite face the camera regardless of
+ * orbit, we transform the per-instance world-space position to view-space
+ * first, then add the quad's local `position.xy` directly in view-space
+ * (where +X is screen-right and +Y is screen-up). This is the classic
+ * "view-space billboard" trick — cheaper than rebuilding a basis on the
+ * CPU each frame, and stable under any camera orientation.
+ *
+ * The load-bearing line is `mvPosition.xy += position.xy` — the spec
+ * regex-checks for it, so a silent rewrite that drops the billboard
+ * behaviour trips a regression.
+ */
+export const LIVESTOCK_FOOD_VERTEX_SHADER = /* glsl */ `
+precision highp float;
+
+attribute vec3 instancePosition;
+
+varying vec2 vQuadUv;
+
+void main() {
+  // The quad's local positions are (±half, ±half, 0). UV runs 0..1.
+  vQuadUv = uv;
+
+  // ── BILLBOARD ──────────────────────────────────────────────────────
+  // Translate the instance's anchor into view-space; then offset by the
+  // quad's local X/Y so the resulting quad sits perpendicular to the
+  // camera no matter where the camera is.
+  vec4 mvPosition = modelViewMatrix * vec4(instancePosition, 1.0);
+  mvPosition.xy += position.xy;
+  // ── /BILLBOARD ─────────────────────────────────────────────────────
+
+  gl_Position = projectionMatrix * mvPosition;
+}
+`;
+
+/**
+ * Fragment shader for food-sprite billboards.
+ *
+ * Warm-tan body colour with a soft circular alpha falloff so the quad
+ * reads as a flake / pellet rather than a hard square. UV → distance
+ * from centre (0.5, 0.5); inside `coreRadius` is fully opaque, between
+ * `coreRadius` and `edgeRadius` fades to 0 via smoothstep; outside is
+ * discarded.
+ */
+export const LIVESTOCK_FOOD_FRAGMENT_SHADER = /* glsl */ `
+precision highp float;
+
+uniform vec3 uFoodColor;
+
+varying vec2 vQuadUv;
+
+void main() {
+  // Distance from the quad's centre, scaled so the disc fits the quad.
+  float d = distance(vQuadUv, vec2(0.5, 0.5)) * 2.0;
+  // Soft circular falloff: opaque inside 0.6, alpha → 0 by 1.0.
+  float alpha = 1.0 - smoothstep(0.6, 1.0, d);
+  if (alpha <= 0.001) discard;
+  gl_FragColor = vec4(uFoodColor, alpha);
+}
+`;

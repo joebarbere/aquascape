@@ -5,7 +5,10 @@ import {
   depthBandForSpecies,
   resolveBehavior,
   type BehaviorResolutionInput,
+  type CuriosityParams,
   type FearParams,
+  type FeedingCategory,
+  type FeedingParams,
   type NippingParams,
   type ResolvedBehavior,
   type TerritoryParams,
@@ -42,6 +45,16 @@ const FEAR_KEYS: ReadonlyArray<keyof FearParams> = [
   'coverPreference',
   'emergenceDelay',
 ];
+const FEEDING_KEYS: ReadonlyArray<keyof FeedingParams> = [
+  'hungerRatePerSec',
+  'threshold',
+  'category',
+];
+const CURIOSITY_KEYS: ReadonlyArray<keyof CuriosityParams> = [
+  'boldness',
+  'ratePerSec',
+  'dwellSec',
+];
 
 function expectFullyPopulated(bundle: ResolvedBehavior): void {
   for (const k of SCHOOLING_KEYS) {
@@ -63,6 +76,16 @@ function expectFullyPopulated(bundle: ResolvedBehavior): void {
   expect(Number.isFinite(bundle.fear.threshold)).toBe(true);
   expect(Number.isFinite(bundle.fear.emergenceDelay)).toBe(true);
   expect(typeof bundle.fear.coverPreference).toBe('string');
+  for (const k of FEEDING_KEYS) {
+    expect(bundle.feeding[k]).toBeDefined();
+  }
+  expect(Number.isFinite(bundle.feeding.hungerRatePerSec)).toBe(true);
+  expect(Number.isFinite(bundle.feeding.threshold)).toBe(true);
+  expect(typeof bundle.feeding.category).toBe('string');
+  for (const k of CURIOSITY_KEYS) {
+    expect(bundle.curiosity[k]).toBeDefined();
+    expect(Number.isFinite(bundle.curiosity[k])).toBe(true);
+  }
 }
 
 describe('presets', () => {
@@ -139,6 +162,60 @@ describe('presets', () => {
     expect(BOTTOM_PRESET.fear.emergenceDelay).toBeGreaterThan(TOP_PRESET.fear.emergenceDelay);
     expect(BOTTOM_PRESET.fear.riskBaseline).toBeGreaterThan(TOP_PRESET.fear.riskBaseline);
   });
+
+  it('TOP_PRESET feeding: surface category, default hunger rate + threshold', () => {
+    expect(TOP_PRESET.feeding).toEqual<FeedingParams>({
+      hungerRatePerSec: 1 / 120,
+      threshold: 0.7,
+      category: 'surface',
+    });
+  });
+
+  it('MID_PRESET feeding: midwater category, default hunger rate + threshold', () => {
+    expect(MID_PRESET.feeding).toEqual<FeedingParams>({
+      hungerRatePerSec: 1 / 120,
+      threshold: 0.7,
+      category: 'midwater',
+    });
+  });
+
+  it('BOTTOM_PRESET feeding: substrate category, slower hunger rate', () => {
+    expect(BOTTOM_PRESET.feeding).toEqual<FeedingParams>({
+      hungerRatePerSec: 1 / 180,
+      threshold: 0.7,
+      category: 'substrate',
+    });
+  });
+
+  it('TOP_PRESET curiosity: bold (0.7), 0.06 rate, 4s dwell', () => {
+    expect(TOP_PRESET.curiosity).toEqual<CuriosityParams>({
+      boldness: 0.7,
+      ratePerSec: 0.06,
+      dwellSec: 4,
+    });
+  });
+
+  it('MID_PRESET curiosity: average (0.5), 0.05 rate, 3s dwell', () => {
+    expect(MID_PRESET.curiosity).toEqual<CuriosityParams>({
+      boldness: 0.5,
+      ratePerSec: 0.05,
+      dwellSec: 3,
+    });
+  });
+
+  it('BOTTOM_PRESET curiosity: shy (0.2), 0.02 rate, 2s dwell', () => {
+    expect(BOTTOM_PRESET.curiosity).toEqual<CuriosityParams>({
+      boldness: 0.2,
+      ratePerSec: 0.02,
+      dwellSec: 2,
+    });
+  });
+
+  it('curiosity ordering by band — bottom species less curious than top', () => {
+    expect(BOTTOM_PRESET.curiosity.boldness).toBeLessThan(MID_PRESET.curiosity.boldness);
+    expect(MID_PRESET.curiosity.boldness).toBeLessThan(TOP_PRESET.curiosity.boldness);
+    expect(BOTTOM_PRESET.curiosity.ratePerSec).toBeLessThan(TOP_PRESET.curiosity.ratePerSec);
+  });
 });
 
 describe('depthBandForSpecies', () => {
@@ -201,9 +278,22 @@ describe('resolveBehavior — preset selection', () => {
     expect(r).toEqual(MID_PRESET);
   });
 
-  it('returns the bottom preset for a snail via group-shortcut', () => {
+  it('returns the bottom preset for a snail via group-shortcut (with F11.4 invertebrate overrides applied)', () => {
     const r = resolveBehavior({ group: 'snail', id: 'nerite' });
-    expect(r).toEqual(BOTTOM_PRESET);
+    // F11.3 fields land bottom-preset; F11.4 upgrades the snail's category to
+    // 'detritivore' and its curiosity to the invertebrate temperament.
+    expect(r.schooling).toEqual(BOTTOM_PRESET.schooling);
+    expect(r.depth).toEqual(BOTTOM_PRESET.depth);
+    expect(r.animation).toEqual(BOTTOM_PRESET.animation);
+    expect(r.fear).toEqual(BOTTOM_PRESET.fear);
+    expect(r.territory).toBeNull();
+    expect(r.nipping).toBeNull();
+    expect(r.feeding.category).toBe<FeedingCategory>('detritivore');
+    expect(r.curiosity).toEqual<CuriosityParams>({
+      boldness: 0.1,
+      ratePerSec: 0.01,
+      dwellSec: 2,
+    });
   });
 
   it('returns the mid preset for an unknown-group entry with no tags', () => {
@@ -569,5 +659,231 @@ describe('resolveBehavior — invertebrate + non-special species sanity', () => 
     expect(r.territory).toBeNull();
     expect(r.nipping).toBeNull();
     expect(r.fear).toEqual(BOTTOM_PRESET.fear);
+  });
+});
+
+describe('resolveBehavior — feeding heuristic', () => {
+  it('top-band species carries TOP_PRESET feeding by default (surface)', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.marbled-hatchet' });
+    expect(r.feeding).toEqual(TOP_PRESET.feeding);
+    expect(r.feeding.category).toBe<FeedingCategory>('surface');
+  });
+
+  it('mid-band species carries MID_PRESET feeding by default (midwater)', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.neon-tetra' });
+    expect(r.feeding).toEqual(MID_PRESET.feeding);
+    expect(r.feeding.category).toBe<FeedingCategory>('midwater');
+  });
+
+  it('bottom-band species carries BOTTOM_PRESET feeding by default (substrate)', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.bronze-cory' });
+    expect(r.feeding).toEqual(BOTTOM_PRESET.feeding);
+    expect(r.feeding.category).toBe<FeedingCategory>('substrate');
+  });
+
+  it('otocinclus → algae-grazer (id substring "oto")', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.otocinclus-affinis' });
+    expect(r.feeding.category).toBe<FeedingCategory>('algae-grazer');
+    // Hunger rate + threshold inherit from the bottom preset (otocinclus is bottom-band).
+    expect(r.feeding.hungerRatePerSec).toBeCloseTo(BOTTOM_PRESET.feeding.hungerRatePerSec);
+    expect(r.feeding.threshold).toBeCloseTo(BOTTOM_PRESET.feeding.threshold);
+  });
+
+  it('pleco → algae-grazer (id substring "pleco")', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.bristlenose-pleco' });
+    expect(r.feeding.category).toBe<FeedingCategory>('algae-grazer');
+  });
+
+  it('siamese algae eater → algae-grazer (id substring "siamese-algae")', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.siamese-algae-eater' });
+    expect(r.feeding.category).toBe<FeedingCategory>('algae-grazer');
+  });
+
+  it('silver dollar (no separator) → plant-eater', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.silverdollar' });
+    expect(r.feeding.category).toBe<FeedingCategory>('plant-eater');
+  });
+
+  it('silver-dollar (hyphen) → plant-eater', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.silver-dollar' });
+    expect(r.feeding.category).toBe<FeedingCategory>('plant-eater');
+  });
+
+  it('severum → plant-eater', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.green-severum' });
+    expect(r.feeding.category).toBe<FeedingCategory>('plant-eater');
+  });
+
+  it('amano shrimp → detritivore even though its band-preset is substrate', () => {
+    const r = resolveBehavior({ group: 'shrimp', id: 'core/livestock.shrimp.amano' });
+    expect(r.feeding.category).toBe<FeedingCategory>('detritivore');
+    // The depth band is bottom; only the category gets upgraded.
+    expect(r.depth).toEqual(BOTTOM_PRESET.depth);
+  });
+
+  it('nerite snail → detritivore', () => {
+    const r = resolveBehavior({ group: 'snail', id: 'core/livestock.snail.nerite' });
+    expect(r.feeding.category).toBe<FeedingCategory>('detritivore');
+  });
+
+  it('group shortcut beats id substring — a shrimp named "oto-shrimp" still resolves to detritivore', () => {
+    const r = resolveBehavior({ group: 'shrimp', id: 'core/livestock.shrimp.oto-clone' });
+    expect(r.feeding.category).toBe<FeedingCategory>('detritivore');
+  });
+
+  it('substring matching is case-insensitive (OTOCINCLUS in upper case)', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'CORE/LIVESTOCK.FISH.OTOCINCLUS' });
+    expect(r.feeding.category).toBe<FeedingCategory>('algae-grazer');
+  });
+
+  it('partial feeding override: threshold replaced, category + hunger preserved', () => {
+    const r = resolveBehavior({
+      group: 'fish',
+      id: 'core/livestock.fish.neon-tetra',
+      behavior: { feeding: { threshold: 0.9 } },
+    });
+    expect(r.feeding.threshold).toBeCloseTo(0.9);
+    expect(r.feeding.category).toBe<FeedingCategory>('midwater');
+    expect(r.feeding.hungerRatePerSec).toBeCloseTo(MID_PRESET.feeding.hungerRatePerSec);
+  });
+
+  it('partial feeding override: category can be set explicitly', () => {
+    const r = resolveBehavior({
+      group: 'fish',
+      id: 'core/livestock.fish.curated-feeder',
+      behavior: { feeding: { category: 'algae-grazer' } },
+    });
+    expect(r.feeding.category).toBe<FeedingCategory>('algae-grazer');
+  });
+
+  it('catalog override beats heuristic: an oto with explicit category "midwater" picks midwater', () => {
+    const r = resolveBehavior({
+      group: 'fish',
+      id: 'core/livestock.fish.otocinclus-affinis',
+      behavior: { feeding: { category: 'midwater' } },
+    });
+    expect(r.feeding.category).toBe<FeedingCategory>('midwater');
+  });
+
+  it('feeding override does not mutate the shared preset', () => {
+    const before = JSON.parse(JSON.stringify(MID_PRESET.feeding));
+    resolveBehavior({
+      group: 'fish',
+      id: 'core/livestock.fish.neon-tetra',
+      behavior: { feeding: { hungerRatePerSec: 999 } },
+    });
+    expect(MID_PRESET.feeding).toEqual(before);
+  });
+
+  it('mutating the returned feeding does not contaminate the next call', () => {
+    const a = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.neon-tetra' });
+    (a.feeding as { threshold: number }).threshold = -1;
+    const b = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.neon-tetra' });
+    expect(b.feeding.threshold).toBe(MID_PRESET.feeding.threshold);
+  });
+});
+
+describe('resolveBehavior — curiosity heuristic', () => {
+  it('top-band species carries TOP_PRESET curiosity by default', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.marbled-hatchet' });
+    expect(r.curiosity).toEqual(TOP_PRESET.curiosity);
+  });
+
+  it('mid-band species carries MID_PRESET curiosity by default', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.neon-tetra' });
+    expect(r.curiosity).toEqual(MID_PRESET.curiosity);
+  });
+
+  it('kuhli loach → boldness ≈ 0.05, ratePerSec ≈ 0.005; dwellSec inherits BOTTOM_PRESET', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.kuhli-loach' });
+    expect(r.curiosity.boldness).toBeCloseTo(0.05);
+    expect(r.curiosity.ratePerSec).toBeCloseTo(0.005);
+    // dwellSec wasn't overridden — falls through to bottom preset.
+    expect(r.curiosity.dwellSec).toBe(BOTTOM_PRESET.curiosity.dwellSec);
+  });
+
+  it('shrimp → boldness 0.1, ratePerSec 0.01, dwellSec 2 (invertebrate override)', () => {
+    const r = resolveBehavior({ group: 'shrimp', id: 'core/livestock.shrimp.cherry' });
+    expect(r.curiosity).toEqual<CuriosityParams>({
+      boldness: 0.1,
+      ratePerSec: 0.01,
+      dwellSec: 2,
+    });
+  });
+
+  it('snail → boldness 0.1, ratePerSec 0.01, dwellSec 2 (invertebrate override)', () => {
+    const r = resolveBehavior({ group: 'snail', id: 'core/livestock.snail.nerite' });
+    expect(r.curiosity).toEqual<CuriosityParams>({
+      boldness: 0.1,
+      ratePerSec: 0.01,
+      dwellSec: 2,
+    });
+  });
+
+  it('id substring "shrimp" on a fish-group entry still triggers the invertebrate override', () => {
+    // Defensive coverage for the id-substring branch when group is missing
+    // (e.g. an entry that only carries id). Without group=shrimp/snail the
+    // group shortcut doesn't fire, so id-substring matching must hold.
+    const r = resolveBehavior({ id: 'core/livestock.fish.shrimpfish' });
+    expect(r.curiosity).toEqual<CuriosityParams>({
+      boldness: 0.1,
+      ratePerSec: 0.01,
+      dwellSec: 2,
+    });
+  });
+
+  it('partial curiosity override: dwellSec replaced, boldness + rate preserved', () => {
+    const r = resolveBehavior({
+      group: 'fish',
+      id: 'core/livestock.fish.neon-tetra',
+      behavior: { curiosity: { dwellSec: 10 } },
+    });
+    expect(r.curiosity.dwellSec).toBe(10);
+    expect(r.curiosity.boldness).toBe(MID_PRESET.curiosity.boldness);
+    expect(r.curiosity.ratePerSec).toBe(MID_PRESET.curiosity.ratePerSec);
+  });
+
+  it('catalog override beats kuhli heuristic — explicit boldness 0.9 wins', () => {
+    const r = resolveBehavior({
+      group: 'fish',
+      id: 'core/livestock.fish.kuhli-loach',
+      behavior: { curiosity: { boldness: 0.9 } },
+    });
+    expect(r.curiosity.boldness).toBeCloseTo(0.9);
+  });
+
+  it('curiosity override does not mutate the shared preset', () => {
+    const before = JSON.parse(JSON.stringify(TOP_PRESET.curiosity));
+    resolveBehavior({
+      group: 'fish',
+      id: 'core/livestock.fish.marbled-hatchet',
+      behavior: { curiosity: { boldness: 0.001 } },
+    });
+    expect(TOP_PRESET.curiosity).toEqual(before);
+  });
+});
+
+describe('resolveBehavior — F11.4 sanity (no ripple to F11.3 fields)', () => {
+  it('an otocinclus still resolves bottom-band schooling + depth + fear', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.otocinclus-affinis' });
+    expect(r.schooling).toEqual(BOTTOM_PRESET.schooling);
+    expect(r.depth).toEqual(BOTTOM_PRESET.depth);
+    expect(r.fear).toEqual(BOTTOM_PRESET.fear);
+    expect(r.territory).toBeNull();
+    expect(r.nipping).toBeNull();
+  });
+
+  it('a tiger barb still carries nipping AND now feeds midwater + has mid curiosity', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.tiger-barb' });
+    expect(r.nipping).not.toBeNull();
+    expect(r.feeding).toEqual(MID_PRESET.feeding);
+    expect(r.curiosity).toEqual(MID_PRESET.curiosity);
+  });
+
+  it('a german ram still carries territory AND now feeds midwater + has mid curiosity', () => {
+    const r = resolveBehavior({ group: 'fish', id: 'core/livestock.fish.german-ram' });
+    expect(r.territory).not.toBeNull();
+    expect(r.feeding).toEqual(MID_PRESET.feeding);
+    expect(r.curiosity).toEqual(MID_PRESET.curiosity);
   });
 });

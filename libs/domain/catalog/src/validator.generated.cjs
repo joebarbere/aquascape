@@ -41,7 +41,7 @@ var require_ucs2length = __commonJS({
   }
 });
 
-// node_modules/.cache/aquascape-validators/3IEMwu/entry.cjs
+// node_modules/.cache/aquascape-validators/6Ro9Li/entry.cjs
 module.exports = validate20;
 module.exports.default = validate20;
 var schema32 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "material", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "substrate" }, "material": { "enum": ["soil", "sand", "gravel"] }, "color": { "$ref": "#/$defs/HexColor" }, "grainSize": { "type": "number", "exclusiveMinimum": 0 } } };
@@ -1723,7 +1723,7 @@ function validate25(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate25.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema43 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "group", "adultSize", "temperament", "temperatureRange", "pHRange", "schoolingMin", "bioloadClass", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "livestock" }, "group": { "enum": ["fish", "shrimp", "snail"] }, "adultSize": { "type": "number", "exclusiveMinimum": 0, "description": "Typical adult body length in millimetres." }, "temperament": { "enum": ["peaceful", "semi-aggressive", "aggressive"] }, "temperatureRange": { "type": "object", "required": ["minC", "maxC"], "additionalProperties": false, "properties": { "minC": { "type": "number", "minimum": 0, "maximum": 40 }, "maxC": { "type": "number", "minimum": 0, "maximum": 40 } }, "description": "Water temperature tolerance window in Celsius. Manifest authors must ensure minC < maxC; JSON Schema cannot enforce cross-field comparisons declaratively." }, "pHRange": { "type": "object", "required": ["min", "max"], "additionalProperties": false, "properties": { "min": { "type": "number", "minimum": 4, "maximum": 9.5 }, "max": { "type": "number", "minimum": 4, "maximum": 9.5 } }, "description": "Water pH tolerance window. Manifest authors must ensure min < max; JSON Schema cannot enforce cross-field comparisons declaratively." }, "schoolingMin": { "type": "integer", "minimum": 1, "description": "Minimum recommended group size. 1 = solitary / non-schooling." }, "bioloadClass": { "enum": ["low", "medium", "high"] }, "color": { "$ref": "#/$defs/HexColor" }, "compatibilityFlags": { "type": "object", "additionalProperties": false, "properties": { "plantedOK": { "type": "boolean" }, "finNipper": { "type": "boolean" }, "brackish": { "type": "boolean" } }, "description": "Pre-baked answers for the Stage 7 F7.2 compatibility rule engine." }, "behavior": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.2 per-species overrides for the schooling + vertical-stratification + animation params. Every subfield is optional; absent fields fall back to the per-group preset via `resolveBehavior()` in `@aquascape/domain/livestock-behaviors`. Manifests authored before schemaVersion 3 lack this block entirely and load unchanged.", "properties": { "schooling": { "type": "object", "additionalProperties": false, "description": "Couzin 2002 three-zone + Reynolds 1987 weighted steering. Distances in millimetres; speeds in mm/sec.", "properties": { "ZOR": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of repulsion radius (mm). Below this, neighbours push us away." }, "ZOO": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of orientation radius (mm). Between ZOR and ZOO, headings align." }, "ZOA": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of attraction radius (mm). Between ZOO and ZOA, steer toward centroid." }, "blindAngle": { "type": "number", "minimum": 0, "maximum": 3.141592653589793, "description": "Blind cone behind the fish (radians, total angle subtended). Range [0, \u03C0]." }, "vPref": { "type": "number", "exclusiveMinimum": 0, "description": "Preferred cruise speed (mm/sec)." }, "vMax": { "type": "number", "exclusiveMinimum": 0, "description": "Hard cap on instantaneous speed (mm/sec)." }, "turnMax": { "type": "number", "exclusiveMinimum": 0, "description": "Maximum heading change (rad/sec)." }, "wSep": { "type": "number", "minimum": 0, "description": "Reynolds separation weight." }, "wAli": { "type": "number", "minimum": 0, "description": "Reynolds alignment weight." }, "wCoh": { "type": "number", "minimum": 0, "description": "Reynolds cohesion weight." }, "noise": { "type": "number", "minimum": 0, "description": "Per-tick noise magnitude as a fraction of vPref. Typical 0..0.2." } } }, "depth": { "type": "object", "additionalProperties": false, "description": "Vertical-stratification spring centred on a preferred fraction of tank height.", "properties": { "preferredY": { "type": "number", "minimum": 0, "maximum": 1, "description": "Preferred Y as a fraction of tank height (0 = substrate, 1 = waterline)." }, "bandWidth": { "type": "number", "minimum": 0, "maximum": 1, "description": "Band half-width as a fraction of tank height. Inside this, only noise applies." }, "returnForce": { "type": "number", "minimum": 0, "description": "Restoring force magnitude when outside the band (mm/sec\xB2 equivalent)." } } }, "animation": { "type": "object", "additionalProperties": false, "description": "Carangiform tail-beat parameters consumed by the renderer-3d vertex shader.", "properties": { "tailBeatFreq": { "type": "number", "exclusiveMinimum": 0, "description": "Tail-beat frequency (Hz)." }, "ampHead": { "type": "number", "minimum": 0, "maximum": 1, "description": "Amplitude at the head end (fraction of body length)." }, "ampTail": { "type": "number", "minimum": 0, "maximum": 1, "description": "Amplitude at the tail tip (fraction of body length)." }, "envelopeExp": { "type": "number", "exclusiveMinimum": 0, "description": "Spine envelope exponent in `amp(s) = ampHead + (ampTail\u2212ampHead) * pow(s, env)`." } } }, "territory": { "oneOf": [{ "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 territoriality params (Brown 1964 + Adams 2001). All subfields optional \u2014 only declared keys override the per-species heuristic; absent keys fall back to the heuristic's defaults.", "properties": { "coreRadius": { "type": "number", "exclusiveMinimum": 0, "description": "Inner defense radius (mm). Non-conspecifics inside this get chased." }, "displayRadius": { "type": "number", "exclusiveMinimum": 0, "description": "Outer display radius (mm). Owner posts but does not chase between core and display." }, "aggression": { "type": "number", "exclusiveMinimum": 0, "description": "Chase-force magnitude (mm/sec\xB2 equivalent). Higher = more aggressive pursuit." }, "fatigueRate": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second decay rate of accumulated fatigue. Scales chase force downward over sustained defense." } } }, { "type": "null", "description": "Explicit `null` opts OUT of the per-species heuristic \u2014 e.g. a peaceful dwarf cichlid that should NOT inherit the cichlid territory default." }] }, "nipping": { "oneOf": [{ "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 fin-nipping params (Keenleyside 1955 + Magurran 1990). All subfields optional.", "properties": { "groupThreshold": { "type": "integer", "minimum": 1, "description": "Minimum conspecific count visible nearby to suppress nipping. Below this, the fish nips." }, "finFraction": { "type": "number", "minimum": 0, "maximum": 1, "description": "Minimum fraction of body length the target's longest fin must reach to be a candidate." }, "rate": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second Poisson rate at which an eligible nip attempt fires when conditions hold." } } }, { "type": "null", "description": "Explicit `null` opts OUT of the per-species nipping heuristic." }] }, "fear": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 anti-predator / fear params (Lima & Dill 1990). No `| null` \u2014 every fish carries fear; manifest authors can only tune values.", "properties": { "riskBaseline": { "type": "number", "minimum": 0, "description": "Baseline anxiety added to every tick's risk integration. Higher = always-jumpy species." }, "threshold": { "type": "number", "exclusiveMinimum": 0, "description": "Risk level above which the FORAGE \u2192 REFUGE mode flip fires." }, "coverPreference": { "enum": ["plants", "caves", "wood", "any"], "description": "Which hardscape coverScore source the species prefers when seeking a refuge. `'any'` = no preference (nearest cover wins)." }, "emergenceDelay": { "type": "number", "minimum": 0, "description": "Seconds to wait in REFUGE mode after risk drops below threshold before flipping back to FORAGE." } } } } } } };
+var schema43 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "group", "adultSize", "temperament", "temperatureRange", "pHRange", "schoolingMin", "bioloadClass", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "livestock" }, "group": { "enum": ["fish", "shrimp", "snail"] }, "adultSize": { "type": "number", "exclusiveMinimum": 0, "description": "Typical adult body length in millimetres." }, "temperament": { "enum": ["peaceful", "semi-aggressive", "aggressive"] }, "temperatureRange": { "type": "object", "required": ["minC", "maxC"], "additionalProperties": false, "properties": { "minC": { "type": "number", "minimum": 0, "maximum": 40 }, "maxC": { "type": "number", "minimum": 0, "maximum": 40 } }, "description": "Water temperature tolerance window in Celsius. Manifest authors must ensure minC < maxC; JSON Schema cannot enforce cross-field comparisons declaratively." }, "pHRange": { "type": "object", "required": ["min", "max"], "additionalProperties": false, "properties": { "min": { "type": "number", "minimum": 4, "maximum": 9.5 }, "max": { "type": "number", "minimum": 4, "maximum": 9.5 } }, "description": "Water pH tolerance window. Manifest authors must ensure min < max; JSON Schema cannot enforce cross-field comparisons declaratively." }, "schoolingMin": { "type": "integer", "minimum": 1, "description": "Minimum recommended group size. 1 = solitary / non-schooling." }, "bioloadClass": { "enum": ["low", "medium", "high"] }, "color": { "$ref": "#/$defs/HexColor" }, "compatibilityFlags": { "type": "object", "additionalProperties": false, "properties": { "plantedOK": { "type": "boolean" }, "finNipper": { "type": "boolean" }, "brackish": { "type": "boolean" } }, "description": "Pre-baked answers for the Stage 7 F7.2 compatibility rule engine." }, "behavior": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.2 per-species overrides for the schooling + vertical-stratification + animation params. Every subfield is optional; absent fields fall back to the per-group preset via `resolveBehavior()` in `@aquascape/domain/livestock-behaviors`. Manifests authored before schemaVersion 3 lack this block entirely and load unchanged.", "properties": { "schooling": { "type": "object", "additionalProperties": false, "description": "Couzin 2002 three-zone + Reynolds 1987 weighted steering. Distances in millimetres; speeds in mm/sec.", "properties": { "ZOR": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of repulsion radius (mm). Below this, neighbours push us away." }, "ZOO": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of orientation radius (mm). Between ZOR and ZOO, headings align." }, "ZOA": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of attraction radius (mm). Between ZOO and ZOA, steer toward centroid." }, "blindAngle": { "type": "number", "minimum": 0, "maximum": 3.141592653589793, "description": "Blind cone behind the fish (radians, total angle subtended). Range [0, \u03C0]." }, "vPref": { "type": "number", "exclusiveMinimum": 0, "description": "Preferred cruise speed (mm/sec)." }, "vMax": { "type": "number", "exclusiveMinimum": 0, "description": "Hard cap on instantaneous speed (mm/sec)." }, "turnMax": { "type": "number", "exclusiveMinimum": 0, "description": "Maximum heading change (rad/sec)." }, "wSep": { "type": "number", "minimum": 0, "description": "Reynolds separation weight." }, "wAli": { "type": "number", "minimum": 0, "description": "Reynolds alignment weight." }, "wCoh": { "type": "number", "minimum": 0, "description": "Reynolds cohesion weight." }, "noise": { "type": "number", "minimum": 0, "description": "Per-tick noise magnitude as a fraction of vPref. Typical 0..0.2." } } }, "depth": { "type": "object", "additionalProperties": false, "description": "Vertical-stratification spring centred on a preferred fraction of tank height.", "properties": { "preferredY": { "type": "number", "minimum": 0, "maximum": 1, "description": "Preferred Y as a fraction of tank height (0 = substrate, 1 = waterline)." }, "bandWidth": { "type": "number", "minimum": 0, "maximum": 1, "description": "Band half-width as a fraction of tank height. Inside this, only noise applies." }, "returnForce": { "type": "number", "minimum": 0, "description": "Restoring force magnitude when outside the band (mm/sec\xB2 equivalent)." } } }, "animation": { "type": "object", "additionalProperties": false, "description": "Carangiform tail-beat parameters consumed by the renderer-3d vertex shader.", "properties": { "tailBeatFreq": { "type": "number", "exclusiveMinimum": 0, "description": "Tail-beat frequency (Hz)." }, "ampHead": { "type": "number", "minimum": 0, "maximum": 1, "description": "Amplitude at the head end (fraction of body length)." }, "ampTail": { "type": "number", "minimum": 0, "maximum": 1, "description": "Amplitude at the tail tip (fraction of body length)." }, "envelopeExp": { "type": "number", "exclusiveMinimum": 0, "description": "Spine envelope exponent in `amp(s) = ampHead + (ampTail\u2212ampHead) * pow(s, env)`." } } }, "territory": { "oneOf": [{ "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 territoriality params (Brown 1964 + Adams 2001). All subfields optional \u2014 only declared keys override the per-species heuristic; absent keys fall back to the heuristic's defaults.", "properties": { "coreRadius": { "type": "number", "exclusiveMinimum": 0, "description": "Inner defense radius (mm). Non-conspecifics inside this get chased." }, "displayRadius": { "type": "number", "exclusiveMinimum": 0, "description": "Outer display radius (mm). Owner posts but does not chase between core and display." }, "aggression": { "type": "number", "exclusiveMinimum": 0, "description": "Chase-force magnitude (mm/sec\xB2 equivalent). Higher = more aggressive pursuit." }, "fatigueRate": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second decay rate of accumulated fatigue. Scales chase force downward over sustained defense." } } }, { "type": "null", "description": "Explicit `null` opts OUT of the per-species heuristic \u2014 e.g. a peaceful dwarf cichlid that should NOT inherit the cichlid territory default." }] }, "nipping": { "oneOf": [{ "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 fin-nipping params (Keenleyside 1955 + Magurran 1990). All subfields optional.", "properties": { "groupThreshold": { "type": "integer", "minimum": 1, "description": "Minimum conspecific count visible nearby to suppress nipping. Below this, the fish nips." }, "finFraction": { "type": "number", "minimum": 0, "maximum": 1, "description": "Minimum fraction of body length the target's longest fin must reach to be a candidate." }, "rate": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second Poisson rate at which an eligible nip attempt fires when conditions hold." } } }, { "type": "null", "description": "Explicit `null` opts OUT of the per-species nipping heuristic." }] }, "fear": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 anti-predator / fear params (Lima & Dill 1990). No `| null` \u2014 every fish carries fear; manifest authors can only tune values.", "properties": { "riskBaseline": { "type": "number", "minimum": 0, "description": "Baseline anxiety added to every tick's risk integration. Higher = always-jumpy species." }, "threshold": { "type": "number", "exclusiveMinimum": 0, "description": "Risk level above which the FORAGE \u2192 REFUGE mode flip fires." }, "coverPreference": { "enum": ["plants", "caves", "wood", "any"], "description": "Which hardscape coverScore source the species prefers when seeking a refuge. `'any'` = no preference (nearest cover wins)." }, "emergenceDelay": { "type": "number", "minimum": 0, "description": "Seconds to wait in REFUGE mode after risk drops below threshold before flipping back to FORAGE." } } }, "feeding": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.4 feeding params. `category` drives FeedingSystem target selection (surface flake vs. midwater pellet vs. substrate wafer, plus algae-grazer / plant-eater / detritivore passive uptake). No `| null` \u2014 every fish has hunger; absent fields fall back to per-species defaults via `resolveBehavior()`.", "properties": { "hungerRatePerSec": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second hunger accrual. Higher = species reads as visibly hungry faster between feedings." }, "threshold": { "type": "number", "exclusiveMinimum": 0, "description": "Hunger level above which the fish actively seeks food. Typically in [0, 2]; can exceed 1 for species that tolerate longer fasts before showing it." }, "category": { "enum": ["surface", "midwater", "substrate", "algae-grazer", "plant-eater", "detritivore"], "description": "Feeding-strategy bucket consumed by FeedingSystem target selection." } } }, "curiosity": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.4 curiosity / glass-surfing params. Drives the chance + duration of the glass-surf investigation behavior. No `| null` \u2014 `ratePerSec = 0` is the documented way to disable glass-surfing entirely for a species.", "properties": { "boldness": { "type": "number", "minimum": 0, "maximum": 1, "description": "How likely a curious bout is to fire when an opportunity presents itself. 0 = always shy, 1 = always investigates." }, "ratePerSec": { "type": "number", "minimum": 0, "description": "Per-second Poisson rate at which a curiosity bout fires. 0 disables glass-surfing entirely for the species." }, "dwellSec": { "type": "number", "exclusiveMinimum": 0, "description": "Seconds the fish lingers at the investigated target before returning to FORAGE." } } } } } } };
 function validate27(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -2423,7 +2423,7 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
       let data25 = data.behavior;
       if (data25 && typeof data25 == "object" && !Array.isArray(data25)) {
         for (const key4 in data25) {
-          if (!(key4 === "schooling" || key4 === "depth" || key4 === "animation" || key4 === "territory" || key4 === "nipping" || key4 === "fear")) {
+          if (!(key4 === "schooling" || key4 === "depth" || key4 === "animation" || key4 === "territory" || key4 === "nipping" || key4 === "fear" || key4 === "feeding" || key4 === "curiosity")) {
             const err65 = { instancePath: instancePath + "/behavior", schemaPath: "#/properties/behavior/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key4 }, message: "must NOT have additional properties" };
             if (vErrors === null) {
               vErrors = [err65];
@@ -3354,22 +3354,201 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
             errors++;
           }
         }
+        if (data25.feeding !== void 0) {
+          let data61 = data25.feeding;
+          if (data61 && typeof data61 == "object" && !Array.isArray(data61)) {
+            for (const key11 in data61) {
+              if (!(key11 === "hungerRatePerSec" || key11 === "threshold" || key11 === "category")) {
+                const err145 = { instancePath: instancePath + "/behavior/feeding", schemaPath: "#/properties/behavior/properties/feeding/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key11 }, message: "must NOT have additional properties" };
+                if (vErrors === null) {
+                  vErrors = [err145];
+                } else {
+                  vErrors.push(err145);
+                }
+                errors++;
+              }
+            }
+            if (data61.hungerRatePerSec !== void 0) {
+              let data62 = data61.hungerRatePerSec;
+              if (typeof data62 == "number" && isFinite(data62)) {
+                if (data62 <= 0 || isNaN(data62)) {
+                  const err146 = { instancePath: instancePath + "/behavior/feeding/hungerRatePerSec", schemaPath: "#/properties/behavior/properties/feeding/properties/hungerRatePerSec/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err146];
+                  } else {
+                    vErrors.push(err146);
+                  }
+                  errors++;
+                }
+              } else {
+                const err147 = { instancePath: instancePath + "/behavior/feeding/hungerRatePerSec", schemaPath: "#/properties/behavior/properties/feeding/properties/hungerRatePerSec/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err147];
+                } else {
+                  vErrors.push(err147);
+                }
+                errors++;
+              }
+            }
+            if (data61.threshold !== void 0) {
+              let data63 = data61.threshold;
+              if (typeof data63 == "number" && isFinite(data63)) {
+                if (data63 <= 0 || isNaN(data63)) {
+                  const err148 = { instancePath: instancePath + "/behavior/feeding/threshold", schemaPath: "#/properties/behavior/properties/feeding/properties/threshold/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err148];
+                  } else {
+                    vErrors.push(err148);
+                  }
+                  errors++;
+                }
+              } else {
+                const err149 = { instancePath: instancePath + "/behavior/feeding/threshold", schemaPath: "#/properties/behavior/properties/feeding/properties/threshold/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err149];
+                } else {
+                  vErrors.push(err149);
+                }
+                errors++;
+              }
+            }
+            if (data61.category !== void 0) {
+              let data64 = data61.category;
+              if (!(data64 === "surface" || data64 === "midwater" || data64 === "substrate" || data64 === "algae-grazer" || data64 === "plant-eater" || data64 === "detritivore")) {
+                const err150 = { instancePath: instancePath + "/behavior/feeding/category", schemaPath: "#/properties/behavior/properties/feeding/properties/category/enum", keyword: "enum", params: { allowedValues: schema43.properties.behavior.properties.feeding.properties.category.enum }, message: "must be equal to one of the allowed values" };
+                if (vErrors === null) {
+                  vErrors = [err150];
+                } else {
+                  vErrors.push(err150);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err151 = { instancePath: instancePath + "/behavior/feeding", schemaPath: "#/properties/behavior/properties/feeding/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            if (vErrors === null) {
+              vErrors = [err151];
+            } else {
+              vErrors.push(err151);
+            }
+            errors++;
+          }
+        }
+        if (data25.curiosity !== void 0) {
+          let data65 = data25.curiosity;
+          if (data65 && typeof data65 == "object" && !Array.isArray(data65)) {
+            for (const key12 in data65) {
+              if (!(key12 === "boldness" || key12 === "ratePerSec" || key12 === "dwellSec")) {
+                const err152 = { instancePath: instancePath + "/behavior/curiosity", schemaPath: "#/properties/behavior/properties/curiosity/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key12 }, message: "must NOT have additional properties" };
+                if (vErrors === null) {
+                  vErrors = [err152];
+                } else {
+                  vErrors.push(err152);
+                }
+                errors++;
+              }
+            }
+            if (data65.boldness !== void 0) {
+              let data66 = data65.boldness;
+              if (typeof data66 == "number" && isFinite(data66)) {
+                if (data66 > 1 || isNaN(data66)) {
+                  const err153 = { instancePath: instancePath + "/behavior/curiosity/boldness", schemaPath: "#/properties/behavior/properties/curiosity/properties/boldness/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
+                  if (vErrors === null) {
+                    vErrors = [err153];
+                  } else {
+                    vErrors.push(err153);
+                  }
+                  errors++;
+                }
+                if (data66 < 0 || isNaN(data66)) {
+                  const err154 = { instancePath: instancePath + "/behavior/curiosity/boldness", schemaPath: "#/properties/behavior/properties/curiosity/properties/boldness/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err154];
+                  } else {
+                    vErrors.push(err154);
+                  }
+                  errors++;
+                }
+              } else {
+                const err155 = { instancePath: instancePath + "/behavior/curiosity/boldness", schemaPath: "#/properties/behavior/properties/curiosity/properties/boldness/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err155];
+                } else {
+                  vErrors.push(err155);
+                }
+                errors++;
+              }
+            }
+            if (data65.ratePerSec !== void 0) {
+              let data67 = data65.ratePerSec;
+              if (typeof data67 == "number" && isFinite(data67)) {
+                if (data67 < 0 || isNaN(data67)) {
+                  const err156 = { instancePath: instancePath + "/behavior/curiosity/ratePerSec", schemaPath: "#/properties/behavior/properties/curiosity/properties/ratePerSec/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err156];
+                  } else {
+                    vErrors.push(err156);
+                  }
+                  errors++;
+                }
+              } else {
+                const err157 = { instancePath: instancePath + "/behavior/curiosity/ratePerSec", schemaPath: "#/properties/behavior/properties/curiosity/properties/ratePerSec/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err157];
+                } else {
+                  vErrors.push(err157);
+                }
+                errors++;
+              }
+            }
+            if (data65.dwellSec !== void 0) {
+              let data68 = data65.dwellSec;
+              if (typeof data68 == "number" && isFinite(data68)) {
+                if (data68 <= 0 || isNaN(data68)) {
+                  const err158 = { instancePath: instancePath + "/behavior/curiosity/dwellSec", schemaPath: "#/properties/behavior/properties/curiosity/properties/dwellSec/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err158];
+                  } else {
+                    vErrors.push(err158);
+                  }
+                  errors++;
+                }
+              } else {
+                const err159 = { instancePath: instancePath + "/behavior/curiosity/dwellSec", schemaPath: "#/properties/behavior/properties/curiosity/properties/dwellSec/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err159];
+                } else {
+                  vErrors.push(err159);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err160 = { instancePath: instancePath + "/behavior/curiosity", schemaPath: "#/properties/behavior/properties/curiosity/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            if (vErrors === null) {
+              vErrors = [err160];
+            } else {
+              vErrors.push(err160);
+            }
+            errors++;
+          }
+        }
       } else {
-        const err145 = { instancePath: instancePath + "/behavior", schemaPath: "#/properties/behavior/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err161 = { instancePath: instancePath + "/behavior", schemaPath: "#/properties/behavior/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
-          vErrors = [err145];
+          vErrors = [err161];
         } else {
-          vErrors.push(err145);
+          vErrors.push(err161);
         }
         errors++;
       }
     }
   } else {
-    const err146 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+    const err162 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
     if (vErrors === null) {
-      vErrors = [err146];
+      vErrors = [err162];
     } else {
-      vErrors.push(err146);
+      vErrors.push(err162);
     }
     errors++;
   }

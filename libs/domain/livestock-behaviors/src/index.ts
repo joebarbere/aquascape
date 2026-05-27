@@ -2,7 +2,8 @@
 //
 // Behaviour-parameter types, per-group presets, and the resolveBehavior()
 // catalog resolver for animated livestock (Plan Stage 11 — F11.2 schooling +
-// vertical stratification, F11.3 territoriality / nipping / fear).
+// vertical stratification, F11.3 territoriality / nipping / fear, F11.4
+// feeding + curiosity).
 //
 // DEPENDENCY BUDGET
 // -----------------
@@ -12,9 +13,12 @@
 
 export type {
   AnimationParams,
+  CuriosityParams,
   DepthBand,
   DepthParams,
   FearParams,
+  FeedingCategory,
+  FeedingParams,
   NippingParams,
   ResolvedBehavior,
   SchoolingParams,

@@ -777,6 +777,206 @@ describe('validateCatalogEntry (livestock, Stage 7 F7.1)', () => {
       ).toBe(true);
     });
   });
+
+  // ─── F11.4 behavior extensions (additive, no schemaVersion bump) ──────────
+  describe('behavior overrides (Stage 11 F11.4 — feeding / curiosity)', () => {
+    // feeding ────────────────────────────────────────────────────────────────
+    it('accepts a partial behavior.feeding object', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { feeding: { category: 'algae-grazer' } },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts a fully-specified behavior.feeding object', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: {
+            feeding: { hungerRatePerSec: 0.02, threshold: 0.8, category: 'midwater' },
+          },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts every feeding.category enum value', () => {
+      for (const category of [
+        'surface',
+        'midwater',
+        'substrate',
+        'algae-grazer',
+        'plant-eater',
+        'detritivore',
+      ]) {
+        expect(
+          validateCatalogEntry({
+            ...validLivestock,
+            behavior: { feeding: { category } },
+          }).ok,
+        ).toBe(true);
+      }
+    });
+
+    it('rejects an unknown feeding.category enum value', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { feeding: { category: 'invalid-category' } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects a typo inside behavior.feeding (additionalProperties: false)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { feeding: { hungerRate: 0.02 } }, // typo: should be hungerRatePerSec
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects feeding.hungerRatePerSec <= 0', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { feeding: { hungerRatePerSec: 0 } },
+        }).ok,
+      ).toBe(false);
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { feeding: { hungerRatePerSec: -0.01 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects feeding.threshold <= 0', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { feeding: { threshold: 0 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('accepts feeding.threshold above 1 (deliberately permissive — no upper bound)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { feeding: { threshold: 1.5 } },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('rejects an explicit null for behavior.feeding (no opt-out; feeding is required at runtime)', () => {
+      expect(
+        validateCatalogEntry({ ...validLivestock, behavior: { feeding: null } }).ok,
+      ).toBe(false);
+    });
+
+    // curiosity ──────────────────────────────────────────────────────────────
+    it('accepts a partial behavior.curiosity object', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { curiosity: { boldness: 0.7 } },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts a fully-specified behavior.curiosity object', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { curiosity: { boldness: 0.6, ratePerSec: 0.02, dwellSec: 5 } },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts curiosity.ratePerSec = 0 (disables glass-surfing entirely)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { curiosity: { ratePerSec: 0 } },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('rejects a typo inside behavior.curiosity (additionalProperties: false)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { curiosity: { bolness: 0.5 } }, // typo
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects curiosity.boldness outside [0, 1]', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { curiosity: { boldness: 1.5 } },
+        }).ok,
+      ).toBe(false);
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { curiosity: { boldness: -0.1 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects curiosity.dwellSec <= 0', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { curiosity: { dwellSec: 0 } },
+        }).ok,
+      ).toBe(false);
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { curiosity: { dwellSec: -1 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects curiosity.ratePerSec below 0', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: { curiosity: { ratePerSec: -0.01 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects an explicit null for behavior.curiosity (no opt-out at the type level)', () => {
+      expect(
+        validateCatalogEntry({ ...validLivestock, behavior: { curiosity: null } }).ok,
+      ).toBe(false);
+    });
+
+    // co-existence ───────────────────────────────────────────────────────────
+    it('accepts F11.2 + F11.3 + F11.4 subfields together in one behavior block', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLivestock,
+          behavior: {
+            schooling: { wCoh: 1.5 },
+            depth: { preferredY: 0.4 },
+            animation: { tailBeatFreq: 4 },
+            territory: { coreRadius: 60 },
+            nipping: null,
+            fear: { riskBaseline: 0.1 },
+            feeding: { category: 'midwater', hungerRatePerSec: 0.02 },
+            curiosity: { boldness: 0.6, ratePerSec: 0.02, dwellSec: 5 },
+          },
+        }).ok,
+      ).toBe(true);
+    });
+  });
 });
 
 describe('validateCatalogEntry (equipment, Stage 7 F7.3)', () => {

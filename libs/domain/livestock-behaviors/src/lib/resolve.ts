@@ -1,13 +1,15 @@
-// Catalog-row → ResolvedBehavior resolution for F11.2 + F11.3.
+// Catalog-row → ResolvedBehavior resolution for F11.2 + F11.3 + F11.4.
 //
 // Pure + deterministic. Same input → byte-stable output. No randomness, no
 // closures over module state, no mutation of the shared preset constants.
 
 import type {
   AnimationParams,
+  CuriosityParams,
   DepthBand,
   DepthParams,
   FearParams,
+  FeedingParams,
   NippingParams,
   ResolvedBehavior,
   SchoolingParams,
@@ -40,6 +42,8 @@ export interface BehaviorResolutionInput {
     territory?: Partial<TerritoryParams> | null;
     nipping?: Partial<NippingParams> | null;
     fear?: Partial<FearParams>;
+    feeding?: Partial<FeedingParams>;
+    curiosity?: Partial<CuriosityParams>;
   };
 }
 
@@ -79,6 +83,23 @@ const DEFAULT_NIPPING: NippingParams = {
   finFraction: 0.4,
   rate: 0.5,
 };
+
+// F11.4 — feeding-category heuristics. Substring matches (lower-case compared)
+// on the catalog id. Algae-grazers + plant-eaters are species-specific
+// upgrades on top of the depth-band preset; detritivore is decided earlier by
+// group (shrimp/snail).
+const ALGAE_GRAZER_ID_HINTS = ['oto', 'pleco', 'siamese-algae'] as const;
+const PLANT_EATER_ID_HINTS = [
+  'silverdollar',
+  'silver-dollar',
+  'severum',
+] as const;
+
+// F11.4 — curiosity-override heuristics. Most species use the band preset; a
+// few well-known temperament cases get explicit overrides (invertebrates +
+// kuhli loaches).
+const CURIOSITY_INVERT_HINTS = ['shrimp', 'snail'] as const;
+const CURIOSITY_TIMID_HINTS = ['kuhli'] as const;
 
 /**
  * Maps a catalog row to its depth band. Priority (first match wins):
@@ -165,6 +186,60 @@ function inferNippingFromSpecies(
 }
 
 /**
+ * F11.4 — return a `Partial<FeedingParams>` override block reflecting
+ * species-specific feeding heuristics. The merged result spreads over the
+ * preset's feeding defaults. Priority order (first match wins):
+ *   1. Group `shrimp` or `snail` → `category: 'detritivore'`.
+ *   2. ID substring (case-insensitive) matches algae-grazer hints → `'algae-grazer'`.
+ *   3. ID substring matches plant-eater hints → `'plant-eater'`.
+ *   4. Otherwise → empty object (keep the preset category).
+ */
+function inferFeedingFromSpecies(
+  entry: BehaviorResolutionInput,
+): Partial<FeedingParams> {
+  if (entry.group === 'shrimp' || entry.group === 'snail') {
+    return { category: 'detritivore' };
+  }
+  if (!entry.id) return {};
+  const idLower = entry.id.toLowerCase();
+  for (const hint of ALGAE_GRAZER_ID_HINTS) {
+    if (idLower.includes(hint)) return { category: 'algae-grazer' };
+  }
+  for (const hint of PLANT_EATER_ID_HINTS) {
+    if (idLower.includes(hint)) return { category: 'plant-eater' };
+  }
+  return {};
+}
+
+/**
+ * F11.4 — return a `Partial<CuriosityParams>` override block reflecting
+ * species-specific temperament. Invertebrates wander but rarely investigate
+ * the glass; kuhli loaches are famously timid. Otherwise the band preset
+ * stands.
+ */
+function inferCuriosityFromSpecies(
+  entry: BehaviorResolutionInput,
+): Partial<CuriosityParams> {
+  if (entry.group === 'shrimp' || entry.group === 'snail') {
+    return { boldness: 0.1, ratePerSec: 0.01, dwellSec: 2 };
+  }
+  if (entry.id) {
+    const idLower = entry.id.toLowerCase();
+    for (const hint of CURIOSITY_INVERT_HINTS) {
+      if (idLower.includes(hint)) {
+        return { boldness: 0.1, ratePerSec: 0.01, dwellSec: 2 };
+      }
+    }
+    for (const hint of CURIOSITY_TIMID_HINTS) {
+      if (idLower.includes(hint)) {
+        return { boldness: 0.05, ratePerSec: 0.005 };
+      }
+    }
+  }
+  return {};
+}
+
+/**
  * Merge an optional `Partial<X> | null | undefined` override on top of the
  * heuristic-derived default. Tri-state semantics:
  *   - override === null      → final value is `null` (explicit opt-out).
@@ -216,6 +291,12 @@ export function resolveBehavior(entry: BehaviorResolutionInput): ResolvedBehavio
     DEFAULT_NIPPING,
   );
 
+  // F11.4 — feeding + curiosity: species heuristic spreads over preset, then
+  // catalog override spreads over the heuristic. No `null` opt-out — these
+  // fields are required on ResolvedBehavior.
+  const feedingHeuristic = inferFeedingFromSpecies(entry);
+  const curiosityHeuristic = inferCuriosityFromSpecies(entry);
+
   // Literal object construction (not Object.assign with computed keys) keeps
   // the returned key order stable across runs + engines.
   return {
@@ -236,6 +317,16 @@ export function resolveBehavior(entry: BehaviorResolutionInput): ResolvedBehavio
     fear: {
       ...preset.fear,
       ...(overrides?.fear ?? {}),
+    },
+    feeding: {
+      ...preset.feeding,
+      ...feedingHeuristic,
+      ...(overrides?.feeding ?? {}),
+    },
+    curiosity: {
+      ...preset.curiosity,
+      ...curiosityHeuristic,
+      ...(overrides?.curiosity ?? {}),
     },
   };
 }

@@ -184,6 +184,45 @@ test.describe('livestock 3D rendering', () => {
     const diff = await countDifferingPixels(frame1, frame2);
     expect(diff).toBeGreaterThan(FRAME_DIFF_FLOOR);
   });
+
+  test('Feed tank spawns food sprites that despawn after their lifetime', async ({ page }) => {
+    // Add livestock so the Feed tank button activates + the simulation
+    // service has a world to spawn sprites in.
+    await addOneFishAndEnter3d(page);
+
+    // Sanity: no sprites before the click.
+    const before = await page.evaluate(
+      () => window.__aquascape_debug__?.getFoodSpriteCount() ?? -1,
+    );
+    expect(before).toBe(0);
+
+    // Click Feed tank. The button lives in LivestockToolComponent — the
+    // service is the only consumer of the FeedingPulse action (no reducer).
+    // Service spawns 3–6 sprites by default via tickPrng.
+    await page.getByRole('button', { name: /Feed tank/i }).click();
+
+    // Poll the debug hook until the world reports sprites. The dispatch →
+    // service subscription → spawnFoodSprite path is synchronous in
+    // practice; poll is for robustness against the change-detection cycle.
+    await expect
+      .poll(() => page.evaluate(() => window.__aquascape_debug__?.getFoodSpriteCount() ?? 0))
+      .toBeGreaterThanOrEqual(3);
+    const afterClick = await page.evaluate(
+      () => window.__aquascape_debug__?.getFoodSpriteCount() ?? -1,
+    );
+    expect(afterClick).toBeLessThanOrEqual(6);
+
+    // Sprites carry a 30s lifetime. We don't wait that long here — the
+    // ECS-side foodSpriteLifetimeSystem covers despawn deterministically
+    // (see libs/domain/livestock-ecs/src/lib/feeding-system.spec.ts).
+    // What we DO assert: the count holds steady across a few frames
+    // (sprites aren't despawning prematurely from a rendering bug).
+    await page.waitForTimeout(500);
+    const afterHold = await page.evaluate(
+      () => window.__aquascape_debug__?.getFoodSpriteCount() ?? -1,
+    );
+    expect(afterHold).toBe(afterClick);
+  });
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────

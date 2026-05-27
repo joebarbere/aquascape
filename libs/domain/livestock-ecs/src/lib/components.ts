@@ -183,10 +183,21 @@ export const FearState = defineComponent({
  * down on the next call. `coverScore` ∈ [0, 1] gates which hardscape entries
  * are usable refuges; `category` matches `HARDSCAPE_CATEGORY.*` so
  * FearSystem can honour species `coverPreference`.
+ *
+ * F11.4 — `algaeScore ∈ [0, 1]` is the per-hardscape algae stock that
+ * algae-grazer fish (otos, plecos) rasp down. The score regenerates over
+ * sim-time (see `FeedingSystem` regrowth rate). Initialised by
+ * `registerHardscape`: rocks + wood start at 1.0 (algae naturally grows on
+ * porous surfaces); plant + other start at 0.0 (no algae on synthetic decor
+ * or live plants — those are handled by the plant-eater branch).
+ * F11.3 hardscape.spec.ts is binary-compatible — adding fields to a bitECS
+ * `defineComponent` only widens the SoA struct; existing slabs keep their
+ * shape and existing tests pass without modification.
  */
 export const Hardscape = defineComponent({
   coverScore: Types.f32,
   category: Types.ui8,
+  algaeScore: Types.f32,
 });
 
 /**
@@ -203,3 +214,61 @@ export const HARDSCAPE_CATEGORY = {
 
 export type HardscapeCategoryId =
   (typeof HARDSCAPE_CATEGORY)[keyof typeof HARDSCAPE_CATEGORY];
+
+/**
+ * Per-fish hunger state (F11.4 FeedingSystem).
+ *
+ * `hunger` integrates from `FeedingParams.hungerRatePerSec` each tick.
+ * Once it exceeds `FeedingParams.threshold` the fish seeks food per its
+ * category (food sprite / algae / detritus). `lastFedAt` is the
+ * `world.tickCounter * SIM_DT` timestamp at the last satisfaction event;
+ * test + diagnostics surface, not consulted by the system itself.
+ */
+export const FeedingDrive = defineComponent({
+  /** Hunger accumulator in `[0, ∞)`. Crosses `threshold` → seek food. */
+  hunger: Types.f32,
+  /** Sim-time seconds at the last satisfaction event. */
+  lastFedAt: Types.f32,
+});
+
+/**
+ * Sentinel stored in `Curiosity.interestX` when no interest point is
+ * active. We use a large negative number (well outside any tank's
+ * canonical mm bounds) so the check is a single < comparison instead of a
+ * NaN-aware predicate. `Number.NaN` would also work but typed-array NaN
+ * round-tripping has odd corner cases (`f32` payload truncation, signed-
+ * NaN vs. quiet-NaN) — `-1e30` is unambiguous and stable across engines.
+ */
+export const NO_INTEREST = -1e30;
+
+/**
+ * Per-fish curiosity / glass-surfing state (F11.4 CuriositySystem).
+ *
+ * The fish drifts toward `(interestX, interestY, interestZ)` while
+ * `dwellRemaining > 0`. When the dwell timer hits 0 the interest point
+ * is cleared via the `NO_INTEREST` sentinel; on each subsequent tick a
+ * Poisson draw (gated by `boldness`) may re-arm it at the front pane
+ * glass for another `dwellSec`.
+ */
+export const Curiosity = defineComponent({
+  /** Current attraction point in mm. `NO_INTEREST` sentinel = inactive. */
+  interestX: Types.f32,
+  interestY: Types.f32,
+  interestZ: Types.f32,
+  /** Seconds remaining on the current interest dwell. 0 = inactive. */
+  dwellRemaining: Types.f32,
+});
+
+/**
+ * Tag component — entity is a food sprite, not a fish or a hardscape.
+ * Food sprites are spawned by `world.spawnFoodSprite`; FeedingSystem
+ * picks them up as targets for surface / midwater / substrate feeders.
+ * `lifetime` decrements each tick (FoodSpriteLifetimeSystem); when it
+ * reaches 0 the sprite despawns.
+ */
+export const FoodSprite = defineComponent({
+  /** Seconds remaining before the sprite auto-despawns. */
+  lifetime: Types.f32,
+  /** Satiation contribution per nibble. Decremented as the fish feeds. */
+  calories: Types.f32,
+});

@@ -32,11 +32,16 @@ import {
   BehaviorParamsRef,
   BEHAVIOR_MODE,
   BodyLength,
+  Curiosity,
   FearState,
+  FeedingDrive,
+  FoodSprite,
   Force,
+  HARDSCAPE_CATEGORY,
   Hardscape,
   NippingDrive,
   NO_ENTITY_REF,
+  NO_INTEREST,
   Orientation,
   Position,
   SpeciesId,
@@ -47,8 +52,11 @@ import { NO_BEHAVIOR_HANDLE, ParamStore } from './param-store';
 import { SpatialGrid } from './spatial-grid';
 import {
   animationSystem,
+  curiositySystem,
   depthSystem,
   fearSystem,
+  feedingSystem,
+  foodSpriteLifetimeSystem,
   kinematicSystem,
   nippingSystem,
   perceptionSystem,
@@ -141,6 +149,13 @@ export interface HardscapeRegistrationEntry {
  * Renderer-facing snapshot of the world. The returned typed arrays may be
  * *pooled* (recycled on the next `snapshot()` call) — consumers that need
  * the data outside a single InstancedMesh upload must copy.
+ *
+ * Slab order: fish entries come first (one entry per FORAGE/REFUGE/PURSUE
+ * livestock entity), then food sprites in a separate slab. Fish counts +
+ * arrays are unchanged from F11.3 — additive only. F11.4 Wave 4 renderer
+ * picks up `foodSpritePosition` to draw transient food cues; legacy
+ * renderers that read only the fish arrays continue to work without
+ * modification.
  */
 export interface WorldSnapshot {
   entityCount: number;
@@ -156,6 +171,15 @@ export interface WorldSnapshot {
   archetype: Uint8Array;
   /** Body length per entity in mm. Length = `entityCount`. */
   scale: Float32Array;
+  /**
+   * Number of currently-live food sprites. Reset to 0 when none exist.
+   * F11.4 addition — surfaces the FoodSprite-tagged entity slab to the
+   * renderer (Wave 4) so it can draw a billboard / sprite cue. The fish
+   * arrays above are unaffected — sprites live in their own slab.
+   */
+  foodSpriteCount: number;
+  /** Stride 3 — x,y,z per sprite. Length = `foodSpriteCount * 3`. */
+  foodSpritePosition: Float32Array;
 }
 
 /**
@@ -233,6 +257,26 @@ export interface LivestockWorld {
    * transitions.
    */
   injectStartle(eid: number, magnitude: number): void;
+  /**
+   * F11.4 — spawn a transient food sprite at the given position.
+   * Returns the new bitECS entity id. Default lifetime 30 s; default
+   * calories 1 (enough to satiate a single fish to hunger = 0). The
+   * sprite is a separate entity from any fish — FeedingSystem queries
+   * `FoodSprite`-tagged entities, not the fish slab.
+   */
+  spawnFoodSprite(
+    position: { x: number; y: number; z: number },
+    lifetimeSec?: number,
+    calories?: number,
+  ): number;
+  /** F11.4 — count of currently-live FoodSprite entities. Tests + debug. */
+  getFoodSpriteCount(): number;
+  /**
+   * F11.4 — read the current algae score for a hardscape entity.
+   * Returns null if `eid` doesn't have a Hardscape component attached.
+   * Tests + debug surface; FeedingSystem reads the SoA slab directly.
+   */
+  getAlgaeScore(hardscapeEid: number): number | null;
   /** Run one sim tick of duration `dt` (callers pass `SIM_DT`). */
   step(dt: number): void;
   /**
@@ -245,7 +289,11 @@ export interface LivestockWorld {
   dispose(): void;
 }
 
-const ALL_ENTITIES = defineQuery([Position]);
+// Fish snapshot query — entities with Orientation are fish (food sprites
+// don't carry it). Using Orientation as the discriminator keeps food
+// sprites out of the fish slab cleanly.
+const FISH_ENTITIES = defineQuery([Position, Orientation]);
+const FOOD_SPRITE_ENTITIES = defineQuery([FoodSprite, Position]);
 
 /** Cheap mutable scratch struct passed to `addComponent` paths. */
 interface SnapshotPool {
@@ -256,9 +304,12 @@ interface SnapshotPool {
   archetype: Uint8Array;
   scale: Float32Array;
   capacity: number;
+  /** F11.4 — food sprite slab. Grown independently of the fish slab. */
+  foodSpritePosition: Float32Array;
+  foodSpriteCapacity: number;
 }
 
-function makeSnapshotPool(capacity: number): SnapshotPool {
+function makeSnapshotPool(capacity: number, spriteCapacity = 16): SnapshotPool {
   return {
     ids: new Uint32Array(capacity),
     position: new Float32Array(capacity * 3),
@@ -267,13 +318,22 @@ function makeSnapshotPool(capacity: number): SnapshotPool {
     archetype: new Uint8Array(capacity),
     scale: new Float32Array(capacity),
     capacity,
+    foodSpritePosition: new Float32Array(spriteCapacity * 3),
+    foodSpriteCapacity: spriteCapacity,
   };
 }
 
 function growPool(pool: SnapshotPool, needed: number): SnapshotPool {
   let cap = pool.capacity;
   while (cap < needed) cap *= 2;
-  return makeSnapshotPool(cap);
+  return makeSnapshotPool(cap, pool.foodSpriteCapacity);
+}
+
+function growSpritePool(pool: SnapshotPool, needed: number): void {
+  let cap = pool.foodSpriteCapacity;
+  while (cap < needed) cap *= 2;
+  pool.foodSpritePosition = new Float32Array(cap * 3);
+  pool.foodSpriteCapacity = cap;
 }
 
 /**
@@ -428,6 +488,23 @@ export function createLivestockWorld(
         NippingDrive.cooldownSec[eid] = 0;
       }
 
+      // F11.4 — feeding + curiosity are required on ResolvedBehavior, so
+      // when a handle is registered we always attach both component slabs
+      // (with zero state — hunger builds up, curiosity stays dormant
+      // until the first Poisson trigger fires). When the handle is
+      // NO_BEHAVIOR_HANDLE (the F11.1 static-wiggle path) we skip both
+      // so the bitECS queries stay narrow and the F11.1 spec stays clean.
+      if (resolved !== null) {
+        addComponent(ecs, FeedingDrive, eid);
+        FeedingDrive.hunger[eid] = 0;
+        FeedingDrive.lastFedAt[eid] = 0;
+        addComponent(ecs, Curiosity, eid);
+        Curiosity.interestX[eid] = NO_INTEREST;
+        Curiosity.interestY[eid] = NO_INTEREST;
+        Curiosity.interestZ[eid] = NO_INTEREST;
+        Curiosity.dwellRemaining[eid] = 0;
+      }
+
       return eid;
     },
 
@@ -480,6 +557,15 @@ export function createLivestockWorld(
         const cs = entry.coverScore;
         Hardscape.coverScore[eid] = cs < 0 ? 0 : cs > 1 ? 1 : cs;
         Hardscape.category[eid] = entry.category & 0xff;
+        // F11.4 — algae seed by category. Rocks + wood are porous and
+        // grow algae naturally; plant + other entries (synthetic decor,
+        // live plants) start at 0 — algae doesn't grow on those surfaces
+        // and plant-eaters target plant scatter directly (reserved for
+        // F11.6). The score regrows over sim time via FeedingSystem.
+        const cat = entry.category & 0xff;
+        const startAlgae =
+          cat === HARDSCAPE_CATEGORY.ROCK || cat === HARDSCAPE_CATEGORY.WOOD ? 1.0 : 0.0;
+        Hardscape.algaeScore[eid] = startAlgae;
         hardscapeEids.push(eid);
       }
     },
@@ -515,23 +601,56 @@ export function createLivestockWorld(
       pendingStartles.set(eid, prior + magnitude);
     },
 
+    spawnFoodSprite(
+      position: { x: number; y: number; z: number },
+      lifetimeSec = 30,
+      calories = 1,
+    ): number {
+      const eid = addEntity(ecs);
+      addComponent(ecs, Position, eid);
+      Position.x[eid] = position.x;
+      Position.y[eid] = position.y;
+      Position.z[eid] = position.z;
+      addComponent(ecs, FoodSprite, eid);
+      FoodSprite.lifetime[eid] = lifetimeSec;
+      FoodSprite.calories[eid] = calories;
+      return eid;
+    },
+
+    getFoodSpriteCount(): number {
+      return FOOD_SPRITE_ENTITIES(ecs).length;
+    },
+
+    getAlgaeScore(hardscapeEid: number): number | null {
+      // bitECS doesn't expose a cheap "is component attached" check
+      // without `hasComponent`; we scan the live hardscape list because
+      // we already maintain it. Returns null for ids not in the list
+      // (entities without Hardscape, despawned ids, etc.).
+      if (!hardscapeEids.includes(hardscapeEid)) return null;
+      return Hardscape.algaeScore[hardscapeEid] as number;
+    },
+
     step(dt: number): void {
-      // F11.3 system order — see docs/caveats/livestock-ecs.md
-      //   Perception → Fear → Nip → Territory →
-      //   (Feeding F11.4) → Schooling → Depth →
-      //   (Flow F11.5) → SteeringIntegrator →
-      //   (Collision F11.5) → Kinematic → Animation
+      // F11.4 system order — see docs/caveats/livestock-ecs.md
+      //   Perception → Fear → Nip → Territory → Feeding → Curiosity →
+      //   Schooling → Depth → (Flow F11.5) → SteeringIntegrator →
+      //   (Collision F11.5) → Kinematic → Animation → FoodSpriteLifetime
       //
       // Priority arbitration is implemented as early-out checks on
       // BehaviorMode in each downstream system: FearSystem may flip to
-      // REFUGE; once flipped, Nipping/Territory/Schooling skip via
-      // mode-guards so the refuge attraction force is the only thing
-      // SteeringIntegrator sees. PURSUE (set by Nip + Territory) likewise
-      // blocks Schooling so the chase isn't diluted by school cohesion.
+      // REFUGE; once flipped, Nipping/Territory/Schooling/Feeding/Curiosity
+      // skip target-seeking via mode-guards so the refuge attraction
+      // force is the only thing SteeringIntegrator sees. PURSUE (set by
+      // Nip + Territory) likewise blocks Schooling/Feeding/Curiosity so
+      // the chase isn't diluted. FoodSpriteLifetime runs at the end so
+      // any sprite consumed mid-tick by FeedingSystem despawns
+      // unconditionally on the same tick it expires.
       perceptionSystem(this);
       fearSystem(this, dt);
       nippingSystem(this, dt);
       territorialSystem(this, dt);
+      feedingSystem(this, dt);
+      curiositySystem(this, dt);
       schoolingSystem(this, dt);
       depthSystem(this, dt);
       steeringIntegrator(this, dt);
@@ -541,12 +660,16 @@ export function createLivestockWorld(
       // nudge a fish a fraction of a mm outside the box.
       clampPositionToAabb(ecs, this.tankAabb);
       animationSystem(ecs, dt);
+      foodSpriteLifetimeSystem(this, dt);
       this.tickCounter += 1;
     },
 
     snapshot(_alpha: number): WorldSnapshot {
-      const ents = ALL_ENTITIES(ecs);
-      const n = ents.length;
+      // Fish-only query (Position + Orientation). Hardscape has Position
+      // but no Orientation; food sprites have Position + FoodSprite but
+      // no Orientation either — both are excluded from the fish slab.
+      const fish = FISH_ENTITIES(ecs);
+      const n = fish.length;
       if (n > pool.capacity) pool = growPool(pool, n);
 
       // `for...of` narrows the element type to `number` (vs. `for (let i…)`
@@ -556,7 +679,7 @@ export function createLivestockWorld(
       // and Uint8/Uint32Array assignment (unlike Float32Array's NaN-coercing
       // one) refuses `number | undefined`.
       let i = 0;
-      for (const eid of ents) {
+      for (const eid of fish) {
         pool.ids[i] = eid;
         pool.position[i * 3 + 0] = Position.x[eid] as number;
         pool.position[i * 3 + 1] = Position.y[eid] as number;
@@ -571,6 +694,21 @@ export function createLivestockWorld(
         i++;
       }
 
+      // F11.4 — food sprite slab. Separate query, separate pooled
+      // Float32Array. The renderer reads `foodSpritePosition` to draw a
+      // billboard / sprite cue. Sprites have no orientation / archetype
+      // / scale — a single position is all the Wave 4 renderer needs.
+      const sprites = FOOD_SPRITE_ENTITIES(ecs);
+      const m = sprites.length;
+      if (m > pool.foodSpriteCapacity) growSpritePool(pool, m);
+      let j = 0;
+      for (const sEid of sprites) {
+        pool.foodSpritePosition[j * 3 + 0] = Position.x[sEid] as number;
+        pool.foodSpritePosition[j * 3 + 1] = Position.y[sEid] as number;
+        pool.foodSpritePosition[j * 3 + 2] = Position.z[sEid] as number;
+        j++;
+      }
+
       // Hand back *views* over the pool that match the live entity count.
       // The pool itself stays sized at `pool.capacity` so we don't reallocate
       // every frame.
@@ -582,6 +720,8 @@ export function createLivestockWorld(
         phase: pool.phase.subarray(0, n),
         archetype: pool.archetype.subarray(0, n),
         scale: pool.scale.subarray(0, n),
+        foodSpriteCount: m,
+        foodSpritePosition: pool.foodSpritePosition.subarray(0, m * 3),
       };
     },
 

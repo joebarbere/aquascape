@@ -7,7 +7,12 @@ import type { LivestockEntry } from '@aquascape/domain/scene-model';
 import { STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
 import type { StorageService } from '@aquascape/platform/platform-api';
 import type { StockingWarning } from '@aquascape/domain/stocking';
-import { SceneActions, selectLivestock, selectStockingWarnings } from '@aquascape/state';
+import {
+  LivestockPulseActions,
+  SceneActions,
+  selectLivestock,
+  selectStockingWarnings,
+} from '@aquascape/state';
 
 import {
   LIVESTOCK_TOOL_COLLAPSED_KEY,
@@ -316,6 +321,61 @@ describe('LivestockToolComponent — inventory list (store → render → dispat
     expect(row?.getAttribute('role')).toBe('listitem');
     // The row's aria-label exposes the species name as the accessible label.
     expect(row?.getAttribute('aria-label')?.length ?? 0).toBeGreaterThan(0);
+  });
+});
+
+describe('LivestockToolComponent — Feed tank pulse (F11.4)', () => {
+  function firstLivestockCatalogEntry(): CatalogLivestockEntry {
+    return coreCatalog.byKind('livestock')[0]!;
+  }
+  function mkEntry(
+    overrides: Partial<LivestockEntry> = {},
+    catalog: CatalogLivestockEntry = firstLivestockCatalogEntry(),
+  ): LivestockEntry {
+    return {
+      id: 'entry-1',
+      ref: { catalog: catalog.catalog, id: catalog.id, version: catalog.version },
+      quantity: 2,
+      ...overrides,
+    };
+  }
+
+  it('renders the Feed tank button when the scene has at least one livestock entry', () => {
+    const { fixture } = configure({ livestock: [mkEntry()] });
+    const btn = fixture.nativeElement.querySelector(
+      '[data-testid="livestock-feed-tank"]',
+    ) as HTMLButtonElement | null;
+    expect(btn).not.toBeNull();
+    // ARIA label spells out the gesture's effect for screen-reader users.
+    expect(btn?.getAttribute('aria-label') ?? '').toContain('Feed tank');
+    expect(btn?.getAttribute('aria-label') ?? '').toContain('food sprites');
+  });
+
+  it('omits the Feed tank button when the inventory is empty (nothing to feed)', () => {
+    const { fixture } = configure({ livestock: [] });
+    const btn = fixture.nativeElement.querySelector(
+      '[data-testid="livestock-feed-tank"]',
+    );
+    expect(btn).toBeNull();
+  });
+
+  it('clicking the Feed tank button dispatches LivestockPulseActions.feedTank exactly once', () => {
+    const { fixture, dispatched } = configure({ livestock: [mkEntry()] });
+    const btn = fixture.nativeElement.querySelector(
+      '[data-testid="livestock-feed-tank"]',
+    ) as HTMLButtonElement;
+    btn.click();
+    fixture.detectChanges();
+
+    const calls = dispatched();
+    const feedCalls = calls.filter(
+      (a): a is ReturnType<typeof LivestockPulseActions.feedTank> =>
+        (a as { type: string }).type === LivestockPulseActions.feedTank.type,
+    );
+    expect(feedCalls.length).toBe(1);
+    // The button dispatches with no explicit spriteCount — the service picks
+    // a deterministic default in [3, 6].
+    expect(feedCalls[0]!.spriteCount).toBeUndefined();
   });
 });
 

@@ -19,7 +19,10 @@
 //     systems running (Velocity is now non-zero — this is the real gate).
 
 import { TestBed } from '@angular/core/testing';
+import { provideMockActions } from '@ngrx/effects/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
+import { EMPTY, Subject } from 'rxjs';
+import type { Action } from '@ngrx/store';
 
 import { defineQuery } from 'bitecs';
 
@@ -40,7 +43,7 @@ import type {
   Scene,
 } from '@aquascape/domain/scene-model';
 import { asLayerId, asObjectId, identityTransform } from '@aquascape/domain/scene-model';
-import { defaultScene, selectScene } from '@aquascape/state';
+import { LivestockPulseActions, defaultScene, selectScene } from '@aquascape/state';
 
 import { LivestockSimulationService } from './livestock-simulation.service';
 
@@ -103,6 +106,11 @@ function setup(initialScene: Scene = defaultScene()): {
         initialState: {},
         selectors: [{ selector: selectScene, value: initialScene }],
       }),
+      // F11.4 — supply an empty Actions stream so the service constructor
+      // can `inject(Actions)`. Tests that exercise the feed-tank path use
+      // `setupWithPulse()` (further down) instead, which pipes a real
+      // Subject through provideMockActions.
+      provideMockActions(() => EMPTY),
     ],
   });
   const service = TestBed.inject(LivestockSimulationService);
@@ -1029,5 +1037,204 @@ describe('LivestockSimulationService — F11.3 determinism with hardscape + anch
     expect(byteEqual(a.position, b.position)).toBe(true);
     expect(byteEqual(a.orientation, b.orientation)).toBe(true);
     expect(byteEqual(a.phase, b.phase)).toBe(true);
+  });
+});
+
+// ─── F11.4 Wave 4 — Feed tank pulse pipeline ────────────────────────────────
+//
+// The service subscribes to `LivestockPulseActions.feedTank` and translates
+// each emission into N `world.spawnFoodSprite(...)` calls at the water
+// surface. Tests below seed the Actions stream via `provideMockActions`
+// (the supported NgRx test surface) and assert on the world's sprite count
+// + per-sprite position.
+//
+// Determinism contract (this section's gate):
+//   - With NO explicit spriteCount, the count is drawn from
+//     `tickPrng(world, FEED_TANK_COUNT_KEY)` so two pulses at the same
+//     world.tickCounter spawn the same N.
+//   - Per-sprite XZ comes from `tickPrng(world, FEED_TANK_KEY, i, axis)` so
+//     two services driven by the same (seed, livestock, dispatch sequence)
+//     produce identical sprite positions.
+
+/** Setup helper that also wires `provideMockActions` with a fresh Subject. */
+function setupWithPulse(
+  initialScene: Scene = defaultScene(),
+): {
+  service: LivestockSimulationService;
+  store: MockStore;
+  actions$: Subject<Action>;
+} {
+  const actions$ = new Subject<Action>();
+  TestBed.configureTestingModule({
+    providers: [
+      provideMockStore({
+        initialState: {},
+        selectors: [{ selector: selectScene, value: initialScene }],
+      }),
+      provideMockActions(() => actions$),
+    ],
+  });
+  const service = TestBed.inject(LivestockSimulationService);
+  service.setCatalog(
+    makeCatalog([
+      livestockEntry('livestock.fish.neon-tetra', { name: 'Neon tetra', adultSize: 35 }),
+    ]),
+  );
+  const store = TestBed.inject(MockStore);
+  return { service, store, actions$ };
+}
+
+describe('LivestockSimulationService — F11.4 Feed tank pulse', () => {
+  it('explicit spriteCount: feedTank({ spriteCount: 4 }) spawns exactly 4 sprites', () => {
+    const { service, store, actions$ } = setupWithPulse();
+    store.overrideSelector(
+      selectScene,
+      sceneWithLivestock([entry('e1', 'livestock.fish.neon-tetra', 3)], 7),
+    );
+    store.refreshState();
+    const world = service.getWorld()!;
+    expect(world.getFoodSpriteCount()).toBe(0);
+
+    actions$.next(LivestockPulseActions.feedTank({ spriteCount: 4 }));
+
+    expect(world.getFoodSpriteCount()).toBe(4);
+  });
+
+  it('default spriteCount: feedTank({}) spawns between FOOD_SPRITE_DEFAULT_MIN and _MAX inclusive', () => {
+    const { service, store, actions$ } = setupWithPulse();
+    store.overrideSelector(
+      selectScene,
+      sceneWithLivestock([entry('e1', 'livestock.fish.neon-tetra', 3)], 7),
+    );
+    store.refreshState();
+    const world = service.getWorld()!;
+
+    actions$.next(LivestockPulseActions.feedTank({}));
+
+    const n = world.getFoodSpriteCount();
+    // FOOD_SPRITE_DEFAULT_MIN/_MAX live in the service module; the range
+    // [3, 6] is part of the documented contract (see service header
+    // constants + this spec's lead comment).
+    expect(n).toBeGreaterThanOrEqual(3);
+    expect(n).toBeLessThanOrEqual(6);
+  });
+
+  it('every spawned sprite sits within the tank AABB and just below the waterline', () => {
+    const { service, store, actions$ } = setupWithPulse();
+    store.overrideSelector(
+      selectScene,
+      sceneWithLivestock([entry('e1', 'livestock.fish.neon-tetra', 2)], 7),
+    );
+    store.refreshState();
+    const world = service.getWorld()!;
+    actions$.next(LivestockPulseActions.feedTank({ spriteCount: 8 }));
+
+    const snap = world.snapshot(0);
+    // `snapshot.foodSpriteCount + foodSpritePosition` is the public read
+    // surface (see livestock-ecs/world.ts → WorldSnapshot).
+    expect(snap.foodSpriteCount).toBe(8);
+    const aabb = world.tankAabb;
+    for (let i = 0; i < snap.foodSpriteCount; i++) {
+      const x = snap.foodSpritePosition[i * 3 + 0]!;
+      const y = snap.foodSpritePosition[i * 3 + 1]!;
+      const z = snap.foodSpritePosition[i * 3 + 2]!;
+      // XZ bounds are inset from the glass but still inside the AABB.
+      expect(x).toBeGreaterThanOrEqual(aabb.minX);
+      expect(x).toBeLessThanOrEqual(aabb.maxX);
+      expect(z).toBeGreaterThanOrEqual(aabb.minZ);
+      expect(z).toBeLessThanOrEqual(aabb.maxZ);
+      // Y is pinned near the surface — well above the tank midpoint (0.5 *
+      // height) regardless of the precise surface offset.
+      expect(y).toBeGreaterThan((aabb.maxY - aabb.minY) * 0.8);
+      expect(y).toBeLessThanOrEqual(aabb.maxY);
+    }
+  });
+
+  it('no-op when the world has not been built (no livestock in the scene)', () => {
+    const { service, actions$ } = setupWithPulse(defaultScene());
+    expect(service.getWorld()).toBeNull();
+
+    // Dispatching while there's no world must not throw — the service
+    // gracefully no-ops.
+    expect(() =>
+      actions$.next(LivestockPulseActions.feedTank({ spriteCount: 5 })),
+    ).not.toThrow();
+    expect(service.getWorld()).toBeNull();
+  });
+
+  it('determinism: two services with same (seed, livestock, dispatch sequence) produce identical sprite positions', () => {
+    const livestock = [entry('e1', 'livestock.fish.neon-tetra', 3)];
+    const scene = sceneWithLivestock(livestock, 12345);
+
+    // Service A
+    const a = setupWithPulse();
+    a.store.overrideSelector(selectScene, scene);
+    a.store.refreshState();
+    a.actions$.next(LivestockPulseActions.feedTank({ spriteCount: 5 }));
+    const worldA = a.service.getWorld()!;
+    const snapA = worldA.snapshot(0);
+    const positionsA = new Float32Array(snapA.foodSpritePosition);
+    const countA = snapA.foodSpriteCount;
+
+    // Service B (fresh TestBed) — same inputs → same outputs.
+    TestBed.resetTestingModule();
+    const b = setupWithPulse();
+    b.store.overrideSelector(selectScene, scene);
+    b.store.refreshState();
+    b.actions$.next(LivestockPulseActions.feedTank({ spriteCount: 5 }));
+    const worldB = b.service.getWorld()!;
+    const snapB = worldB.snapshot(0);
+    const positionsB = new Float32Array(snapB.foodSpritePosition);
+    const countB = snapB.foodSpriteCount;
+
+    expect(countA).toBe(5);
+    expect(countB).toBe(5);
+    for (let i = 0; i < 5 * 3; i++) {
+      expect(positionsA[i]).toBeCloseTo(positionsB[i]!, 5);
+    }
+  });
+
+  it('determinism: default (count-from-tickPrng) is also byte-stable across cold starts', () => {
+    // Same scene, same seed, default sprite count → same N AND same
+    // positions on two cold starts. This is the gate for the "two
+    // services driven by the same dispatch sequence reproduce" contract.
+    const livestock = [entry('e1', 'livestock.fish.neon-tetra', 3)];
+    const scene = sceneWithLivestock(livestock, 99);
+
+    const a = setupWithPulse();
+    a.store.overrideSelector(selectScene, scene);
+    a.store.refreshState();
+    a.actions$.next(LivestockPulseActions.feedTank({}));
+    const snapA = a.service.getWorld()!.snapshot(0);
+    const countA = snapA.foodSpriteCount;
+    const posA = new Float32Array(snapA.foodSpritePosition);
+
+    TestBed.resetTestingModule();
+    const b = setupWithPulse();
+    b.store.overrideSelector(selectScene, scene);
+    b.store.refreshState();
+    b.actions$.next(LivestockPulseActions.feedTank({}));
+    const snapB = b.service.getWorld()!.snapshot(0);
+    const countB = snapB.foodSpriteCount;
+    const posB = new Float32Array(snapB.foodSpritePosition);
+
+    expect(countA).toBe(countB);
+    for (let i = 0; i < countA * 3; i++) {
+      expect(posA[i]).toBeCloseTo(posB[i]!, 5);
+    }
+  });
+
+  it('spriteCount <= 0 spawns nothing (defensive — guards against UI bugs sending 0/negative)', () => {
+    const { service, store, actions$ } = setupWithPulse();
+    store.overrideSelector(
+      selectScene,
+      sceneWithLivestock([entry('e1', 'livestock.fish.neon-tetra', 2)], 7),
+    );
+    store.refreshState();
+    const world = service.getWorld()!;
+    actions$.next(LivestockPulseActions.feedTank({ spriteCount: 0 }));
+    expect(world.getFoodSpriteCount()).toBe(0);
+    actions$.next(LivestockPulseActions.feedTank({ spriteCount: -3 }));
+    expect(world.getFoodSpriteCount()).toBe(0);
   });
 });

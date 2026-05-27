@@ -15,7 +15,9 @@
 // no further stubbing is needed.
 
 import { TestBed } from '@angular/core/testing';
+import { provideMockActions } from '@ngrx/effects/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
+import { EMPTY } from 'rxjs';
 
 import { asObjectId } from '@aquascape/domain/scene-model';
 import type { Scene } from '@aquascape/domain/scene-model';
@@ -96,6 +98,9 @@ function configure(initialScene: Scene = defaultScene()): void {
           { selector: selectCanRedo, value: false },
         ],
       }),
+      // See app.component.spec.ts — Actions must be provided so the
+      // LivestockSimulationService constructor's inject(Actions) resolves.
+      provideMockActions(() => EMPTY),
     ],
   });
 }
@@ -213,20 +218,56 @@ describe('debug hook — read-only accessors', () => {
     fixture.destroy();
   });
 
-  it('the hook exposes ONLY the four read-only accessors (no dispatch / mutator surface)', () => {
+  it('the hook exposes ONLY the read-only accessors (no dispatch / mutator surface)', () => {
     configure();
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const handle = window.__aquascape_debug__!;
     // Sort for stable comparison.
     const keys = Object.keys(handle).sort();
-    expect(keys).toEqual(['getEntityCount', 'getScene', 'getViewMode', 'getWorld']);
+    expect(keys).toEqual([
+      'getEntityCount',
+      'getFoodSpriteCount',
+      'getScene',
+      'getViewMode',
+      'getWorld',
+    ]);
     // None of the obvious mutator names should be reachable through the
     // typed surface (and runtime check guards against accidental
     // additions slipping past the type system in future edits).
     expect((handle as Record<string, unknown>).dispatch).toBeUndefined();
     expect((handle as Record<string, unknown>).setMode).toBeUndefined();
     expect((handle as Record<string, unknown>).spawnFish).toBeUndefined();
+    fixture.destroy();
+  });
+
+  it('getFoodSpriteCount() returns 0 before livestock loads (no world built)', () => {
+    configure(defaultScene());
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    expect(window.__aquascape_debug__!.getFoodSpriteCount()).toBe(0);
+    fixture.destroy();
+  });
+
+  it('getFoodSpriteCount() reflects sprites spawned on the live world', () => {
+    configure(defaultScene());
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    expect(window.__aquascape_debug__!.getFoodSpriteCount()).toBe(0);
+
+    // Push a livestock scene through so the world materialises, then
+    // spawn sprites directly on the world handle the debug hook exposes.
+    // (The Feed tank pulse pipeline is tested separately in the
+    // livestock-simulation.service spec; here we just verify the debug
+    // hook's accessor reads through to the same world.)
+    const store = TestBed.inject(MockStore);
+    store.overrideSelector(selectScene, sceneWithFish(2));
+    store.refreshState();
+    const world = window.__aquascape_debug__!.getWorld()!;
+    expect(world).not.toBeNull();
+    world.spawnFoodSprite({ x: 100, y: 200, z: 100 });
+    world.spawnFoodSprite({ x: 200, y: 200, z: 200 });
+    expect(window.__aquascape_debug__!.getFoodSpriteCount()).toBe(2);
     fixture.destroy();
   });
 });

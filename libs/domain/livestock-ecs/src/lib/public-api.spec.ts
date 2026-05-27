@@ -10,13 +10,17 @@ import {
   BehaviorMode,
   BehaviorParamsRef,
   BodyLength,
+  Curiosity,
   FearState,
+  FeedingDrive,
   FISH_ARCHETYPE,
+  FoodSprite,
   Force,
   HARDSCAPE_CATEGORY,
   Hardscape,
   NippingDrive,
   NO_BEHAVIOR_HANDLE,
+  NO_INTEREST,
   Orientation,
   ParamStore,
   Position,
@@ -28,8 +32,11 @@ import {
   Velocity,
   animationSystem,
   createLivestockWorld,
+  curiositySystem,
   depthSystem,
   fearSystem,
+  feedingSystem,
+  foodSpriteLifetimeSystem,
   kinematicSystem,
   nippingSystem,
   perceptionSystem,
@@ -64,6 +71,9 @@ describe('public API surface', () => {
       AnimationPhase,
       BehaviorMode,
       BehaviorParamsRef,
+      Curiosity,
+      FeedingDrive,
+      FoodSprite,
       Force,
       FearState,
       Hardscape,
@@ -72,6 +82,13 @@ describe('public API surface', () => {
     ]) {
       expect(c).toBeDefined();
     }
+  });
+
+  it('exposes F11.4 system + sentinel exports', () => {
+    expect(typeof feedingSystem).toBe('function');
+    expect(typeof curiositySystem).toBe('function');
+    expect(typeof foodSpriteLifetimeSystem).toBe('function');
+    expect(NO_INTEREST).toBeLessThan(-1e29);
   });
 
   it('exposes the F11.3 enums + systems', () => {
@@ -131,5 +148,28 @@ describe('public API surface', () => {
     const g = new SpatialGrid(50);
     g.insert(1, 0, 0, 0);
     expect(Array.from(g.query(0, 0, 0, 1))).toContain(1);
+  });
+
+  it('F11.4 world API — spawnFoodSprite + getFoodSpriteCount + getAlgaeScore', () => {
+    const w = createLivestockWorld(0);
+    expect(w.getFoodSpriteCount()).toBe(0);
+    const eid = w.spawnFoodSprite({ x: 100, y: 200, z: 200 });
+    expect(typeof eid).toBe('number');
+    expect(w.getFoodSpriteCount()).toBe(1);
+    // Unregistered eid → null.
+    expect(w.getAlgaeScore(999999)).toBeNull();
+  });
+
+  it('F11.4 WorldSnapshot has additive food sprite fields', () => {
+    const w = createLivestockWorld(0);
+    w.spawnFoodSprite({ x: 100, y: 200, z: 200 });
+    const snap = w.snapshot(0);
+    expect(snap.foodSpriteCount).toBe(1);
+    expect(snap.foodSpritePosition.length).toBe(3);
+    expect(snap.foodSpritePosition[0]).toBeCloseTo(100);
+    expect(snap.foodSpritePosition[1]).toBeCloseTo(200);
+    expect(snap.foodSpritePosition[2]).toBeCloseTo(200);
+    // Fish slab unchanged — no fish spawned, count is 0.
+    expect(snap.entityCount).toBe(0);
   });
 });

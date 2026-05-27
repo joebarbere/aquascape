@@ -139,3 +139,7 @@ export {
   selectionFeature,
 } from './selection';
 export type { SelectionState } from './selection';
+
+// Livestock pulse — transient, fire-and-forget actions consumed by
+// `LivestockSimulationService` (no reducer, no selectors). Stage 11 F11.4.
+export { LivestockPulseActions } from './livestock-pulse';

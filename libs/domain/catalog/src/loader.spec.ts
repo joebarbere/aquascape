@@ -121,6 +121,75 @@ describe('loadCatalog — schemaVersion 3 forward-compat (F11.2)', () => {
   });
 });
 
+describe('loadCatalog — F11.4 feeding / curiosity forward-compat', () => {
+  // Same v3 manifest schema as F11.2 — feeding + curiosity were added
+  // additively under the existing `behavior` block. A manifest without
+  // them must keep loading; a manifest with them must round-trip the
+  // values to the loaded catalog so downstream resolveBehavior() sees them.
+  const baseLivestock = {
+    catalog: 'core',
+    id: 'livestock.fish.legacy-no-feeding',
+    version: 1,
+    name: 'Legacy fish manifest (no feeding/curiosity)',
+    kind: 'livestock' as const,
+    group: 'fish' as const,
+    adultSize: 30,
+    temperament: 'peaceful' as const,
+    temperatureRange: { minC: 22, maxC: 26 },
+    pHRange: { min: 6.0, max: 7.5 },
+    schoolingMin: 6,
+    bioloadClass: 'low' as const,
+    color: '#abcdef',
+  };
+
+  it('accepts a manifest without behavior.feeding / curiosity (default-fallback path)', () => {
+    const result = loadCatalog([baseLivestock]);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([]);
+    expect(result.catalog.entries.length).toBe(1);
+  });
+
+  it('preserves behavior.feeding.category on a manifest that declares it', () => {
+    const annotated = {
+      ...baseLivestock,
+      id: 'livestock.fish.annotated-feeding',
+      behavior: { feeding: { category: 'algae-grazer' as const } },
+    };
+    const { catalog } = loadCatalog([annotated]);
+    const entry = catalog.get({ catalog: 'core', id: annotated.id });
+    expect(entry?.kind).toBe('livestock');
+    if (entry?.kind !== 'livestock') return;
+    expect(entry.behavior?.feeding?.category).toBe('algae-grazer');
+  });
+
+  it('preserves a fully-specified behavior.curiosity block on a manifest that declares it', () => {
+    const annotated = {
+      ...baseLivestock,
+      id: 'livestock.fish.annotated-curiosity',
+      behavior: { curiosity: { boldness: 0.6, ratePerSec: 0.02, dwellSec: 5 } },
+    };
+    const { catalog } = loadCatalog([annotated]);
+    const entry = catalog.get({ catalog: 'core', id: annotated.id });
+    if (entry?.kind !== 'livestock') return;
+    expect(entry.behavior?.curiosity).toEqual({
+      boldness: 0.6,
+      ratePerSec: 0.02,
+      dwellSec: 5,
+    });
+  });
+
+  it('rejects a manifest with an unknown feeding.category enum value', () => {
+    const broken = {
+      ...baseLivestock,
+      id: 'livestock.fish.broken-feeding',
+      behavior: { feeding: { category: 'omnivore' as unknown as 'midwater' } },
+    };
+    const result = loadCatalog([broken]);
+    expect(result.errors.length).toBe(1);
+    expect(result.catalog.entries.length).toBe(0);
+  });
+});
+
 describe('loadCatalog — hardscape coverScore default-fill (F11.3)', () => {
   // F11.3 FearSystem reads `coverScore` to pick refuges. JSON Schema's
   // `default` is metadata only, so the loader populates the field when a

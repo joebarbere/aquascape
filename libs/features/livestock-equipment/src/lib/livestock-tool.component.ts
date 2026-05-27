@@ -40,7 +40,12 @@ import type { LivestockEntry } from '@aquascape/domain/scene-model';
 import type { StockingWarning } from '@aquascape/domain/stocking';
 import { STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
 import type { StorageService } from '@aquascape/platform/platform-api';
-import { SceneActions, selectLivestock, selectStockingWarnings } from '@aquascape/state';
+import {
+  LivestockPulseActions,
+  SceneActions,
+  selectLivestock,
+  selectStockingWarnings,
+} from '@aquascape/state';
 
 type GroupFilter = 'all' | 'fish' | 'shrimp' | 'snail';
 
@@ -155,7 +160,20 @@ interface InventoryRow {
         }
 
         <!-- ── Inventory list ──────────────────────────────────────────── -->
-        <h3 class="livestock-tool__subheading">Inventory</h3>
+        <div class="livestock-tool__inventory-header">
+          <h3 class="livestock-tool__subheading">Inventory</h3>
+          @if (canFeed()) {
+            <button
+              type="button"
+              class="feed-btn"
+              data-testid="livestock-feed-tank"
+              aria-label="Feed tank — drops food sprites at the surface for fish to eat"
+              (click)="onFeedTank()"
+            >
+              Feed tank
+            </button>
+          }
+        </div>
         @if (inventoryRows().length === 0) {
           <p class="livestock-tool__empty">
             No livestock yet. Pick a species above to start planning.
@@ -414,6 +432,30 @@ interface InventoryRow {
         letter-spacing: 0.04em;
         color: var(--text-muted, #555);
       }
+      .livestock-tool__inventory-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .livestock-tool__inventory-header .livestock-tool__subheading {
+        flex: 1;
+      }
+      .feed-btn {
+        padding: 4px 10px;
+        background: var(--accent, #20232a);
+        color: var(--accent-text, #fff);
+        border: 1px solid var(--accent, #20232a);
+        border-radius: 4px;
+        cursor: pointer;
+        font: inherit;
+        font-size: 11px;
+      }
+      .feed-btn:hover,
+      .feed-btn:focus-visible {
+        filter: brightness(1.1);
+        outline: none;
+      }
       .livestock-tool__list {
         list-style: none;
         margin: 0;
@@ -649,6 +691,14 @@ export class LivestockToolComponent {
 
   readonly inventoryCount = computed<number>(() => this.inventoryRows().length);
 
+  /**
+   * F11.4 — show the "Feed tank" button only when there's at least one
+   * livestock entry to feed. Avoids dispatching pulses that the simulation
+   * service would have to no-op on anyway (no entities → no FeedingSystem
+   * targets), and keeps the inventory header uncluttered when empty.
+   */
+  readonly canFeed = computed<boolean>(() => this.inventoryRows().length > 0);
+
   // Stocking warnings (F7.2). Streamed from the store so the existing
   // selector memoization carries through; toSignal feeds the template via
   // a signal source so OnPush refreshes on update. `initialValue: null`
@@ -771,6 +821,20 @@ export class LivestockToolComponent {
     this.store.dispatch(
       SceneActions.dispatchCommand({ command: removeLivestockEntry(entry.id) }),
     );
+  }
+
+  /**
+   * F11.4 — fire a transient `feedTank` pulse. The
+   * `LivestockSimulationService` subscribes to this action via
+   * `@ngrx/effects` `Actions` and spawns food sprite ECS entities at the
+   * water surface; FoodSpriteLifetimeSystem despawns them after ~30 s.
+   *
+   * No payload — let the service pick a deterministic random sprite count
+   * in [3, 6] via `tickPrng`. The button is rendered only when
+   * `canFeed()` is true, so we don't need a runtime guard here.
+   */
+  onFeedTank(): void {
+    this.store.dispatch(LivestockPulseActions.feedTank({}));
   }
 
   // ── Stocking guidance (F7.2) ──────────────────────────────────────────

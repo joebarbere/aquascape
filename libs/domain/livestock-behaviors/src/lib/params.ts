@@ -131,12 +131,73 @@ export interface FearParams {
 }
 
 /**
+ * Coarse classification of where a fish feeds. Drives FeedingSystem target
+ * selection in F11.4 — surface/midwater/substrate fish seek food sprites at
+ * their natural depth, algae-grazers + plant-eaters graze hardscape / plant
+ * polygons, detritivores never seek a sprite and stay substrate-glued.
+ *
+ * - 'surface'      Hatchetfish, gourami — feed from food sprites near the waterline.
+ * - 'midwater'     Tetra, rasbora, danio, barb — generic mid-column feeding.
+ * - 'substrate'    Cory, kuhli — feed from sprites that settle to the bottom (or substrate detritus).
+ * - 'algae-grazer' Otocinclus, pleco — graze algae off hardscape surfaces.
+ * - 'plant-eater'  Silver dollar, severum — graze plants (not implemented in F11.4; treated like 'algae-grazer' but biased toward plant scatter polygons).
+ * - 'detritivore'  Shrimp, snail — substrate-glued wandering; never seeks food sprites, always satisfied at substrate level.
+ */
+export type FeedingCategory =
+  | 'surface'
+  | 'midwater'
+  | 'substrate'
+  | 'algae-grazer'
+  | 'plant-eater'
+  | 'detritivore';
+
+/**
+ * Feeding / hunger drive parameters — Stephens & Krebs 1986 optimal-foraging
+ * framing distilled to a single hunger scalar that crosses a per-species
+ * threshold and gates the FeedingSystem's target-seeking behaviour. Every fish
+ * has hunger; the params just vary by species + depth band.
+ */
+export interface FeedingParams {
+  /**
+   * Per-second hunger accumulation rate. Crosses `threshold` after
+   * `1 / hungerRatePerSec` seconds of sim time. Default ~1/120 (full hunger
+   * every 2 minutes — visible on the time-slider scale).
+   */
+  hungerRatePerSec: number;
+  /** Hunger level above which FeedingSystem seeks food. Default 0.7. */
+  threshold: number;
+  /** Drives target-selection logic. See FeedingCategory docs. */
+  category: FeedingCategory;
+}
+
+/**
+ * Curiosity / glass-surfing parameters — Réale et al. 2007 boldness axis.
+ * Drives the Poisson-triggered attraction-point pulse at the front pane that
+ * makes bold species (gouramis, danios) read as "investigating" the viewer.
+ * Required on every fish — even shy species carry low-boldness params and the
+ * CuriositySystem early-outs when boldness is near zero.
+ */
+export interface CuriosityParams {
+  /**
+   * [0, 1] — gates the Poisson trigger probability. Bold species
+   * (boldness ≈ 0.9) glass-surf often; shy species (≈ 0.05) almost never.
+   */
+  boldness: number;
+  /** Poisson trigger rate per second. Default ~0.05 (1 trigger per 20s for a bold fish). */
+  ratePerSec: number;
+  /** Seconds the attraction point persists once triggered. Default ~3s. */
+  dwellSec: number;
+}
+
+/**
  * The fully resolved behaviour bundle returned by `resolveBehavior`.
  *
  * `territory` + `nipping` are explicitly nullable: most species don't defend
  * a territory or nip, so the corresponding systems early-out on `null`.
- * `fear` is required — every fish reacts to predator-cursor and startle
- * events; the params vary by species but the field is never absent.
+ * `fear`, `feeding`, `curiosity` are required — every fish reacts to
+ * predator-cursor + startle events, accumulates hunger, and can in principle
+ * investigate the glass; the params vary by species but the fields are never
+ * absent.
  */
 export interface ResolvedBehavior {
   schooling: SchoolingParams;
@@ -148,6 +209,10 @@ export interface ResolvedBehavior {
   nipping: NippingParams | null;
   /** Required — every fish has fear; the params just differ. */
   fear: FearParams;
+  /** Required — every fish has hunger; params vary. */
+  feeding: FeedingParams;
+  /** Required — even shy fish have low boldness; CuriositySystem early-outs when boldness ≈ 0. */
+  curiosity: CuriosityParams;
 }
 
 /** Coarse classification used by `depthBandForSpecies` + the preset switch. */

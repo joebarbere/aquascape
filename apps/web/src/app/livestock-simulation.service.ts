@@ -71,6 +71,7 @@
 import { Injectable, OnDestroy, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DestroyRef } from '@angular/core';
+import { Actions, ofType } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
 
 import { coreCatalog } from '@aquascape/domain/catalog';
@@ -91,17 +92,26 @@ import {
   HARDSCAPE_CATEGORY,
   NO_BEHAVIOR_HANDLE,
   createLivestockWorld,
+  tickPrng,
   type HardscapeRegistrationEntry,
   type LivestockWorld,
   type TankAabb,
 } from '@aquascape/domain/livestock-ecs';
 import type { HardscapeObject, LivestockEntry, Scene } from '@aquascape/domain/scene-model';
-import { selectScene } from '@aquascape/state';
+import { LivestockPulseActions, selectScene } from '@aquascape/state';
 
 /** Body length when the catalog entry can't be resolved (mm). */
 const FALLBACK_BODY_LENGTH_MM = 35;
 /** Inset from each interior wall so spawned fish never start inside the glass. */
 const SPAWN_WALL_INSET_MM = 20;
+/** F11.4 — wall inset for food-sprite XZ positions (mm). Smaller than the
+ *  fish inset because sprites are visually tiny billboards, not ellipsoids. */
+const FOOD_SPRITE_WALL_INSET_MM = 30;
+/** F11.4 — how far below the waterline food sprites spawn (mm). */
+const FOOD_SPRITE_SURFACE_OFFSET_MM = 20;
+/** F11.4 — bounds for the random sprite-count default (inclusive). */
+const FOOD_SPRITE_DEFAULT_MIN = 3;
+const FOOD_SPRITE_DEFAULT_MAX = 6;
 
 /**
  * Service that owns the `LivestockWorld` for the running app. Lazily
@@ -113,6 +123,12 @@ const SPAWN_WALL_INSET_MM = 20;
 export class LivestockSimulationService implements OnDestroy {
   private readonly store = inject(Store);
   private readonly destroyRef = inject(DestroyRef);
+  // F11.4 — `Actions` is provided at the app's composition root by
+  // `provideEffects()`. We mark it optional so service tests that don't
+  // need the pulse pipeline (most of the F11.1-F11.3 specs) can configure
+  // a TestBed without `provideMockActions`. Tests that exercise the Feed
+  // tank path inject Actions explicitly.
+  private readonly actions$ = inject(Actions, { optional: true });
 
   /** The catalog used to resolve `LivestockEntry.ref` → archetype + size. */
   private catalog: Catalog = coreCatalog;
@@ -139,6 +155,25 @@ export class LivestockSimulationService implements OnDestroy {
         if (scene === null) return;
         this.onSceneChanged(scene);
       });
+
+    // F11.4 — listen for transient "Feed tank" pulses. The action stream
+    // is fire-and-forget: each emission drops N food sprite entities at
+    // the surface. Determinism contract: two services driven by the same
+    // dispatch sequence + same world.tickCounter at the moment of dispatch
+    // produce identical sprite positions (sprite count + per-sprite x/z
+    // come from `tickPrng`). In real usage the user clicks asynchronously
+    // so positions vary trial-to-trial — that's expected; tests pin the
+    // dispatch order to reproduce a fixed distribution.
+    //
+    // The `Actions` token is provided by `provideEffects()` at the app
+    // root. When tests inject the service without `provideMockActions`,
+    // `actions$` is null and the subscription is skipped (no feed-tank
+    // pulses to consume in those tests anyway).
+    if (this.actions$ !== null) {
+      this.actions$
+        .pipe(ofType(LivestockPulseActions.feedTank), takeUntilDestroyed(this.destroyRef))
+        .subscribe((action) => this.onFeedTank(action.spriteCount));
+    }
   }
 
   /**
@@ -174,6 +209,67 @@ export class LivestockSimulationService implements OnDestroy {
     }
     this.lastSpawnKey = null;
     this.warnedRefs.clear();
+  }
+
+  /**
+   * F11.4 — drop food sprites into the world at the water surface.
+   * Called from the `LivestockPulseActions.feedTank` subscription; also
+   * safe to call directly from tests.
+   *
+   * Behaviour:
+   *  - No-op if the world hasn't been built (no livestock in the scene).
+   *  - When `spriteCount` is undefined, picks a deterministic random count
+   *    in `[FOOD_SPRITE_DEFAULT_MIN, FOOD_SPRITE_DEFAULT_MAX]` via
+   *    `tickPrng(world, 'feed-tank-count')`. Two pulses at the same
+   *    `world.tickCounter` therefore drop the same number of sprites.
+   *  - Per-sprite XZ is uniform inside the tank interior with a
+   *    `FOOD_SPRITE_WALL_INSET_MM` inset; Y is pinned just below the
+   *    waterline (`tankAabb.maxY - FOOD_SPRITE_SURFACE_OFFSET_MM`).
+   *
+   * Sprite despawn is owned by `foodSpriteLifetimeSystem` (already running
+   * in `world.step`); we don't track sprites here.
+   */
+  private onFeedTank(spriteCount?: number): void {
+    const world = this.world;
+    if (world === null) return;
+    if (world.snapshot(0).entityCount === 0) return;
+
+    const aabb = world.tankAabb;
+    // Count comes from either the explicit override or a deterministic
+    // tickPrng draw. The `FEED_TANK_COUNT_KEY` is partitioned away from
+    // other tickPrng keys (BehaviorSystems use entity ids) so streams
+    // don't alias.
+    const count =
+      spriteCount !== undefined
+        ? Math.max(0, Math.floor(spriteCount))
+        : pickSpriteCount(world);
+    if (count === 0) return;
+
+    // XZ bounds inset from the glass; Y pinned to just below the surface.
+    const minX = aabb.minX + FOOD_SPRITE_WALL_INSET_MM;
+    const maxX = aabb.maxX - FOOD_SPRITE_WALL_INSET_MM;
+    const minZ = aabb.minZ + FOOD_SPRITE_WALL_INSET_MM;
+    const maxZ = aabb.maxZ - FOOD_SPRITE_WALL_INSET_MM;
+    const y = aabb.maxY - FOOD_SPRITE_SURFACE_OFFSET_MM;
+
+    // Defensive: a tiny tank could have inverted bounds after the inset.
+    // Fall back to the tank centre on that axis to avoid NaN positions.
+    const xLo = minX <= maxX ? minX : (aabb.minX + aabb.maxX) * 0.5;
+    const xHi = minX <= maxX ? maxX : xLo;
+    const zLo = minZ <= maxZ ? minZ : (aabb.minZ + aabb.maxZ) * 0.5;
+    const zHi = minZ <= maxZ ? maxZ : zLo;
+
+    for (let i = 0; i < count; i++) {
+      // Two independent draws per sprite (axis 0 = X, axis 2 = Z); the
+      // sprite index `i` partitions the stream so two sprites in the same
+      // pulse get independent positions. We skip axis 1 (Y) since Y is
+      // pinned to the surface.
+      const rx = tickPrng(world, FEED_TANK_KEY, i, 0);
+      const rz = tickPrng(world, FEED_TANK_KEY, i, 2);
+      const x = xLo + rx * (xHi - xLo);
+      const z = zLo + rz * (zHi - zLo);
+      world.spawnFoodSprite({ x, y, z });
+    }
   }
 
   // ─── Internal ─────────────────────────────────────────────────────────
@@ -480,6 +576,44 @@ export class LivestockSimulationService implements OnDestroy {
 }
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────
+
+/**
+ * F11.4 — `tickPrng` partition key for Feed tank position draws. Picked as
+ * an FNV-1a fold of the literal `'feed-tank'` string so it sits well clear
+ * of the per-entity keys (which are small integers ≤ 65535). Kept as a
+ * module-scope constant so two different feeds at the same tickCounter
+ * draw from the same stream layout.
+ */
+const FEED_TANK_KEY = (() => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < 'feed-tank'.length; i++) {
+    h ^= 'feed-tank'.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) | 0;
+  }
+  return h | 0;
+})();
+
+/** F11.4 — separate partition key for the sprite-count draw. */
+const FEED_TANK_COUNT_KEY = (() => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < 'feed-tank-count'.length; i++) {
+    h ^= 'feed-tank-count'.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) | 0;
+  }
+  return h | 0;
+})();
+
+/**
+ * Pick a deterministic sprite count in `[FOOD_SPRITE_DEFAULT_MIN,
+ * FOOD_SPRITE_DEFAULT_MAX]` from the world's current tick. Two pulses
+ * at the same tickCounter draw the same count — that's what makes the
+ * test invariant "same dispatch sequence → same sprite layout" hold.
+ */
+function pickSpriteCount(world: LivestockWorld): number {
+  const r = tickPrng(world, FEED_TANK_COUNT_KEY);
+  const span = FOOD_SPRITE_DEFAULT_MAX - FOOD_SPRITE_DEFAULT_MIN + 1;
+  return FOOD_SPRITE_DEFAULT_MIN + Math.floor(r * span);
+}
 
 /** Map a string archetype id (from fish-anatomy) to the `FISH_ARCHETYPE` enum. */
 function archetypeIdToEnum(id: FishArchetypeId): number {

@@ -22,6 +22,8 @@ export { steeringIntegrator } from './steering-integrator';
 export { fearSystem } from './fear-system';
 export { nippingSystem } from './nipping-system';
 export { territorialSystem } from './territorial-system';
+export { feedingSystem, foodSpriteLifetimeSystem } from './feeding-system';
+export { curiositySystem } from './curiosity-system';
 
 const TWO_PI = Math.PI * 2;
 

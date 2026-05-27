@@ -29,7 +29,12 @@ export {
   type LivestockMeshBundle,
 } from './lib/build-livestock-meshes';
 
-export { LIVESTOCK_VERTEX_SHADER, LIVESTOCK_FRAGMENT_SHADER } from './lib/shaders';
+export {
+  LIVESTOCK_FOOD_FRAGMENT_SHADER,
+  LIVESTOCK_FOOD_VERTEX_SHADER,
+  LIVESTOCK_FRAGMENT_SHADER,
+  LIVESTOCK_VERTEX_SHADER,
+} from './lib/shaders';
 
 /** Engine version marker — bump on any vertex-math change that would
  * invalidate persisted instance positions. (No persistence yet — Stage

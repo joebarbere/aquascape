@@ -1,4 +1,4 @@
-// Per-group behaviour presets for F11.2 + F11.3.
+// Per-group behaviour presets for F11.2 + F11.3 + F11.4.
 //
 // Three named constants (no lookup table) — tree-shakable + obviously
 // deterministic. F11.6 will refine the per-species presets; F11.2 just needs
@@ -9,6 +9,13 @@
 // by the heuristics in `resolve.ts`, not by depth band. Fear is required and
 // varies per band: bottom dwellers are skittish (low threshold, long
 // emergence delay), top dwellers are bold.
+//
+// F11.4 added `feeding`, `curiosity`. Both are required on every preset.
+// Feeding category tracks the depth band (top → 'surface',
+// mid → 'midwater', bottom → 'substrate'); the species heuristic in
+// `resolve.ts` upgrades algae-grazers / plant-eaters / detritivores when an
+// id or group matches. Curiosity boldness scales by band — top species are
+// boldest (glass-surf often), bottom species are focused on the substrate.
 
 import type { ResolvedBehavior } from './params';
 
@@ -51,6 +58,16 @@ export const TOP_PRESET: ResolvedBehavior = {
     coverPreference: 'plants',
     emergenceDelay: 5,
   },
+  feeding: {
+    hungerRatePerSec: 1 / 120,
+    threshold: 0.7,
+    category: 'surface',
+  },
+  curiosity: {
+    boldness: 0.7,
+    ratePerSec: 0.06,
+    dwellSec: 4,
+  },
 };
 
 /** Default preset for a mid-water schooler (tetra, rasbora, danio, barb). */
@@ -87,6 +104,16 @@ export const MID_PRESET: ResolvedBehavior = {
     coverPreference: 'plants',
     emergenceDelay: 4,
   },
+  feeding: {
+    hungerRatePerSec: 1 / 120,
+    threshold: 0.7,
+    category: 'midwater',
+  },
+  curiosity: {
+    boldness: 0.5,
+    ratePerSec: 0.05,
+    dwellSec: 3,
+  },
 };
 
 /** Default preset for a substrate-hugger (cory, kuhli, pleco, oto). */
@@ -122,5 +149,15 @@ export const BOTTOM_PRESET: ResolvedBehavior = {
     threshold: 0.4,
     coverPreference: 'wood',
     emergenceDelay: 8,
+  },
+  feeding: {
+    hungerRatePerSec: 1 / 180,
+    threshold: 0.7,
+    category: 'substrate',
+  },
+  curiosity: {
+    boldness: 0.2,
+    ratePerSec: 0.02,
+    dwellSec: 2,
   },
 };

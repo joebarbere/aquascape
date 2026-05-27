@@ -2,13 +2,15 @@
 
 **Load this when:** touching `libs/domain/livestock-ecs/`, `libs/domain/fish-anatomy/`, `libs/rendering/livestock-renderer-3d/`, or `apps/web/src/app/livestock-simulation.service.ts`. Cross-load `renderer-3d.md` if your change crosses into the 3D RAF tick or the bundle's dispose surface.
 
-## Scope of F11.1 + F11.2 + F11.3
+## Scope of F11.1 + F11.2 + F11.3 + F11.4
 
 F11.1 shipped six static archetype meshes wiggling in place. F11.2 makes them swim — Perception → Schooling → Depth → SteeringIntegrator now run before Kinematic, and every entity tagged with a `BehaviorParamsRef` resolves Couzin three-zone schooling + vertical-band stratification each tick. Entities with `handleIdx === NO_BEHAVIOR_HANDLE` stay on the F11.1 static-wiggle path (the integrator short-circuits before touching Velocity).
 
 F11.3 added three behaviour systems — FearSystem, NippingSystem, TerritorialSystem — plus the `Hardscape` tag + `world.registerHardscape(...)` surface. Every fish now carries `FearState` (fear params are required on `ResolvedBehavior`); fish with non-null `territory` get `Territory` + an auto-anchor at spawn; fish with non-null `nipping` get `NippingDrive`. Priority arbitration runs through `BehaviorMode`: FearSystem may flip FORAGE → REFUGE, NippingSystem / TerritorialSystem set PURSUE for one tick. Downstream systems (Nip, Territory, Schooling) early-out when `BehaviorMode !== FORAGE`; DepthSystem always runs.
 
-F11.4 feeding + grazing + curiosity; F11.5 flow field + hardscape SDF + bubble columns; F11.6 per-species presets + perf budget; F11.7 ambient polish (water surface, day-night, plant sway).
+F11.4 added FeedingSystem + CuriositySystem (between Territory and Schooling per the reserved seats) and the `FoodSpriteLifetimeSystem` that runs after Animation. New components: `FeedingDrive` + `Curiosity` on every fish with a registered behaviour, `FoodSprite` tag on transient food entities, and `algaeScore` extended onto `Hardscape` (initialised by `registerHardscape`: rocks + wood → 1.0; plant + other → 0.0). New world API: `spawnFoodSprite(pos, lifetimeSec=30, calories=1)`, `getFoodSpriteCount()`, `getAlgaeScore(eid)`. `WorldSnapshot` gained `foodSpriteCount` + `foodSpritePosition` slabs — additive only; the fish slab is unchanged so F11.1+ renderers keep working.
+
+F11.5 flow field + hardscape SDF + bubble columns; F11.6 per-species presets + perf budget; F11.7 ambient polish (water surface, day-night, plant sway).
 
 ## World lifecycle
 
@@ -25,24 +27,26 @@ F11.4 feeding + grazing + curiosity; F11.5 flow field + hardscape SDF + bubble c
 
 ## System ordering (current + reserved)
 
-F11.1 ran only Kinematic + Animation. F11.2 fills in Perception → Schooling → Depth → SteeringIntegrator. F11.3 added Fear → Nip → Territory between Perception and Schooling. Honour the seat ordering when adding new systems:
+F11.1 ran only Kinematic + Animation. F11.2 fills in Perception → Schooling → Depth → SteeringIntegrator. F11.3 added Fear → Nip → Territory between Perception and Schooling. F11.4 added Feeding + Curiosity in their reserved seats and `FoodSpriteLifetimeSystem` at the very end. Honour the seat ordering when adding new systems:
 
 ```
-PerceptionSystem      (F11.2 — rebuilds the SpatialGrid)
-FearSystem            (F11.3 — risk-driven mode flips, runs early so other behaviours read the latest mode)
-NippingSystem         (F11.3 — group-threshold suppression + nip dart)
-TerritorialSystem     (F11.3 — bourgeois rule + fatigue decay)
-FeedingSystem         (F11.4 — reserved seat)
-SchoolingSystem       (F11.2)
-DepthSystem           (F11.2)
-FlowFieldSystem       (F11.5)
-SteeringIntegrator    (F11.2 — sums forces, clamps maxForce + maxTurnRate)
-CollisionSystem       (F11.5 — SDF deflect)
-KinematicSystem       (always last among physics — integrates velocity)
-AnimationSystem       (always last overall — purely visual, no state reads)
+PerceptionSystem        (F11.2 — rebuilds the SpatialGrid)
+FearSystem              (F11.3 — risk-driven mode flips, runs early so other behaviours read the latest mode)
+NippingSystem           (F11.3 — group-threshold suppression + nip dart)
+TerritorialSystem       (F11.3 — bourgeois rule + fatigue decay)
+FeedingSystem           (F11.4 — hunger integration + sprite/algae targeting + algae regrowth)
+CuriositySystem         (F11.4 — Poisson glass-surfing trigger + dwell)
+SchoolingSystem         (F11.2)
+DepthSystem             (F11.2)
+FlowFieldSystem         (F11.5)
+SteeringIntegrator      (F11.2 — sums forces, clamps maxForce + maxTurnRate)
+CollisionSystem         (F11.5 — SDF deflect)
+KinematicSystem         (always last among physics — integrates velocity)
+AnimationSystem         (always last overall — purely visual, no state reads)
+FoodSpriteLifetimeSystem (F11.4 — drains FoodSprite.lifetime + despawns expired sprites; runs after Animation so mid-tick consumption settles first)
 ```
 
-**"First system with a non-null target wins"** — arbitration is by priority, not by force summation, for mode-flipping behaviours (Fear → Nip → Territory → Feeding). Implemented as **early-out checks on `BehaviorMode`**: FearSystem may flip FORAGE → REFUGE; NippingSystem / TerritorialSystem set PURSUE for exactly one tick (NippingSystem resets PURSUE → FORAGE at the start of its own loop the following tick). SchoolingSystem skips entirely when `mode !== FORAGE` so REFUGE/PURSUE forces aren't diluted. DepthSystem **always** runs — fleeing fish still respect depth bands. Schooling + Depth + Flow are additive forces summed by SteeringIntegrator.
+**"First system with a non-null target wins"** — arbitration is by priority, not by force summation, for mode-flipping behaviours (Fear → Nip → Territory → Feeding → Curiosity). Implemented as **early-out checks on `BehaviorMode`**: FearSystem may flip FORAGE → REFUGE; NippingSystem / TerritorialSystem set PURSUE for exactly one tick (NippingSystem resets PURSUE → FORAGE at the start of its own loop the following tick). FeedingSystem still integrates hunger for REFUGE/PURSUE fish (fish get hungry even when fleeing) but skips target-seeking; CuriositySystem skips entirely. SchoolingSystem skips entirely when `mode !== FORAGE` so REFUGE/PURSUE forces aren't diluted. DepthSystem **always** runs — fleeing fish still respect depth bands. Schooling + Depth + Flow + Feeding + Curiosity are additive forces summed by SteeringIntegrator.
 
 **Hardscape registration:** `world.registerHardscape(entries)` tears down all existing `Hardscape`-tagged entities and adds fresh ones from the input. Re-registration is the chosen rebuild path; hardscape mutations trigger a livestock re-spawn upstream (same pattern as F11.2 tank resizes), so callers MUST NOT depend on specific bitECS eids surviving across re-registrations. Auto-anchor for territorial fish happens at `spawnFish` time — the nearest hardscape within `2 * coreRadius` wins; if none in range, `Territory.anchorEid = NO_ENTITY_REF` (0xffffffff) and TerritorialSystem skips that fish. Hardscape entities live in the same `Position` query as fish, so systems that walk neighbours must filter via `hasComponent(ecs, Hardscape, nid)` to exclude them.
 

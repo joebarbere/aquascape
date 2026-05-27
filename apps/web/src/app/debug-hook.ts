@@ -63,6 +63,14 @@ export interface AquascapeDebugHandle {
    */
   getEntityCount(): number;
   /**
+   * F11.4 — count of currently-live food sprite entities (transient ECS
+   * entities spawned by the Feed tank pulse, despawned after their 30 s
+   * lifetime). Returns 0 when no world has been built yet. Used by the
+   * Playwright e2e to verify a click on "Feed tank" actually drops
+   * sprites the renderer can billboard.
+   */
+  getFoodSpriteCount(): number;
+  /**
    * The current `Scene` from the NgRx store, or `null` before the first
    * store emission. Returns the same object reference the renderer would
    * read on its next paint.
@@ -113,6 +121,15 @@ export function attachDebugHook(deps: {
       // archetypes ride the same component slabs). The `0` alpha
       // argument selects the post-step state with no sub-tick lerping.
       return world.snapshot(0).entityCount;
+    },
+    getFoodSpriteCount: () => {
+      // F11.4 — distinct from entityCount: fish are tracked via Orientation
+      // + Position; sprites are FoodSprite-tagged Position-only entities
+      // and live in their own bitECS query. The world owns the accessor;
+      // we just forward.
+      const world = deps.livestockSim.getWorld();
+      if (world === null) return 0;
+      return world.getFoodSpriteCount();
     },
     getScene: () => {
       // NgRx Stores are BehaviorSubjects under the hood — subscribing

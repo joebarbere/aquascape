@@ -14,7 +14,9 @@
 // emitted scenes deterministically.
 
 import { TestBed } from '@angular/core/testing';
+import { provideMockActions } from '@ngrx/effects/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
+import { EMPTY } from 'rxjs';
 import type { Scene } from '@aquascape/domain/scene-model';
 import {
   DIALOG_SERVICE,
@@ -107,6 +109,13 @@ function configure(
           { selector: selectCanRedo, value: false },
         ],
       }),
+      // F11.4 — LivestockSimulationService subscribes to
+      // `LivestockPulseActions.feedTank` via @ngrx/effects' `Actions`. Tests
+      // that boot AppComponent must provide an Actions stream (even an
+      // empty one) so the service constructor's `inject(Actions)` resolves
+      // — `optional: true` is not enough, because Actions is registered
+      // root-providedIn and its factory crashes without ScannedActionsSubject.
+      provideMockActions(() => EMPTY),
     ],
   });
 }

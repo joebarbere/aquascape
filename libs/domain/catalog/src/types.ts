@@ -22,8 +22,10 @@
 
 import type {
   AnimationParams,
+  CuriosityParams,
   DepthParams,
   FearParams,
+  FeedingParams,
   NippingParams,
   SchoolingParams,
   TerritoryParams,
@@ -261,6 +263,22 @@ export interface LivestockEntry extends CatalogEntryBase {
      * not opt out.
      */
     fear?: Partial<FearParams>;
+    /**
+     * Stage 11 F11.4 per-species feeding override. `category` drives the
+     * FeedingSystem's target selection (surface flake vs. midwater pellet vs.
+     * substrate sinking wafer, plus algae-grazer / plant-eater / detritivore
+     * passive uptake paths). `hungerRatePerSec` + `threshold` tune how
+     * visibly hungry the species reads. No `| null` — every fish has hunger;
+     * the lib still needs to resolve defaults for an absent block.
+     */
+    feeding?: Partial<FeedingParams>;
+    /**
+     * Stage 11 F11.4 curiosity / glass-surfing override. `ratePerSec = 0` is
+     * a valid value that disables glass-surfing entirely for the species; no
+     * `| null` is needed for opt-out. Defaults still resolve via
+     * `resolveBehavior()` when the block is absent.
+     */
+    curiosity?: Partial<CuriosityParams>;
   };
 }
 

@@ -47,14 +47,21 @@ import {
   BufferGeometry,
   Color,
   type ColorRepresentation,
+  DoubleSide,
   DynamicDrawUsage,
   Group,
   InstancedBufferAttribute,
   InstancedMesh,
+  PlaneGeometry,
   ShaderMaterial,
   Vector3,
 } from 'three';
-import { LIVESTOCK_FRAGMENT_SHADER, LIVESTOCK_VERTEX_SHADER } from './shaders';
+import {
+  LIVESTOCK_FOOD_FRAGMENT_SHADER,
+  LIVESTOCK_FOOD_VERTEX_SHADER,
+  LIVESTOCK_FRAGMENT_SHADER,
+  LIVESTOCK_VERTEX_SHADER,
+} from './shaders';
 
 // ─── Public API ──────────────────────────────────────────────────────────
 
@@ -64,8 +71,18 @@ import { LIVESTOCK_FRAGMENT_SHADER, LIVESTOCK_VERTEX_SHADER } from './shaders';
  * call `dispose` once on renderer teardown.
  */
 export interface LivestockMeshBundle {
-  /** Container that holds one `InstancedMesh` per archetype. */
+  /**
+   * Container that holds one `InstancedMesh` per archetype, plus a
+   * seventh InstancedMesh for food-sprite billboards (F11.4 Wave 4).
+   */
   group: Group;
+  /**
+   * Direct handle to the food-sprite billboard `InstancedMesh`.
+   * Exposed so tests + future feeders can inspect / replace it without
+   * walking the group's children. The mesh's `count` is driven by
+   * `syncFromSnapshot` from `WorldSnapshot.foodSpriteCount`.
+   */
+  foodSpriteMesh: InstancedMesh;
   /**
    * Copy the latest snapshot's per-entity attributes into the matching
    * `InstancedBufferAttribute`s and advance the shader's time uniform.
@@ -96,6 +113,17 @@ export interface BuildLivestockMeshesOpts {
    * the catalog and call a future `setArchetypeColor(...)` API.
    */
   defaultBodyColor?: ColorRepresentation;
+  /**
+   * Food-sprite instance cap (F11.4 Wave 4). The "Feed tank" command
+   * spawns 3–6 sprites at a time and each despawns after 30 s, so even
+   * impatient clicking won't approach this cap. Defaults to 64.
+   */
+  maxFoodSprites?: number;
+  /**
+   * Food-flake colour applied to every sprite. Defaults to a warm tan
+   * (`0xd9a86c`) that reads against any backdrop.
+   */
+  foodColor?: ColorRepresentation;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────
@@ -104,6 +132,18 @@ const DEFAULT_MAX_INSTANCES = 256;
 
 /** Silver-tetra blue — neutral, reads on every aquascape backdrop. */
 const DEFAULT_BODY_COLOR = 0x9ec5d6;
+
+/**
+ * Food-sprite instance cap. Service spawns 3–6 per Feed-tank click,
+ * each lives 30 s — 64 is roughly 10–20 simultaneous clicks of buffer.
+ */
+const DEFAULT_MAX_FOOD_SPRITES = 64;
+
+/** Warm tan — reads as flake food against any aquascape backdrop. */
+const DEFAULT_FOOD_COLOR = 0xd9a86c;
+
+/** Food flake side length in mm. ~5mm matches real flake food. */
+const FOOD_SPRITE_SIZE_MM = 5;
 
 /** Tail-beat frequency default (Hz) — calm cruise. Matches `ecs/world.ts`. */
 const DEFAULT_TAIL_BEAT_FREQ = 4;
@@ -135,6 +175,22 @@ const ARCHETYPE_LABELS: Record<number, string> = {
 };
 
 // ─── Internal types ──────────────────────────────────────────────────────
+
+/**
+ * Food-sprite slot — owns the single billboard `InstancedMesh` + its
+ * `instancePosition` attribute. Mirrors `ArchetypeSlot`'s shape so the
+ * dispose path can iterate uniformly.
+ */
+interface FoodSpriteSlot {
+  mesh: InstancedMesh;
+  geometry: BufferGeometry;
+  material: ShaderMaterial;
+  instancePosition: InstancedBufferAttribute;
+  /** Capacity = max sprites the attribute can hold. */
+  capacity: number;
+  /** One-time overflow warn flag — mirrors the fish-bucket pattern. */
+  overflowWarned: boolean;
+}
 
 /**
  * Per-archetype slot — owns the mesh + the typed-array views into its
@@ -183,7 +239,17 @@ export function buildLivestockMeshes(opts: BuildLivestockMeshesOpts = {}): Lives
     );
   }
 
+  const maxFoodSprites = opts.maxFoodSprites ?? DEFAULT_MAX_FOOD_SPRITES;
+  if (!Number.isFinite(maxFoodSprites) || maxFoodSprites <= 0) {
+    throw new Error(
+      `buildLivestockMeshes: maxFoodSprites must be a positive finite number, got ${String(
+        opts.maxFoodSprites,
+      )}`,
+    );
+  }
+
   const bodyColor = new Color(opts.defaultBodyColor ?? DEFAULT_BODY_COLOR);
+  const foodColor = new Color(opts.foodColor ?? DEFAULT_FOOD_COLOR);
 
   const group = new Group();
   group.name = 'aquascape:livestock';
@@ -199,14 +265,22 @@ export function buildLivestockMeshes(opts: BuildLivestockMeshesOpts = {}): Lives
     group.add(slot.mesh);
   }
 
+  // 7th InstancedMesh — food-sprite billboards (F11.4 Wave 4). Added
+  // as a sibling under the same group so `disposeNode` walks find it
+  // alongside the archetype meshes.
+  const foodSlot = buildFoodSpriteSlot(maxFoodSprites, foodColor);
+  group.add(foodSlot.mesh);
+
   let disposed = false;
 
   const bundle: LivestockMeshBundle = {
     group,
+    foodSpriteMesh: foodSlot.mesh,
 
     syncFromSnapshot(snapshot: WorldSnapshot, currentTimeSec: number): void {
       if (disposed) return;
       syncFromSnapshotImpl(slots, snapshot, currentTimeSec);
+      syncFoodSpritesImpl(foodSlot, snapshot);
     },
 
     dispose(): void {
@@ -226,6 +300,11 @@ export function buildLivestockMeshes(opts: BuildLivestockMeshesOpts = {}): Lives
         // anyway for completeness.
         slot.mesh.dispose();
       }
+      // Release the food-sprite slot the same way.
+      group.remove(foodSlot.mesh);
+      foodSlot.geometry.dispose();
+      foodSlot.material.dispose();
+      foodSlot.mesh.dispose();
     },
   };
 
@@ -469,4 +548,82 @@ function makeInstancedAttr(
   const attr = new InstancedBufferAttribute(buf, itemSize);
   attr.setUsage(DynamicDrawUsage);
   return attr;
+}
+
+// ─── Food sprite slot (F11.4 Wave 4) ─────────────────────────────────────
+
+function buildFoodSpriteSlot(maxFoodSprites: number, foodColor: Color): FoodSpriteSlot {
+  // A single 5mm × 5mm quad — billboarded camera-facing in the vertex
+  // shader, so the actual orientation in object space doesn't matter.
+  // `PlaneGeometry` gives us 4 vertices + 2 triangles + UVs that run
+  // (0,0) bottom-left through (1,1) top-right, which the fragment
+  // shader uses for the circular-flake alpha falloff.
+  const geometry = new PlaneGeometry(FOOD_SPRITE_SIZE_MM, FOOD_SPRITE_SIZE_MM);
+
+  const instancePosition = makeInstancedAttr(maxFoodSprites, 3);
+  geometry.setAttribute('instancePosition', instancePosition);
+
+  const material = new ShaderMaterial({
+    vertexShader: LIVESTOCK_FOOD_VERTEX_SHADER,
+    fragmentShader: LIVESTOCK_FOOD_FRAGMENT_SHADER,
+    uniforms: {
+      uFoodColor: { value: foodColor.clone() },
+    },
+    // Sprites need alpha (soft circular falloff). DoubleSide because
+    // the billboard math doesn't compute a consistent face normal —
+    // either face could end up toward the camera depending on quad
+    // orientation in world space (which the X-mirror flips).
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    side: DoubleSide,
+  });
+
+  const mesh = new InstancedMesh(geometry, material, maxFoodSprites);
+  mesh.name = 'aquascape:livestock/food-sprite';
+  mesh.count = 0;
+  // Instances can land anywhere inside the tank as food falls; the
+  // InstancedMesh's own bounding box doesn't account for that.
+  mesh.frustumCulled = false;
+
+  return {
+    mesh,
+    geometry,
+    material,
+    instancePosition,
+    capacity: maxFoodSprites,
+    overflowWarned: false,
+  };
+}
+
+function syncFoodSpritesImpl(slot: FoodSpriteSlot, snapshot: WorldSnapshot): void {
+  const requested = snapshot.foodSpriteCount;
+  const cap = slot.capacity;
+
+  // Clamp + warn-once if the ECS world somehow exposes more sprites
+  // than the renderer reserved capacity for. Defensive — the world
+  // has its own pool growth + the service spawns small batches.
+  let n = requested;
+  if (n > cap) {
+    n = cap;
+    if (!slot.overflowWarned) {
+      slot.overflowWarned = true;
+      console.warn(
+        `[livestock-renderer-3d] food sprite count (${requested}) exceeds maxFoodSprites (${cap}); ` +
+          `dropping additional sprites`,
+      );
+    }
+  }
+
+  const dst = slot.instancePosition.array as Float32Array;
+  const src = snapshot.foodSpritePosition;
+  // Copy n × 3 floats. `Float32Array.set` with a clamped subarray is
+  // allocation-free under V8 / JSC.
+  if (n > 0) {
+    dst.set(src.subarray(0, n * 3));
+    slot.instancePosition.needsUpdate = true;
+  }
+  // Three.js skips the draw cleanly when count is 0; no need to clear
+  // the attribute data (stale values won't render).
+  slot.mesh.count = n;
 }
