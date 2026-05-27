@@ -77,6 +77,10 @@ import type {
   Viewport,
 } from '@aquascape/rendering/renderer-api';
 import {
+  AmbientLight,
+  Color,
+  DirectionalLight,
+  Group,
   InstancedMesh,
   Mesh,
   Object3D,
@@ -157,9 +161,14 @@ const defaultRendererFactory: RendererFactory = (canvas) =>
 import { buildCamera, tankCenter } from './scene-builder/camera';
 import { buildHardscapeMeshes } from './scene-builder/hardscape-mesh';
 import { buildLighting } from './scene-builder/lighting';
-import { buildPlantMeshes } from './scene-builder/plant-mesh';
+import {
+  buildPlantMeshes,
+  updatePlantEmissiveBoost,
+  updatePlantSwayTime,
+} from './scene-builder/plant-mesh';
 import { buildSubstrateMeshes } from './scene-builder/substrate-mesh';
 import { buildTankMesh } from './scene-builder/tank-mesh';
+import { buildWaterMesh, type WaterMeshHandle } from './scene-builder/water-mesh';
 
 /** Damping factor for orbit interactions. 0.08 reads smooth on mid-tier HW. */
 const ORBIT_DAMPING = 0.08;
@@ -248,6 +257,70 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    * time (it's just an `Object3D` re-parent, not a GPU rebuild).
    */
   private livestockBundle: LivestockMeshBundle | null = null;
+  /**
+   * Stage 11 F11.7 — cached animated water surface handle. Built lazily on
+   * the first `render()` after `attach()` and rebuilt only when the tank
+   * dimensions change (mirroring the lighting rig's "tag the last-built
+   * dimensions" pattern). The shader is otherwise stable across renders;
+   * only `updateTime()` from the RAF tick mutates per-frame state. The
+   * mesh is re-parented into each freshly-built content group rather than
+   * rebuilt — same caching rationale as the livestock bundle, just smaller
+   * GPU cost (single ShaderMaterial + 16×16 plane).
+   */
+  private waterMesh: WaterMeshHandle | null = null;
+  /**
+   * Tank-dimensions tag for the last-built water mesh. When the tank
+   * changes (resize), the cached water mesh is disposed + rebuilt so the
+   * plane stays sized to the new tank footprint.
+   */
+  private waterMeshTag: string | null = null;
+  /**
+   * Stage 11 F11.7 — handle on the plant group built by `buildPlantMeshes`
+   * during the last `render()`. The RAF tick uses it to advance the sway
+   * shader's `uTime` uniform without re-traversing the content tree.
+   * Re-assigned on every render; cleared on `dispose()`.
+   *
+   * The plants themselves are rebuilt from scratch every render (their
+   * geometries + materials are cheap), so unlike the water mesh or
+   * livestock bundle we don't cache them across renders — we just hold
+   * a reference to whichever group is currently mounted so the per-
+   * frame `uTime` advance has somewhere to land.
+   */
+  private currentPlantGroup: Group | null = null;
+  /**
+   * Stage 11 F11.7 Wave 3 — cached references to the lighting rig's
+   * Ambient + Directional lights. Set in `ensureLightingForTank` after
+   * every (re)build of the lighting group; nulled in `dispose()`. The
+   * day-night cycle mutates `color` (ambient) + `intensity` (directional)
+   * IN PLACE every render so the cycle interpolates smoothly without
+   * rebuilding the lighting group per frame (rebuild allocates Three.js
+   * objects + light targets; per-frame allocation under a typical 60 fps
+   * RAF would shred GC).
+   *
+   * `baseDirectionalIntensity` captures the rig's authored noon intensity
+   * (today: `KEY_INTENSITY = 1.0` in `lighting.ts`) so the multiplier from
+   * `DayNightLookup.directionalIntensity` is applied as a fraction-of-noon
+   * rather than an absolute. If the lighting builder ever upgrades the
+   * key light's intensity, this captured value flows through without a
+   * coordinated change here.
+   */
+  private currentAmbientLight: AmbientLight | null = null;
+  private currentDirectionalLight: DirectionalLight | null = null;
+  private baseDirectionalIntensity = 1;
+  /**
+   * Stage 11 F11.7 Wave 3 — the AmbientLight's authored colour (white).
+   * The cycle writes a tinted colour into the cached light on every
+   * render; on a render WITHOUT a `dayNightLookup`, we reset the ambient
+   * to white so a host that turns the cycle off mid-session sees the
+   * lighting return to its editorial default.
+   */
+  private static readonly DEFAULT_AMBIENT_COLOR = 0xffffff;
+  /**
+   * Stage 11 F11.7 Wave 3 — default scene background. Matches the
+   * `setClearColor(0x1a2030)` call in `attach()` so a render without
+   * `dayNightLookup` reads identically to pre-F11.7 behaviour.
+   */
+  private static readonly DEFAULT_BACKGROUND_COLOR = 0x1a2030;
 
   /**
    * @param rendererFactory injectable WebGLRenderer factory. The default
@@ -414,6 +487,26 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
         bundle.syncFromSnapshot(world.snapshot(alpha), now / 1000);
       }
 
+      // Stage 11 F11.7 — drive the water surface's uTime uniform off the
+      // wall clock so the swell + ripple bands animate at their authored
+      // frequencies regardless of the sim accumulator. The handle no-ops
+      // after dispose so a stale tick after `dispose()` is safe.
+      this.waterMesh?.updateTime(now / 1000);
+
+      // Stage 11 F11.7 — same wall-clock tick drives every plant sway
+      // material's `uTime` uniform. `updatePlantSwayTime` is a no-op when
+      // the group has no sway materials attached (e.g. before the first
+      // `render()` or for an empty scene), so the unconditional call is
+      // safe. **Simplification vs. plan:** F11.7 also called for sway
+      // frequency to couple to the F11.5 flow-field magnitude at each
+      // plant's base. The renderer doesn't have direct access to the
+      // livestock-ecs world's flow field; wiring that through is bigger
+      // than F11.7 calls for. v1 uses a constant 1.2 Hz sway frequency.
+      // Flow-coupling deferred — tracked as a Stage 11 follow-up.
+      if (this.currentPlantGroup !== null) {
+        updatePlantSwayTime(this.currentPlantGroup, now / 1000);
+      }
+
       ctl?.update();
       r.render(s, c);
       this.rafHandle = raf.requestAnimationFrame(tick);
@@ -443,6 +536,14 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     //    dimensions changed (key-light position scales with the tank).
     this.ensureLightingForTank(scene, tScene);
 
+    // 2a) Stage 11 F11.7 Wave 3 — day-night cycle. Mutate the cached
+    //     ambient colour + directional intensity + scene background +
+    //     plant emissive uniform IN PLACE (no rebuild). Each field is
+    //     independent; when the host omits `dayNightLookup`, we reset
+    //     to editorial defaults so a host that turns the cycle off
+    //     mid-session sees the rig return to noon.
+    this.applyDayNightLookup(options.dayNightLookup, tScene);
+
     // 3) Rebuild content group from scratch. Cheap (~ms) for typical
     //    scenes and keeps idempotency trivial — same input, same graph.
     if (this.currentContent !== null) {
@@ -456,15 +557,57 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       if (this.livestockBundle !== null) {
         this.currentContent.remove(this.livestockBundle.group);
       }
+      // Stage 11 F11.7 — same detach-before-dispose dance as the livestock
+      // bundle. The water mesh is cached on the renderer and re-parented
+      // into the new content group below; if we let `disposeNode` walk
+      // through it, the shared geometry + ShaderMaterial would be GPU-
+      // disposed every render.
+      if (this.waterMesh !== null) {
+        this.currentContent.remove(this.waterMesh.mesh);
+      }
       disposeNode(this.currentContent);
       this.currentContent = null;
+      // Stage 11 F11.7 — the plant group's materials were just disposed
+      // by `disposeNode` above. Clear the handle so the RAF tick doesn't
+      // poke `uTime` on torn-down uniforms before the new group is built
+      // a few lines down. Reassigned below.
+      this.currentPlantGroup = null;
     }
     const content = new Object3D();
     content.name = 'aquascape:content';
     content.add(buildTankMesh(scene.tank));
     content.add(buildSubstrateMeshes(scene, catalog));
     content.add(buildHardscapeMeshes(scene, catalog));
-    content.add(buildPlantMeshes(scene, catalog, previewAgeWeeks));
+    // Stage 11 F11.7 — retain a handle on the plant group so the RAF tick
+    // can drive its sway materials' `uTime` uniform. The group itself is
+    // rebuilt + GPU-disposed every render (no caching), but we always
+    // re-point this handle at the latest group so per-frame ticks land.
+    const plantGroup = buildPlantMeshes(scene, catalog, previewAgeWeeks);
+    this.currentPlantGroup = plantGroup;
+    content.add(plantGroup);
+    // Stage 11 F11.7 Wave 3 — write the day-night `emissiveBoost` into the
+    // freshly-built plant group's sway-material uniforms. Per-render is
+    // sufficient — the boost lerps with the cycle phase, not per-frame —
+    // and doing it here (rather than every RAF tick) keeps the per-frame
+    // tick cheap. The default 0 written by `createPlantSwayMaterial`
+    // means a render without a `dayNightLookup` leaves plants at noon
+    // (no boost).
+    if (options.dayNightLookup !== undefined) {
+      updatePlantEmissiveBoost(plantGroup, options.dayNightLookup.emissiveBoost);
+    } else {
+      updatePlantEmissiveBoost(plantGroup, 0);
+    }
+
+    // Stage 11 F11.7 — animated water surface. Always present in 3D
+    // (no opt-in flag in v1). Cached against the tank's WxHxD tag — same
+    // dimensions reuse the existing handle, a tank resize disposes +
+    // rebuilds. The mesh's `renderOrder = 1` keeps it in the transparent
+    // pass AFTER opaque content; `depthWrite: false` means fish + plants
+    // below are still visible through it.
+    this.ensureWaterMeshForTank(scene);
+    if (this.waterMesh !== null) {
+      content.add(this.waterMesh.mesh);
+    }
 
     // Stage 11 F11.1 — livestock InstancedMesh bundle. The world is owned
     // by the host (apps/web's `LivestockSimulationService`); the renderer
@@ -591,6 +734,104 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     rig.userData['aquascape:lightingTag'] = tag;
     tScene.add(rig);
     this.lighting = rig;
+
+    // Stage 11 F11.7 Wave 3 — cache the Ambient + Directional refs so the
+    // day-night cycle can mutate `color` + `intensity` in place per render
+    // (no rebuild). `buildLighting` returns a Group with one of each plus
+    // the directional light's `target` child; find them by `isXLight` so
+    // we don't depend on child order.
+    let ambient: AmbientLight | null = null;
+    let directional: DirectionalLight | null = null;
+    rig.traverse((node) => {
+      if ((node as AmbientLight).isAmbientLight) {
+        ambient = node as AmbientLight;
+      } else if ((node as DirectionalLight).isDirectionalLight) {
+        directional = node as DirectionalLight;
+      }
+    });
+    this.currentAmbientLight = ambient;
+    this.currentDirectionalLight = directional;
+    this.baseDirectionalIntensity = directional !== null
+      ? (directional as DirectionalLight).intensity
+      : 1;
+  }
+
+  /**
+   * Stage 11 F11.7 Wave 3 — apply the day-night `DayNightLookup` to the
+   * cached lights + scene background. **Mutation-only**: each field is a
+   * cheap in-place write (Color.set + intensity = float + Scene.background
+   * = Color.set), no Three.js object allocation per render.
+   *
+   * When `lookup` is undefined, every field is reset to its editorial
+   * default (ambient = white, directional = the captured `baseDirectional
+   * Intensity`, background = `DEFAULT_BACKGROUND_COLOR`). This means a
+   * host that toggles the day-night UI off mid-session sees the lighting
+   * snap back to the pre-F11.7 look without needing a re-render with
+   * different inputs.
+   *
+   * Note on directional COLOUR: the sun is white in v1. The cycle's
+   * warm/cool tint rides on the ambient channel alone — adding the sun
+   * to the gradient table would make midnight bluer than it needs to be
+   * and double-count the temperature shift the user perceives. If a
+   * future cycle stage wants a coloured sun, this is the wiring spot.
+   */
+  private applyDayNightLookup(
+    lookup: RenderOptions['dayNightLookup'] | undefined,
+    tScene: ThreeScene,
+  ): void {
+    if (lookup === undefined) {
+      if (this.currentAmbientLight !== null) {
+        this.currentAmbientLight.color.set(Three3DRenderer.DEFAULT_AMBIENT_COLOR);
+      }
+      if (this.currentDirectionalLight !== null) {
+        this.currentDirectionalLight.intensity = this.baseDirectionalIntensity;
+      }
+      if (
+        tScene.background !== null &&
+        (tScene.background as Color).isColor
+      ) {
+        (tScene.background as Color).set(Three3DRenderer.DEFAULT_BACKGROUND_COLOR);
+      } else {
+        tScene.background = new Color(Three3DRenderer.DEFAULT_BACKGROUND_COLOR);
+      }
+      return;
+    }
+    if (this.currentAmbientLight !== null) {
+      this.currentAmbientLight.color.set(lookup.ambientColor);
+    }
+    if (this.currentDirectionalLight !== null) {
+      this.currentDirectionalLight.intensity =
+        this.baseDirectionalIntensity * lookup.directionalIntensity;
+    }
+    // Mutate `Scene.background` in place when it's already a Color (the
+    // common case after the first day-night render); otherwise allocate.
+    // This shaves a Color allocation off the steady-state cycle.
+    if (
+      tScene.background !== null &&
+      (tScene.background as Color).isColor
+    ) {
+      (tScene.background as Color).set(lookup.backgroundTint);
+    } else {
+      tScene.background = new Color(lookup.backgroundTint);
+    }
+  }
+
+  /**
+   * Stage 11 F11.7 — lazily build / rebuild the animated water surface.
+   * Same caching policy as the lighting rig: tag the last-built tank's
+   * WxHxD, reuse on match, dispose + rebuild on a tank resize. The
+   * shader uniforms are otherwise stable across renders — only the RAF
+   * tick's `updateTime()` writes per-frame state.
+   */
+  private ensureWaterMeshForTank(scene: Scene): void {
+    const tag = `${scene.tank.width}x${scene.tank.height}x${scene.tank.depth}`;
+    if (this.waterMesh !== null && this.waterMeshTag === tag) return;
+    if (this.waterMesh !== null) {
+      this.waterMesh.dispose();
+      this.waterMesh = null;
+    }
+    this.waterMesh = buildWaterMesh(scene);
+    this.waterMeshTag = tag;
   }
 
   // ─── hitTest ──────────────────────────────────────────────────────────
@@ -775,9 +1016,19 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       if (this.livestockBundle !== null) {
         this.currentContent.remove(this.livestockBundle.group);
       }
+      // Stage 11 F11.7 — same dance for the water surface: dedicated
+      // dispose path below handles its GPU resources.
+      if (this.waterMesh !== null) {
+        this.currentContent.remove(this.waterMesh.mesh);
+      }
       disposeNode(this.currentContent);
       this.currentContent = null;
     }
+    // Stage 11 F11.7 — drop the plant-group handle so a stale tick after
+    // `dispose()` doesn't reach into a torn-down content tree. The actual
+    // geometries + materials were disposed by `disposeNode` above; this is
+    // just our reference.
+    this.currentPlantGroup = null;
 
     // Stage 11 F11.1 — release the GPU resources behind the livestock
     // bundle. The world itself is owned by the host (it survives a
@@ -789,11 +1040,26 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     }
     this.livestockWorld = null;
 
+    // Stage 11 F11.7 — release the water surface's geometry + ShaderMaterial.
+    // Idempotent at the handle level; clearing the cache + tag here keeps
+    // a subsequent `attach() + render()` rebuilding from scratch.
+    if (this.waterMesh !== null) {
+      this.waterMesh.dispose();
+      this.waterMesh = null;
+    }
+    this.waterMeshTag = null;
+
     if (this.lighting !== null) {
       if (this.threeScene !== null) this.threeScene.remove(this.lighting);
       disposeNode(this.lighting);
       this.lighting = null;
     }
+    // Stage 11 F11.7 Wave 3 — drop cached light refs so a stale
+    // `applyDayNightLookup` after dispose can't reach into disposed
+    // resources. Reassigned next time `ensureLightingForTank` runs.
+    this.currentAmbientLight = null;
+    this.currentDirectionalLight = null;
+    this.baseDirectionalIntensity = 1;
 
     if (this.renderer !== null) {
       this.renderer.dispose();

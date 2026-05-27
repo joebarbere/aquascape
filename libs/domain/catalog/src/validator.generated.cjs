@@ -41,7 +41,7 @@ var require_ucs2length = __commonJS({
   }
 });
 
-// node_modules/.cache/aquascape-validators/OteNMw/entry.cjs
+// node_modules/.cache/aquascape-validators/jKi0RK/entry.cjs
 module.exports = validate20;
 module.exports.default = validate20;
 var schema32 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "material", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "substrate" }, "material": { "enum": ["soil", "sand", "gravel"] }, "color": { "$ref": "#/$defs/HexColor" }, "grainSize": { "type": "number", "exclusiveMinimum": 0 } } };
@@ -3556,7 +3556,7 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate27.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema46 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "category", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "equipment" }, "category": { "enum": ["filter", "heater", "light", "co2"] }, "subcategory": { "type": "string", "minLength": 1 }, "wattage": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published power draw in watts." }, "flowRateLph": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published flow rate (litres per hour). Filter-specific; ignored for other categories." }, "coverageLitres": { "type": "object", "additionalProperties": false, "properties": { "min": { "type": "integer", "exclusiveMinimum": 0 }, "max": { "type": "integer", "exclusiveMinimum": 0 } }, "description": "Recommended tank-size window. Either bound is optional; both are positive integers when present." }, "defaultSettings": { "type": "object", "additionalProperties": { "anyOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }] }, "description": "Seed settings the future settings UI populates on first attach. F7.3 v1 is display-only; shape mirrors the document-side EquipmentEntry.settings Record." }, "color": { "$ref": "#/$defs/HexColor" }, "flow": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.5 flow contribution for filter / pump equipment. Drives the FlowFieldSystem source/sink bake. Every subfield is optional + additive \u2014 older manifests without `flow` keep loading unchanged.", "properties": { "outflowPos": { "$ref": "#/$defs/Vec3", "description": "World-space position where water exits the equipment (mm). Right-handed, +x right, +y up, +z back." }, "outflowVec": { "$ref": "#/$defs/Vec3", "description": "Direction vector of the outflow jet (unit-ish). Default (0, 0, 1) \u2014 points toward back of tank." }, "intakePos": { "$ref": "#/$defs/Vec3", "description": "World-space position where water enters the equipment intake (mm). Optional \u2014 when absent, the intake is co-located with `outflowPos`." }, "flowRate": { "type": "number", "minimum": 0, "description": "Volumetric flow rate (L/hr). Drives source/sink strength. Default 200." } } }, "airRateMl": { "type": "number", "minimum": 0, "description": "Stage 11 F11.5 air-stone air volumetric rate (mL/min). Drives BubbleParticleSystem spawn rate. When absent, the equipment is not an air-stone (or produces no visible bubbles)." } } };
+var schema46 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "category", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "equipment" }, "category": { "enum": ["filter", "heater", "light", "co2"] }, "subcategory": { "type": "string", "minLength": 1 }, "wattage": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published power draw in watts." }, "flowRateLph": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published flow rate (litres per hour). Filter-specific; ignored for other categories." }, "coverageLitres": { "type": "object", "additionalProperties": false, "properties": { "min": { "type": "integer", "exclusiveMinimum": 0 }, "max": { "type": "integer", "exclusiveMinimum": 0 } }, "description": "Recommended tank-size window. Either bound is optional; both are positive integers when present." }, "defaultSettings": { "type": "object", "additionalProperties": { "anyOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }] }, "description": "Seed settings the future settings UI populates on first attach. F7.3 v1 is display-only; shape mirrors the document-side EquipmentEntry.settings Record." }, "color": { "$ref": "#/$defs/HexColor" }, "flow": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.5 flow contribution for filter / pump equipment. Drives the FlowFieldSystem source/sink bake. Every subfield is optional + additive \u2014 older manifests without `flow` keep loading unchanged.", "properties": { "outflowPos": { "$ref": "#/$defs/Vec3", "description": "World-space position where water exits the equipment (mm). Right-handed, +x right, +y up, +z back." }, "outflowVec": { "$ref": "#/$defs/Vec3", "description": "Direction vector of the outflow jet (unit-ish). Default (0, 0, 1) \u2014 points toward back of tank." }, "intakePos": { "$ref": "#/$defs/Vec3", "description": "World-space position where water enters the equipment intake (mm). Optional \u2014 when absent, the intake is co-located with `outflowPos`." }, "flowRate": { "type": "number", "minimum": 0, "description": "Volumetric flow rate (L/hr). Drives source/sink strength. Default 200." } } }, "airRateMl": { "type": "number", "minimum": 0, "description": "Stage 11 F11.5 air-stone air volumetric rate (mL/min). Drives BubbleParticleSystem spawn rate. When absent, the equipment is not an air-stone (or produces no visible bubbles)." }, "photoperiodHours": { "type": "number", "minimum": 0, "maximum": 24, "description": "Stage 11 F11.7 optional daily photoperiod for lighting equipment (hours per day, 0\u201324). Drives the day-night cycle's 'equipment' mode. Only meaningful when category === 'light'; absent = service default 10h on / 14h off." } } };
 function validate29(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -4401,12 +4401,43 @@ function validate29(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
+    if (data.photoperiodHours !== void 0) {
+      let data34 = data.photoperiodHours;
+      if (typeof data34 == "number" && isFinite(data34)) {
+        if (data34 > 24 || isNaN(data34)) {
+          const err75 = { instancePath: instancePath + "/photoperiodHours", schemaPath: "#/properties/photoperiodHours/maximum", keyword: "maximum", params: { comparison: "<=", limit: 24 }, message: "must be <= 24" };
+          if (vErrors === null) {
+            vErrors = [err75];
+          } else {
+            vErrors.push(err75);
+          }
+          errors++;
+        }
+        if (data34 < 0 || isNaN(data34)) {
+          const err76 = { instancePath: instancePath + "/photoperiodHours", schemaPath: "#/properties/photoperiodHours/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+          if (vErrors === null) {
+            vErrors = [err76];
+          } else {
+            vErrors.push(err76);
+          }
+          errors++;
+        }
+      } else {
+        const err77 = { instancePath: instancePath + "/photoperiodHours", schemaPath: "#/properties/photoperiodHours/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+        if (vErrors === null) {
+          vErrors = [err77];
+        } else {
+          vErrors.push(err77);
+        }
+        errors++;
+      }
+    }
   } else {
-    const err75 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+    const err78 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
     if (vErrors === null) {
-      vErrors = [err75];
+      vErrors = [err78];
     } else {
-      vErrors.push(err75);
+      vErrors.push(err78);
     }
     errors++;
   }

@@ -725,3 +725,336 @@ describe('Three3DRenderer — livestock wiring', () => {
     else g.performance = prevPerf;
   });
 });
+
+// ─── Stage 11 F11.7 — animated water surface wiring ──────────────────────
+
+describe('Three3DRenderer — water surface wiring', () => {
+  it('first render attaches the water mesh to the content group', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport);
+    const rAny = r as unknown as {
+      currentContent: { children: ReadonlyArray<{ name: string }> } | null;
+      waterMesh: { mesh: { name: string } } | null;
+    };
+    expect(rAny.waterMesh).not.toBeNull();
+    const names = rAny.currentContent!.children.map((c) => c.name);
+    expect(names).toContain('aquascape:water-surface');
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('water mesh handle is cached across renders when tank dimensions are unchanged', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport);
+    const rAny = r as unknown as { waterMesh: { mesh: unknown } | null };
+    const firstHandle = rAny.waterMesh;
+    r.render(sceneOf(600, 360, 300), viewport);
+    expect(rAny.waterMesh).toBe(firstHandle);
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('water mesh is rebuilt when tank dimensions change (sized to the new tank)', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport);
+    const rAny = r as unknown as {
+      waterMesh: { mesh: { position: { y: number } } } | null;
+    };
+    const firstHandle = rAny.waterMesh;
+    r.render(sceneOf(1200, 500, 400), viewport);
+    expect(rAny.waterMesh).not.toBe(firstHandle);
+    // New plane sits 5 mm below the new rim.
+    expect(rAny.waterMesh!.mesh.position.y).toBeCloseTo(500 - 5, 5);
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('dispose releases the water mesh handle and clears the cache tag', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport);
+    const rAny = r as unknown as { waterMesh: { dispose: () => void } | null; waterMeshTag: string | null };
+    const handle = rAny.waterMesh!;
+    const spy = jest.spyOn(handle, 'dispose');
+    r.dispose();
+    expect(spy).toHaveBeenCalledTimes(1);
+    const rAny2 = r as unknown as { waterMesh: unknown; waterMeshTag: unknown };
+    expect(rAny2.waterMesh).toBeNull();
+    expect(rAny2.waterMeshTag).toBeNull();
+    raf.uninstall();
+  });
+});
+
+// ─── Stage 11 F11.7 Wave 3 — day-night cycle wiring ──────────────────────
+
+describe('Three3DRenderer — day-night cycle', () => {
+  it('applies dayNightLookup.ambientColor + directionalIntensity to the cached lights per render', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport, {
+      dayNightLookup: {
+        ambientColor: '#ff0000',
+        directionalIntensity: 0.5,
+        backgroundTint: '#00ff00',
+        emissiveBoost: 0.2,
+      },
+    });
+    const rAny = r as unknown as {
+      currentAmbientLight: { color: { r: number; g: number; b: number } } | null;
+      currentDirectionalLight: { intensity: number } | null;
+      baseDirectionalIntensity: number;
+    };
+    expect(rAny.currentAmbientLight).not.toBeNull();
+    // Pure red — assert the channel RELATIONSHIP survives Three.js's
+    // colour-management pipeline (exact channel values depend on whether
+    // Color management is on and what working-space we're in, so checking
+    // "red dominates" is more durable than the channel literals).
+    expect(rAny.currentAmbientLight!.color.r).toBeGreaterThan(
+      rAny.currentAmbientLight!.color.g,
+    );
+    expect(rAny.currentAmbientLight!.color.r).toBeGreaterThan(
+      rAny.currentAmbientLight!.color.b,
+    );
+    expect(rAny.currentAmbientLight!.color.g).toBeCloseTo(0, 5);
+    expect(rAny.currentAmbientLight!.color.b).toBeCloseTo(0, 5);
+    expect(rAny.currentDirectionalLight).not.toBeNull();
+    expect(rAny.currentDirectionalLight!.intensity).toBeCloseTo(
+      rAny.baseDirectionalIntensity * 0.5,
+      5,
+    );
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('applies dayNightLookup.backgroundTint to threeScene.background', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    // Use a pure red so the channel relationship survives Three.js's
+    // sRGB-to-linear conversion (which is non-linear per channel but
+    // preserves zero-vs-nonzero). Asserting exact channels against an
+    // arbitrary hex would be brittle against colour-management swaps.
+    r.render(sceneOf(600, 360, 300), viewport, {
+      dayNightLookup: {
+        ambientColor: '#ffffff',
+        directionalIntensity: 1,
+        backgroundTint: '#ff0000',
+        emissiveBoost: 0,
+      },
+    });
+    const rAny = r as unknown as {
+      threeScene: { background: { isColor: true; r: number; g: number; b: number } | null } | null;
+    };
+    const bg = rAny.threeScene!.background;
+    expect(bg).not.toBeNull();
+    expect(bg!.isColor).toBe(true);
+    // Pure red: r is the strongest channel after sRGB → linear conversion.
+    expect(bg!.r).toBeGreaterThan(bg!.g);
+    expect(bg!.r).toBeGreaterThan(bg!.b);
+    expect(bg!.g).toBeCloseTo(0, 5);
+    expect(bg!.b).toBeCloseTo(0, 5);
+    // Now change the background and verify the in-place mutation works
+    // (Color.set on the same reference rather than allocating a new Color).
+    const firstBgRef = bg;
+    r.render(sceneOf(600, 360, 300), viewport, {
+      dayNightLookup: {
+        ambientColor: '#ffffff',
+        directionalIntensity: 1,
+        backgroundTint: '#0000ff',
+        emissiveBoost: 0,
+      },
+    });
+    const secondBgRef = (
+      rAny.threeScene!.background as { isColor: true; r: number; g: number; b: number }
+    );
+    expect(secondBgRef).toBe(firstBgRef);
+    // Now blue should dominate.
+    expect(secondBgRef.b).toBeGreaterThan(secondBgRef.r);
+    expect(secondBgRef.b).toBeGreaterThan(secondBgRef.g);
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('without dayNightLookup, ambient stays white + directional stays at base intensity', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport);
+    const rAny = r as unknown as {
+      currentAmbientLight: { color: { r: number; g: number; b: number } } | null;
+      currentDirectionalLight: { intensity: number } | null;
+      baseDirectionalIntensity: number;
+    };
+    // Ambient defaults to white via the cycle's "reset" branch.
+    expect(rAny.currentAmbientLight!.color.r).toBeCloseTo(1, 3);
+    expect(rAny.currentAmbientLight!.color.g).toBeCloseTo(1, 3);
+    expect(rAny.currentAmbientLight!.color.b).toBeCloseTo(1, 3);
+    expect(rAny.currentDirectionalLight!.intensity).toBeCloseTo(
+      rAny.baseDirectionalIntensity,
+      5,
+    );
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('day-night render does NOT rebuild the lighting group (intensity mutates in place)', () => {
+    // Load-bearing: rebuilding the lighting per render would allocate
+    // Three.js light objects + targets on every frame in real-time mode.
+    // We mutate intensity / color on the cached references instead.
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport, {
+      dayNightLookup: {
+        ambientColor: '#ffffff',
+        directionalIntensity: 1,
+        backgroundTint: '#000000',
+        emissiveBoost: 0,
+      },
+    });
+    const rAny = r as unknown as {
+      lighting: object | null;
+      currentAmbientLight: object | null;
+      currentDirectionalLight: object | null;
+    };
+    const lightingBefore = rAny.lighting;
+    const ambientBefore = rAny.currentAmbientLight;
+    const directionalBefore = rAny.currentDirectionalLight;
+    // Cycle through several lookup values — lighting refs must stay identical.
+    for (let i = 0; i < 5; i++) {
+      r.render(sceneOf(600, 360, 300), viewport, {
+        dayNightLookup: {
+          ambientColor: `#${i.toString(16).padStart(6, '0')}`,
+          directionalIntensity: i / 4,
+          backgroundTint: '#202020',
+          emissiveBoost: i * 0.1,
+        },
+      });
+    }
+    expect(rAny.lighting).toBe(lightingBefore);
+    expect(rAny.currentAmbientLight).toBe(ambientBefore);
+    expect(rAny.currentDirectionalLight).toBe(directionalBefore);
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('day-night render writes emissiveBoost into every plant sway material', async () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    // Build a scene with one plant so the plant group has at least one
+    // sway material to inspect. Use the carpet entry shape the plant-mesh
+    // spec uses.
+    const plantEntry = {
+      catalog: 'core',
+      id: 'plant.test.carpet',
+      version: 1,
+      name: 'Test',
+      kind: 'plant' as const,
+      zone: 'foreground' as const,
+      lighting: 'medium' as const,
+      co2: 'low' as const,
+      difficulty: 'easy' as const,
+      color: '#2e7d32',
+      naturalSize: { width: 30, height: 20, depth: 20 },
+      silhouette: [
+        { x: -1, y: -1 },
+        { x: 1, y: -1 },
+        { x: 1, y: 1 },
+        { x: -1, y: 1 },
+      ],
+      growth: { weeksToMature: 8, sizeAtZero: 0.3 },
+    };
+    const catalog = makeCatalog([plantEntry]);
+    const tank = {
+      width: 600,
+      height: 360,
+      depth: 300,
+      style: { frame: 'rimless' as const, background: { kind: 'none' as const } },
+    };
+    const layer = {
+      id: 'l1' as Layer['id'],
+      name: 'L',
+      opacity: 1,
+      visible: true,
+      locked: false,
+      objects: [
+        {
+          id: 'p1' as HardscapeObject['id'],
+          kind: 'plant' as const,
+          ref: { catalog: 'core', id: 'plant.test.carpet', version: 1 },
+          transform: {
+            position: { x: 100, y: 30, z: 50 },
+            rotation: { x: 0, y: 0, z: 0 },
+            scale: { x: 1, y: 1, z: 1 },
+            flipX: false,
+            flipY: false,
+          },
+          growth: { ageWeeks: 12, vigor: 1 },
+        },
+      ],
+    } as unknown as Layer;
+    const sceneWithPlant: Scene = {
+      tank,
+      substrate: { regions: [] },
+      layers: [layer],
+      seed: 1,
+    };
+    r.render(sceneWithPlant, viewport, {
+      catalog,
+      dayNightLookup: {
+        ambientColor: '#ffffff',
+        directionalIntensity: 1,
+        backgroundTint: '#202020',
+        emissiveBoost: 0.4,
+      },
+    });
+    const rAny = r as unknown as {
+      currentPlantGroup: {
+        userData: Record<string, unknown>;
+      } | null;
+    };
+    const mats = rAny.currentPlantGroup!.userData[
+      'aquascape:plantSwayMaterials'
+    ] as Array<{ userData: { swayUniforms: { uPlantEmissiveBoost: { value: number } } } }>;
+    expect(mats.length).toBeGreaterThan(0);
+    for (const m of mats) {
+      expect(m.userData.swayUniforms.uPlantEmissiveBoost.value).toBeCloseTo(0.4, 5);
+    }
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('dispose clears the cached light refs (no stale handles)', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(), viewport);
+    r.dispose();
+    const rAny = r as unknown as {
+      currentAmbientLight: unknown;
+      currentDirectionalLight: unknown;
+    };
+    expect(rAny.currentAmbientLight).toBeNull();
+    expect(rAny.currentDirectionalLight).toBeNull();
+    raf.uninstall();
+  });
+});

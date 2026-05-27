@@ -373,6 +373,18 @@ export interface EquipmentEntry extends CatalogEntryBase {
    * bubbles). Backward-compatible — older manifests load unchanged.
    */
   airRateMl?: number;
+
+  /**
+   * Stage 11 F11.7 — optional daily photoperiod for lighting equipment
+   * (hours per day, 0–24). Drives the F11.7 day-night cycle's "equipment"
+   * mode (Wave 5 exposes the toggle UI). Only meaningful when
+   * `category === 'light'`; ignored for non-lighting categories. Absent =
+   * use the service's default 10 h on / 14 h off cycle.
+   *
+   * Schema: catalog manifest schemaVersion stays at 3 — additive within
+   * the F11.5/F11.6 series, mirroring the `flow` / `airRateMl` pattern.
+   */
+  photoperiodHours?: number;
 }
 
 // ─── Placeholders for later stages ────────────────────────────────────────

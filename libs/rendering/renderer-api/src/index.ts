@@ -243,6 +243,36 @@ export interface RenderOptions {
    * archetype geometries + ShaderMaterial are built once.
    */
   readonly livestockWorld?: LivestockWorld;
+  /**
+   * Stage 11 F11.7 — day-night cycle lookup. When present, the 3D renderer
+   * keys ambient light colour, directional light intensity, scene background
+   * tint, and plant emissive boost off these four values per render. The
+   * 2D renderer ignores this field (day-night is a 3D-only effect in v1;
+   * the 2D authoring surface always paints in flat editorial light).
+   *
+   * The lookup is computed by the host's `DayNightService`; the type is
+   * inlined here (rather than imported from `domain/day-night-service`)
+   * so the rendering libs stay free of host-app dependencies. A noon /
+   * neutral default applies when omitted.
+   *
+   * Field semantics — all four are independent (the renderer treats each
+   * as a separate write into its cached Three.js handles):
+   *
+   *  - `ambientColor` — hex `#RRGGBB`. Written into the cached
+   *    `AmbientLight.color` every render. Warm at noon, cool at night.
+   *  - `directionalIntensity` — `[0, 1]` multiplier on the cached
+   *    `DirectionalLight.intensity`. 1.0 at noon, ≈ 0 at midnight.
+   *  - `backgroundTint` — hex `#RRGGBB`. Written into
+   *    `THREE.Scene.background` every render.
+   *  - `emissiveBoost` — `[0, 0.5]`. Written into the plant material's
+   *    `uPlantEmissiveBoost` uniform so dark scenes don't go featureless.
+   */
+  readonly dayNightLookup?: {
+    readonly ambientColor: string;
+    readonly directionalIntensity: number;
+    readonly backgroundTint: string;
+    readonly emissiveBoost: number;
+  };
 }
 
 /**

@@ -167,6 +167,25 @@ describe('@aquascape/rendering/renderer-api', () => {
       const options: RenderOptions = { selection: ['x' as ObjectId, 'y' as ObjectId] };
       expect(options.selection).toHaveLength(2);
     });
+
+    it('dayNightLookup slot is optional and structural (no domain import)', () => {
+      // F11.7 Wave 3 — the four-field shape is inlined in renderer-api so
+      // the rendering libs stay free of `apps/web` / `domain/day-night-
+      // service` imports. Plain object literal with the right shape must
+      // type-check.
+      const options: RenderOptions = {
+        dayNightLookup: {
+          ambientColor: '#fff5e0',
+          directionalIntensity: 1,
+          backgroundTint: '#a4c7e8',
+          emissiveBoost: 0,
+        },
+      };
+      expect(options.dayNightLookup?.ambientColor).toBe('#fff5e0');
+      // Also valid: omit entirely.
+      const optsWithout: RenderOptions = {};
+      expect(optsWithout.dayNightLookup).toBeUndefined();
+    });
   });
 
   describe('HitTestOptions is a strict subset', () => {

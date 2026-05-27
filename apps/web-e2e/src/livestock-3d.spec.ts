@@ -224,6 +224,67 @@ test.describe('livestock 3D rendering', () => {
     expect(afterHold).toBe(afterClick);
   });
 
+  test('day-night slider scrubs renderer lighting', async ({ page }) => {
+    // F11.7 Wave 5 — verifies the DayNightControlComponent's phase slider
+    // actually re-paints the 3D canvas. Mirrors the air-stone test's
+    // strategy: scope to the panel `region` (the `<section aria-
+    // labelledby>` exposed by ARIA), drive the slider, screenshot,
+    // then countDifferingPixels between the two extremes.
+    //
+    // We don't compare against a static reference image — that's brittle
+    // across GPU/driver/AA settings. Instead we lean on the same pixel-
+    // diff helper the frame-diff test uses; the floor is empirically
+    // tuned from observed runs and divided by ~4 for headroom.
+    await addOneFishAndEnter3d(page);
+
+    // The Day / Night panel lives below Backdrop in the left sidebar; it
+    // mounts collapsed-or-expanded depending on persisted state. Expand
+    // it if needed before driving the slider. The button name template
+    // mirrors the panel header's `<h2 id="day-night-heading">Day / Night
+    // </h2>` plus the `aria-label="current day-night phase"` badge.
+    const dayNightToggle = page.getByRole('button', { name: /Day \/ Night/i });
+    await expect(dayNightToggle).toBeVisible();
+    if ((await dayNightToggle.getAttribute('aria-expanded')) !== 'true') {
+      await dayNightToggle.click();
+    }
+    await dayNightToggle.scrollIntoViewIfNeeded();
+
+    const slider = page.getByRole('slider', { name: /Day-night phase/i });
+    await expect(slider).toBeVisible();
+
+    // Scrub to noon (0.5). HTML range inputs accept .fill() like text
+    // inputs in modern Playwright.
+    await slider.fill('0.5');
+    // Let the renderer's RAF tick + the dayNightEffect's reactive re-
+    // render flow through. 400ms is the same wait the F11.5 air-stone
+    // test uses for "let one render cycle complete".
+    await page.waitForTimeout(400);
+    const noon = await page.locator('canvas').nth(1).screenshot();
+
+    // Scrub to midnight (0.0).
+    await slider.fill('0');
+    await page.waitForTimeout(400);
+    const midnight = await page.locator('canvas').nth(1).screenshot();
+
+    // The two frames should differ significantly — noon has a bright
+    // ambient + neutral background, midnight has a near-black ambient
+    // + deep-blue background. Across 500x500-ish 3D canvas pixels we
+    // expect at least DAY_NIGHT_DIFF_FLOOR pixels to differ beyond the
+    // per-channel TOLERANCE the helper bakes in.
+    //
+    // FLOOR RATIONALE
+    // ---------------
+    // Local-run measurements show > 80 000 pixels of delta between
+    // midnight + noon on a 600x500 canvas (ambient + background +
+    // every plant + every fish gets retinted, and the fish are
+    // animating between samples so a fraction of the delta is motion
+    // rather than tint). 5 000 leaves room for a CI run on a smaller
+    // canvas + the motion-only baseline the animation-runs test
+    // already proves can clear FRAME_DIFF_FLOOR (50).
+    const diff = await countDifferingPixels(noon, midnight);
+    expect(diff).toBeGreaterThan(5_000);
+  });
+
   test('air-stone equipment spawns bubble particles in the world', async ({ page }) => {
     // F11.5 Wave 5 verification — placing an air-stone (an equipment row
     // carrying `airRateMl > 0` per the F11.5 Wave 2 catalog addition)

@@ -1,4 +1,4 @@
-import { Group, InstancedMesh, Mesh, MeshStandardMaterial } from 'three';
+import { Group, InstancedMesh, Mesh, MeshStandardMaterial, type Shader } from 'three';
 import type {
   Catalog,
   CatalogEntry,
@@ -6,7 +6,38 @@ import type {
   PlantEntry,
 } from '@aquascape/domain/catalog';
 import type { Layer, PlantObject, Scene } from '@aquascape/domain/scene-model';
-import { buildPlantMeshes } from './plant-mesh';
+import {
+  PLANT_SWAY_MATERIALS_KEY,
+  buildPlantMeshes,
+  createPlantSwayMaterial,
+  updatePlantEmissiveBoost,
+  updatePlantSwayTime,
+  type PlantSwayUniforms,
+} from './plant-mesh';
+
+/**
+ * Drive `MeshStandardMaterial.onBeforeCompile` with a minimal shader-like
+ * stub. The real Three.js shader compile is invoked by `WebGLRenderer`,
+ * which we don't have in unit tests — calling `onBeforeCompile` directly
+ * with the standard chunk markers reproduces the patch that production
+ * would see.
+ */
+function compileMaterialShader(mat: MeshStandardMaterial): Shader {
+  const shader: Shader = {
+    uniforms: {},
+    vertexShader: [
+      '#include <common>',
+      'void main() {',
+      '#include <begin_vertex>',
+      '}',
+    ].join('\n'),
+    fragmentShader: '',
+  };
+  // `onBeforeCompile` is typed `(shader: Shader, renderer: WebGLRenderer)`.
+  // The plant-sway implementation doesn't touch the renderer arg.
+  (mat.onBeforeCompile as (s: Shader, r: unknown) => void)(shader, undefined);
+  return shader;
+}
 
 function makeCatalog(entries: CatalogEntry[]): Catalog {
   return {
@@ -175,5 +206,254 @@ describe('plant-mesh builder — scatter patches', () => {
       undefined,
     );
     expect(a.children.length).toBe(b.children.length);
+  });
+});
+
+// ─── Stage 11 F11.7 — plant sway ─────────────────────────────────────────
+
+describe('plant-mesh sway — vertex displacement', () => {
+  it('injects sway formula into the compiled vertex shader (single specimen)', () => {
+    const catalog = makeCatalog([carpetEntry()]);
+    const group = buildPlantMeshes(sceneWithPlants([plant()]), catalog, undefined);
+    const mat = (group.children[0] as Mesh).material as MeshStandardMaterial;
+    const shader = compileMaterialShader(mat);
+    // Sway lateral displacement on transformed.x must be present.
+    expect(shader.vertexShader).toMatch(/transformed\.x\s*\+=\s*swayX/);
+    // Per-vertex height factor + per-plant position factor must both be
+    // present — that's what gives lower plants more sway AND top vertices
+    // more sway than the rooted base.
+    expect(shader.vertexShader).toContain('plantPosFactor');
+    expect(shader.vertexShader).toContain('vertexHeightFactor');
+    // uTime drives the oscillation.
+    expect(shader.uniforms['uTime']).toBeDefined();
+  });
+
+  it('exposes sway materials on the plant group userData', () => {
+    const catalog = makeCatalog([carpetEntry()]);
+    const group = buildPlantMeshes(
+      sceneWithPlants([plant(), plant({ id: 'p2' as PlantObject['id'] })]),
+      catalog,
+      undefined,
+    );
+    const mats = group.userData[PLANT_SWAY_MATERIALS_KEY] as MeshStandardMaterial[];
+    expect(Array.isArray(mats)).toBe(true);
+    expect(mats.length).toBe(2);
+  });
+
+  it('phase is deterministic across builds for the same documentSeed', () => {
+    const catalog = makeCatalog([carpetEntry()]);
+    const scene = sceneWithPlants([plant()]);
+    const a = buildPlantMeshes(scene, catalog, undefined);
+    const b = buildPlantMeshes(scene, catalog, undefined);
+    const matA = (a.children[0] as Mesh).material as MeshStandardMaterial;
+    const matB = (b.children[0] as Mesh).material as MeshStandardMaterial;
+    const sA = compileMaterialShader(matA);
+    const sB = compileMaterialShader(matB);
+    expect(sA.uniforms['uPhaseOffset']!.value).toBe(sB.uniforms['uPhaseOffset']!.value);
+  });
+
+  it('phase differs between two plants in the same scene (no collisions)', () => {
+    const catalog = makeCatalog([carpetEntry()]);
+    const scene = sceneWithPlants([
+      plant({ id: 'p1' as PlantObject['id'] }),
+      plant({ id: 'p2' as PlantObject['id'] }),
+    ]);
+    const group = buildPlantMeshes(scene, catalog, undefined);
+    const matA = (group.children[0] as Mesh).material as MeshStandardMaterial;
+    const matB = (group.children[1] as Mesh).material as MeshStandardMaterial;
+    const sA = compileMaterialShader(matA);
+    const sB = compileMaterialShader(matB);
+    expect(sA.uniforms['uPhaseOffset']!.value).not.toBe(
+      sB.uniforms['uPhaseOffset']!.value,
+    );
+  });
+
+  it('plant at high Y has a smaller plantBaseY → only the floor-Y factor matters', () => {
+    // The plan: "amplitude proportional to (1 - clamp(plant.y / tank.height, 0, 1))".
+    // In 3D, single specimens are SUBSTRATE-SNAPPED (see plant-mesh
+    // header) — the floor depends on the substrate at the plant's X.
+    // With an empty `substrate.regions` array, `substrateHeightAt` returns
+    // 0 for every X, so `uPlantBaseY` is 0 for both plants. The shader
+    // factor reduces to `1 - 0/tankH = 1`. The TEST that matters here is
+    // that the uniform takes whatever value the substrate-snap produces,
+    // and that the shader applies the formula correctly. The "lower
+    // plants sway more" intent is encoded by the shader expression
+    // `clamp(1.0 - uPlantBaseY / uTankHeight, 0, 1)` itself — a property
+    // of the GLSL source we verify by string match.
+    const catalog = makeCatalog([carpetEntry()]);
+    const group = buildPlantMeshes(sceneWithPlants([plant()]), catalog, undefined);
+    const mat = (group.children[0] as Mesh).material as MeshStandardMaterial;
+    const shader = compileMaterialShader(mat);
+    // The formula tying plantPosFactor to (1 - plantBaseY / tankHeight)
+    // is the load-bearing piece — it's what makes the height proportion
+    // work in the running shader.
+    expect(shader.vertexShader).toMatch(
+      /clamp\s*\(\s*1\.0\s*-\s*uPlantBaseY\s*\/\s*uTankHeight\s*,\s*0\.0\s*,\s*1\.0\s*\)/,
+    );
+    // uTankHeight matches the scene's tank height.
+    expect(shader.uniforms['uTankHeight']!.value).toBe(360);
+  });
+
+  it('uTime uniform updates on subsequent updatePlantSwayTime calls', () => {
+    const catalog = makeCatalog([carpetEntry()]);
+    const group = buildPlantMeshes(sceneWithPlants([plant()]), catalog, undefined);
+    const mat = (group.children[0] as Mesh).material as MeshStandardMaterial;
+    // Compile so the shader.uniforms `uTime` and the userData uniform
+    // point at the same `IUniform` reference.
+    const shader = compileMaterialShader(mat);
+    updatePlantSwayTime(group, 1.25);
+    expect(shader.uniforms['uTime']!.value).toBe(1.25);
+    updatePlantSwayTime(group, 3.75);
+    expect(shader.uniforms['uTime']!.value).toBe(3.75);
+  });
+
+  it('updatePlantSwayTime is a no-op on a group with no sway materials', () => {
+    const empty = new Group();
+    // No swayMaterials userData attached. Must not throw.
+    expect(() => updatePlantSwayTime(empty, 1)).not.toThrow();
+  });
+
+  it('shader frequency is the documented 1.2 Hz (constant for v1)', () => {
+    // F11.7's flow-coupling is deferred; we hard-bake 2π × 1.2 ≈ 7.5398
+    // into the shader. If this constant ever changes, sway behaviour
+    // changes for everyone — flag the test so the bump is intentional.
+    const mat = createPlantSwayMaterial('#2e7d32', {
+      silhouetteHeight: 100,
+      plantBaseY: 0,
+      tankHeight: 360,
+      phase: 0,
+    });
+    const shader = compileMaterialShader(mat);
+    expect(shader.vertexShader).toMatch(/uTime\s*\*\s*7\.539822/);
+  });
+
+  it('scatter InstancedMesh uses per-instance attributes for phase + plantBaseY', () => {
+    const catalog = makeCatalog([carpetEntry()]);
+    const dense = plant({
+      scatter: {
+        polygon: [
+          { x: 0, y: 0 },
+          { x: 100, y: 0 },
+          { x: 100, y: 100 },
+          { x: 0, y: 100 },
+        ],
+        density: 100,
+      },
+    });
+    const group = buildPlantMeshes(sceneWithPlants([dense]), catalog, undefined);
+    const patch = group.children[0] as InstancedMesh;
+    expect(patch).toBeInstanceOf(InstancedMesh);
+    expect(patch.geometry.getAttribute('aPlantPhase')).toBeDefined();
+    expect(patch.geometry.getAttribute('aPlantBaseY')).toBeDefined();
+    // The compiled shader for the instanced path reads from the attrs.
+    const mat = patch.material as MeshStandardMaterial;
+    const shader = compileMaterialShader(mat);
+    expect(shader.vertexShader).toContain('attribute float aPlantPhase');
+    expect(shader.vertexShader).toContain('attribute float aPlantBaseY');
+  });
+
+  it('scatter per-instance phase is deterministic for the same documentSeed', () => {
+    const catalog = makeCatalog([carpetEntry()]);
+    const dense = plant({
+      scatter: {
+        polygon: [
+          { x: 0, y: 0 },
+          { x: 100, y: 0 },
+          { x: 100, y: 100 },
+          { x: 0, y: 100 },
+        ],
+        density: 100,
+      },
+    });
+    const a = buildPlantMeshes(sceneWithPlants([dense]), catalog, undefined);
+    const b = buildPlantMeshes(sceneWithPlants([dense]), catalog, undefined);
+    const phaseA = (a.children[0] as InstancedMesh).geometry.getAttribute(
+      'aPlantPhase',
+    ).array;
+    const phaseB = (b.children[0] as InstancedMesh).geometry.getAttribute(
+      'aPlantPhase',
+    ).array;
+    expect(Array.from(phaseA)).toEqual(Array.from(phaseB));
+  });
+
+  it('sway userData uniforms object is referentially shared with the compiled shader', () => {
+    // The same `IUniform` reference must survive `onBeforeCompile` — that's
+    // what makes `updatePlantSwayTime` work BEFORE the first frame: the
+    // host can write `uTime` synchronously and the value will be live the
+    // moment WebGLRenderer compiles the shader.
+    const mat = createPlantSwayMaterial('#2e7d32', {
+      silhouetteHeight: 100,
+      plantBaseY: 0,
+      tankHeight: 360,
+      phase: 0,
+    });
+    const handle = mat.userData['swayUniforms'] as PlantSwayUniforms;
+    handle.uTime.value = 42;
+    const shader = compileMaterialShader(mat);
+    expect(shader.uniforms['uTime']).toBe(handle.uTime);
+    expect(shader.uniforms['uTime']!.value).toBe(42);
+  });
+});
+
+// ─── Stage 11 F11.7 Wave 3 — plant emissive boost ───────────────────────
+
+describe('plant-mesh emissive boost (F11.7 Wave 3 day-night)', () => {
+  it('exposes uPlantEmissiveBoost in the compiled shader uniforms', () => {
+    const mat = createPlantSwayMaterial('#2e7d32', {
+      silhouetteHeight: 100,
+      plantBaseY: 0,
+      tankHeight: 360,
+      phase: 0,
+    });
+    const shader = compileMaterialShader(mat);
+    expect(shader.uniforms['uPlantEmissiveBoost']).toBeDefined();
+    expect(shader.uniforms['uPlantEmissiveBoost']!.value).toBe(0);
+  });
+
+  it('patches the fragment shader to add a green-biased boost to gl_FragColor', () => {
+    const mat = createPlantSwayMaterial('#2e7d32', {
+      silhouetteHeight: 100,
+      plantBaseY: 0,
+      tankHeight: 360,
+      phase: 0,
+    });
+    // Build a fragment-shader stub that contains the standard chunk
+    // marker we patch, then run `onBeforeCompile`.
+    const shader = {
+      uniforms: {},
+      vertexShader: ['#include <common>', 'void main(){', '#include <begin_vertex>', '}'].join(
+        '\n',
+      ),
+      fragmentShader: [
+        '#include <common>',
+        'void main(){',
+        '#include <dithering_fragment>',
+        '}',
+      ].join('\n'),
+    };
+    (mat.onBeforeCompile as (s: typeof shader, r: unknown) => void)(shader, undefined);
+    expect(shader.fragmentShader).toContain('uniform float uPlantEmissiveBoost');
+    expect(shader.fragmentShader).toContain('uPlantEmissiveBoost * vec3(0.4, 0.8, 0.5)');
+  });
+
+  it('updatePlantEmissiveBoost writes into every sway material uniform', () => {
+    const catalog = makeCatalog([carpetEntry()]);
+    const group = buildPlantMeshes(
+      sceneWithPlants([plant(), plant({ id: 'p2' as PlantObject['id'] })]),
+      catalog,
+      undefined,
+    );
+    updatePlantEmissiveBoost(group, 0.3);
+    const mats = group.userData[PLANT_SWAY_MATERIALS_KEY] as MeshStandardMaterial[];
+    expect(mats.length).toBe(2);
+    for (const mat of mats) {
+      const uniforms = mat.userData['swayUniforms'] as PlantSwayUniforms;
+      expect(uniforms.uPlantEmissiveBoost.value).toBeCloseTo(0.3, 5);
+    }
+  });
+
+  it('updatePlantEmissiveBoost is a no-op on a group with no sway materials', () => {
+    const empty = new Group();
+    expect(() => updatePlantEmissiveBoost(empty, 0.4)).not.toThrow();
   });
 });

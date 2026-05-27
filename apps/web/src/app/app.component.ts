@@ -76,6 +76,8 @@ import {
   BackdropService,
   CompositionOverlaysComponent,
   CursorPositionService,
+  DayNightControlComponent,
+  DayNightService,
   EditorShellComponent,
   OverlayOptionsService,
   PreviewTimeService,
@@ -196,6 +198,7 @@ type DragState =
     BehaviorDebugOverlayComponent,
     CommonModule,
     CompositionOverlaysComponent,
+    DayNightControlComponent,
     EditorShellComponent,
     EquipmentToolComponent,
     HardscapeToolComponent,
@@ -336,6 +339,7 @@ type DragState =
             <aquascape-snap-settings></aquascape-snap-settings>
             <aquascape-wall-background></aquascape-wall-background>
             <aquascape-backdrop-panel></aquascape-backdrop-panel>
+            <aquascape-day-night-control></aquascape-day-night-control>
           </div>
         </aside>
 
@@ -687,6 +691,23 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   // Flipped by the Ctrl+Shift+D HostListener below. The overlay component
   // reads `enabled()` itself; the AppComponent just owns the chord.
   private readonly behaviorDebug = inject(BehaviorDebugService);
+  // Stage 11 F11.7 Wave 3 — day-night cycle lookup the 3D renderer reads
+  // per render. The service holds the phase + mode signals (the Wave 5 UI
+  // mutates them); we just forward the computed `lookup()` value into
+  // `RenderOptions.dayNightLookup` on each 3D render call. The 2D render
+  // call deliberately omits the field — day-night is 3D-only in v1.
+  //
+  // REAL-TIME MODE WIRING DEFERRED. `DayNightService.tick(dt)` advances
+  // phase in real-time mode, but apps/web doesn't currently own a RAF
+  // loop (every render is event-driven off store + signal effects), and
+  // the renderer-3d's RAF can't import from apps/web without breaking
+  // the layer boundary. Manual + equipment modes work today via
+  // `setPhase`. A follow-up wave can add a tick driver — likely by
+  // surfacing the renderer's RAF onto a host-side `addAnimationListener`
+  // (similar to the existing `addChangeListener`) so apps/web can call
+  // `dayNight.tick(dt)` from there without the renderer learning about
+  // the day-night service.
+  private readonly dayNight = inject(DayNightService);
 
   private readonly fileService: FileService = inject(FILE_SERVICE);
   private readonly dialogService: DialogService = inject(DIALOG_SERVICE);
@@ -953,6 +974,26 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     void this.backdropService.backdrop();
     if (this.backdropFirstRun) {
       this.backdropFirstRun = false;
+      return;
+    }
+    if (this.currentScene !== null) {
+      this.renderCurrent();
+    }
+  });
+
+  // Stage 11 F11.7 Wave 3 — re-render when the day-night lookup changes
+  // so the user sees the cycle's tint / intensity shift as they scrub the
+  // phase slider (Wave 5 UI) or as equipment-mode schedules tick. Same
+  // first-run-guard pattern as the rest of this file. The 2D render path
+  // omits the lookup, so a phase change in 2D mode produces a redundant
+  // (but harmless) re-render — cheap, and the alternative ("only fire
+  // when in 3D") would miss a phase change that landed during a brief
+  // 2D-mode visit, leaving stale ambient on the next 3D view.
+  private dayNightFirstRun = true;
+  private readonly dayNightEffect = effect(() => {
+    void this.dayNight.lookup();
+    if (this.dayNightFirstRun) {
+      this.dayNightFirstRun = false;
       return;
     }
     if (this.currentScene !== null) {
@@ -1840,6 +1881,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     // renderer's spread-skip below means the field is absent rather
     // than set to undefined.
     const livestockWorld = is3d ? this.livestockSim.getWorld() : null;
+    // Stage 11 F11.7 Wave 3 — only forward the day-night lookup in 3D.
+    // The 2D renderer ignores it (day-night is 3D-only in v1), and
+    // omitting the field on 2D renders keeps the options bag minimal
+    // + mirrors the `livestockWorld` pattern above.
+    const dayNightLookup = is3d ? this.dayNight.lookup() : null;
     renderer.render(scenePassed, viewport, {
       catalog: coreCatalog,
       selection: this.currentSelection,
@@ -1849,6 +1895,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       ...(this.currentSnapGuides !== null ? { snapGuides: this.currentSnapGuides } : {}),
       ...(backdrop !== null ? { backdropImage: backdrop } : {}),
       ...(livestockWorld !== null ? { livestockWorld } : {}),
+      ...(dayNightLookup !== null ? { dayNightLookup } : {}),
     });
   }
 

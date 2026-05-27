@@ -18,6 +18,24 @@
 
 If you change the dispose discipline here, update both files in the same PR. The two files share a single invariant: every GPU resource attached must be released, no exceptions.
 
+## Animated water surface (Stage 11 F11.7)
+
+`scene-builder/water-mesh.ts` builds a single `THREE.Mesh` — `PlaneGeometry(tank.width, tank.depth, 16, 16)` rotated −π/2 about X, positioned at `(tank.width / 2, tank.height − 5 mm, tank.depth / 2)` — i.e. 5 mm below the interior rim. The vertex shader displaces Y by two stacked sine bands:
+
+- **Swell:** `sin(x · 0.008 + t · 0.5) · 1.2` → ≤ 1.2 mm
+- **Ripple A:** `sin(z · 0.04 + t · 2.0) · 0.6` → ≤ 0.6 mm
+- **Ripple B:** `cos(x · 0.06 − t · 1.7) · 0.2` → ≤ 0.2 mm
+
+Total amplitude is BOUNDED at the GLSL source level — the three coefficients sum to 2.0, and a regression test (`water-mesh.spec.ts` → "amplitude coefficients sum to 2.0") parses them out and asserts the sum so a future tweak that pushes above the plan's 2 mm ceiling fails the test. **Don't break the cap** — at higher amplitudes the surface silhouette fights the substrate profile and pokes past the glass rim.
+
+Material: `ShaderMaterial` with `transparent: true`, `depthWrite: false`, `side: DoubleSide` (so a camera below the surface sees it from underneath). `renderOrder = 1` places it in the transparent pass AFTER opaque content so fish + plants below stay visible through it. The fragment shader does a cheap fake-sun specular highlight from the perturbed normal — no refraction (single-pass shader can't sample its own framebuffer) and no caustics.
+
+Cached on the renderer (`this.waterMesh: WaterMeshHandle | null`, tagged by `WxHxD`). Tank resize disposes + rebuilds. RAF tick calls `waterMesh.updateTime(performance.now() / 1000)` every frame; the handle no-ops after dispose so a stale tick is safe. Same detach-before-`disposeNode` discipline as the livestock bundle — the cached mesh must be removed from `currentContent` before the rebuild walker disposes the tree, otherwise the shared geometry + material would be GPU-disposed every render.
+
+**Caustics: deferred.** The F11.7 plan calls for noise-texture caustics modulating the directional light's intensity on substrate + hardscape. Shipping that requires either a fragile `onBeforeCompile` patch on the standard PBR material or bespoke ShaderMaterials for substrate + hardscape — both are larger changes than the water plane itself. The water surface alone is a meaningful visual win and caustics belong in a follow-up (F11.7.1).
+
+**Refraction: out of scope.** A proper refraction approximation needs a screen-space pre-pass (extra render target). The fragment's specular highlight + alpha ramp is the visual scope v1 ships.
+
 ## Hardscape + plant placement pipeline (Stage 10 v1.1)
 
 For every hardscape rock and single-specimen plant the position runs through four steps **in this exact order** — they're independent but composable, so changing the order changes the visible result:

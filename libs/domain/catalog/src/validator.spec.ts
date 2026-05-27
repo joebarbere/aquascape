@@ -1223,6 +1223,49 @@ describe('validateCatalogEntry (equipment, Stage 7 F7.3)', () => {
       expect(validateCatalogEntry({ ...validEquipment, airRateMl: 'lots' }).ok).toBe(false);
     });
   });
+
+  // ─── F11.7 photoperiodHours (additive, no schemaVersion bump) ─────────────
+  describe('photoperiodHours (Stage 11 F11.7)', () => {
+    it('accepts an equipment entry with no photoperiodHours (forward-compat)', () => {
+      expect(validateCatalogEntry(validEquipment).ok).toBe(true);
+    });
+
+    it('accepts a photoperiodHours value within [0, 24]', () => {
+      expect(
+        validateCatalogEntry({ ...validEquipment, photoperiodHours: 10 }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts photoperiodHours = 0 (sentinel for lights-off cycle)', () => {
+      expect(
+        validateCatalogEntry({ ...validEquipment, photoperiodHours: 0 }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts photoperiodHours = 24 (always-on cycle)', () => {
+      expect(
+        validateCatalogEntry({ ...validEquipment, photoperiodHours: 24 }).ok,
+      ).toBe(true);
+    });
+
+    it('rejects photoperiodHours below 0', () => {
+      expect(
+        validateCatalogEntry({ ...validEquipment, photoperiodHours: -1 }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects photoperiodHours above 24', () => {
+      expect(
+        validateCatalogEntry({ ...validEquipment, photoperiodHours: 25 }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects a non-numeric photoperiodHours', () => {
+      expect(
+        validateCatalogEntry({ ...validEquipment, photoperiodHours: 'all-day' }).ok,
+      ).toBe(false);
+    });
+  });
 });
 
 describe('formatError (defensive fallbacks)', () => {

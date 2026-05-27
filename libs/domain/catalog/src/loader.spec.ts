@@ -332,6 +332,52 @@ describe('loadCatalog — F11.5 equipment flow / airRateMl forward-compat', () =
   });
 });
 
+describe('loadCatalog — F11.7 equipment photoperiodHours forward-compat', () => {
+  // photoperiodHours was added additively under the existing equipment
+  // branch. A manifest without it must keep loading; a manifest with it
+  // must round-trip the value so the DayNightService "equipment" mode sees it.
+  const baseLight = {
+    catalog: 'core',
+    id: 'equipment.light.legacy-no-photoperiod',
+    version: 1,
+    name: 'Legacy lighting manifest (no photoperiodHours)',
+    kind: 'equipment' as const,
+    category: 'light' as const,
+    color: '#fff2c0',
+  };
+
+  it('accepts an equipment manifest without photoperiodHours', () => {
+    const result = loadCatalog([baseLight]);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([]);
+    expect(result.catalog.entries.length).toBe(1);
+  });
+
+  it('preserves photoperiodHours on a manifest that declares it', () => {
+    const annotated = {
+      ...baseLight,
+      id: 'equipment.light.annotated-photoperiod',
+      photoperiodHours: 10,
+    };
+    const { catalog } = loadCatalog([annotated]);
+    const entry = catalog.get({ catalog: 'core', id: annotated.id });
+    expect(entry?.kind).toBe('equipment');
+    if (entry?.kind !== 'equipment') return;
+    expect(entry.photoperiodHours).toBe(10);
+  });
+
+  it('rejects a manifest with photoperiodHours outside [0, 24]', () => {
+    const broken = {
+      ...baseLight,
+      id: 'equipment.light.broken-photoperiod',
+      photoperiodHours: 30,
+    };
+    const result = loadCatalog([broken]);
+    expect(result.errors.length).toBe(1);
+    expect(result.catalog.entries.length).toBe(0);
+  });
+});
+
 describe('loadCatalog — F11.6 per-species manifest smoke (each new fish loads clean)', () => {
   // Each id below corresponds to an F11.6 species manifest under
   // libs/domain/catalog/src/data/livestock/. The full core-catalog spec

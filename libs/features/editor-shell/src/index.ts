@@ -112,6 +112,15 @@ export {
   type ImageDecoder,
 } from './lib/backdrop.service';
 export {
+  DayNightService,
+  type DayNightLookup,
+  type DayNightMode,
+} from './lib/day-night.service';
+export {
+  DayNightControlComponent,
+  DAY_NIGHT_CONTROL_COLLAPSED_KEY,
+} from './lib/day-night-control.component';
+export {
   ZOOM_MULT_MAX,
   ZOOM_MULT_MIN,
   ZOOM_STEP_MULT,

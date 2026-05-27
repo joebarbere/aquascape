@@ -50,6 +50,7 @@ import {
 } from '@aquascape/state';
 
 import {
+  DayNightService,
   OverlayOptionsService,
   ViewModeService,
   ViewportService,
@@ -849,6 +850,66 @@ describe('AppComponent — 2D / 3D view mode', () => {
 
     const lastCall = renderer3d.render.mock.calls.at(-1)!;
     expect(lastCall[2]?.livestockWorld).toBeUndefined();
+  });
+
+  // ─── Stage 11 F11.7 Wave 3 — day-night lookup propagation ────────────────
+
+  it('does NOT pass options.dayNightLookup in 2D mode (2D ignores day-night)', () => {
+    const renderer = new MockSceneRenderer();
+    const renderer3d = new MockSceneRenderer();
+    configure(renderer, defaultScene(), renderer3d);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const firstCall = renderer.render.mock.calls[0]!;
+    expect(firstCall[2]?.dayNightLookup).toBeUndefined();
+  });
+
+  it('passes options.dayNightLookup in 3D mode (full four-field shape)', () => {
+    const renderer = new MockSceneRenderer();
+    const renderer3d = new MockSceneRenderer();
+    configure(renderer, defaultScene(), renderer3d);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const vm = TestBed.inject(ViewModeService);
+    vm.setMode('3d');
+    fixture.detectChanges();
+
+    const lastCall = renderer3d.render.mock.calls.at(-1)!;
+    const lookup = lastCall[2]?.dayNightLookup;
+    expect(lookup).toBeDefined();
+    expect(typeof lookup!.ambientColor).toBe('string');
+    expect(lookup!.ambientColor).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(typeof lookup!.directionalIntensity).toBe('number');
+    expect(typeof lookup!.backgroundTint).toBe('string');
+    expect(lookup!.backgroundTint).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(typeof lookup!.emissiveBoost).toBe('number');
+  });
+
+  it('day-night lookup change triggers a re-render so the cycle is interactive', () => {
+    // F11.7 Wave 5 — DayNightService moved out of apps/web into the
+    // editor-shell lib so the new sidebar control + apps/web's render
+    // wiring both consume the same singleton without crossing the
+    // `apps → libs` boundary. Static import to satisfy the Nx
+    // "no static imports of lazy-loaded libraries" rule (line 52 above
+    // already statically imports the lib).
+    const renderer = new MockSceneRenderer();
+    const renderer3d = new MockSceneRenderer();
+    configure(renderer, defaultScene(), renderer3d);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const vm = TestBed.inject(ViewModeService);
+    vm.setMode('3d');
+    fixture.detectChanges();
+
+    const before = renderer3d.render.mock.calls.length;
+    const svc = TestBed.inject(DayNightService);
+    svc.setPhase(0.0); // midnight — different from the default 0.5 noon
+    fixture.detectChanges();
+    const after = renderer3d.render.mock.calls.length;
+    expect(after).toBeGreaterThan(before);
   });
 });
 
