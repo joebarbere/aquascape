@@ -57,6 +57,8 @@ import {
   Vector3,
 } from 'three';
 import {
+  LIVESTOCK_BUBBLE_FRAGMENT_SHADER,
+  LIVESTOCK_BUBBLE_VERTEX_SHADER,
   LIVESTOCK_FOOD_FRAGMENT_SHADER,
   LIVESTOCK_FOOD_VERTEX_SHADER,
   LIVESTOCK_FRAGMENT_SHADER,
@@ -73,7 +75,8 @@ import {
 export interface LivestockMeshBundle {
   /**
    * Container that holds one `InstancedMesh` per archetype, plus a
-   * seventh InstancedMesh for food-sprite billboards (F11.4 Wave 4).
+   * seventh InstancedMesh for food-sprite billboards (F11.4 Wave 4)
+   * and an eighth for bubble-stream billboards (F11.5 Wave 5).
    */
   group: Group;
   /**
@@ -83,6 +86,12 @@ export interface LivestockMeshBundle {
    * `syncFromSnapshot` from `WorldSnapshot.foodSpriteCount`.
    */
   foodSpriteMesh: InstancedMesh;
+  /**
+   * Direct handle to the bubble billboard `InstancedMesh` (F11.5).
+   * Drained from `WorldSnapshot.bubblePosition` each tick. Exposed for
+   * tests + future bubble-stream sources (powerheads, aerators).
+   */
+  bubbleMesh: InstancedMesh;
   /**
    * Copy the latest snapshot's per-entity attributes into the matching
    * `InstancedBufferAttribute`s and advance the shader's time uniform.
@@ -124,6 +133,13 @@ export interface BuildLivestockMeshesOpts {
    * (`0xd9a86c`) that reads against any backdrop.
    */
   foodColor?: ColorRepresentation;
+  /**
+   * Bubble-billboard instance cap (F11.5 Wave 5). The plan budgets up
+   * to ~200 bubbles per active stone; 256 covers the common single-
+   * stone case with margin. The bubble fragment shader colours each
+   * instance directly (no body-colour uniform).
+   */
+  maxBubbles?: number;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────
@@ -144,6 +160,15 @@ const DEFAULT_FOOD_COLOR = 0xd9a86c;
 
 /** Food flake side length in mm. ~5mm matches real flake food. */
 const FOOD_SPRITE_SIZE_MM = 5;
+
+/**
+ * Bubble billboard cap. F11.5 plan budgets ~200 bubbles max per active
+ * bubble stone; 256 covers the common single-stone case with headroom.
+ */
+const DEFAULT_MAX_BUBBLES = 256;
+
+/** Bubble quad side length in mm — smaller than food flakes (~3mm). */
+const BUBBLE_SPRITE_SIZE_MM = 3;
 
 /** Tail-beat frequency default (Hz) — calm cruise. Matches `ecs/world.ts`. */
 const DEFAULT_TAIL_BEAT_FREQ = 4;
@@ -189,6 +214,22 @@ interface FoodSpriteSlot {
   /** Capacity = max sprites the attribute can hold. */
   capacity: number;
   /** One-time overflow warn flag — mirrors the fish-bucket pattern. */
+  overflowWarned: boolean;
+}
+
+/**
+ * Bubble billboard slot (F11.5 Wave 5). Same shape as
+ * `FoodSpriteSlot` — independent slot so dispose / sync can iterate
+ * each one without conditional bookkeeping.
+ */
+interface BubbleSlot {
+  mesh: InstancedMesh;
+  geometry: BufferGeometry;
+  material: ShaderMaterial;
+  instancePosition: InstancedBufferAttribute;
+  /** Capacity = max bubbles the attribute can hold. */
+  capacity: number;
+  /** One-time overflow warn flag. */
   overflowWarned: boolean;
 }
 
@@ -248,6 +289,15 @@ export function buildLivestockMeshes(opts: BuildLivestockMeshesOpts = {}): Lives
     );
   }
 
+  const maxBubbles = opts.maxBubbles ?? DEFAULT_MAX_BUBBLES;
+  if (!Number.isFinite(maxBubbles) || maxBubbles <= 0) {
+    throw new Error(
+      `buildLivestockMeshes: maxBubbles must be a positive finite number, got ${String(
+        opts.maxBubbles,
+      )}`,
+    );
+  }
+
   const bodyColor = new Color(opts.defaultBodyColor ?? DEFAULT_BODY_COLOR);
   const foodColor = new Color(opts.foodColor ?? DEFAULT_FOOD_COLOR);
 
@@ -271,16 +321,23 @@ export function buildLivestockMeshes(opts: BuildLivestockMeshesOpts = {}): Lives
   const foodSlot = buildFoodSpriteSlot(maxFoodSprites, foodColor);
   group.add(foodSlot.mesh);
 
+  // 8th InstancedMesh — bubble billboards (F11.5 Wave 5). Same sibling
+  // pattern as the food sprite slot.
+  const bubbleSlot = buildBubbleSlot(maxBubbles);
+  group.add(bubbleSlot.mesh);
+
   let disposed = false;
 
   const bundle: LivestockMeshBundle = {
     group,
     foodSpriteMesh: foodSlot.mesh,
+    bubbleMesh: bubbleSlot.mesh,
 
     syncFromSnapshot(snapshot: WorldSnapshot, currentTimeSec: number): void {
       if (disposed) return;
       syncFromSnapshotImpl(slots, snapshot, currentTimeSec);
       syncFoodSpritesImpl(foodSlot, snapshot);
+      syncBubblesImpl(bubbleSlot, snapshot);
     },
 
     dispose(): void {
@@ -305,6 +362,11 @@ export function buildLivestockMeshes(opts: BuildLivestockMeshesOpts = {}): Lives
       foodSlot.geometry.dispose();
       foodSlot.material.dispose();
       foodSlot.mesh.dispose();
+      // Release the bubble slot.
+      group.remove(bubbleSlot.mesh);
+      bubbleSlot.geometry.dispose();
+      bubbleSlot.material.dispose();
+      bubbleSlot.mesh.dispose();
     },
   };
 
@@ -625,5 +687,80 @@ function syncFoodSpritesImpl(slot: FoodSpriteSlot, snapshot: WorldSnapshot): voi
   }
   // Three.js skips the draw cleanly when count is 0; no need to clear
   // the attribute data (stale values won't render).
+  slot.mesh.count = n;
+}
+
+// ─── Bubble slot (F11.5 Wave 5) ──────────────────────────────────────────
+
+function buildBubbleSlot(maxBubbles: number): BubbleSlot {
+  // 3mm × 3mm quad — smaller than food flakes (~5mm) so a stream of
+  // ~200 bubbles still reads as fine-grained against any aquascape.
+  const geometry = new PlaneGeometry(BUBBLE_SPRITE_SIZE_MM, BUBBLE_SPRITE_SIZE_MM);
+
+  const instancePosition = makeInstancedAttr(maxBubbles, 3);
+  geometry.setAttribute('instancePosition', instancePosition);
+
+  const material = new ShaderMaterial({
+    vertexShader: LIVESTOCK_BUBBLE_VERTEX_SHADER,
+    fragmentShader: LIVESTOCK_BUBBLE_FRAGMENT_SHADER,
+    uniforms: {
+      // No body-colour uniform: the bubble fragment shader hard-codes
+      // the blue-white tone + the highlight anchor so every bubble
+      // reads identically. F11.6 could lift this to a uniform if
+      // tinted bubbles (CO2 vs air) become a thing.
+    },
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    side: DoubleSide,
+  });
+
+  const mesh = new InstancedMesh(geometry, material, maxBubbles);
+  mesh.name = 'aquascape:livestock/bubble';
+  mesh.count = 0;
+  // Bubbles drift anywhere from the source upward; bounding box of the
+  // mesh itself can't track that.
+  mesh.frustumCulled = false;
+
+  return {
+    mesh,
+    geometry,
+    material,
+    instancePosition,
+    capacity: maxBubbles,
+    overflowWarned: false,
+  };
+}
+
+function syncBubblesImpl(slot: BubbleSlot, snapshot: WorldSnapshot): void {
+  // Defensive: the parallel agent extends WorldSnapshot with these
+  // fields. If a stale snapshot (e.g. a fixture from an older test)
+  // omits them, treat as zero rather than crashing — the renderer's
+  // job is to drain whatever the world exposes.
+  const requested = snapshot.bubbleCount ?? 0;
+  const src = snapshot.bubblePosition;
+  if (src === undefined) {
+    slot.mesh.count = 0;
+    return;
+  }
+
+  const cap = slot.capacity;
+  let n = requested;
+  if (n > cap) {
+    n = cap;
+    if (!slot.overflowWarned) {
+      slot.overflowWarned = true;
+      console.warn(
+        `[livestock-renderer-3d] bubble count (${requested}) exceeds maxBubbles (${cap}); ` +
+          `dropping additional bubbles`,
+      );
+    }
+  }
+
+  const dst = slot.instancePosition.array as Float32Array;
+  if (n > 0) {
+    dst.set(src.subarray(0, n * 3));
+    slot.instancePosition.needsUpdate = true;
+  }
   slot.mesh.count = n;
 }

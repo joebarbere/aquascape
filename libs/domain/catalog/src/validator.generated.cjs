@@ -41,7 +41,7 @@ var require_ucs2length = __commonJS({
   }
 });
 
-// node_modules/.cache/aquascape-validators/6Ro9Li/entry.cjs
+// node_modules/.cache/aquascape-validators/OteNMw/entry.cjs
 module.exports = validate20;
 module.exports.default = validate20;
 var schema32 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "material", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "substrate" }, "material": { "enum": ["soil", "sand", "gravel"] }, "color": { "$ref": "#/$defs/HexColor" }, "grainSize": { "type": "number", "exclusiveMinimum": 0 } } };
@@ -3556,7 +3556,7 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate27.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema46 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "category", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "equipment" }, "category": { "enum": ["filter", "heater", "light", "co2"] }, "subcategory": { "type": "string", "minLength": 1 }, "wattage": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published power draw in watts." }, "flowRateLph": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published flow rate (litres per hour). Filter-specific; ignored for other categories." }, "coverageLitres": { "type": "object", "additionalProperties": false, "properties": { "min": { "type": "integer", "exclusiveMinimum": 0 }, "max": { "type": "integer", "exclusiveMinimum": 0 } }, "description": "Recommended tank-size window. Either bound is optional; both are positive integers when present." }, "defaultSettings": { "type": "object", "additionalProperties": { "anyOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }] }, "description": "Seed settings the future settings UI populates on first attach. F7.3 v1 is display-only; shape mirrors the document-side EquipmentEntry.settings Record." }, "color": { "$ref": "#/$defs/HexColor" } } };
+var schema46 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "category", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "equipment" }, "category": { "enum": ["filter", "heater", "light", "co2"] }, "subcategory": { "type": "string", "minLength": 1 }, "wattage": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published power draw in watts." }, "flowRateLph": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published flow rate (litres per hour). Filter-specific; ignored for other categories." }, "coverageLitres": { "type": "object", "additionalProperties": false, "properties": { "min": { "type": "integer", "exclusiveMinimum": 0 }, "max": { "type": "integer", "exclusiveMinimum": 0 } }, "description": "Recommended tank-size window. Either bound is optional; both are positive integers when present." }, "defaultSettings": { "type": "object", "additionalProperties": { "anyOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }] }, "description": "Seed settings the future settings UI populates on first attach. F7.3 v1 is display-only; shape mirrors the document-side EquipmentEntry.settings Record." }, "color": { "$ref": "#/$defs/HexColor" }, "flow": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.5 flow contribution for filter / pump equipment. Drives the FlowFieldSystem source/sink bake. Every subfield is optional + additive \u2014 older manifests without `flow` keep loading unchanged.", "properties": { "outflowPos": { "$ref": "#/$defs/Vec3", "description": "World-space position where water exits the equipment (mm). Right-handed, +x right, +y up, +z back." }, "outflowVec": { "$ref": "#/$defs/Vec3", "description": "Direction vector of the outflow jet (unit-ish). Default (0, 0, 1) \u2014 points toward back of tank." }, "intakePos": { "$ref": "#/$defs/Vec3", "description": "World-space position where water enters the equipment intake (mm). Optional \u2014 when absent, the intake is co-located with `outflowPos`." }, "flowRate": { "type": "number", "minimum": 0, "description": "Volumetric flow rate (L/hr). Drives source/sink strength. Default 200." } } }, "airRateMl": { "type": "number", "minimum": 0, "description": "Stage 11 F11.5 air-stone air volumetric rate (mL/min). Drives BubbleParticleSystem spawn rate. When absent, the equipment is not an air-stone (or produces no visible bubbles)." } } };
 function validate29(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -4072,12 +4072,341 @@ function validate29(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
+    if (data.flow !== void 0) {
+      let data19 = data.flow;
+      if (data19 && typeof data19 == "object" && !Array.isArray(data19)) {
+        for (const key3 in data19) {
+          if (!(key3 === "outflowPos" || key3 === "outflowVec" || key3 === "intakePos" || key3 === "flowRate")) {
+            const err45 = { instancePath: instancePath + "/flow", schemaPath: "#/properties/flow/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key3 }, message: "must NOT have additional properties" };
+            if (vErrors === null) {
+              vErrors = [err45];
+            } else {
+              vErrors.push(err45);
+            }
+            errors++;
+          }
+        }
+        if (data19.outflowPos !== void 0) {
+          let data20 = data19.outflowPos;
+          if (data20 && typeof data20 == "object" && !Array.isArray(data20)) {
+            if (data20.x === void 0) {
+              const err46 = { instancePath: instancePath + "/flow/outflowPos", schemaPath: "#/$defs/Vec3/required", keyword: "required", params: { missingProperty: "x" }, message: "must have required property 'x'" };
+              if (vErrors === null) {
+                vErrors = [err46];
+              } else {
+                vErrors.push(err46);
+              }
+              errors++;
+            }
+            if (data20.y === void 0) {
+              const err47 = { instancePath: instancePath + "/flow/outflowPos", schemaPath: "#/$defs/Vec3/required", keyword: "required", params: { missingProperty: "y" }, message: "must have required property 'y'" };
+              if (vErrors === null) {
+                vErrors = [err47];
+              } else {
+                vErrors.push(err47);
+              }
+              errors++;
+            }
+            if (data20.z === void 0) {
+              const err48 = { instancePath: instancePath + "/flow/outflowPos", schemaPath: "#/$defs/Vec3/required", keyword: "required", params: { missingProperty: "z" }, message: "must have required property 'z'" };
+              if (vErrors === null) {
+                vErrors = [err48];
+              } else {
+                vErrors.push(err48);
+              }
+              errors++;
+            }
+            for (const key4 in data20) {
+              if (!(key4 === "x" || key4 === "y" || key4 === "z")) {
+                const err49 = { instancePath: instancePath + "/flow/outflowPos", schemaPath: "#/$defs/Vec3/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key4 }, message: "must NOT have additional properties" };
+                if (vErrors === null) {
+                  vErrors = [err49];
+                } else {
+                  vErrors.push(err49);
+                }
+                errors++;
+              }
+            }
+            if (data20.x !== void 0) {
+              let data21 = data20.x;
+              if (!(typeof data21 == "number" && isFinite(data21))) {
+                const err50 = { instancePath: instancePath + "/flow/outflowPos/x", schemaPath: "#/$defs/Vec3/properties/x/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err50];
+                } else {
+                  vErrors.push(err50);
+                }
+                errors++;
+              }
+            }
+            if (data20.y !== void 0) {
+              let data22 = data20.y;
+              if (!(typeof data22 == "number" && isFinite(data22))) {
+                const err51 = { instancePath: instancePath + "/flow/outflowPos/y", schemaPath: "#/$defs/Vec3/properties/y/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err51];
+                } else {
+                  vErrors.push(err51);
+                }
+                errors++;
+              }
+            }
+            if (data20.z !== void 0) {
+              let data23 = data20.z;
+              if (!(typeof data23 == "number" && isFinite(data23))) {
+                const err52 = { instancePath: instancePath + "/flow/outflowPos/z", schemaPath: "#/$defs/Vec3/properties/z/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err52];
+                } else {
+                  vErrors.push(err52);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err53 = { instancePath: instancePath + "/flow/outflowPos", schemaPath: "#/$defs/Vec3/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            if (vErrors === null) {
+              vErrors = [err53];
+            } else {
+              vErrors.push(err53);
+            }
+            errors++;
+          }
+        }
+        if (data19.outflowVec !== void 0) {
+          let data24 = data19.outflowVec;
+          if (data24 && typeof data24 == "object" && !Array.isArray(data24)) {
+            if (data24.x === void 0) {
+              const err54 = { instancePath: instancePath + "/flow/outflowVec", schemaPath: "#/$defs/Vec3/required", keyword: "required", params: { missingProperty: "x" }, message: "must have required property 'x'" };
+              if (vErrors === null) {
+                vErrors = [err54];
+              } else {
+                vErrors.push(err54);
+              }
+              errors++;
+            }
+            if (data24.y === void 0) {
+              const err55 = { instancePath: instancePath + "/flow/outflowVec", schemaPath: "#/$defs/Vec3/required", keyword: "required", params: { missingProperty: "y" }, message: "must have required property 'y'" };
+              if (vErrors === null) {
+                vErrors = [err55];
+              } else {
+                vErrors.push(err55);
+              }
+              errors++;
+            }
+            if (data24.z === void 0) {
+              const err56 = { instancePath: instancePath + "/flow/outflowVec", schemaPath: "#/$defs/Vec3/required", keyword: "required", params: { missingProperty: "z" }, message: "must have required property 'z'" };
+              if (vErrors === null) {
+                vErrors = [err56];
+              } else {
+                vErrors.push(err56);
+              }
+              errors++;
+            }
+            for (const key5 in data24) {
+              if (!(key5 === "x" || key5 === "y" || key5 === "z")) {
+                const err57 = { instancePath: instancePath + "/flow/outflowVec", schemaPath: "#/$defs/Vec3/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key5 }, message: "must NOT have additional properties" };
+                if (vErrors === null) {
+                  vErrors = [err57];
+                } else {
+                  vErrors.push(err57);
+                }
+                errors++;
+              }
+            }
+            if (data24.x !== void 0) {
+              let data25 = data24.x;
+              if (!(typeof data25 == "number" && isFinite(data25))) {
+                const err58 = { instancePath: instancePath + "/flow/outflowVec/x", schemaPath: "#/$defs/Vec3/properties/x/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err58];
+                } else {
+                  vErrors.push(err58);
+                }
+                errors++;
+              }
+            }
+            if (data24.y !== void 0) {
+              let data26 = data24.y;
+              if (!(typeof data26 == "number" && isFinite(data26))) {
+                const err59 = { instancePath: instancePath + "/flow/outflowVec/y", schemaPath: "#/$defs/Vec3/properties/y/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err59];
+                } else {
+                  vErrors.push(err59);
+                }
+                errors++;
+              }
+            }
+            if (data24.z !== void 0) {
+              let data27 = data24.z;
+              if (!(typeof data27 == "number" && isFinite(data27))) {
+                const err60 = { instancePath: instancePath + "/flow/outflowVec/z", schemaPath: "#/$defs/Vec3/properties/z/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err60];
+                } else {
+                  vErrors.push(err60);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err61 = { instancePath: instancePath + "/flow/outflowVec", schemaPath: "#/$defs/Vec3/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            if (vErrors === null) {
+              vErrors = [err61];
+            } else {
+              vErrors.push(err61);
+            }
+            errors++;
+          }
+        }
+        if (data19.intakePos !== void 0) {
+          let data28 = data19.intakePos;
+          if (data28 && typeof data28 == "object" && !Array.isArray(data28)) {
+            if (data28.x === void 0) {
+              const err62 = { instancePath: instancePath + "/flow/intakePos", schemaPath: "#/$defs/Vec3/required", keyword: "required", params: { missingProperty: "x" }, message: "must have required property 'x'" };
+              if (vErrors === null) {
+                vErrors = [err62];
+              } else {
+                vErrors.push(err62);
+              }
+              errors++;
+            }
+            if (data28.y === void 0) {
+              const err63 = { instancePath: instancePath + "/flow/intakePos", schemaPath: "#/$defs/Vec3/required", keyword: "required", params: { missingProperty: "y" }, message: "must have required property 'y'" };
+              if (vErrors === null) {
+                vErrors = [err63];
+              } else {
+                vErrors.push(err63);
+              }
+              errors++;
+            }
+            if (data28.z === void 0) {
+              const err64 = { instancePath: instancePath + "/flow/intakePos", schemaPath: "#/$defs/Vec3/required", keyword: "required", params: { missingProperty: "z" }, message: "must have required property 'z'" };
+              if (vErrors === null) {
+                vErrors = [err64];
+              } else {
+                vErrors.push(err64);
+              }
+              errors++;
+            }
+            for (const key6 in data28) {
+              if (!(key6 === "x" || key6 === "y" || key6 === "z")) {
+                const err65 = { instancePath: instancePath + "/flow/intakePos", schemaPath: "#/$defs/Vec3/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key6 }, message: "must NOT have additional properties" };
+                if (vErrors === null) {
+                  vErrors = [err65];
+                } else {
+                  vErrors.push(err65);
+                }
+                errors++;
+              }
+            }
+            if (data28.x !== void 0) {
+              let data29 = data28.x;
+              if (!(typeof data29 == "number" && isFinite(data29))) {
+                const err66 = { instancePath: instancePath + "/flow/intakePos/x", schemaPath: "#/$defs/Vec3/properties/x/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err66];
+                } else {
+                  vErrors.push(err66);
+                }
+                errors++;
+              }
+            }
+            if (data28.y !== void 0) {
+              let data30 = data28.y;
+              if (!(typeof data30 == "number" && isFinite(data30))) {
+                const err67 = { instancePath: instancePath + "/flow/intakePos/y", schemaPath: "#/$defs/Vec3/properties/y/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err67];
+                } else {
+                  vErrors.push(err67);
+                }
+                errors++;
+              }
+            }
+            if (data28.z !== void 0) {
+              let data31 = data28.z;
+              if (!(typeof data31 == "number" && isFinite(data31))) {
+                const err68 = { instancePath: instancePath + "/flow/intakePos/z", schemaPath: "#/$defs/Vec3/properties/z/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err68];
+                } else {
+                  vErrors.push(err68);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err69 = { instancePath: instancePath + "/flow/intakePos", schemaPath: "#/$defs/Vec3/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            if (vErrors === null) {
+              vErrors = [err69];
+            } else {
+              vErrors.push(err69);
+            }
+            errors++;
+          }
+        }
+        if (data19.flowRate !== void 0) {
+          let data32 = data19.flowRate;
+          if (typeof data32 == "number" && isFinite(data32)) {
+            if (data32 < 0 || isNaN(data32)) {
+              const err70 = { instancePath: instancePath + "/flow/flowRate", schemaPath: "#/properties/flow/properties/flowRate/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+              if (vErrors === null) {
+                vErrors = [err70];
+              } else {
+                vErrors.push(err70);
+              }
+              errors++;
+            }
+          } else {
+            const err71 = { instancePath: instancePath + "/flow/flowRate", schemaPath: "#/properties/flow/properties/flowRate/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+            if (vErrors === null) {
+              vErrors = [err71];
+            } else {
+              vErrors.push(err71);
+            }
+            errors++;
+          }
+        }
+      } else {
+        const err72 = { instancePath: instancePath + "/flow", schemaPath: "#/properties/flow/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        if (vErrors === null) {
+          vErrors = [err72];
+        } else {
+          vErrors.push(err72);
+        }
+        errors++;
+      }
+    }
+    if (data.airRateMl !== void 0) {
+      let data33 = data.airRateMl;
+      if (typeof data33 == "number" && isFinite(data33)) {
+        if (data33 < 0 || isNaN(data33)) {
+          const err73 = { instancePath: instancePath + "/airRateMl", schemaPath: "#/properties/airRateMl/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+          if (vErrors === null) {
+            vErrors = [err73];
+          } else {
+            vErrors.push(err73);
+          }
+          errors++;
+        }
+      } else {
+        const err74 = { instancePath: instancePath + "/airRateMl", schemaPath: "#/properties/airRateMl/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+        if (vErrors === null) {
+          vErrors = [err74];
+        } else {
+          vErrors.push(err74);
+        }
+        errors++;
+      }
+    }
   } else {
-    const err45 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+    const err75 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
     if (vErrors === null) {
-      vErrors = [err45];
+      vErrors = [err75];
     } else {
-      vErrors.push(err45);
+      vErrors.push(err75);
     }
     errors++;
   }

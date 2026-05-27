@@ -259,4 +259,39 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     expect(entry.category).toBe('co2');
     expect(entry.subcategory).toBe('pressurised');
   });
+
+  it('the Eheim Pro 4+ filter entry carries its F11.5 flow annotation (outflow + intake + flowRate)', () => {
+    const entry = coreCatalog.get({
+      catalog: 'core',
+      id: 'equipment.filter.eheim-pro-4-plus-350',
+    });
+    expect(entry).not.toBeNull();
+    if (entry?.kind !== 'equipment') return;
+    expect(entry.flow).toEqual({
+      outflowPos: { x: 550, y: 320, z: 40 },
+      outflowVec: { x: -1, y: 0, z: 0 },
+      intakePos: { x: 50, y: 80, z: 40 },
+      flowRate: 700,
+    });
+  });
+
+  it('the Aquaneat triple-sponge entry carries its F11.5 airRateMl annotation', () => {
+    const entry = coreCatalog.get({
+      catalog: 'core',
+      id: 'equipment.filter.aquaneat-triple-sponge',
+    });
+    expect(entry).not.toBeNull();
+    if (entry?.kind !== 'equipment') return;
+    expect(entry.airRateMl).toBe(800);
+  });
+
+  it('only a small handful of equipment entries declare flow / airRateMl (defaults still exercise the absent-block path)', () => {
+    const annotated = coreCatalog
+      .byKind('equipment')
+      .filter((e) => e.flow !== undefined || e.airRateMl !== undefined);
+    // F11.5 plan: ~2 explicit annotations total (eheim-pro-4 + aquaneat-triple-sponge);
+    // F11.6 will broaden this. If this creeps up before F11.6 lands, the
+    // wiring tests for the "no flow / no bubbles" default path lose coverage.
+    expect(annotated.length).toBeLessThanOrEqual(2);
+  });
 });

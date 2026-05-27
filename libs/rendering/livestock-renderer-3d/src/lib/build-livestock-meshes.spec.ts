@@ -27,7 +27,12 @@ import {
   ShaderMaterial,
 } from 'three';
 import { buildLivestockMeshes, type LivestockMeshBundle } from './build-livestock-meshes';
-import { LIVESTOCK_FOOD_VERTEX_SHADER, LIVESTOCK_VERTEX_SHADER } from './shaders';
+import {
+  LIVESTOCK_BUBBLE_FRAGMENT_SHADER,
+  LIVESTOCK_BUBBLE_VERTEX_SHADER,
+  LIVESTOCK_FOOD_VERTEX_SHADER,
+  LIVESTOCK_VERTEX_SHADER,
+} from './shaders';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -40,6 +45,7 @@ function makeSnapshot(
     scale?: number;
   }>,
   foodSprites: ReadonlyArray<[number, number, number]> = [],
+  bubbles: ReadonlyArray<[number, number, number]> = [],
 ): WorldSnapshot {
   const n = entries.length;
   const ids = new Uint32Array(n);
@@ -75,6 +81,18 @@ function makeSnapshot(
     foodSpritePosition[i * 3 + 2] = p[2];
   }
 
+  const bubbleCount = bubbles.length;
+  const bubblePosition = new Float32Array(bubbleCount * 3);
+  for (let i = 0; i < bubbleCount; i++) {
+    const p = bubbles[i]!;
+    bubblePosition[i * 3 + 0] = p[0];
+    bubblePosition[i * 3 + 1] = p[1];
+    bubblePosition[i * 3 + 2] = p[2];
+  }
+
+  // The bubble fields are typed on WorldSnapshot by the parallel agent
+  // (F11.5 ECS extension). Until that lands we cast the literal so the
+  // renderer tests can prove the contract is wired end-to-end.
   return {
     entityCount: n,
     ids,
@@ -85,7 +103,9 @@ function makeSnapshot(
     scale,
     foodSpriteCount: fsCount,
     foodSpritePosition,
-  };
+    bubbleCount,
+    bubblePosition,
+  } as unknown as WorldSnapshot;
 }
 
 function meshForArchetype(bundle: LivestockMeshBundle, archetypeId: number): InstancedMesh {
@@ -120,11 +140,11 @@ describe('buildLivestockMeshes', () => {
     let bundle: LivestockMeshBundle;
     afterEach(() => bundle.dispose());
 
-    it('returns a named Group containing one InstancedMesh per archetype + one food sprite mesh', () => {
+    it('returns a named Group containing one InstancedMesh per archetype + food sprite + bubble billboard meshes', () => {
       bundle = buildLivestockMeshes();
       expect(bundle.group.name).toBe('aquascape:livestock');
-      // 6 archetypes + 1 food sprite billboard mesh.
-      expect(bundle.group.children).toHaveLength(7);
+      // 6 archetypes + 1 food sprite billboard mesh + 1 bubble billboard mesh.
+      expect(bundle.group.children).toHaveLength(8);
       for (const child of bundle.group.children) {
         expect((child as InstancedMesh).isInstancedMesh).toBe(true);
       }
@@ -411,7 +431,8 @@ describe('buildLivestockMeshes', () => {
 
     it('adds a 7th InstancedMesh dedicated to food sprites', () => {
       bundle = buildLivestockMeshes();
-      expect(bundle.group.children).toHaveLength(7);
+      // 6 archetypes + food sprite + bubble.
+      expect(bundle.group.children).toHaveLength(8);
       expect(bundle.foodSpriteMesh.isInstancedMesh).toBe(true);
       expect(bundle.foodSpriteMesh.name).toBe('aquascape:livestock/food-sprite');
       // The exposed handle is a sibling under the same group, not a
@@ -622,6 +643,253 @@ describe('buildLivestockMeshes', () => {
     });
   });
 
+  describe('bubble billboards (F11.5 Wave 5)', () => {
+    let bundle: LivestockMeshBundle;
+    afterEach(() => bundle.dispose());
+
+    it('adds an 8th InstancedMesh dedicated to bubbles', () => {
+      bundle = buildLivestockMeshes();
+      expect(bundle.group.children).toHaveLength(8);
+      expect(bundle.bubbleMesh.isInstancedMesh).toBe(true);
+      expect(bundle.bubbleMesh.name).toBe('aquascape:livestock/bubble');
+      expect(bundle.group.children).toContain(bundle.bubbleMesh);
+    });
+
+    it('uses a 4-vertex quad geometry for the bubble billboard', () => {
+      bundle = buildLivestockMeshes();
+      const geo = bundle.bubbleMesh.geometry as BufferGeometry;
+      // PlaneGeometry has 4 vertices + 2 triangles regardless of size.
+      expect(geo.getAttribute('position').count).toBe(4);
+    });
+
+    it('attaches the instancePosition attribute sized to maxBubbles', () => {
+      bundle = buildLivestockMeshes({ maxBubbles: 128 });
+      const geo = bundle.bubbleMesh.geometry as BufferGeometry;
+      const attr = geo.getAttribute('instancePosition') as InstancedBufferAttribute;
+      expect(attr).toBeDefined();
+      expect(attr.count).toBe(128);
+      expect(attr.itemSize).toBe(3);
+      expect(attr.array.length).toBe(128 * 3);
+    });
+
+    it('defaults maxBubbles to 256', () => {
+      bundle = buildLivestockMeshes();
+      const geo = bundle.bubbleMesh.geometry as BufferGeometry;
+      const attr = geo.getAttribute('instancePosition') as InstancedBufferAttribute;
+      expect(attr.count).toBe(256);
+    });
+
+    it('starts with bubbleMesh.count === 0 (no draws until first sync)', () => {
+      bundle = buildLivestockMeshes();
+      expect(bundle.bubbleMesh.count).toBe(0);
+    });
+
+    it('disables frustum culling on the bubble mesh', () => {
+      bundle = buildLivestockMeshes();
+      expect(bundle.bubbleMesh.frustumCulled).toBe(false);
+    });
+
+    it('renders transparent + depth-write-off so the bubble alpha mask reads cleanly', () => {
+      bundle = buildLivestockMeshes();
+      const mat = bundle.bubbleMesh.material as ShaderMaterial;
+      expect(mat.transparent).toBe(true);
+      expect(mat.depthWrite).toBe(false);
+    });
+
+    it('rejects non-positive maxBubbles', () => {
+      expect(() => buildLivestockMeshes({ maxBubbles: 0 })).toThrow(/maxBubbles/);
+      expect(() => buildLivestockMeshes({ maxBubbles: -1 })).toThrow(/maxBubbles/);
+      expect(() => buildLivestockMeshes({ maxBubbles: Infinity })).toThrow(/maxBubbles/);
+    });
+
+    it('writes snapshot.bubblePosition into the instancePosition attribute', () => {
+      bundle = buildLivestockMeshes({ maxBubbles: 16 });
+      const snap = makeSnapshot(
+        [],
+        [],
+        [
+          [10, 100, 20],
+          [11, 120, 21],
+          [12, 140, 22],
+          [13, 160, 23],
+        ],
+      );
+
+      bundle.syncFromSnapshot(snap, 0);
+
+      expect(bundle.bubbleMesh.count).toBe(4);
+      const arr = (
+        bundle.bubbleMesh.geometry as BufferGeometry
+      ).getAttribute('instancePosition').array as Float32Array;
+      expect(arr[0]).toBeCloseTo(10, 5);
+      expect(arr[1]).toBeCloseTo(100, 5);
+      expect(arr[2]).toBeCloseTo(20, 5);
+      expect(arr[3]).toBeCloseTo(11, 5);
+      expect(arr[6]).toBeCloseTo(12, 5);
+      expect(arr[11]).toBeCloseTo(23, 5);
+    });
+
+    it('flags the instancePosition attribute as needsUpdate after a non-empty sync', () => {
+      bundle = buildLivestockMeshes({ maxBubbles: 4 });
+      const snap = makeSnapshot([], [], [[1, 2, 3]]);
+      bundle.syncFromSnapshot(snap, 0);
+      const attr = (
+        bundle.bubbleMesh.geometry as BufferGeometry
+      ).getAttribute('instancePosition') as InstancedBufferAttribute;
+      expect(attr.version).toBe(1);
+    });
+
+    it('sets bubbleMesh.count = 0 when the snapshot has no bubbles', () => {
+      bundle = buildLivestockMeshes({ maxBubbles: 4 });
+      const populated = makeSnapshot([], [], [[1, 2, 3]]);
+      bundle.syncFromSnapshot(populated, 0);
+      expect(bundle.bubbleMesh.count).toBe(1);
+
+      const empty = makeSnapshot([], [], []);
+      bundle.syncFromSnapshot(empty, 0.1);
+      expect(bundle.bubbleMesh.count).toBe(0);
+    });
+
+    it('clamps to maxBubbles and warns once on overflow', () => {
+      bundle = buildLivestockMeshes({ maxBubbles: 2 });
+
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+      try {
+        const snap = makeSnapshot(
+          [],
+          [],
+          [
+            [1, 10, 0],
+            [2, 20, 0],
+            [3, 30, 0],
+            [4, 40, 0],
+          ],
+        );
+
+        bundle.syncFromSnapshot(snap, 0);
+        expect(bundle.bubbleMesh.count).toBe(2);
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0]![0]).toMatch(/bubble count.*exceeds maxBubbles/);
+
+        // Second overflow doesn't re-warn.
+        bundle.syncFromSnapshot(snap, 0.5);
+        expect(warn).toHaveBeenCalledTimes(1);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('keeps the fish + food slabs working when the snapshot also has bubbles', () => {
+      bundle = buildLivestockMeshes({
+        maxInstancesPerArchetype: 4,
+        maxFoodSprites: 4,
+        maxBubbles: 4,
+      });
+      const snap = makeSnapshot(
+        [{ archetype: FISH_ARCHETYPE.SLIM_TETRA }],
+        [[10, 20, 30]],
+        [
+          [40, 50, 60],
+          [41, 70, 60],
+        ],
+      );
+      bundle.syncFromSnapshot(snap, 0);
+      expect(meshForArchetype(bundle, FISH_ARCHETYPE.SLIM_TETRA).count).toBe(1);
+      expect(bundle.foodSpriteMesh.count).toBe(1);
+      expect(bundle.bubbleMesh.count).toBe(2);
+    });
+
+    it('is allocation-stable across repeated bubble syncs (same TypedArray identity)', () => {
+      bundle = buildLivestockMeshes({ maxBubbles: 16 });
+      const arrBefore = (
+        bundle.bubbleMesh.geometry as BufferGeometry
+      ).getAttribute('instancePosition').array;
+      for (let i = 0; i < 10; i++) {
+        bundle.syncFromSnapshot(makeSnapshot([], [], [[i, 100, 0]]), i * 0.1);
+      }
+      const arrAfter = (
+        bundle.bubbleMesh.geometry as BufferGeometry
+      ).getAttribute('instancePosition').array;
+      expect(arrAfter).toBe(arrBefore);
+    });
+  });
+
+  describe('bubble billboard shader', () => {
+    it('contains the view-space billboard formula `mvPosition.xy += position.xy`', () => {
+      // Same load-bearing line as the food sprite — without it the
+      // quad fails to face the camera under orbit.
+      expect(LIVESTOCK_BUBBLE_VERTEX_SHADER).toMatch(/mvPosition\.xy\s*\+=\s*position\.xy/);
+    });
+
+    it('writes gl_Position from projectionMatrix * mvPosition', () => {
+      expect(LIVESTOCK_BUBBLE_VERTEX_SHADER).toMatch(
+        /gl_Position\s*=\s*projectionMatrix\s*\*\s*mvPosition/,
+      );
+    });
+
+    it('hard-codes the blue-white bubble tone (~#e0f4ff family)', () => {
+      // The vec3(0.85, 0.95, 1.00) baseline is the load-bearing colour;
+      // the fragment mixes it with vec3(1.0) under a small top-of-sphere
+      // highlight to produce the bubble read.
+      expect(LIVESTOCK_BUBBLE_FRAGMENT_SHADER).toMatch(
+        /vec3\(\s*0\.85\s*,\s*0\.95\s*,\s*1\.00\s*\)/,
+      );
+    });
+
+    it('anchors the highlight above the geometric centre (vec2(0.5, 0.65))', () => {
+      // Off-centre highlight → sphere-catching-light read. Centering
+      // would lose the bubble silhouette.
+      expect(LIVESTOCK_BUBBLE_FRAGMENT_SHADER).toMatch(/vec2\(\s*0\.5\s*,\s*0\.65\s*\)/);
+    });
+
+    it('compiles a ShaderMaterial without throwing (smoke test)', () => {
+      const bundle = buildLivestockMeshes();
+      try {
+        const mat = bundle.bubbleMesh.material as ShaderMaterial;
+        expect(mat.vertexShader).toBe(LIVESTOCK_BUBBLE_VERTEX_SHADER);
+        expect(mat.fragmentShader).toBe(LIVESTOCK_BUBBLE_FRAGMENT_SHADER);
+      } finally {
+        bundle.dispose();
+      }
+    });
+  });
+
+  describe('bubble dispose', () => {
+    it('disposes the bubble geometry + material on bundle.dispose()', () => {
+      const bundle = buildLivestockMeshes();
+      const geo = bundle.bubbleMesh.geometry as BufferGeometry;
+      const mat = bundle.bubbleMesh.material as Material;
+      const geoSpy = jest.spyOn(geo, 'dispose');
+      const matSpy = jest.spyOn(mat, 'dispose');
+
+      bundle.dispose();
+
+      expect(geoSpy).toHaveBeenCalledTimes(1);
+      expect(matSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('detaches the bubble mesh from the group', () => {
+      const bundle = buildLivestockMeshes();
+      const bubble = bundle.bubbleMesh;
+      expect(bundle.group.children).toContain(bubble);
+      bundle.dispose();
+      expect(bundle.group.children).not.toContain(bubble);
+    });
+
+    it('is idempotent for the bubble slot — second dispose is a no-op', () => {
+      const bundle = buildLivestockMeshes();
+      const geo = bundle.bubbleMesh.geometry as BufferGeometry;
+      const mat = bundle.bubbleMesh.material as Material;
+      bundle.dispose();
+
+      const geoSpy = jest.spyOn(geo, 'dispose');
+      const matSpy = jest.spyOn(mat, 'dispose');
+      expect(() => bundle.dispose()).not.toThrow();
+      expect(geoSpy).not.toHaveBeenCalled();
+      expect(matSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('dispose', () => {
     it('disposes every geometry and material exactly once', () => {
       const bundle = buildLivestockMeshes();
@@ -659,8 +927,8 @@ describe('buildLivestockMeshes', () => {
 
     it('clears all children from the group after dispose', () => {
       const bundle = buildLivestockMeshes();
-      // 6 archetypes + 1 food sprite billboard mesh.
-      expect(bundle.group.children).toHaveLength(7);
+      // 6 archetypes + 1 food sprite + 1 bubble billboard mesh.
+      expect(bundle.group.children).toHaveLength(8);
       bundle.dispose();
       expect(bundle.group.children).toHaveLength(0);
     });

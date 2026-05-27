@@ -7,6 +7,7 @@
       "@aquascape/domain/catalog": ["libs/domain/catalog/src/index.ts"],
       "@aquascape/domain/document": ["libs/domain/document/src/index.ts"],
       "@aquascape/domain/fish-anatomy": ["libs/domain/fish-anatomy/src/index.ts"],
+      "@aquascape/domain/fluid-sim": ["libs/domain/fluid-sim/src/index.ts"],
       "@aquascape/domain/geometry": ["libs/domain/geometry/src/index.ts"],
       "@aquascape/domain/growth-sim": ["libs/domain/growth-sim/src/index.ts"],
       "@aquascape/domain/livestock-behaviors": [

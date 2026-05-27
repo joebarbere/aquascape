@@ -210,3 +210,98 @@ describe('WorldSnapshot', () => {
     expect(s.scale[129]).toBeCloseTo(10 + 129);
   });
 });
+
+describe('F11.5 Wave 4 world API — registerFlowField + registerHardscapeSdf', () => {
+  // Synthetic FlowField — typed-array-only; FlowFieldSystem cares about
+  // the shape, not how it was constructed. (Calling the real bake here
+  // would couple this spec to fluid-sim's bake semantics.)
+  function makeField(): import('@aquascape/domain/fluid-sim').FlowField {
+    const n = 4 * 4 * 4;
+    return {
+      gx: 4, gy: 4, gz: 4,
+      origin: { x: 0, y: 0, z: 0 },
+      cellSize: 100,
+      u: new Float32Array(n),
+      v: new Float32Array(n),
+      w: new Float32Array(n),
+    };
+  }
+  function makeSdf(): import('@aquascape/domain/fluid-sim').HardscapeSdf {
+    return {
+      gx: 4, gy: 4, gz: 4,
+      origin: { x: 0, y: 0, z: 0 },
+      cellSize: 100,
+      sdf: new Float32Array(4 * 4 * 4),
+    };
+  }
+
+  it('starts with no flow field and no SDF registered', () => {
+    const w = createLivestockWorld(0);
+    expect(w.getFlowField()).toBeNull();
+    expect(w.getHardscapeSdf()).toBeNull();
+  });
+
+  it('registerFlowField + getFlowField round-trip', () => {
+    const w = createLivestockWorld(0);
+    const f = makeField();
+    w.registerFlowField(f);
+    expect(w.getFlowField()).toBe(f);
+  });
+
+  it('registerHardscapeSdf + getHardscapeSdf round-trip', () => {
+    const w = createLivestockWorld(0);
+    const s = makeSdf();
+    w.registerHardscapeSdf(s);
+    expect(w.getHardscapeSdf()).toBe(s);
+  });
+
+  it('passing null clears a previously-registered flow field', () => {
+    const w = createLivestockWorld(0);
+    w.registerFlowField(makeField());
+    w.registerFlowField(null);
+    expect(w.getFlowField()).toBeNull();
+  });
+
+  it('passing null clears a previously-registered SDF', () => {
+    const w = createLivestockWorld(0);
+    w.registerHardscapeSdf(makeSdf());
+    w.registerHardscapeSdf(null);
+    expect(w.getHardscapeSdf()).toBeNull();
+  });
+
+  it('a second registration replaces the previous reference', () => {
+    const w = createLivestockWorld(0);
+    const f1 = makeField();
+    const f2 = makeField();
+    w.registerFlowField(f1);
+    w.registerFlowField(f2);
+    expect(w.getFlowField()).toBe(f2);
+    const s1 = makeSdf();
+    const s2 = makeSdf();
+    w.registerHardscapeSdf(s1);
+    w.registerHardscapeSdf(s2);
+    expect(w.getHardscapeSdf()).toBe(s2);
+  });
+
+  it('dispose clears the flow field + SDF registrations', () => {
+    const w = createLivestockWorld(0);
+    w.registerFlowField(makeField());
+    w.registerHardscapeSdf(makeSdf());
+    w.dispose();
+    expect(w.getFlowField()).toBeNull();
+    expect(w.getHardscapeSdf()).toBeNull();
+  });
+
+  it('stores the reference as-is (no copy of typed arrays)', () => {
+    const w = createLivestockWorld(0);
+    const f = makeField();
+    w.registerFlowField(f);
+    const back = w.getFlowField();
+    expect(back).not.toBeNull();
+    // Mutating the original surfaces in the stored reference — confirms
+    // we're not copying. The sim service relies on this so it can mutate
+    // a long-lived buffer in place without re-registering.
+    f.u[0] = 7;
+    expect((back as NonNullable<typeof back>).u[0]).toBe(7);
+  });
+});

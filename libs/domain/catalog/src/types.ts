@@ -329,6 +329,50 @@ export interface EquipmentEntry extends CatalogEntryBase {
   defaultSettings?: Record<string, number | string | boolean>;
   /** Display swatch in the catalog browser. NOT a rendered silhouette colour. */
   color: HexColor;
+
+  /**
+   * Stage 11 F11.5 — flow contribution for filter / pump equipment. Drives
+   * the FlowFieldSystem (`libs/domain/fluid-sim/`): each declared `outflowPos`
+   * is a positive-divergence source, each `intakePos` a negative-divergence
+   * sink, baked once per scene into a 32×32×32 velocity grid. When absent,
+   * the equipment contributes no flow — backward-compatible with manifests
+   * authored before F11.5. The structural `{ x; y; z }` shape mirrors
+   * `Vec3` in `@aquascape/domain/geometry`; we re-declare it inline so the
+   * catalog runtime has no upward dep on geometry.
+   *
+   * Coordinates are world-space millimetres in the document's right-handed
+   * frame (origin = tank front-bottom-left interior corner, +x right, +y
+   * up, +z back). `flowRate` is the manufacturer-style volumetric figure in
+   * litres per hour, scaling the source/sink strength.
+   *
+   * Schema: catalog manifest schemaVersion stays at 3 — every subfield is
+   * optional + additive, so older manifests load unchanged.
+   */
+  flow?: {
+    /** World-space position where water exits the equipment (mm). */
+    outflowPos?: { x: number; y: number; z: number };
+    /**
+     * Direction vector of the outflow jet (unit-ish). Default `(0, 0, 1)` —
+     * pointing toward the back of the tank when omitted.
+     */
+    outflowVec?: { x: number; y: number; z: number };
+    /**
+     * World-space position where water enters the equipment intake (mm).
+     * Optional — when absent, the intake is co-located with `outflowPos`
+     * (filter sits as a single in-place point source).
+     */
+    intakePos?: { x: number; y: number; z: number };
+    /** Volumetric flow rate (L/hr). Drives source/sink strength. Default 200. */
+    flowRate?: number;
+  };
+
+  /**
+   * Stage 11 F11.5 — air-stone air volumetric rate (mL/min). Drives the
+   * `BubbleParticleSystem` spawn rate in `livestock-renderer-3d`. When
+   * absent, the equipment is not an air-stone (or does not produce visible
+   * bubbles). Backward-compatible — older manifests load unchanged.
+   */
+  airRateMl?: number;
 }
 
 // ─── Placeholders for later stages ────────────────────────────────────────

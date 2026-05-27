@@ -226,6 +226,7 @@ describe('debug hook — read-only accessors', () => {
     // Sort for stable comparison.
     const keys = Object.keys(handle).sort();
     expect(keys).toEqual([
+      'getBubbleParticleCount',
       'getEntityCount',
       'getFoodSpriteCount',
       'getScene',
@@ -268,6 +269,40 @@ describe('debug hook — read-only accessors', () => {
     world.spawnFoodSprite({ x: 100, y: 200, z: 100 });
     world.spawnFoodSprite({ x: 200, y: 200, z: 200 });
     expect(window.__aquascape_debug__!.getFoodSpriteCount()).toBe(2);
+    fixture.destroy();
+  });
+
+  it('getBubbleParticleCount() returns 0 before livestock loads (no world built)', () => {
+    configure(defaultScene());
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    expect(window.__aquascape_debug__!.getBubbleParticleCount()).toBe(0);
+    fixture.destroy();
+  });
+
+  it('getBubbleParticleCount() reflects bubbles spawned on the live world', () => {
+    configure(defaultScene());
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    expect(window.__aquascape_debug__!.getBubbleParticleCount()).toBe(0);
+
+    // Same pattern as the FoodSprite test: hydrate the world via a
+    // livestock-bearing scene, then drive bubble sources directly on
+    // the exposed world handle. The full service path (scene equipment
+    // → catalog `airRateMl` lookup → registerBubbleSources) is covered
+    // in the simulation service spec; here we just verify the hook
+    // reads through to the same accessor.
+    const store = TestBed.inject(MockStore);
+    store.overrideSelector(selectScene, sceneWithFish(2));
+    store.refreshState();
+    const world = window.__aquascape_debug__!.getWorld()!;
+    expect(world).not.toBeNull();
+    world.registerBubbleSources([
+      { position: { x: 200, y: 20, z: 200 }, airRateMl: 600 },
+    ]);
+    // A few sim steps so the spawn accumulator clears at least one bubble.
+    for (let i = 0; i < 30; i++) world.step(1 / 30);
+    expect(window.__aquascape_debug__!.getBubbleParticleCount()).toBeGreaterThan(0);
     fixture.destroy();
   });
 });

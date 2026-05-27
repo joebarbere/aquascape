@@ -190,3 +190,69 @@ void main() {
   gl_FragColor = vec4(uFoodColor, alpha);
 }
 `;
+
+// ─── Bubble billboard shaders (F11.5 Wave 5) ─────────────────────────────
+
+/**
+ * Vertex shader for bubble billboards.
+ *
+ * Identical billboard math to the food sprite — the per-instance world
+ * anchor is converted to view-space and the quad's local `position.xy`
+ * is added directly so the resulting quad always faces the camera. The
+ * load-bearing line is `mvPosition.xy += position.xy` (the spec
+ * regex-checks for it).
+ *
+ * We keep this as a separate constant rather than aliasing the food
+ * shader so future bubble-specific tweaks (e.g. per-instance scale /
+ * upward jitter via a uniform) have a clean home.
+ */
+export const LIVESTOCK_BUBBLE_VERTEX_SHADER = /* glsl */ `
+precision highp float;
+
+attribute vec3 instancePosition;
+
+varying vec2 vQuadUv;
+
+void main() {
+  vQuadUv = uv;
+
+  // ── BILLBOARD ──────────────────────────────────────────────────────
+  vec4 mvPosition = modelViewMatrix * vec4(instancePosition, 1.0);
+  mvPosition.xy += position.xy;
+  // ── /BILLBOARD ─────────────────────────────────────────────────────
+
+  gl_Position = projectionMatrix * mvPosition;
+}
+`;
+
+/**
+ * Fragment shader for bubble billboards.
+ *
+ * Blue-white body colour (`~#e0f4ff`) with a soft circular alpha
+ * falloff. A small highlight biased toward the top of the disc gives
+ * the silhouette a "sphere catching the key light" read so it parses
+ * as a bubble rather than a generic disc. Both the body tint and the
+ * highlight peak are load-bearing — the spec regex-checks for the
+ * `0.85`, `0.95`, `1.00` tone and the `vec2(0.5, 0.65)` highlight
+ * anchor.
+ */
+export const LIVESTOCK_BUBBLE_FRAGMENT_SHADER = /* glsl */ `
+precision highp float;
+
+varying vec2 vQuadUv;
+
+void main() {
+  // Soft circular silhouette: opaque-ish near the centre, soft falloff
+  // toward the rim. smoothstep edges chosen so the disc fills most of
+  // the quad without a hard cutout.
+  float d = distance(vQuadUv, vec2(0.5));
+  float alpha = smoothstep(0.55, 0.35, d);
+  if (alpha < 0.05) discard;
+
+  // Off-centre highlight (slightly above geometric centre) → reads as
+  // the top of a sphere catching the key light.
+  float highlight = smoothstep(0.25, 0.05, distance(vQuadUv, vec2(0.5, 0.65)));
+  vec3 color = mix(vec3(0.85, 0.95, 1.00), vec3(1.0), highlight * 0.4);
+  gl_FragColor = vec4(color, alpha * 0.85);
+}
+`;

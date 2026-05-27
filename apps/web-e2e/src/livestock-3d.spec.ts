@@ -223,6 +223,77 @@ test.describe('livestock 3D rendering', () => {
     );
     expect(afterHold).toBe(afterClick);
   });
+
+  test('air-stone equipment spawns bubble particles in the world', async ({ page }) => {
+    // F11.5 Wave 5 verification — placing an air-stone (an equipment row
+    // carrying `airRateMl > 0` per the F11.5 Wave 2 catalog addition)
+    // triggers the service to call `world.registerBubbleSources(...)` on
+    // the next spawn cycle; subsequent `step()` calls emit bubble particles
+    // at the stone's position. We assert via the debug hook rather than
+    // pixel-counting because bubbles render as a separate 8th InstancedMesh
+    // alongside the food-sprite billboards and aren't easy to distinguish
+    // from substrate variance with a coarse pixel-channel test.
+    //
+    // We rely on the F11.5 Wave 2 sample annotation: the "Aquaneat Triple
+    // Sponge Filter" equipment row carries `airRateMl: 800` — the only
+    // air-driven entry in the core catalog as of F11.5.
+    //
+    // Need at least one livestock entry first — the LivestockSimulation
+    // service builds the bitECS world lazily on the first emission with
+    // non-empty `scene.livestock`. Equipment-only scenes leave `world ===
+    // null` and the bubble system never ticks. This mirrors what a real
+    // user does: add fish + filter together, not filter in isolation.
+    await addOneFishAndEnter3d(page);
+
+    // The Equipment tool lives next to Livestock in the sidebar; its
+    // panel header is a per-panel collapse toggle (see docs/caveats/
+    // app-shell.md — every panel is a self-collapsing accordion). On a
+    // fresh viewport the Equipment panel can start either expanded or
+    // collapsed depending on localStorage state, so check aria-expanded
+    // and only click if we need to expand.
+    const equipmentPanelToggle = page.getByRole('button', { name: /Equipment.*entries/ });
+    await expect(equipmentPanelToggle).toBeVisible();
+    if ((await equipmentPanelToggle.getAttribute('aria-expanded')) !== 'true') {
+      await equipmentPanelToggle.click();
+    }
+    // Scroll into view so the radiogroup below renders + becomes visible.
+    await equipmentPanelToggle.scrollIntoViewIfNeeded();
+
+    // Filter to 'Filter' equipment then add the Aquaneat sponge filter
+    // (the only F11.5-annotated air-stone proxy in the catalog). The
+    // Livestock tool also has a "Filter" branch — scope to the Equipment
+    // region to avoid the ambiguity.
+    const equipmentRegion = page.getByRole('region', { name: 'Equipment' });
+    await equipmentRegion.getByRole('radio', { name: /^Filter$/ }).click();
+    const airStoneTile = equipmentRegion.getByRole('button', {
+      name: /Add Aquaneat Triple Sponge Filter to equipment/,
+    });
+    await expect(airStoneTile).toBeVisible();
+    await airStoneTile.click();
+
+    // Wait for the simulation service to register the bubble source +
+    // emit the first particles. The bubble source registration runs on
+    // the same `(scene)` signal the spawn cycle does, so this should
+    // settle within a few RAF ticks. (We're already in 3D from
+    // `addOneFishAndEnter3d` above, so the world ticks.)
+    await expect
+      .poll(
+        () => page.evaluate(() => window.__aquascape_debug__?.getBubbleParticleCount() ?? 0),
+        { timeout: 5_000 },
+      )
+      .toBeGreaterThan(0);
+
+    // Steady-state: with airRateMl=800, BUBBLE_SCALE=3, lifetime=6s, the
+    // column converges to a few dozen bubbles before hitting the 200 cap.
+    // Don't pin an exact number — the test just confirms the column is
+    // alive + non-trivial.
+    await page.waitForTimeout(500);
+    const count = await page.evaluate(
+      () => window.__aquascape_debug__?.getBubbleParticleCount() ?? 0,
+    );
+    expect(count).toBeGreaterThan(5);
+    expect(count).toBeLessThanOrEqual(200);
+  });
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────

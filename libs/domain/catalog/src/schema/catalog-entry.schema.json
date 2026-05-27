@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aquascape.dev/schemas/catalog-entry-v3.json",
   "title": "CatalogEntry",
-  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 + 7 F7.3 ship `substrate` + `hardscape` + `plant` + `livestock` + `equipment`. Future stages add tank under the same oneOf. Manifest schemaVersion 3 (Stage 11 F11.2) adds the optional `behavior` block on `LivestockEntry`; v2 manifests load unchanged because every behavior subfield is optional + additive (`resolveBehavior()` falls back to per-group presets when the block is absent). Stage 11 F11.3 extends the same v3 schema additively with `behavior.territory` / `nipping` / `fear` on livestock and `coverScore` on hardscape — no manifest version bump. Stage 11 F11.4 extends the same v3 schema additively with `behavior.feeding` / `curiosity` on livestock — no manifest version bump.",
+  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 + 7 F7.3 ship `substrate` + `hardscape` + `plant` + `livestock` + `equipment`. Future stages add tank under the same oneOf. Manifest schemaVersion 3 (Stage 11 F11.2) adds the optional `behavior` block on `LivestockEntry`; v2 manifests load unchanged because every behavior subfield is optional + additive (`resolveBehavior()` falls back to per-group presets when the block is absent). Stage 11 F11.3 extends the same v3 schema additively with `behavior.territory` / `nipping` / `fear` on livestock and `coverScore` on hardscape — no manifest version bump. Stage 11 F11.4 extends the same v3 schema additively with `behavior.feeding` / `curiosity` on livestock — no manifest version bump. Stage 11 F11.5 extends the same v3 schema additively with `flow` (filter / pump outflow + intake + flowRate) and `airRateMl` (air-stone bubble volumetric rate) on equipment — no manifest version bump.",
   "oneOf": [
     { "$ref": "#/$defs/SubstrateEntry" },
     { "$ref": "#/$defs/HardscapeEntry" },
@@ -19,6 +19,16 @@
       "properties": {
         "x": { "type": "number" },
         "y": { "type": "number" }
+      }
+    },
+    "Vec3": {
+      "type": "object",
+      "required": ["x", "y", "z"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
       }
     },
     "CatalogEntryBase": {
@@ -536,7 +546,36 @@
           },
           "description": "Seed settings the future settings UI populates on first attach. F7.3 v1 is display-only; shape mirrors the document-side EquipmentEntry.settings Record."
         },
-        "color": { "$ref": "#/$defs/HexColor" }
+        "color": { "$ref": "#/$defs/HexColor" },
+        "flow": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Stage 11 F11.5 flow contribution for filter / pump equipment. Drives the FlowFieldSystem source/sink bake. Every subfield is optional + additive — older manifests without `flow` keep loading unchanged.",
+          "properties": {
+            "outflowPos": {
+              "$ref": "#/$defs/Vec3",
+              "description": "World-space position where water exits the equipment (mm). Right-handed, +x right, +y up, +z back."
+            },
+            "outflowVec": {
+              "$ref": "#/$defs/Vec3",
+              "description": "Direction vector of the outflow jet (unit-ish). Default (0, 0, 1) — points toward back of tank."
+            },
+            "intakePos": {
+              "$ref": "#/$defs/Vec3",
+              "description": "World-space position where water enters the equipment intake (mm). Optional — when absent, the intake is co-located with `outflowPos`."
+            },
+            "flowRate": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Volumetric flow rate (L/hr). Drives source/sink strength. Default 200."
+            }
+          }
+        },
+        "airRateMl": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Stage 11 F11.5 air-stone air volumetric rate (mL/min). Drives BubbleParticleSystem spawn rate. When absent, the equipment is not an air-stone (or produces no visible bubbles)."
+        }
       }
     }
   }

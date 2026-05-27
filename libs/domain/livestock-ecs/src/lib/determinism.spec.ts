@@ -9,6 +9,7 @@
  * this test will fail on the very next run.
  */
 import { MID_PRESET, type ResolvedBehavior } from '@aquascape/domain/livestock-behaviors';
+import { bakeFlowField, bakeHardscapeSdf } from '@aquascape/domain/fluid-sim';
 import { FISH_ARCHETYPE, HARDSCAPE_CATEGORY, type LivestockWorld } from '../index';
 import { createLivestockWorld, type TankAabb } from './world';
 
@@ -268,6 +269,184 @@ describe('determinism: 1000 ticks × fixed fleet', () => {
 
     const r1 = runMixedFleet();
     const r2 = runMixedFleet();
+    expect(byteEqual(r1.position, r2.position)).toBe(true);
+    expect(byteEqual(r1.orientation, r2.orientation)).toBe(true);
+    expect(byteEqual(r1.foodSpritePosition, r2.foodSpritePosition)).toBe(true);
+  });
+
+  it('F11.5 Wave 5 full stack — 1000-tick replay with flow + SDF + bubble source + cave + ram + cardinals + betta + barbs + oto + sprites is byte-identical (bubblePosition included)', () => {
+    // Smaller mixed fleet than the Wave 4 stack below — keeps the test
+    // focused on the bubble determinism contract while still exercising
+    // every system that touches the BubbleParticle path (spawn,
+    // lifetime, snapshot).
+    const cardinalSpecies = 1;
+    const cardinalBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+
+    function runWithBubbles(): {
+      position: Float32Array;
+      bubbleCount: number;
+      bubblePosition: Float32Array;
+    } {
+      const w: LivestockWorld = createLivestockWorld(SEED, { tankAabb: TANK });
+      const handle = w.registerSpeciesBehavior(cardinalSpecies, cardinalBehavior);
+      // Two air-stone sources — one near the front-left, one near the
+      // back-right, both at substrate. Different airRateMls so the
+      // streams don't collapse to symmetric draws.
+      w.registerBubbleSources([
+        { position: { x: 200, y: 20, z: 100 }, airRateMl: 400 },
+        { position: { x: 800, y: 20, z: 300 }, airRateMl: 700 },
+      ]);
+      for (let i = 0; i < 6; i++) {
+        w.spawnFish({
+          archetype: FISH_ARCHETYPE.SLIM_TETRA,
+          speciesId: cardinalSpecies,
+          bodyLengthMm: 30,
+          position: { x: 200 + i * 20, y: 200, z: 150 },
+          behaviorHandleIdx: handle,
+        });
+      }
+      for (let i = 0; i < TICKS; i++) w.step(SIM_DT);
+      const s = w.snapshot(0);
+      return {
+        position: new Float32Array(s.position),
+        bubbleCount: s.bubbleCount,
+        bubblePosition: new Float32Array(s.bubblePosition),
+      };
+    }
+
+    const r1 = runWithBubbles();
+    const r2 = runWithBubbles();
+    expect(r1.bubbleCount).toBe(r2.bubbleCount);
+    expect(byteEqual(r1.position, r2.position)).toBe(true);
+    expect(byteEqual(r1.bubblePosition, r2.bubblePosition)).toBe(true);
+  });
+
+  it('F11.5 Wave 4 full stack — 1000-tick replay with flow + SDF + cave + ram + cardinals + betta + barbs + oto + sprites is byte-identical', () => {
+    // Largest mixed fleet so far — covers every system path including
+    // FlowFieldSystem (filter outflow) + CollisionSystem (sphere SDF +
+    // fish-vs-fish separation in a tight school).
+    const ramSpecies = 1;
+    const cardinalSpecies = 2;
+    const bettaSpecies = 3;
+    const barbSpecies = 4;
+    const otoSpecies = 5;
+
+    const ramBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+    ramBehavior.territory = {
+      coreRadius: 80,
+      displayRadius: 150,
+      aggression: 100,
+      fatigueRate: 0.08,
+    };
+    const cardinalBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+    const bettaBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+    const barbBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+    barbBehavior.nipping = {
+      groupThreshold: 8,
+      finFraction: 0.4,
+      rate: 0.5,
+    };
+    const otoBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+    otoBehavior.feeding = {
+      hungerRatePerSec: 1 / 10,
+      threshold: 0.4,
+      category: 'algae-grazer',
+    };
+    otoBehavior.depth.preferredY = 0.2;
+
+    function runFullStack(): {
+      position: Float32Array;
+      orientation: Float32Array;
+      foodSpritePosition: Float32Array;
+    } {
+      const w: LivestockWorld = createLivestockWorld(SEED, { tankAabb: TANK });
+      const ramHandle = w.registerSpeciesBehavior(ramSpecies, ramBehavior);
+      const cardinalHandle = w.registerSpeciesBehavior(cardinalSpecies, cardinalBehavior);
+      const bettaHandle = w.registerSpeciesBehavior(bettaSpecies, bettaBehavior);
+      const barbHandle = w.registerSpeciesBehavior(barbSpecies, barbBehavior);
+      const otoHandle = w.registerSpeciesBehavior(otoSpecies, otoBehavior);
+      // Hardscape (cave/rock) — anchor for the ram + algae for the oto.
+      w.registerHardscape([
+        { position: { x: 500, y: 100, z: 300 }, coverScore: 0.5, category: HARDSCAPE_CATEGORY.ROCK },
+      ]);
+      // F11.5 — register a baked flow field driven by a single filter
+      // outflow + a baked sphere SDF for the cave rock so collision can
+      // deflect fish away.
+      const flowField = bakeFlowField({
+        tankAabb: { min: { x: 0, y: 0, z: 0 }, max: { x: 1000, y: 400, z: 400 } },
+        sources: [
+          {
+            outflowPos: { x: 950, y: 300, z: 200 },
+            outflowVec: { x: -1, y: 0, z: 0 },
+            intakePos: { x: 950, y: 50, z: 200 },
+            flowRate: 200,
+          },
+        ],
+      });
+      const hardscapeSdf = bakeHardscapeSdf({
+        tankAabb: { min: { x: 0, y: 0, z: 0 }, max: { x: 1000, y: 400, z: 400 } },
+        hardscape: [{ position: { x: 500, y: 100, z: 300 }, radius: 80 }],
+      });
+      w.registerFlowField(flowField);
+      w.registerHardscapeSdf(hardscapeSdf);
+      // Ram anchored near the rock.
+      w.spawnFish({
+        archetype: FISH_ARCHETYPE.DEEP_BODIED,
+        speciesId: ramSpecies,
+        bodyLengthMm: 70,
+        position: { x: 510, y: 100, z: 310 },
+        behaviorHandleIdx: ramHandle,
+      });
+      // 6 cardinal tetras clustered mid-water.
+      for (let i = 0; i < 6; i++) {
+        w.spawnFish({
+          archetype: FISH_ARCHETYPE.SLIM_TETRA,
+          speciesId: cardinalSpecies,
+          bodyLengthMm: 30,
+          position: { x: 200 + i * 20, y: 200, z: 150 },
+          behaviorHandleIdx: cardinalHandle,
+        });
+      }
+      // 1 betta — slow, long-fin, barb victim.
+      w.spawnFish({
+        archetype: FISH_ARCHETYPE.DEEP_BODIED,
+        speciesId: bettaSpecies,
+        bodyLengthMm: 60,
+        position: { x: 700, y: 150, z: 200 },
+        behaviorHandleIdx: bettaHandle,
+      });
+      // 6 tiger barbs — below the group threshold so nipping fires.
+      for (let i = 0; i < 6; i++) {
+        w.spawnFish({
+          archetype: FISH_ARCHETYPE.BARB,
+          speciesId: barbSpecies,
+          bodyLengthMm: 50,
+          position: { x: 650 + i * 15, y: 180, z: 220 + i * 5 },
+          behaviorHandleIdx: barbHandle,
+        });
+      }
+      // 1 oto near the rock for the algae-grazer pathway.
+      w.spawnFish({
+        archetype: FISH_ARCHETYPE.CORY_CYLINDER,
+        speciesId: otoSpecies,
+        bodyLengthMm: 40,
+        position: { x: 480, y: 80, z: 290 },
+        behaviorHandleIdx: otoHandle,
+      });
+      // 2 food sprites for the cardinals + betta to seek.
+      w.spawnFoodSprite({ x: 250, y: 300, z: 200 }, 60, 5);
+      w.spawnFoodSprite({ x: 500, y: 250, z: 200 }, 60, 5);
+      for (let i = 0; i < TICKS; i++) w.step(SIM_DT);
+      const s = w.snapshot(0);
+      return {
+        position: new Float32Array(s.position),
+        orientation: new Float32Array(s.orientation),
+        foodSpritePosition: new Float32Array(s.foodSpritePosition),
+      };
+    }
+
+    const r1 = runFullStack();
+    const r2 = runFullStack();
     expect(byteEqual(r1.position, r2.position)).toBe(true);
     expect(byteEqual(r1.orientation, r2.orientation)).toBe(true);
     expect(byteEqual(r1.foodSpritePosition, r2.foodSpritePosition)).toBe(true);

@@ -133,7 +133,12 @@ describe('schoolingSystem — Couzin phase transitions', () => {
     params.schooling.wSep = 1.0;
     params.schooling.noise = 0.01;
     const handle = w.registerSpeciesBehavior(1, params);
-    const eids = spawnCluster(w, 12, { x: 500, y: 200, z: 200 }, 30, handle, params.schooling.vPref);
+    // F11.5 Wave 4 — spread widened from 30 to 100 mm so the initial
+    // cluster's pairwise distances clear the new CollisionSystem
+    // fish-vs-fish overlap threshold ((BL+BL)*0.4 = 24 mm for BL=30).
+    // Otherwise the per-tick separation impulses drown out alignment +
+    // cohesion and polarisation never reaches the 0.7 threshold.
+    const eids = spawnCluster(w, 12, { x: 500, y: 200, z: 200 }, 100, handle, params.schooling.vPref);
     for (let t = 0; t < 200; t++) w.step(SIM_DT);
     const p = polarisation(eids);
     expect(p).toBeGreaterThanOrEqual(0.7);
@@ -203,11 +208,17 @@ describe('schoolingSystem — Couzin phase transitions', () => {
     });
     Velocity.x[focal] = 50;
     // Neighbour directly behind (−X relative to focal).
+    // F11.5 Wave 4 — bumped from x=490 to x=460 so the pair distance (40
+    // mm) clears the CollisionSystem fish-vs-fish overlap threshold
+    // ((BL+BL)*0.4 = 24 mm for BL=30). Within the schooling ZOO/ZOA
+    // (200 mm) so the blind-cone test still exercises the intended
+    // perceptual path; outside the collision threshold so the only force
+    // on focal is the (zero) schooling contribution.
     w.spawnFish({
       archetype: FISH_ARCHETYPE.SLIM_TETRA,
       speciesId: 1,
       bodyLengthMm: 30,
-      position: { x: 490, y: 200, z: 200 },
+      position: { x: 460, y: 200, z: 200 },
       behaviorHandleIdx: handle,
     });
     const vxBefore = Velocity.x[focal] as number;

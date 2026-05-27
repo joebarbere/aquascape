@@ -7,9 +7,13 @@ import {
   AnimationPhase,
   Archetype,
   BEHAVIOR_MODE,
+  BUBBLE_GLOBAL_CAP_COUNT,
   BehaviorMode,
   BehaviorParamsRef,
   BodyLength,
+  BubbleParticle,
+  bubbleLifetimeSystem,
+  bubbleSourceSpawnSystem,
   Curiosity,
   FearState,
   FeedingDrive,
@@ -31,11 +35,13 @@ import {
   Territory,
   Velocity,
   animationSystem,
+  collisionSystem,
   createLivestockWorld,
   curiositySystem,
   depthSystem,
   fearSystem,
   feedingSystem,
+  flowFieldSystem,
   foodSpriteLifetimeSystem,
   kinematicSystem,
   nippingSystem,
@@ -158,6 +164,41 @@ describe('public API surface', () => {
     expect(w.getFoodSpriteCount()).toBe(1);
     // Unregistered eid → null.
     expect(w.getAlgaeScore(999999)).toBeNull();
+  });
+
+  it('exposes the F11.5 Wave 4 systems + world API', () => {
+    expect(typeof flowFieldSystem).toBe('function');
+    expect(typeof collisionSystem).toBe('function');
+    const w = createLivestockWorld(0);
+    expect(typeof w.registerFlowField).toBe('function');
+    expect(typeof w.registerHardscapeSdf).toBe('function');
+    expect(typeof w.getFlowField).toBe('function');
+    expect(typeof w.getHardscapeSdf).toBe('function');
+    expect(w.getFlowField()).toBeNull();
+    expect(w.getHardscapeSdf()).toBeNull();
+  });
+
+  it('exposes the F11.5 Wave 5 BubbleParticle component + systems + world API', () => {
+    expect(BubbleParticle).toBeDefined();
+    expect(typeof bubbleSourceSpawnSystem).toBe('function');
+    expect(typeof bubbleLifetimeSystem).toBe('function');
+    expect(BUBBLE_GLOBAL_CAP_COUNT).toBe(200);
+    const w = createLivestockWorld(0);
+    expect(typeof w.registerBubbleSources).toBe('function');
+    expect(typeof w.getBubbleParticleCount).toBe('function');
+    expect(typeof w.getBubbleSourceCount).toBe('function');
+    expect(w.getBubbleSourceCount()).toBe(0);
+    expect(w.getBubbleParticleCount()).toBe(0);
+  });
+
+  it('F11.5 Wave 5 WorldSnapshot has additive bubble slab fields', () => {
+    const w = createLivestockWorld(0);
+    w.registerBubbleSources([{ position: { x: 200, y: 20, z: 200 }, airRateMl: 800 }]);
+    w.step(SIM_DT);
+    const snap = w.snapshot(0);
+    expect(typeof snap.bubbleCount).toBe('number');
+    expect(snap.bubblePosition).toBeInstanceOf(Float32Array);
+    expect(snap.bubblePosition.length).toBe(snap.bubbleCount * 3);
   });
 
   it('F11.4 WorldSnapshot has additive food sprite fields', () => {

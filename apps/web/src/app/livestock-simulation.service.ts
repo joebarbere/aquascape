@@ -77,10 +77,17 @@ import { Store } from '@ngrx/store';
 import { coreCatalog } from '@aquascape/domain/catalog';
 import type {
   Catalog,
+  EquipmentEntry as CatalogEquipmentEntry,
   HardscapeEntry as CatalogHardscapeEntry,
   LivestockEntry as CatalogLivestockEntry,
 } from '@aquascape/domain/catalog';
 import { archetypeForSpecies, type FishArchetypeId } from '@aquascape/domain/fish-anatomy';
+import {
+  bakeFlowField,
+  bakeHardscapeSdf,
+  type FlowSource,
+  type HardscapeSphere,
+} from '@aquascape/domain/fluid-sim';
 import {
   resolveBehavior,
   type BehaviorResolutionInput,
@@ -93,11 +100,17 @@ import {
   NO_BEHAVIOR_HANDLE,
   createLivestockWorld,
   tickPrng,
+  type BubbleSourceRegistration,
   type HardscapeRegistrationEntry,
   type LivestockWorld,
   type TankAabb,
 } from '@aquascape/domain/livestock-ecs';
-import type { HardscapeObject, LivestockEntry, Scene } from '@aquascape/domain/scene-model';
+import type {
+  EquipmentEntry,
+  HardscapeObject,
+  LivestockEntry,
+  Scene,
+} from '@aquascape/domain/scene-model';
 import { LivestockPulseActions, selectScene } from '@aquascape/state';
 
 /** Body length when the catalog entry can't be resolved (mm). */
@@ -112,6 +125,23 @@ const FOOD_SPRITE_SURFACE_OFFSET_MM = 20;
 /** F11.4 — bounds for the random sprite-count default (inclusive). */
 const FOOD_SPRITE_DEFAULT_MIN = 3;
 const FOOD_SPRITE_DEFAULT_MAX = 6;
+
+/**
+ * F11.5 — fallback sphere radius for the hardscape SDF bake (mm). The
+ * scene-model `HardscapeObject` doesn't carry a body-radius today, and the
+ * catalog's `naturalSize` is a `{ width, height, depth }` AABB rather than
+ * a sphere — both are coarse approximations relative to the actual mesh.
+ *
+ * 50 mm is the sensible default for the small/medium rocks the demo
+ * catalog ships (matches the order-of-magnitude of `naturalSize.width`
+ * for `hardscape.rock.seiryu` and friends). When the catalog row's
+ * `naturalSize` is present we use **half of the longest dimension**
+ * instead — a "bounding sphere of the bounding box" approximation that
+ * scales correctly for both small pebbles and large boulders without
+ * importing the full mesh geometry. F11.6's perf pass will likely refine
+ * to per-mesh AABB → SDF; this is the F11.5 placeholder.
+ */
+const HARDSCAPE_SDF_FALLBACK_RADIUS_MM = 50;
 
 /**
  * Service that owns the `LivestockWorld` for the running app. Lazily
@@ -291,7 +321,16 @@ export class LivestockSimulationService implements OnDestroy {
     // onSceneChanged so the same array drives both the spawnKey
     // fingerprint and the world.registerHardscape call below.
     const hardscape = collectHardscape(scene, this.catalog);
-    const key = this.spawnKey(scene.seed, livestock, scene.tank, hardscape);
+    // F11.5 Wave 5: equipment-driven inputs for FlowField bake +
+    // HardscapeSdf bake + bubble-source registration. All three are
+    // pure derivations from the scene + catalog; built once per
+    // onSceneChanged so the spawnKey fingerprint and the world
+    // register* calls see the exact same arrays.
+    const equipment = scene.equipment ?? [];
+    const flowSources = collectFlowSources(equipment, this.catalog);
+    const bubbleSources = collectBubbleSources(equipment, this.catalog, scene);
+    const sphereInputs = collectHardscapeSpheres(scene, this.catalog);
+    const key = this.spawnKey(scene.seed, livestock, scene.tank, hardscape, equipment);
     const tankAabb = tankAabbFromScene(scene);
 
     // No livestock at all → tear down the world entirely so the
@@ -314,6 +353,9 @@ export class LivestockSimulationService implements OnDestroy {
       // Hardscape MUST be registered before spawnAll so spawnFish's
       // auto-anchor pass can see refuges within range.
       this.world.registerHardscape(hardscape);
+      // F11.5: bake + register flow + SDF + bubble sources BEFORE spawn
+      // so the world is fully populated when fish first integrate.
+      this.wireFluidAndBubbles(this.world, tankAabb, flowSources, sphereInputs, bubbleSources);
       this.spawnAll(this.world, scene, livestock);
       this.lastSpawnKey = key;
       return;
@@ -344,8 +386,53 @@ export class LivestockSimulationService implements OnDestroy {
     // contract simple: post-rebuild, the world's hardscape state
     // always matches the latest scene.
     this.world.registerHardscape(hardscape);
+    // F11.5: re-bake + re-register flow + SDF + bubble sources on every
+    // rebuild. Empty inputs clear (pass null / empty array). Spawn fish
+    // LAST so auto-anchor + initial bubble debt are consistent with the
+    // fully-populated world state.
+    this.wireFluidAndBubbles(this.world, tankAabb, flowSources, sphereInputs, bubbleSources);
     this.spawnAll(this.world, scene, livestock);
     this.lastSpawnKey = key;
+  }
+
+  /**
+   * F11.5 Wave 5 — bake + register flow field + hardscape SDF + bubble
+   * sources on the given world. Centralised so the "first time" and
+   * "existing world" branches in `onSceneChanged` share the same
+   * empty-input semantics:
+   *
+   *   - Empty `flowSources` → register null (no current, FlowFieldSystem
+   *     early-returns and pays zero cost per tick).
+   *   - Empty `sphereInputs` → register null (CollisionSystem still runs
+   *     fish-vs-fish separation, just no SDF deflect pass).
+   *   - Empty `bubbleSources` → register [] (bubble systems early-return
+   *     on `count === 0`; any live bubbles still rise + pop naturally).
+   *
+   * The bake itself is pure + deterministic — same inputs always produce
+   * the same typed-array outputs (see `domain/fluid-sim`'s spec).
+   */
+  private wireFluidAndBubbles(
+    world: LivestockWorld,
+    tankAabb: TankAabb,
+    flowSources: ReadonlyArray<FlowSource>,
+    sphereInputs: ReadonlyArray<HardscapeSphere>,
+    bubbleSources: ReadonlyArray<BubbleSourceRegistration>,
+  ): void {
+    const aabb3 = {
+      min: { x: tankAabb.minX, y: tankAabb.minY, z: tankAabb.minZ },
+      max: { x: tankAabb.maxX, y: tankAabb.maxY, z: tankAabb.maxZ },
+    };
+    if (flowSources.length > 0) {
+      world.registerFlowField(bakeFlowField({ tankAabb: aabb3, sources: flowSources }));
+    } else {
+      world.registerFlowField(null);
+    }
+    if (sphereInputs.length > 0) {
+      world.registerHardscapeSdf(bakeHardscapeSdf({ tankAabb: aabb3, hardscape: sphereInputs }));
+    } else {
+      world.registerHardscapeSdf(null);
+    }
+    world.registerBubbleSources(bubbleSources);
   }
 
   /**
@@ -369,6 +456,7 @@ export class LivestockSimulationService implements OnDestroy {
     livestock: readonly LivestockEntry[],
     tank: Scene['tank'],
     hardscape: readonly HardscapeRegistrationEntry[],
+    equipment: readonly EquipmentEntry[],
   ): string {
     const parts = livestock.map(
       (e) => `${e.id}:${e.ref.catalog}/${e.ref.id}@${e.ref.version}:${e.quantity}`,
@@ -383,7 +471,17 @@ export class LivestockSimulationService implements OnDestroy {
       (h) =>
         `${h.category}:${Math.round(h.position.x)},${Math.round(h.position.y)},${Math.round(h.position.z)}:${h.coverScore.toFixed(3)}`,
     );
-    return `${seed | 0}|${tank.width}x${tank.height}x${tank.depth}|${parts.join('|')}|H:${hardparts.join('|')}`;
+    // F11.5 Wave 5: equipment fingerprint. Catalog ref (drives flow +
+    // airRateMl lookups) is the load-bearing axis — settings are
+    // user-facing knobs the bake doesn't consume yet. Iteration order
+    // is `scene.equipment` document order — same stability contract as
+    // the livestock + hardscape parts. If an entry gains a per-instance
+    // position field in a future stage, fingerprint it here so a moved
+    // air stone re-bakes; for F11.5 the catalog row owns the position.
+    const eqparts = equipment.map(
+      (e) => `${e.id}:${e.ref.catalog}/${e.ref.id}@${e.ref.version}`,
+    );
+    return `${seed | 0}|${tank.width}x${tank.height}x${tank.depth}|${parts.join('|')}|H:${hardparts.join('|')}|E:${eqparts.join('|')}`;
   }
 
   /** Despawn every fish in the world. Used on re-spawn (same seed). */
@@ -709,6 +807,132 @@ function isLivestockRow(catalogRow: unknown): boolean {
  * map to `HARDSCAPE_CATEGORY.PLANT` if they were ever registered here,
  * but they're not.
  */
+/**
+ * F11.5 Wave 5 — Walk a scene's equipment entries and project to
+ * `FlowSource[]` for `bakeFlowField`. Only equipment whose catalog row
+ * declares `flow?: { ... }` contributes; everything else is skipped (zero
+ * contribution to the field is identical to "not present at all" once the
+ * source set is empty, so we keep the array small for the bake's hot loop).
+ *
+ * Iteration order = document order — load-bearing for determinism: the
+ * bake's Gaussian deposit sums in iteration order, and floating-point
+ * summation isn't associative, so reshuffling sources would produce a
+ * different field on the same inputs.
+ */
+function collectFlowSources(
+  equipment: readonly EquipmentEntry[],
+  catalog: Catalog,
+): FlowSource[] {
+  const out: FlowSource[] = [];
+  for (const eq of equipment) {
+    const row = catalog.get(eq.ref);
+    if (row === null || row.kind !== 'equipment') continue;
+    const eqRow = row as CatalogEquipmentEntry;
+    if (eqRow.flow === undefined) continue;
+    const fs: FlowSource = {
+      outflowPos: eqRow.flow.outflowPos ?? { x: 0, y: 0, z: 0 },
+      outflowVec: eqRow.flow.outflowVec ?? { x: 0, y: 0, z: 1 },
+      flowRate: eqRow.flow.flowRate ?? 200,
+      // Spread an optional intakePos via the spread trick so we never
+      // assign `undefined` (which `exactOptionalPropertyTypes` forbids
+      // for declared-optional fields).
+      ...(eqRow.flow.intakePos !== undefined ? { intakePos: eqRow.flow.intakePos } : {}),
+    };
+    out.push(fs);
+  }
+  return out;
+}
+
+/**
+ * F11.5 Wave 5 — Walk a scene's equipment entries and project to
+ * `BubbleSourceRegistration[]`. Only entries whose catalog row declares
+ * `airRateMl > 0` contribute (an `airRateMl: 0` row is a documented
+ * sentinel for "this is technically an air stone but produces no visible
+ * bubbles" — we treat it as no source).
+ *
+ * Position resolution policy:
+ *   1. Catalog row's `flow.outflowPos` if present (an air-driven sponge
+ *      filter is often both a flow source AND a bubble source, and the
+ *      outflow position is the natural emission point).
+ *   2. Otherwise tank center-bottom (`width/2, 0, depth/2`) — the
+ *      typical air-stone placement when authoring.
+ *
+ * Documented as a placeholder until the document format gains a per-
+ * equipment-instance position field; for F11.5 the catalog row owns it.
+ * Flagged for review in the agent report.
+ */
+function collectBubbleSources(
+  equipment: readonly EquipmentEntry[],
+  catalog: Catalog,
+  scene: Scene,
+): BubbleSourceRegistration[] {
+  const out: BubbleSourceRegistration[] = [];
+  for (const eq of equipment) {
+    const row = catalog.get(eq.ref);
+    if (row === null || row.kind !== 'equipment') continue;
+    const eqRow = row as CatalogEquipmentEntry;
+    if (eqRow.airRateMl === undefined || eqRow.airRateMl <= 0) continue;
+    const position = eqRow.flow?.outflowPos ?? {
+      x: scene.tank.width / 2,
+      y: 0,
+      z: scene.tank.depth / 2,
+    };
+    out.push({ position, airRateMl: eqRow.airRateMl });
+  }
+  return out;
+}
+
+/**
+ * F11.5 Wave 5 — Walk a scene's hardscape SceneObjects and project to
+ * `HardscapeSphere[]` for the SDF bake. The scene-model doesn't ship a
+ * sphere-radius today; we approximate from the catalog row's
+ * `naturalSize` (half of the longest dim, "bounding sphere of bounding
+ * box") and fall back to `HARDSCAPE_SDF_FALLBACK_RADIUS_MM` when the
+ * row is missing or has no `naturalSize`.
+ *
+ * Iteration order matches `collectHardscape` (document order) so the
+ * SDF bake's per-sphere min reduction sees the same input ordering as
+ * the bitECS Hardscape registration — keeps the per-cell SDF value
+ * byte-identical across two cold service builds with the same scene.
+ */
+function collectHardscapeSpheres(scene: Scene, catalog: Catalog): HardscapeSphere[] {
+  const out: HardscapeSphere[] = [];
+  for (const layer of scene.layers) {
+    for (const obj of layer.objects) {
+      if (obj.kind !== 'hardscape') continue;
+      const row = catalog.get(obj.ref);
+      const hardscapeRow =
+        row !== null && row.kind === 'hardscape' ? (row as CatalogHardscapeEntry) : null;
+      const radius = sphereRadiusForHardscape(hardscapeRow);
+      out.push({
+        position: {
+          x: obj.transform.position.x,
+          y: obj.transform.position.y,
+          z: obj.transform.position.z,
+        },
+        radius,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Pick a sphere radius approximating the hardscape entry's mesh extent.
+ * Half of the longest `naturalSize` dim is the "bounding sphere of the
+ * bounding box" — coarse but correct in order of magnitude for both
+ * small pebbles + large boulders. Falls back to the const when
+ * `naturalSize` is missing (catalog row absent or under-populated).
+ */
+function sphereRadiusForHardscape(row: CatalogHardscapeEntry | null): number {
+  if (row === null) return HARDSCAPE_SDF_FALLBACK_RADIUS_MM;
+  const ns = row.naturalSize;
+  if (ns === undefined) return HARDSCAPE_SDF_FALLBACK_RADIUS_MM;
+  const longest = Math.max(ns.width, ns.height, ns.depth);
+  if (!Number.isFinite(longest) || longest <= 0) return HARDSCAPE_SDF_FALLBACK_RADIUS_MM;
+  return longest * 0.5;
+}
+
 function collectHardscape(
   scene: Scene,
   catalog: Catalog,

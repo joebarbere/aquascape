@@ -71,6 +71,16 @@ export interface AquascapeDebugHandle {
    */
   getFoodSpriteCount(): number;
   /**
+   * F11.5 Wave 5 — count of currently-live bubble particle entities
+   * (transient ECS entities spawned by `bubbleSourceSpawnSystem` at each
+   * registered air-stone source, despawned at the waterline or via
+   * lifetime cap). Returns 0 when no world has been built yet (no
+   * livestock in the scene). The Playwright e2e uses this to verify
+   * an air-stone equipment entry actually produces a bubble column the
+   * renderer can billboard.
+   */
+  getBubbleParticleCount(): number;
+  /**
    * The current `Scene` from the NgRx store, or `null` before the first
    * store emission. Returns the same object reference the renderer would
    * read on its next paint.
@@ -130,6 +140,14 @@ export function attachDebugHook(deps: {
       const world = deps.livestockSim.getWorld();
       if (world === null) return 0;
       return world.getFoodSpriteCount();
+    },
+    getBubbleParticleCount: () => {
+      // F11.5 Wave 5 — bubble particles live in their own
+      // BubbleParticle-tagged bitECS query (independent of fish + food
+      // sprites). The world owns the accessor; we just forward.
+      const world = deps.livestockSim.getWorld();
+      if (world === null) return 0;
+      return world.getBubbleParticleCount();
     },
     getScene: () => {
       // NgRx Stores are BehaviorSubjects under the hood — subscribing

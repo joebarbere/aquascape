@@ -25,6 +25,7 @@ import {
   type IWorld,
 } from 'bitecs';
 import type { ResolvedBehavior } from '@aquascape/domain/livestock-behaviors';
+import type { FlowField, HardscapeSdf } from '@aquascape/domain/fluid-sim';
 import {
   AnimationPhase,
   Archetype,
@@ -32,6 +33,7 @@ import {
   BehaviorParamsRef,
   BEHAVIOR_MODE,
   BodyLength,
+  BubbleParticle,
   Curiosity,
   FearState,
   FeedingDrive,
@@ -52,10 +54,12 @@ import { NO_BEHAVIOR_HANDLE, ParamStore } from './param-store';
 import { SpatialGrid } from './spatial-grid';
 import {
   animationSystem,
+  collisionSystem,
   curiositySystem,
   depthSystem,
   fearSystem,
   feedingSystem,
+  flowFieldSystem,
   foodSpriteLifetimeSystem,
   kinematicSystem,
   nippingSystem,
@@ -64,6 +68,11 @@ import {
   steeringIntegrator,
   territorialSystem,
 } from './systems';
+import {
+  BUBBLE_SCALE,
+  bubbleLifetimeSystem,
+  bubbleSourceSpawnSystem,
+} from './bubble-system';
 
 /** Fixed simulation time-step, in seconds. 30 Hz — matches the plan. */
 export const SIM_DT = 1 / 30;
@@ -146,6 +155,41 @@ export interface HardscapeRegistrationEntry {
 }
 
 /**
+ * One air-stone bubble source passed to `world.registerBubbleSources` (Stage
+ * 11 F11.5 Wave 5). The `LivestockSimulationService` builds these from
+ * equipment entries whose catalog row declares `airRateMl > 0`.
+ */
+export interface BubbleSourceRegistration {
+  /** Air-stone position in canonical mm coords. Bubbles spawn just above. */
+  position: { x: number; y: number; z: number };
+  /** Volumetric air rate (mL/min). Drives spawn rate via `BUBBLE_SCALE`. */
+  airRateMl: number;
+}
+
+/**
+ * @internal — parallel-typed-array store for the registered bubble sources.
+ * Surfaced on the world via `world.__bubbleSources` so the spawn system
+ * can hot-read without going through a closure. Re-allocated only when
+ * the source count changes; per-tick mutation overwrites
+ * `spawnAccumulator` + `spawnSequence` in place.
+ */
+export interface BubbleSourceStore {
+  count: number;
+  /** Stride 1 — source position X (mm). */
+  posX: Float32Array;
+  /** Stride 1 — source position Y (mm). */
+  posY: Float32Array;
+  /** Stride 1 — source position Z (mm). */
+  posZ: Float32Array;
+  /** Particles per second (= `airRateMl / 60 * BUBBLE_SCALE`). */
+  rateParticlesPerSec: Float32Array;
+  /** Running fractional spawn debt per source. */
+  spawnAccumulator: Float32Array;
+  /** Monotonic spawn counter per source — partition key for `tickPrng` jitter. */
+  spawnSequence: Uint32Array;
+}
+
+/**
  * Renderer-facing snapshot of the world. The returned typed arrays may be
  * *pooled* (recycled on the next `snapshot()` call) — consumers that need
  * the data outside a single InstancedMesh upload must copy.
@@ -180,6 +224,23 @@ export interface WorldSnapshot {
   foodSpriteCount: number;
   /** Stride 3 — x,y,z per sprite. Length = `foodSpriteCount * 3`. */
   foodSpritePosition: Float32Array;
+  /**
+   * F11.5 Wave 5 — number of currently-live bubble particles. Reset to 0
+   * when no air-stone source is registered or every bubble has popped.
+   *
+   * The parallel `livestock-renderer-3d/` agent reads this slab to size
+   * its 8th InstancedMesh (the bubble billboard layer). Contract:
+   *   - `bubblePosition` is stride 3 (`x, y, z`), length = `bubbleCount * 3`.
+   *   - The typed array is **pooled** — the next `snapshot()` call may
+   *     mutate it in place. Consumers that need to retain the data past
+   *     the next call must copy.
+   *   - Fish + sprite slabs are unaffected — bubbles live in their own
+   *     query so earlier renderers (F11.1–F11.4) keep working without
+   *     modification.
+   */
+  bubbleCount: number;
+  /** Stride 3 — x,y,z per bubble. Length = `bubbleCount * 3`. */
+  bubblePosition: Float32Array;
 }
 
 /**
@@ -198,6 +259,8 @@ export interface LivestockWorld {
   readonly ecs: IWorld;
   /** @internal — shared mutable state between world + systems. */
   readonly __internals: LivestockWorldInternals;
+  /** @internal — parallel-typed-array store read by the bubble systems. */
+  readonly __bubbleSources: BubbleSourceStore;
   /** Caller-supplied PRNG seed (typically `document.seed`). Frozen at creation. */
   readonly seed: number;
   /** Increments by 1 on every `step()` call. */
@@ -277,6 +340,54 @@ export interface LivestockWorld {
    * Tests + debug surface; FeedingSystem reads the SoA slab directly.
    */
   getAlgaeScore(hardscapeEid: number): number | null;
+  /**
+   * F11.5 Wave 4 — register the baked `FlowField` for `FlowFieldSystem`
+   * to sample each tick. Pass `null` to clear (empty tanks have no
+   * current). The world stores the reference as-is (no copy) — the
+   * `LivestockSimulationService` owns the lifetime and re-bakes when the
+   * scene's equipment / tank dims change. Replacing an existing field
+   * just overwrites the slot.
+   */
+  registerFlowField(field: FlowField | null): void;
+  /**
+   * F11.5 Wave 4 — register the baked `HardscapeSdf` for `CollisionSystem`
+   * to sample each tick. Pass `null` to clear (no hardscape collision —
+   * only fish-vs-fish separation runs). Same lifetime + replacement
+   * semantics as `registerFlowField`.
+   */
+  registerHardscapeSdf(sdf: HardscapeSdf | null): void;
+  /**
+   * F11.5 Wave 4 — diagnostic accessor for the currently-registered flow
+   * field. `null` when none registered. Used by `FlowFieldSystem`'s
+   * early-return path and by tests; the sim service should hold its own
+   * reference to the bake it produced.
+   */
+  getFlowField(): FlowField | null;
+  /**
+   * F11.5 Wave 4 — diagnostic accessor for the currently-registered
+   * hardscape SDF. `null` when none registered. Used by `CollisionSystem`'s
+   * SDF-pass early return and by tests.
+   */
+  getHardscapeSdf(): HardscapeSdf | null;
+  /**
+   * F11.5 Wave 5 — replace the set of air-stone bubble sources. Passing
+   * `[]` clears every source (the bubble systems early-out on
+   * `sources.count === 0`). Existing live bubble particles are NOT
+   * despawned on re-registration — they continue to rise + pop naturally
+   * via `bubbleLifetimeSystem`. The sim service calls this on every
+   * scene change; idempotent at the world API surface.
+   *
+   * `airRateMl` is the catalog row's manufacturer figure (mL/min); the
+   * system converts to particles/sec via `BUBBLE_SCALE`. Sources with
+   * `airRateMl <= 0` are stored verbatim (so byKind queries surface the
+   * count correctly) but never spawn — the spawn loop skips zero-rate
+   * sources for free.
+   */
+  registerBubbleSources(sources: ReadonlyArray<BubbleSourceRegistration>): void;
+  /** F11.5 Wave 5 — count of currently-live BubbleParticle entities. Tests + debug-hook. */
+  getBubbleParticleCount(): number;
+  /** F11.5 Wave 5 — count of currently-registered bubble sources. Tests. */
+  getBubbleSourceCount(): number;
   /** Run one sim tick of duration `dt` (callers pass `SIM_DT`). */
   step(dt: number): void;
   /**
@@ -294,6 +405,7 @@ export interface LivestockWorld {
 // sprites out of the fish slab cleanly.
 const FISH_ENTITIES = defineQuery([Position, Orientation]);
 const FOOD_SPRITE_ENTITIES = defineQuery([FoodSprite, Position]);
+const BUBBLE_ENTITIES = defineQuery([BubbleParticle, Position]);
 
 /** Cheap mutable scratch struct passed to `addComponent` paths. */
 interface SnapshotPool {
@@ -307,9 +419,16 @@ interface SnapshotPool {
   /** F11.4 — food sprite slab. Grown independently of the fish slab. */
   foodSpritePosition: Float32Array;
   foodSpriteCapacity: number;
+  /** F11.5 Wave 5 — bubble particle slab. Grown independently of fish + sprites. */
+  bubblePosition: Float32Array;
+  bubbleCapacity: number;
 }
 
-function makeSnapshotPool(capacity: number, spriteCapacity = 16): SnapshotPool {
+function makeSnapshotPool(
+  capacity: number,
+  spriteCapacity = 16,
+  bubbleCapacity = 32,
+): SnapshotPool {
   return {
     ids: new Uint32Array(capacity),
     position: new Float32Array(capacity * 3),
@@ -320,13 +439,15 @@ function makeSnapshotPool(capacity: number, spriteCapacity = 16): SnapshotPool {
     capacity,
     foodSpritePosition: new Float32Array(spriteCapacity * 3),
     foodSpriteCapacity: spriteCapacity,
+    bubblePosition: new Float32Array(bubbleCapacity * 3),
+    bubbleCapacity,
   };
 }
 
 function growPool(pool: SnapshotPool, needed: number): SnapshotPool {
   let cap = pool.capacity;
   while (cap < needed) cap *= 2;
-  return makeSnapshotPool(cap, pool.foodSpriteCapacity);
+  return makeSnapshotPool(cap, pool.foodSpriteCapacity, pool.bubbleCapacity);
 }
 
 function growSpritePool(pool: SnapshotPool, needed: number): void {
@@ -334,6 +455,26 @@ function growSpritePool(pool: SnapshotPool, needed: number): void {
   while (cap < needed) cap *= 2;
   pool.foodSpritePosition = new Float32Array(cap * 3);
   pool.foodSpriteCapacity = cap;
+}
+
+function growBubblePool(pool: SnapshotPool, needed: number): void {
+  let cap = pool.bubbleCapacity;
+  while (cap < needed) cap *= 2;
+  pool.bubblePosition = new Float32Array(cap * 3);
+  pool.bubbleCapacity = cap;
+}
+
+/** Build an empty BubbleSourceStore (count = 0, zero-length typed arrays). */
+function makeEmptyBubbleSourceStore(): BubbleSourceStore {
+  return {
+    count: 0,
+    posX: new Float32Array(0),
+    posY: new Float32Array(0),
+    posZ: new Float32Array(0),
+    rateParticlesPerSec: new Float32Array(0),
+    spawnAccumulator: new Float32Array(0),
+    spawnSequence: new Uint32Array(0),
+  };
 }
 
 /**
@@ -393,11 +534,26 @@ export function createLivestockWorld(
   // hardscape eids, used by `getHardscapeCount` + the re-registration path.
   let hardscapeEids: number[] = [];
 
+  // F11.5 Wave 4 — registered fluid bakes. The world holds a reference (no
+  // copy) so the sim service can re-register a fresh bake without a full
+  // world rebuild. Both slots default to null — empty tank, no current, no
+  // SDF collision. FlowFieldSystem + CollisionSystem early-return when
+  // their slot is null so the no-equipment fast path costs nothing.
+  let flowField: FlowField | null = null;
+  let hardscapeSdf: HardscapeSdf | null = null;
+
+  // F11.5 Wave 5 — air-stone bubble sources. Parallel typed arrays sized to
+  // `sources.count`; re-allocated only when the count changes. Mutating
+  // the per-source slots in place (spawnAccumulator, spawnSequence) keeps
+  // the spawn loop allocation-free in the hot path.
+  const bubbleSources: BubbleSourceStore = makeEmptyBubbleSourceStore();
+
   // `tickCounter` and `seed` live on the world object so `tickPrng(world,…)`
   // can read them without a closure variable per tick.
   const world: LivestockWorld = {
     ecs,
     __internals: { pendingStartles },
+    __bubbleSources: bubbleSources,
     seed: seed | 0,
     tickCounter: 0,
     paramStore,
@@ -630,11 +786,76 @@ export function createLivestockWorld(
       return Hardscape.algaeScore[hardscapeEid] as number;
     },
 
+    registerFlowField(field: FlowField | null): void {
+      // Store the caller's reference as-is. The sim service owns the
+      // typed-array lifetime — it re-bakes on equipment / tank change
+      // and re-registers; we just point at whichever bake is live now.
+      flowField = field;
+    },
+
+    registerHardscapeSdf(sdf: HardscapeSdf | null): void {
+      // Same lifetime contract as registerFlowField — reference-only,
+      // service owns the bake.
+      hardscapeSdf = sdf;
+    },
+
+    getFlowField(): FlowField | null {
+      return flowField;
+    },
+
+    getHardscapeSdf(): HardscapeSdf | null {
+      return hardscapeSdf;
+    },
+
+    registerBubbleSources(sources: ReadonlyArray<BubbleSourceRegistration>): void {
+      const n = sources.length;
+      // Only re-allocate when the count actually changes — keeps the
+      // typical "re-emit on every scene change with the same equipment
+      // shape" path allocation-free at the source store. A change in
+      // position/airRateMl with the same count overwrites in place.
+      if (n !== bubbleSources.count) {
+        bubbleSources.count = n;
+        bubbleSources.posX = new Float32Array(n);
+        bubbleSources.posY = new Float32Array(n);
+        bubbleSources.posZ = new Float32Array(n);
+        bubbleSources.rateParticlesPerSec = new Float32Array(n);
+        bubbleSources.spawnAccumulator = new Float32Array(n);
+        bubbleSources.spawnSequence = new Uint32Array(n);
+      } else {
+        // Zero only the per-tick mutable slabs — position + rate get
+        // overwritten unconditionally below. Resetting accumulator +
+        // sequence on a re-register keeps determinism: two services
+        // built from the same scene see the same starting state.
+        bubbleSources.spawnAccumulator.fill(0);
+        bubbleSources.spawnSequence.fill(0);
+      }
+      for (let i = 0; i < n; i++) {
+        const src = sources[i]!;
+        bubbleSources.posX[i] = src.position.x;
+        bubbleSources.posY[i] = src.position.y;
+        bubbleSources.posZ[i] = src.position.z;
+        // mL/min → particles/sec via BUBBLE_SCALE. The conversion is a
+        // single multiply so we hot-cache it on the store rather than
+        // recomputing every tick.
+        bubbleSources.rateParticlesPerSec[i] =
+          src.airRateMl > 0 ? (src.airRateMl / 60) * BUBBLE_SCALE : 0;
+      }
+    },
+
+    getBubbleParticleCount(): number {
+      return BUBBLE_ENTITIES(ecs).length;
+    },
+
+    getBubbleSourceCount(): number {
+      return bubbleSources.count;
+    },
+
     step(dt: number): void {
-      // F11.4 system order — see docs/caveats/livestock-ecs.md
+      // F11.5 Wave 5 system order — see docs/caveats/livestock-ecs.md
       //   Perception → Fear → Nip → Territory → Feeding → Curiosity →
-      //   Schooling → Depth → (Flow F11.5) → SteeringIntegrator →
-      //   (Collision F11.5) → Kinematic → Animation → FoodSpriteLifetime
+      //   Schooling → Depth → FlowField → SteeringIntegrator →
+      //   Collision → Kinematic → Animation → FoodSpriteLifetime
+      //     → bubbleSourceSpawn → bubbleLifetime
       //
       // Priority arbitration is implemented as early-out checks on
       // BehaviorMode in each downstream system: FearSystem may flip to
@@ -642,9 +863,19 @@ export function createLivestockWorld(
       // skip target-seeking via mode-guards so the refuge attraction
       // force is the only thing SteeringIntegrator sees. PURSUE (set by
       // Nip + Territory) likewise blocks Schooling/Feeding/Curiosity so
-      // the chase isn't diluted. FoodSpriteLifetime runs at the end so
-      // any sprite consumed mid-tick by FeedingSystem despawns
-      // unconditionally on the same tick it expires.
+      // the chase isn't diluted. FlowFieldSystem + CollisionSystem run
+      // mode-agnostic — flow is an environmental force, collision is
+      // physical reality. FoodSpriteLifetime runs at the end so any
+      // sprite consumed mid-tick by FeedingSystem despawns unconditionally
+      // on the same tick it expires.
+      //
+      // F11.5 Wave 5 — bubble particle systems run last (after every
+      // fish system). Spawn first so a freshly-emitted bubble has a
+      // position in the snapshot this tick; lifetime second so an
+      // already-rising bubble that crosses the waterline this tick is
+      // gone before snapshot() runs. Bubbles never interact with fish
+      // physically — clean separation from FoodSprite (which feedingSystem
+      // consumes) keeps the two systems independent.
       perceptionSystem(this);
       fearSystem(this, dt);
       nippingSystem(this, dt);
@@ -653,7 +884,9 @@ export function createLivestockWorld(
       curiositySystem(this, dt);
       schoolingSystem(this, dt);
       depthSystem(this, dt);
+      flowFieldSystem(this);
       steeringIntegrator(this, dt);
+      collisionSystem(this);
       kinematicSystem(ecs, dt);
       // Clamp Position to tankAabb after Kinematic — SteeringIntegrator's
       // projection should prevent escapes, but rounding error can still
@@ -661,6 +894,8 @@ export function createLivestockWorld(
       clampPositionToAabb(ecs, this.tankAabb);
       animationSystem(ecs, dt);
       foodSpriteLifetimeSystem(this, dt);
+      bubbleSourceSpawnSystem(this, dt);
+      bubbleLifetimeSystem(this, dt);
       this.tickCounter += 1;
     },
 
@@ -709,6 +944,41 @@ export function createLivestockWorld(
         j++;
       }
 
+      // F11.5 Wave 5 — bubble particle slab. Another separate query,
+      // another pooled Float32Array. The renderer's 8th InstancedMesh
+      // (bubble billboards) reads `bubblePosition` to set per-instance
+      // translation. Bubbles have no orientation / archetype / scale —
+      // billboards always face the camera and use a single fixed sprite
+      // size, so a stride-3 position slab is all the renderer needs.
+      //
+      // CROSS-WORLD DETERMINISM: bitECS' query returns entities in eid
+      // allocation order, but eids come from a module-global cursor — two
+      // cold worlds get distinct ranges and the raw iteration order would
+      // silently break byte-identical determinism replay. Sort by the
+      // `(sourceEid, spawnSeq)` pair stamped on each bubble at spawn time
+      // (see BubbleParticle JSDoc) before draining into the snapshot.
+      const bubbles = BUBBLE_ENTITIES(ecs);
+      const b = bubbles.length;
+      if (b > pool.bubbleCapacity) growBubblePool(pool, b);
+      // Build a sort index once per snapshot. Cap at ~200 bubbles, so
+      // O(b log b) is trivial and the allocation amortises across many
+      // ticks (the renderer drives ~60 snapshots/sec).
+      const sortedBubbles = Array.from(bubbles).sort((a, c) => {
+        const sa = BubbleParticle.sourceEid[a] as number;
+        const sc = BubbleParticle.sourceEid[c] as number;
+        if (sa !== sc) return sa - sc;
+        const qa = BubbleParticle.spawnSeq[a] as number;
+        const qc = BubbleParticle.spawnSeq[c] as number;
+        return qa - qc;
+      });
+      let k = 0;
+      for (const bEid of sortedBubbles) {
+        pool.bubblePosition[k * 3 + 0] = Position.x[bEid] as number;
+        pool.bubblePosition[k * 3 + 1] = Position.y[bEid] as number;
+        pool.bubblePosition[k * 3 + 2] = Position.z[bEid] as number;
+        k++;
+      }
+
       // Hand back *views* over the pool that match the live entity count.
       // The pool itself stays sized at `pool.capacity` so we don't reallocate
       // every frame.
@@ -722,6 +992,8 @@ export function createLivestockWorld(
         scale: pool.scale.subarray(0, n),
         foodSpriteCount: m,
         foodSpritePosition: pool.foodSpritePosition.subarray(0, m * 3),
+        bubbleCount: b,
+        bubblePosition: pool.bubblePosition.subarray(0, b * 3),
       };
     },
 
@@ -736,6 +1008,18 @@ export function createLivestockWorld(
       this.spatialGrid.clear();
       pendingStartles.clear();
       hardscapeEids = [];
+      flowField = null;
+      hardscapeSdf = null;
+      // Clear bubble sources but keep the typed arrays at length 0 (no
+      // GC churn — the next register call will reallocate based on the
+      // new source count anyway).
+      bubbleSources.count = 0;
+      bubbleSources.posX = new Float32Array(0);
+      bubbleSources.posY = new Float32Array(0);
+      bubbleSources.posZ = new Float32Array(0);
+      bubbleSources.rateParticlesPerSec = new Float32Array(0);
+      bubbleSources.spawnAccumulator = new Float32Array(0);
+      bubbleSources.spawnSequence = new Uint32Array(0);
     },
   };
 

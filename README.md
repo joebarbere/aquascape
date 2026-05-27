@@ -9,7 +9,7 @@
 [![main CI](https://github.com/joebarbere/aquascape/actions/workflows/main.yml/badge.svg)](https://github.com/joebarbere/aquascape/actions/workflows/main.yml)
 [![PR CI](https://github.com/joebarbere/aquascape/actions/workflows/pr.yml/badge.svg)](https://github.com/joebarbere/aquascape/actions/workflows/pr.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
-[![Status: Stages 0–7 + 10 + F11.1–F11.4 complete](https://img.shields.io/badge/status-stages%200--7%20%2B%2010%20%2B%20F11.1--F11.4-brightgreen.svg)](#status--roadmap)
+[![Status: Stages 0–7 + 10 + F11.1–F11.5 complete](https://img.shields.io/badge/status-stages%200--7%20%2B%2010%20%2B%20F11.1--F11.5-brightgreen.svg)](#status--roadmap)
 [![Platform: Web + Electron](https://img.shields.io/badge/platform-web%20%2B%20electron-informational.svg)](#platforms)
 
 </div>
@@ -107,6 +107,7 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 - **F11.2 shipped:** the fish now swim — Couzin three-zone schooling (ZOR / ZOO / ZOA with blind cone), Reynolds 1987 weighted separation / alignment / cohesion forces, vertical-band stratification (hatchetfish hug the surface, tetras roam mid-water, cories scoot along the substrate), turn-rate-clamped steering integrator. Catalog manifest `schemaVersion: 3` adds an optional `LivestockEntry.behavior` block so manifest authors can override per-species params one field at a time on top of the per-group presets.
 - **F11.3 shipped:** territoriality + nipping + fear. Cichlids defend caves (bourgeois owner-wins chase with fatigue decay), tiger barbs nip long-finned slow-swimming victims (suppressed once their conspecific group hits threshold), startled fish flip into REFUGE mode and dart to the nearest hardscape with `coverScore > 0`. Hardscape gains an optional `coverScore` (loader defaults from category — wood 0.6 / rock 0.4); livestock behaviour gains optional `territory` / `nipping` / required `fear` params. Priority arbitration: Fear → Nip → Territory → Schooling, mode-gated via `BehaviorMode`.
 - **F11.4 shipped:** feeding + grazing + curiosity/glass-surfing. Otocinclus graze algae off rocks (algae score decays under rasping + regrows ~17 min to full), hatchetfish + tetras + cories find food sprites at the right Y-band for their feeding category, shrimp + snails detrivore-wander the substrate; bold species curiously dart at the front pane on a Poisson trigger. A "Feed tank" button in the Livestock tool drops 3–6 food sprites just below the waterline (transient — sprites auto-despawn after 30s). Food sprites render as camera-facing billboards via a 7th InstancedMesh in the livestock renderer.
+- **F11.5 shipped:** flow field + hardscape SDF collision + bubble columns. A new `libs/domain/fluid-sim/` lib bakes a 32³ divergence-free FlowField from filter outflow + intake positions and a 64³ sphere-union HardscapeSdf for collision detection. FlowFieldSystem drags fish slightly toward intakes / away from outflows; CollisionSystem deflects velocity off rocks (tangent-project + repulsion) and separates overlapping fish. Air-stone equipment with `airRateMl > 0` registers as a bubble source — `BUBBLE_SCALE × airRateMl / 60` particles/sec rise from the stone at 150 mm/s, capped at 200 bubbles globally, despawning at the waterline. Catalog gained `EquipmentEntry.flow?` + `airRateMl?`. Bubbles render as an 8th InstancedMesh of small blue-white billboards.
 
 ### 📦 Templates
 
@@ -169,7 +170,8 @@ The roadmap lives in [`aquascape-development-plan.md`](./aquascape-development-p
 | 11 F11.2 | Schooling + vertical stratification — Couzin three-zone schooling, depth bands, turn-rate-clamped steering; catalog manifest schemaVersion 2 → 3 to host the optional `behavior` block. | ✅ |
 | 11 F11.3 | Territoriality + fin-nipping + hiding/timid — bourgeois owner-wins cave defense with fatigue, group-threshold-suppressed nipping, fear-driven REFUGE mode + nearest-cover refuge. Catalog `HardscapeEntry.coverScore?` + livestock `behavior.{territory,nipping,fear}`. | ✅ |
 | 11 F11.4 | Feeding + grazing + curiosity — hunger drive, six FeedingCategory branches (surface/midwater/substrate/algae-grazer/plant-eater/detritivore), algae score on hardscape (decays under rasping, regrows over sim-time), boldness-gated Poisson glass-surfing, transient food sprites from a "Feed tank" UI button. | ✅ |
-| 11 F11.5–F11.7 | Flow field + hardscape SDF + bubbles (F11.5), per-species presets + perf budget (F11.6), ambient polish — water surface, day-night, plant sway (F11.7). [Research bibliography](./docs/research/stage-11-livestock-subsystem.md). | 📐 Planned |
+| 11 F11.5 | Flow field + hardscape SDF collision + bubble columns — `libs/domain/fluid-sim/` bakes a divergence-free flow grid from filter equipment; CollisionSystem deflects fish off rocks + separates overlapping pairs; air-stone equipment spawns rising bubble billboards capped at 200 globally. | ✅ |
+| 11 F11.6–F11.7 | Per-species presets + perf budget (F11.6), ambient polish — water surface, day-night, plant sway (F11.7). [Research bibliography](./docs/research/stage-11-livestock-subsystem.md). | 📐 Planned |
 | 12 | Release pipeline — `pnpm release <version>`, electron-builder installers, GitHub Releases. Version scheme + first-release tag are an open decision (tracked inside the plan + a forthcoming ADR-0005); the script ships scheme-agnostic. See [`plans/stage-12-release-pipeline.md`](./plans/stage-12-release-pipeline.md). | 📐 Planned |
 
 ---
@@ -200,10 +202,11 @@ libs/
     catalog/       Substrates, hardscape, plants, livestock, equipment data
     document/      `.aqua` v1 schema, validator, migrations, marshal
     fish-anatomy/  Six procedural fish archetype geometry generators (Stage 11 F11.1)
+    fluid-sim/     FlowField + HardscapeSdf + BubbleStableFluids2D bakes (Stage 11 F11.5)
     geometry/      Vec2/3, transforms, hit-test, snap helpers
     growth-sim/    Deterministic plant-growth math
-    livestock-behaviors/  Schooling/Depth/Animation param types + per-group presets + resolveBehavior (Stage 11 F11.2)
-    livestock-ecs/ bitECS world + Perception/Schooling/Depth/SteeringIntegrator/Kinematic/Animation systems + ParamStore (Stage 11 F11.1+F11.2)
+    livestock-behaviors/  Schooling/Depth/Animation + Territory/Nipping/Fear + Feeding/Curiosity param types + presets + resolveBehavior (Stage 11 F11.2-F11.4)
+    livestock-ecs/ bitECS world + Perception/Fear/Nip/Territory/Feeding/Curiosity/Schooling/Depth/FlowField/SteeringIntegrator/Collision/Kinematic/Animation systems + ParamStore + bubble particles (Stage 11 F11.1-F11.5)
     scene-model/   Scene/Layer/Object types + Command pipeline + history
     stocking/      Stocking-guidance rules engine (F7.2)
   rendering/

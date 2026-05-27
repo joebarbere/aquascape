@@ -24,6 +24,8 @@ export { nippingSystem } from './nipping-system';
 export { territorialSystem } from './territorial-system';
 export { feedingSystem, foodSpriteLifetimeSystem } from './feeding-system';
 export { curiositySystem } from './curiosity-system';
+export { flowFieldSystem } from './flow-field-system';
+export { collisionSystem } from './collision-system';
 
 const TWO_PI = Math.PI * 2;
 

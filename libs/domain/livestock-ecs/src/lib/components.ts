@@ -272,3 +272,47 @@ export const FoodSprite = defineComponent({
   /** Satiation contribution per nibble. Decremented as the fish feeds. */
   calories: Types.f32,
 });
+
+/**
+ * Tag component — entity is a rising air-stone bubble (Stage 11 F11.5
+ * Wave 5).
+ *
+ * Spawned by `bubbleSourceSpawnSystem` at the registered air-stone position
+ * (with small per-spawn jitter from `tickPrng`); advected upward each tick
+ * by `bubbleLifetimeSystem` at a fixed `velocityY` mm/sec. Despawned when
+ * the bubble crosses the waterline (`tankAabb.maxY - BUBBLE_WATERLINE_INSET_MM`)
+ * OR its `lifetimeSec` reaches 0 — whichever fires first.
+ *
+ * Note: this is the **particle-only simplification** of the plan's
+ * `BubbleStableFluids2D` advect/diffuse/project loop. The fluid-sim lib
+ * still ships `BubbleStableFluids2D` for future fidelity passes; F11.5
+ * ships particles because they're deterministic, allocation-free in the
+ * hot loop, and render-cheap (one InstancedMesh, billboards).
+ *
+ * The renderer (parallel agent's `livestock-renderer-3d/`) reads
+ * `WorldSnapshot.bubbleCount + bubblePosition` to drive an InstancedMesh
+ * billboard count + per-instance translate attribute.
+ */
+export const BubbleParticle = defineComponent({
+  /** Rise speed in mm/sec. Typically ~150 (gentle air-stone column). */
+  velocityY: Types.f32,
+  /** Seconds remaining before auto-despawn (independent of waterline cap). */
+  lifetimeSec: Types.f32,
+  /**
+   * Source index (0-based into the registered bubble sources). Surfaces
+   * for tests + diagnostics — the system itself doesn't read it after
+   * spawn, but a future per-source colour/scale variation would.
+   */
+  sourceEid: Types.ui32,
+  /**
+   * Per-source monotonic spawn sequence at spawn time. Combined with
+   * `sourceEid` it forms a stable cross-world sort key for the bubble
+   * snapshot slab — bitECS allocates eids from a module-global cursor, so
+   * two cold worlds get different eid ranges and the raw query order
+   * would silently break byte-identical determinism replay. `snapshot()`
+   * uses `(sourceEid, spawnSeq)` lexicographic ordering to neutralise
+   * that. Mirrors the same fix the fish snapshot uses with
+   * `BehaviorParamsRef.spawnIndex`.
+   */
+  spawnSeq: Types.ui32,
+});

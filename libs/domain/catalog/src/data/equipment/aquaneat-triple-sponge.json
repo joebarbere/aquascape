@@ -10,5 +10,6 @@
   "coverageLitres": { "max": 200 },
   "description": "Air-driven triple-stack sponge filter prized in shrimp tanks and fry-rearing setups — gentle flow, no impeller, no risk of sucking up tiny inhabitants. Requires a separate air pump (sold separately); wattage and flow are therefore not published as filter-side specs.",
   "tags": ["sponge", "shrimp", "fry-safe", "air-driven", "nano", "biological"],
-  "defaultSettings": { "airFlowLpm": 2 }
+  "defaultSettings": { "airFlowLpm": 2 },
+  "airRateMl": 800
 }

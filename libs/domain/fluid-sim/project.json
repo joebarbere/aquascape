@@ -1,0 +1,19 @@
+{
+  "name": "domain-fluid-sim",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/fluid-sim/src",
+  "projectType": "library",
+  "tags": ["scope:domain", "type:lib", "framework:none", "domain:fluid-sim"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/domain/fluid-sim",
+        "main": "libs/domain/fluid-sim/src/index.ts",
+        "tsConfig": "libs/domain/fluid-sim/tsconfig.lib.json",
+        "assets": ["libs/domain/fluid-sim/*.md"]
+      }
+    }
+  }
+}

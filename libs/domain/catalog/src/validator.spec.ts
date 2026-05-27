@@ -1121,6 +1121,108 @@ describe('validateCatalogEntry (equipment, Stage 7 F7.3)', () => {
       }).ok,
     ).toBe(false);
   });
+
+  // ─── F11.5 flow + airRateMl (additive, no schemaVersion bump) ─────────────
+  describe('flow + airRateMl (Stage 11 F11.5)', () => {
+    it('accepts an equipment entry with no flow / airRateMl (forward-compat with v2/v3 manifests)', () => {
+      expect(validateCatalogEntry(validEquipment).ok).toBe(true);
+    });
+
+    it('accepts an empty flow block', () => {
+      expect(validateCatalogEntry({ ...validEquipment, flow: {} }).ok).toBe(true);
+    });
+
+    it('accepts a fully-specified flow block', () => {
+      expect(
+        validateCatalogEntry({
+          ...validEquipment,
+          flow: {
+            outflowPos: { x: 550, y: 320, z: 40 },
+            outflowVec: { x: -1, y: 0, z: 0 },
+            intakePos: { x: 50, y: 80, z: 40 },
+            flowRate: 700,
+          },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts a partial flow block (just flowRate)', () => {
+      expect(
+        validateCatalogEntry({ ...validEquipment, flow: { flowRate: 200 } }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts flowRate = 0 (sentinel for an equipped-but-off filter)', () => {
+      expect(
+        validateCatalogEntry({ ...validEquipment, flow: { flowRate: 0 } }).ok,
+      ).toBe(true);
+    });
+
+    it('rejects a negative flowRate', () => {
+      expect(
+        validateCatalogEntry({ ...validEquipment, flow: { flowRate: -10 } }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects a typo at the top of the flow block (additionalProperties: false)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validEquipment,
+          // typo: should be outflowVec
+          flow: { outflowVc: { x: 0, y: 0, z: 1 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects a Vec3 with a missing axis on flow.outflowPos', () => {
+      expect(
+        validateCatalogEntry({
+          ...validEquipment,
+          flow: { outflowPos: { x: 0, y: 0 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects extra keys inside a flow Vec3 (additionalProperties: false)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validEquipment,
+          flow: { outflowPos: { x: 0, y: 0, z: 0, w: 1 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects a non-numeric Vec3 axis on flow.outflowVec', () => {
+      expect(
+        validateCatalogEntry({
+          ...validEquipment,
+          flow: { outflowVec: { x: 'left', y: 0, z: 0 } },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('accepts airRateMl alongside flow', () => {
+      expect(
+        validateCatalogEntry({
+          ...validEquipment,
+          flow: { flowRate: 200 },
+          airRateMl: 500,
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('accepts airRateMl = 0 (sentinel for an air-stone with no visible bubbles)', () => {
+      expect(validateCatalogEntry({ ...validEquipment, airRateMl: 0 }).ok).toBe(true);
+    });
+
+    it('rejects a negative airRateMl', () => {
+      expect(validateCatalogEntry({ ...validEquipment, airRateMl: -50 }).ok).toBe(false);
+    });
+
+    it('rejects a non-numeric airRateMl', () => {
+      expect(validateCatalogEntry({ ...validEquipment, airRateMl: 'lots' }).ok).toBe(false);
+    });
+  });
 });
 
 describe('formatError (defensive fallbacks)', () => {

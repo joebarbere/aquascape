@@ -12,5 +12,11 @@
   "coverageLitres": { "min": 180, "max": 350 },
   "description": "Premium German-engineered canister filter with pre-filter cartridge and Xtender bypass for extended media-cleaning intervals. Manufacturer-rated pump output is 1050 L/h; effective in-tank turnover after media + plumbing losses is typically lower (real-world tests cite ~600-700 L/h), but we keep the manufacturer figure as the canonical spec.",
   "tags": ["canister", "premium", "planted", "high-flow", "200L+"],
-  "defaultSettings": { "flowPct": 100 }
+  "defaultSettings": { "flowPct": 100 },
+  "flow": {
+    "outflowPos": { "x": 550, "y": 320, "z": 40 },
+    "outflowVec": { "x": -1, "y": 0, "z": 0 },
+    "intakePos": { "x": 50, "y": 80, "z": 40 },
+    "flowRate": 700
+  }
 }

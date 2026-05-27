@@ -256,6 +256,82 @@ describe('loadCatalog — hardscape coverScore default-fill (F11.3)', () => {
   });
 });
 
+describe('loadCatalog — F11.5 equipment flow / airRateMl forward-compat', () => {
+  // Same v3 manifest schema — flow + airRateMl were added additively under
+  // the existing equipment branch. A manifest without them must keep
+  // loading; a manifest with them must round-trip the values so downstream
+  // FlowFieldSystem + BubbleParticleSystem see them.
+  const baseFilter = {
+    catalog: 'core',
+    id: 'equipment.filter.legacy-no-flow',
+    version: 1,
+    name: 'Legacy filter manifest (no flow)',
+    kind: 'equipment' as const,
+    category: 'filter' as const,
+    color: '#1f5b8a',
+  };
+
+  it('accepts an equipment manifest without flow / airRateMl', () => {
+    const result = loadCatalog([baseFilter]);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([]);
+    expect(result.catalog.entries.length).toBe(1);
+  });
+
+  it('preserves a fully-specified flow block on a manifest that declares it', () => {
+    const annotated = {
+      ...baseFilter,
+      id: 'equipment.filter.annotated-flow',
+      flow: {
+        outflowPos: { x: 550, y: 320, z: 40 },
+        outflowVec: { x: -1, y: 0, z: 0 },
+        intakePos: { x: 50, y: 80, z: 40 },
+        flowRate: 700,
+      },
+    };
+    const { catalog } = loadCatalog([annotated]);
+    const entry = catalog.get({ catalog: 'core', id: annotated.id });
+    expect(entry?.kind).toBe('equipment');
+    if (entry?.kind !== 'equipment') return;
+    expect(entry.flow).toEqual(annotated.flow);
+  });
+
+  it('preserves airRateMl on a manifest that declares it', () => {
+    const annotated = {
+      ...baseFilter,
+      id: 'equipment.filter.annotated-airstone',
+      airRateMl: 800,
+    };
+    const { catalog } = loadCatalog([annotated]);
+    const entry = catalog.get({ catalog: 'core', id: annotated.id });
+    if (entry?.kind !== 'equipment') return;
+    expect(entry.airRateMl).toBe(800);
+  });
+
+  it('rejects a manifest with a negative flow.flowRate', () => {
+    const broken = {
+      ...baseFilter,
+      id: 'equipment.filter.broken-flow',
+      flow: { flowRate: -10 },
+    };
+    const result = loadCatalog([broken]);
+    expect(result.errors.length).toBe(1);
+    expect(result.catalog.entries.length).toBe(0);
+  });
+
+  it('rejects a manifest with a typo inside the flow block', () => {
+    const broken = {
+      ...baseFilter,
+      id: 'equipment.filter.broken-flow-typo',
+      // typo: should be outflowVec
+      flow: { outflowVc: { x: 0, y: 0, z: 1 } },
+    };
+    const result = loadCatalog([broken]);
+    expect(result.errors.length).toBe(1);
+    expect(result.catalog.entries.length).toBe(0);
+  });
+});
+
 describe('emptyCatalog', () => {
   it('returns a usable empty catalog', () => {
     const empty = emptyCatalog();

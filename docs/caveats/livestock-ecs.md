@@ -27,23 +27,25 @@ F11.5 flow field + hardscape SDF + bubble columns; F11.6 per-species presets + p
 
 ## System ordering (current + reserved)
 
-F11.1 ran only Kinematic + Animation. F11.2 fills in Perception → Schooling → Depth → SteeringIntegrator. F11.3 added Fear → Nip → Territory between Perception and Schooling. F11.4 added Feeding + Curiosity in their reserved seats and `FoodSpriteLifetimeSystem` at the very end. Honour the seat ordering when adding new systems:
+F11.1 ran only Kinematic + Animation. F11.2 fills in Perception → Schooling → Depth → SteeringIntegrator. F11.3 added Fear → Nip → Territory between Perception and Schooling. F11.4 added Feeding + Curiosity in their reserved seats and `FoodSpriteLifetimeSystem` at the very end. F11.5 added FlowFieldSystem (between Depth and SteeringIntegrator) + CollisionSystem (between SteeringIntegrator and Kinematic) + bubble particle spawn + lifetime after FoodSprite. Honour the seat ordering when adding new systems:
 
 ```
-PerceptionSystem        (F11.2 — rebuilds the SpatialGrid)
-FearSystem              (F11.3 — risk-driven mode flips, runs early so other behaviours read the latest mode)
-NippingSystem           (F11.3 — group-threshold suppression + nip dart)
-TerritorialSystem       (F11.3 — bourgeois rule + fatigue decay)
-FeedingSystem           (F11.4 — hunger integration + sprite/algae targeting + algae regrowth)
-CuriositySystem         (F11.4 — Poisson glass-surfing trigger + dwell)
-SchoolingSystem         (F11.2)
-DepthSystem             (F11.2)
-FlowFieldSystem         (F11.5)
-SteeringIntegrator      (F11.2 — sums forces, clamps maxForce + maxTurnRate)
-CollisionSystem         (F11.5 — SDF deflect)
-KinematicSystem         (always last among physics — integrates velocity)
-AnimationSystem         (always last overall — purely visual, no state reads)
-FoodSpriteLifetimeSystem (F11.4 — drains FoodSprite.lifetime + despawns expired sprites; runs after Animation so mid-tick consumption settles first)
+PerceptionSystem          (F11.2 — rebuilds the SpatialGrid)
+FearSystem                (F11.3 — risk-driven mode flips, runs early so other behaviours read the latest mode)
+NippingSystem             (F11.3 — group-threshold suppression + nip dart)
+TerritorialSystem         (F11.3 — bourgeois rule + fatigue decay)
+FeedingSystem             (F11.4 — hunger integration + sprite/algae targeting + algae regrowth)
+CuriositySystem           (F11.4 — Poisson glass-surfing trigger + dwell)
+SchoolingSystem           (F11.2)
+DepthSystem               (F11.2)
+FlowFieldSystem           (F11.5 — trilinear-samples world.flowField, adds drag-coupled force; always-on, mode-agnostic)
+SteeringIntegrator        (F11.2 — sums forces, clamps maxForce + maxTurnRate)
+CollisionSystem           (F11.5 — SDF deflect + tangent project; fish-vs-fish separation via the F11.2 SpatialGrid; always-on)
+KinematicSystem           (always last among physics — integrates velocity)
+AnimationSystem           (always last overall — purely visual, no state reads)
+FoodSpriteLifetimeSystem  (F11.4 — drains FoodSprite.lifetime + despawns expired sprites; runs after Animation so mid-tick consumption settles first)
+BubbleSourceSpawnSystem   (F11.5 — per-source spawn-debt accumulator; emits one BubbleParticle per integer unit of debt; clamps to BUBBLE_GLOBAL_CAP_COUNT = 200)
+BubbleLifetimeSystem      (F11.5 — Position.y += velocityY * dt; despawn at waterline OR lifetime ≤ 0)
 ```
 
 **"First system with a non-null target wins"** — arbitration is by priority, not by force summation, for mode-flipping behaviours (Fear → Nip → Territory → Feeding → Curiosity). Implemented as **early-out checks on `BehaviorMode`**: FearSystem may flip FORAGE → REFUGE; NippingSystem / TerritorialSystem set PURSUE for exactly one tick (NippingSystem resets PURSUE → FORAGE at the start of its own loop the following tick). FeedingSystem still integrates hunger for REFUGE/PURSUE fish (fish get hungry even when fleeing) but skips target-seeking; CuriositySystem skips entirely. SchoolingSystem skips entirely when `mode !== FORAGE` so REFUGE/PURSUE forces aren't diluted. DepthSystem **always** runs — fleeing fish still respect depth bands. Schooling + Depth + Flow + Feeding + Curiosity are additive forces summed by SteeringIntegrator.
@@ -51,6 +53,16 @@ FoodSpriteLifetimeSystem (F11.4 — drains FoodSprite.lifetime + despawns expire
 **Hardscape registration:** `world.registerHardscape(entries)` tears down all existing `Hardscape`-tagged entities and adds fresh ones from the input. Re-registration is the chosen rebuild path; hardscape mutations trigger a livestock re-spawn upstream (same pattern as F11.2 tank resizes), so callers MUST NOT depend on specific bitECS eids surviving across re-registrations. Auto-anchor for territorial fish happens at `spawnFish` time — the nearest hardscape within `2 * coreRadius` wins; if none in range, `Territory.anchorEid = NO_ENTITY_REF` (0xffffffff) and TerritorialSystem skips that fish. Hardscape entities live in the same `Position` query as fish, so systems that walk neighbours must filter via `hasComponent(ecs, Hardscape, nid)` to exclude them.
 
 **`NO_ENTITY_REF` sentinel:** bitECS allocates entity ids starting at 0, so 0 is a *valid* eid. The "no anchor / no refuge" sentinel for `Territory.anchorEid` + `FearState.refugeEid` is `0xffffffff` (max ui32). Never compare those slabs against 0.
+
+## Flow field + hardscape SDF + bubble particles (F11.5)
+
+- **`@aquascape/domain/fluid-sim`** owns the bakes: `bakeFlowField({ tankAabb, sources })` → 32³ divergence-free `FlowField`, `bakeHardscapeSdf({ tankAabb, hardscape: { position, radius }[] })` → 64³ sphere-union `HardscapeSdf`. Both are deterministic — same inputs → byte-identical Float32Array outputs.
+- **`world.registerFlowField(field | null)`** + **`world.registerHardscapeSdf(sdf | null)`** are how the service hands baked outputs to the systems. Stored by reference (no copy). FlowFieldSystem early-outs when the field is null; CollisionSystem early-outs its SDF pass when sdf is null but still runs the fish-vs-fish pass (which is cheap + always-useful).
+- **Sphere-radius approximation.** The F11.5 SDF bake takes `(position, radius)[]` — a sphere per hardscape entry. The service supplies `radius = 50 mm` by default (no per-row catalog field yet); a real per-row `naturalRadius` is a follow-up. Fish-body-length is ~30 mm typical, so 50 mm spheres around rocks give a comfortable repulsion margin without over-blocking the tank.
+- **`world.registerBubbleSources(sources)`** — sources are `{ position, airRateMl }[]`. Spawn rate per source: `(airRateMl / 60) * BUBBLE_SCALE` particles/sec where `BUBBLE_SCALE = 3`. Global cap `BUBBLE_GLOBAL_CAP_COUNT = 200` ensures the renderer's per-frame attribute write stays bounded regardless of `airRateMl` excess.
+- **BubbleStableFluids2D is intentionally NOT wired in F11.5.** The plan calls for Stam 1999 advect/diffuse/project per air-stone; the lib code is present in `domain/fluid-sim` for a later fidelity pass, but F11.5 ships a particle-only column (linear rise + deterministic horizontal jitter via tickPrng). The simpler model is visually adequate for "bubbles rise from an air-stone" and saves the Stable Fluids pass for when there's user demand for finer behaviour (column wobble, multi-stone interaction).
+- **`(sourceEid, spawnSeq)` is the cross-world stable sort key for the bubble snapshot.** bitECS' query returns entities in eid allocation order, but eids come from a module-global cursor — two cold worlds get distinct ranges and the raw iteration order would silently break the 1000-tick byte-identical replay. `snapshot()` sorts bubbles by `(sourceEid, spawnSeq)` before writing the pooled `bubblePosition` slab. Mirrors the F11.2 `spawnIndex`-instead-of-eid pattern.
+- **`scene.equipment` mutations re-fire the spawn cycle.** The service's `spawnKey` fingerprint includes a per-equipment digest (kind + integer-mm position + flowRate@3dp + airRateMl); any add / remove / move / rate-change triggers re-bake of FlowField + SDF + re-register of bubble sources, then re-spawn of fish. No surgical update path — the F11.3 "rebuild on hardscape mutation" pattern extends here.
 
 ## Sim rate vs. render rate
 
