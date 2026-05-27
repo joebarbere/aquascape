@@ -332,6 +332,44 @@ describe('loadCatalog — F11.5 equipment flow / airRateMl forward-compat', () =
   });
 });
 
+describe('loadCatalog — F11.6 per-species manifest smoke (each new fish loads clean)', () => {
+  // Each id below corresponds to an F11.6 species manifest under
+  // libs/domain/catalog/src/data/livestock/. The full core-catalog spec
+  // already counts the total + asserts behaviour resolution; this set is the
+  // narrower per-row smoke that catches schema-level regressions on each new
+  // entry in isolation.
+  const F11_6_FISH_IDS = [
+    'livestock.fish.cardinal-tetra',
+    'livestock.fish.ember-tetra',
+    'livestock.fish.harlequin-rasbora',
+    'livestock.fish.cherry-barb',
+    'livestock.fish.tiger-barb',
+    'livestock.fish.marbled-hatchetfish',
+    'livestock.fish.dwarf-gourami',
+    'livestock.fish.pearl-gourami',
+    'livestock.fish.angelfish',
+    'livestock.fish.discus',
+    'livestock.fish.german-blue-ram',
+    'livestock.fish.kuhli-loach',
+    'livestock.fish.bronze-cory',
+    'livestock.fish.otocinclus',
+    'livestock.fish.bristlenose-pleco',
+    'livestock.fish.common-pleco',
+  ];
+
+  it.each(F11_6_FISH_IDS)('the %s manifest is reachable through coreCatalog without warnings', (id) => {
+    // Re-export of coreCatalog is in core-catalog.ts; importing here would
+    // double-load and risk cycles. Lazy require via a dynamic import keeps the
+    // top-level loader spec isolated to the in-test fixtures above while still
+    // letting us assert on the production load result.
+    const { coreCatalog, CORE_CATALOG_RESULT } = require('./core-catalog') as typeof import('./core-catalog');
+    expect(CORE_CATALOG_RESULT.errors).toEqual([]);
+    const entry = coreCatalog.get({ catalog: 'core', id });
+    expect(entry).not.toBeNull();
+    expect(entry?.kind).toBe('livestock');
+  });
+});
+
 describe('emptyCatalog', () => {
   it('returns a usable empty catalog', () => {
     const empty = emptyCatalog();

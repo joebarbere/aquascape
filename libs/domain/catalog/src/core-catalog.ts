@@ -79,11 +79,27 @@ import fluorite from './data/substrates/fluorite.json';
 import silicaSand from './data/substrates/silica-sand.json';
 import tropicaAquasoil from './data/substrates/tropica-aquasoil.json';
 import whiteSand from './data/substrates/white-sand.json';
-// Livestock — fish (Stage 7 F7.1)
+// Livestock — fish (Stage 7 F7.1; Stage 11 F11.6 expansion)
+import livestockAncistrusCirrhosus from './data/livestock/ancistrus-cirrhosus.json';
 import livestockApistogrammaCacatuoides from './data/livestock/apistogramma-cacatuoides.json';
 import livestockBettaSplendens from './data/livestock/betta-splendens.json';
+import livestockCarnegiellaStrigata from './data/livestock/carnegiella-strigata.json';
+import livestockCorydorasAeneus from './data/livestock/corydoras-aeneus.json';
 import livestockCorydorasPygmaeus from './data/livestock/corydoras-pygmaeus.json';
+import livestockHyphessobryconAmandae from './data/livestock/hyphessobrycon-amandae.json';
+import livestockHypostomusPlecostomus from './data/livestock/hypostomus-plecostomus.json';
+import livestockMikrogeophagusRamirezi from './data/livestock/mikrogeophagus-ramirezi.json';
 import livestockNeonTetra from './data/livestock/neon-tetra.json';
+import livestockOtocinclusVittatus from './data/livestock/otocinclus-vittatus.json';
+import livestockPangioKuhlii from './data/livestock/pangio-kuhlii.json';
+import livestockParacheirodonAxelrodi from './data/livestock/paracheirodon-axelrodi.json';
+import livestockPterophyllumScalare from './data/livestock/pterophyllum-scalare.json';
+import livestockPuntigrusTetrazona from './data/livestock/puntigrus-tetrazona.json';
+import livestockPuntiusTitteya from './data/livestock/puntius-titteya.json';
+import livestockSymphysodonAequifasciatus from './data/livestock/symphysodon-aequifasciatus.json';
+import livestockTrichogasterLalius from './data/livestock/trichogaster-lalius.json';
+import livestockTrichopodusLeerii from './data/livestock/trichopodus-leerii.json';
+import livestockTrigonostigmaHeteromorpha from './data/livestock/trigonostigma-heteromorpha.json';
 // Livestock — shrimp
 import livestockCaridinaCantonensis from './data/livestock/caridina-cantonensis.json';
 import livestockNeocaridinaDavidi from './data/livestock/neocaridina-davidi.json';
@@ -169,11 +185,28 @@ export const CORE_CATALOG_MANIFESTS: readonly unknown[] = [
   plantHygrophilaPolysperma,
   plantAmmannia,
   plantMyriophyllum,
-  // Livestock — fish (Stage 7 F7.1)
+  // Livestock — fish (Stage 7 F7.1; Stage 11 F11.6 expansion)
   livestockNeonTetra,
   livestockBettaSplendens,
   livestockCorydorasPygmaeus,
   livestockApistogrammaCacatuoides,
+  // Stage 11 F11.6 — common-species expansion (16 added, total fish = 20)
+  livestockParacheirodonAxelrodi,
+  livestockHyphessobryconAmandae,
+  livestockTrigonostigmaHeteromorpha,
+  livestockPuntiusTitteya,
+  livestockPuntigrusTetrazona,
+  livestockCarnegiellaStrigata,
+  livestockTrichogasterLalius,
+  livestockTrichopodusLeerii,
+  livestockPterophyllumScalare,
+  livestockSymphysodonAequifasciatus,
+  livestockMikrogeophagusRamirezi,
+  livestockPangioKuhlii,
+  livestockCorydorasAeneus,
+  livestockOtocinclusVittatus,
+  livestockAncistrusCirrhosus,
+  livestockHypostomusPlecostomus,
   // Livestock — shrimp
   livestockNeocaridinaDavidi,
   livestockCaridinaCantonensis,

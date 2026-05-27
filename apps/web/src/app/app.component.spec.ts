@@ -851,3 +851,63 @@ describe('AppComponent — 2D / 3D view mode', () => {
     expect(lastCall[2]?.livestockWorld).toBeUndefined();
   });
 });
+
+// ── Stage 11 F11.6 Wave 4 — behavior debug chord ────────────────────────
+
+describe('AppComponent — behavior debug chord', () => {
+  it('Ctrl+Shift+D toggles BehaviorDebugService.enabled()', async () => {
+    const { BehaviorDebugService: SvcCtor } = await import('./behavior-debug.service');
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const svc = TestBed.inject(SvcCtor);
+    expect(svc.enabled()).toBe(false);
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'D', code: 'KeyD', ctrlKey: true, shiftKey: true }),
+    );
+    expect(svc.enabled()).toBe(true);
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'D', code: 'KeyD', ctrlKey: true, shiftKey: true }),
+    );
+    expect(svc.enabled()).toBe(false);
+  });
+
+  it('Cmd+Shift+D (macOS) toggles BehaviorDebugService.enabled() too', async () => {
+    const { BehaviorDebugService: SvcCtor } = await import('./behavior-debug.service');
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const svc = TestBed.inject(SvcCtor);
+    expect(svc.enabled()).toBe(false);
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'D', code: 'KeyD', metaKey: true, shiftKey: true }),
+    );
+    expect(svc.enabled()).toBe(true);
+  });
+
+  it('ignores the chord while a text input is focused (the user is typing)', async () => {
+    const { BehaviorDebugService: SvcCtor } = await import('./behavior-debug.service');
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const svc = TestBed.inject(SvcCtor);
+    // Build a real <input> so `target.tagName === 'INPUT'` is true.
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'D',
+        code: 'KeyD',
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+      }),
+    );
+    expect(svc.enabled()).toBe(false);
+    document.body.removeChild(input);
+  });
+});

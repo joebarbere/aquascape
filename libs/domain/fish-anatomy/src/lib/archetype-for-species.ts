@@ -14,8 +14,9 @@
  *      that haven't been retagged yet).
  *   4. Default `slim-tetra`.
  *
- * Snails + shrimp map to `slim-tetra` for now; Stage 11 F11.6 introduces
- * a real crawler archetype and this mapper will gain a branch then.
+ * Snails + shrimp map to `crawler` (Stage 11 F11.6 Wave 2): a stubby
+ * substrate-hugging silhouette with antennae instead of fins; the
+ * renderer suppresses the carangiform tail-beat for this archetype.
  */
 
 export type FishArchetypeId =
@@ -24,7 +25,8 @@ export type FishArchetypeId =
   | 'barb'
   | 'cory-cylinder'
   | 'eel'
-  | 'hatchet-wedge';
+  | 'hatchet-wedge'
+  | 'crawler';
 
 /**
  * Structural shape we accept. Any livestock-ish object with optional
@@ -96,8 +98,9 @@ export function archetypeForSpecies(entry: SpeciesMappingHints): FishArchetypeId
     const g = entry.group.toLowerCase();
     const hit = TAG_TO_ARCHETYPE[g];
     if (hit) return hit;
-    // Shrimp + snail are placeholder until F11.6 adds a real crawler.
-    if (g === 'shrimp' || g === 'snail') return 'slim-tetra';
+    // Shrimp + snail share the crawler archetype (F11.6 Wave 2) —
+    // substrate-hugging body + antennae, no fish fins.
+    if (g === 'shrimp' || g === 'snail') return 'crawler';
     // Bare 'fish' is too generic — fall through to the id sniff.
   }
 

@@ -35,6 +35,7 @@
 import {
   buildBarbGeometry,
   buildCoryCylinderGeometry,
+  buildCrawlerGeometry,
   buildDeepBodiedGeometry,
   buildEelGeometry,
   buildHatchetWedgeGeometry,
@@ -187,6 +188,7 @@ const ARCHETYPE_IDS = [
   FISH_ARCHETYPE.CORY_CYLINDER,
   FISH_ARCHETYPE.EEL,
   FISH_ARCHETYPE.HATCHET_WEDGE,
+  FISH_ARCHETYPE.CRAWLER,
 ] as const;
 
 /** Human-readable name on the InstancedMesh for `disposeNode` debug walks. */
@@ -197,6 +199,7 @@ const ARCHETYPE_LABELS: Record<number, string> = {
   [FISH_ARCHETYPE.CORY_CYLINDER]: 'cory-cylinder',
   [FISH_ARCHETYPE.EEL]: 'eel',
   [FISH_ARCHETYPE.HATCHET_WEDGE]: 'hatchet-wedge',
+  [FISH_ARCHETYPE.CRAWLER]: 'crawler',
 };
 
 // ─── Internal types ──────────────────────────────────────────────────────
@@ -426,10 +429,22 @@ function syncFromSnapshotImpl(
     (slot.attr.instanceScale.array as Float32Array)[cursor] = scale[i] as number;
     (slot.attr.instancePhase.array as Float32Array)[cursor] = phase[i] as number;
 
+    // F11.6 Wave 2 — crawler archetype (shrimp + snail) has no
+    // carangiform tail to flex. Zero its per-instance amp on every
+    // sync so the vertex shader produces no fish-style wiggle even if
+    // the AnimationPhase slab carries a non-zero phase (which it does
+    // — AnimationSystem advances it for every entity, since gating
+    // there would require an archetype-aware branch in the hottest
+    // per-frame loop). Cheaper to suppress at the per-instance amp.
+    if (arch === FISH_ARCHETYPE.CRAWLER) {
+      (slot.attr.instanceAmpHead.array as Float32Array)[cursor] = 0;
+      (slot.attr.instanceAmpTail.array as Float32Array)[cursor] = 0;
+    }
+
     slot.writeCursor = cursor + 1;
   }
 
-  // Commit per-archetype counts + attribute updates. Six slots; each
+  // Commit per-archetype counts + attribute updates. Seven slots; each
   // does at most seven `needsUpdate = true` flag flips. No
   // allocations.
   for (const slot of slots) {
@@ -439,10 +454,15 @@ function syncFromSnapshotImpl(
     slot.attr.instanceQuat.needsUpdate = true;
     slot.attr.instanceScale.needsUpdate = true;
     slot.attr.instancePhase.needsUpdate = true;
-    // freq / ampHead / ampTail stay constant in F11.1 — F11.2+ will
-    // touch them from catalog `behavior.animation`. We don't flag
-    // their attributes as needing an update unless the values
-    // actually change, sparing the GPU upload.
+    // The crawler slot rewrites ampHead/ampTail every tick (to keep
+    // the carangiform deformation suppressed for crawler instances —
+    // see the per-entity write above). Flag its amp attributes as
+    // dirty so the GPU sees the zero values; other archetypes keep
+    // their construction-time defaults and don't need a re-upload.
+    if (slot.archetypeId === FISH_ARCHETYPE.CRAWLER) {
+      slot.attr.instanceAmpHead.needsUpdate = true;
+      slot.attr.instanceAmpTail.needsUpdate = true;
+    }
     slot.material.uniforms['uTime']!.value = currentTimeSec;
   }
 }
@@ -463,6 +483,8 @@ function descriptorForArchetype(archetypeId: number): FishGeometryDescriptor {
       return buildEelGeometry();
     case FISH_ARCHETYPE.HATCHET_WEDGE:
       return buildHatchetWedgeGeometry();
+    case FISH_ARCHETYPE.CRAWLER:
+      return buildCrawlerGeometry();
     default:
       // Defensive: every value in `ARCHETYPE_IDS` is handled above.
       // If a future archetype enum value is added without a builder,

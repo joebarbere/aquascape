@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.marbled-hatchetfish",
+  "version": 1,
+  "name": "Marbled Hatchetfish (Carnegiella strigata)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 35,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 24, "maxC": 28 },
+  "pHRange": { "min": 5.5, "max": 7.0 },
+  "schoolingMin": 6,
+  "bioloadClass": "low",
+  "color": "#b0a47c",
+  "description": "True surface-dweller — keel-chested South American fish that hugs the waterline and can jump several body lengths (tank must be tightly covered). The 'hatchet' substring fires the F11.2 top-depth heuristic; the explicit `depth.preferredY` override pushes them even higher than the default TOP_PRESET.",
+  "tags": ["schooler", "community", "surface", "hatchet"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false },
+  "behavior": {
+    "depth": { "preferredY": 0.95 }
+  }
+}

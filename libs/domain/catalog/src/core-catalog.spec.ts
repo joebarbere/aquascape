@@ -1,3 +1,5 @@
+import { resolveBehavior } from '@aquascape/domain/livestock-behaviors';
+
 import { CORE_CATALOG_MANIFESTS, CORE_CATALOG_RESULT, coreCatalog } from './core-catalog';
 
 describe('core catalog (bundled substrates + hardscape + plants)', () => {
@@ -129,14 +131,14 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     expect(entry.defaultDensity).toBeGreaterThan(0);
   });
 
-  it('ships exactly the 8 seeded livestock species (4 fish + 2 shrimp + 2 snails)', () => {
+  it('ships exactly the 24 seeded livestock species (20 fish + 2 shrimp + 2 snails) after F11.6 expansion', () => {
     const livestock = coreCatalog.byKind('livestock');
-    expect(livestock.length).toBe(8);
+    expect(livestock.length).toBe(24);
     const groups = livestock.reduce<Record<string, number>>((acc, entry) => {
       acc[entry.group] = (acc[entry.group] ?? 0) + 1;
       return acc;
     }, {});
-    expect(groups).toEqual({ fish: 4, shrimp: 2, snail: 2 });
+    expect(groups).toEqual({ fish: 20, shrimp: 2, snail: 2 });
   });
 
   it('every livestock entry has a valid swatch color, plausible ranges, and a positive adult size', () => {
@@ -184,14 +186,16 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     });
   });
 
-  it('only a small handful of livestock entries declare a behavior block (defaults still exercise resolveBehavior)', () => {
+  it('most livestock entries with an annotated behavior block stay sparse (F11.6 expansion)', () => {
     const annotated = coreCatalog
       .byKind('livestock')
       .filter((e) => e.behavior !== undefined);
-    // F11.2 + F11.3 plan: ~2 explicit overrides total (neon-tetra + apistogramma);
-    // F11.6 will broaden this. If this count creeps up before F11.6 lands, the
-    // wiring tests for the default `resolveBehavior` path lose their coverage.
-    expect(annotated.length).toBeLessThanOrEqual(2);
+    // F11.6 broadens the curated species list to ~24; most new fish carry at
+    // least one override (cohesion tweak, depth bump, territory tune, nipping
+    // opt-in/out). Cap is the size of the curated set + headroom — if it keeps
+    // creeping past this, audit whether the new entries are leaning on the
+    // per-group preset where they should and only declaring true deviations.
+    expect(annotated.length).toBeLessThanOrEqual(24);
   });
 
   it('the Cherry Shrimp livestock entry is reachable and grouped as shrimp', () => {
@@ -293,5 +297,128 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     // F11.6 will broaden this. If this creeps up before F11.6 lands, the
     // wiring tests for the "no flow / no bubbles" default path lose coverage.
     expect(annotated.length).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('core catalog — F11.6 per-species behavior resolution', () => {
+  // Each test routes a real catalog row through `resolveBehavior` and asserts
+  // the expected combination of (heuristic-derived defaults, explicit overrides,
+  // explicit opt-outs) lands on the resolved bundle. This is the QA matrix that
+  // validates F11.2 – F11.4's heuristic-resolution code against the F11.6
+  // species expansion.
+
+  function getLivestock(id: string) {
+    const entry = coreCatalog.get({ catalog: 'core', id });
+    expect(entry).not.toBeNull();
+    expect(entry?.kind).toBe('livestock');
+    if (entry?.kind !== 'livestock') throw new Error('not livestock');
+    return entry;
+  }
+
+  it('tiger barb resolves an explicit nipping block (overrides the absent-id-substring default)', () => {
+    const entry = getLivestock('livestock.fish.tiger-barb');
+    const resolved = resolveBehavior(entry);
+    expect(resolved.nipping).not.toBeNull();
+    expect(resolved.nipping?.groupThreshold).toBe(8);
+    expect(resolved.nipping?.finFraction).toBe(0.4);
+    expect(resolved.nipping?.rate).toBe(0.5);
+  });
+
+  it('cherry barb opts OUT of the nipping heuristic via behavior.nipping: null', () => {
+    const entry = getLivestock('livestock.fish.cherry-barb');
+    const resolved = resolveBehavior(entry);
+    expect(resolved.nipping).toBeNull();
+  });
+
+  it('angelfish resolves the explicit territory override (cichlid heuristic + tuned values)', () => {
+    const entry = getLivestock('livestock.fish.angelfish');
+    const resolved = resolveBehavior(entry);
+    expect(resolved.territory).toEqual({
+      coreRadius: 100,
+      displayRadius: 200,
+      aggression: 60,
+      fatigueRate: 0.08,
+    });
+  });
+
+  it('german blue ram fires the "ram" territory heuristic and tunes aggression downward', () => {
+    const entry = getLivestock('livestock.fish.german-blue-ram');
+    const resolved = resolveBehavior(entry);
+    expect(resolved.territory).not.toBeNull();
+    // Heuristic seeds coreRadius 80 + displayRadius 150; manifest only overrides aggression.
+    expect(resolved.territory?.coreRadius).toBe(80);
+    expect(resolved.territory?.displayRadius).toBe(150);
+    expect(resolved.territory?.aggression).toBe(55);
+  });
+
+  it('kuhli loach fires the "kuhli" timid-curiosity heuristic', () => {
+    const entry = getLivestock('livestock.fish.kuhli-loach');
+    const resolved = resolveBehavior(entry);
+    expect(resolved.curiosity.boldness).toBe(0.05);
+    expect(resolved.curiosity.ratePerSec).toBe(0.005);
+  });
+
+  it('otocinclus fires the "oto" algae-grazer feeding heuristic', () => {
+    const entry = getLivestock('livestock.fish.otocinclus');
+    const resolved = resolveBehavior(entry);
+    expect(resolved.feeding.category).toBe('algae-grazer');
+  });
+
+  it('common pleco fires the "pleco" algae-grazer feeding heuristic AND lands on the bottom band', () => {
+    const entry = getLivestock('livestock.fish.common-pleco');
+    const resolved = resolveBehavior(entry);
+    expect(resolved.feeding.category).toBe('algae-grazer');
+    // BOTTOM_PRESET.depth.preferredY = 0.05.
+    expect(resolved.depth.preferredY).toBe(0.05);
+  });
+
+  it('bristlenose pleco lands algae-grazer via explicit override (id "ancistrus" lacks the substring)', () => {
+    const entry = getLivestock('livestock.fish.bristlenose-pleco');
+    const resolved = resolveBehavior(entry);
+    expect(resolved.feeding.category).toBe('algae-grazer');
+    // depth:bottom tag explicitly puts it on the bottom band.
+    expect(resolved.depth.preferredY).toBe(0.05);
+  });
+
+  it('marbled hatchetfish resolves to the top band via the "hatchet" substring heuristic + extra preferredY override', () => {
+    const entry = getLivestock('livestock.fish.marbled-hatchetfish');
+    const resolved = resolveBehavior(entry);
+    // Manifest override pushes preferredY to 0.95 above the TOP_PRESET 0.92.
+    expect(resolved.depth.preferredY).toBe(0.95);
+    // TOP_PRESET cohesion weight survives — no override on schooling.
+    expect(resolved.schooling.wCoh).toBe(0.5);
+  });
+
+  it('dwarf + pearl gourami land on the top band via the explicit depth:top tag and disable cohesion', () => {
+    for (const id of ['livestock.fish.dwarf-gourami', 'livestock.fish.pearl-gourami']) {
+      const resolved = resolveBehavior(getLivestock(id));
+      // TOP_PRESET.depth.preferredY = 0.92.
+      expect(resolved.depth.preferredY).toBe(0.92);
+      // Explicit wCoh: 0 → solitary.
+      expect(resolved.schooling.wCoh).toBe(0);
+    }
+  });
+
+  it('discus tunes fear.riskBaseline up and inherits the cichlid territory heuristic', () => {
+    const entry = getLivestock('livestock.fish.discus');
+    const resolved = resolveBehavior(entry);
+    expect(resolved.fear.riskBaseline).toBe(0.18);
+    expect(resolved.territory).not.toBeNull();
+    // Heuristic seeds aggression 100; manifest overrides to 50.
+    expect(resolved.territory?.aggression).toBe(50);
+  });
+
+  it('cardinal + ember tetras tune cohesion to bracket the neon (cardinal tighter, ember looser)', () => {
+    const cardinal = resolveBehavior(getLivestock('livestock.fish.cardinal-tetra'));
+    const ember = resolveBehavior(getLivestock('livestock.fish.ember-tetra'));
+    expect(cardinal.schooling.wCoh).toBe(1.4);
+    expect(ember.schooling.wCoh).toBe(0.8);
+  });
+
+  it('bronze cory fires the "cory" bottom-depth heuristic without any explicit override', () => {
+    const entry = getLivestock('livestock.fish.bronze-cory');
+    expect(entry.behavior).toBeUndefined();
+    const resolved = resolveBehavior(entry);
+    expect(resolved.depth.preferredY).toBe(0.05);
   });
 });

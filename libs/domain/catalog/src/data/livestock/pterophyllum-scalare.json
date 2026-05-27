@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.angelfish",
+  "version": 1,
+  "name": "Angelfish (Pterophyllum scalare)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 150,
+  "temperament": "semi-aggressive",
+  "temperatureRange": { "minC": 24, "maxC": 29 },
+  "pHRange": { "min": 6.0, "max": 7.5 },
+  "schoolingMin": 1,
+  "bioloadClass": "high",
+  "color": "#bfb097",
+  "description": "Deep-bodied South American cichlid; the 'angelfish' substring fires both depth-band (none — fish default) and territory heuristics. Explicit territory block tunes the cichlid default to angelfish-specific values — they bond into pairs that defend a small cone around the chosen spawning surface but otherwise tolerate community tankmates.",
+  "tags": ["cichlid", "centerpiece", "south-american", "angelfish"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false },
+  "behavior": {
+    "territory": { "coreRadius": 100, "displayRadius": 200, "aggression": 60, "fatigueRate": 0.08 }
+  }
+}

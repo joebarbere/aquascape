@@ -23,6 +23,7 @@ import {
   buildCoryCylinderGeometry,
   buildEelGeometry,
   buildHatchetWedgeGeometry,
+  buildCrawlerGeometry,
 } from './archetypes';
 
 interface ArchetypeCase {
@@ -239,5 +240,104 @@ describe('archetype distinctness', () => {
     const cory = bodyExtents(buildCoryCylinderGeometry());
     // yOffset > 0 means the body sits above the spine more than below.
     expect(cory.yMax).toBeGreaterThan(Math.abs(cory.yMin));
+  });
+});
+
+// ─── crawler (F11.6 Wave 2) ──────────────────────────────────────────────
+//
+// Shrimp + snail archetype. Different shape contract than the fish
+// archetypes: NO fins (caudal/dorsal/anal/pectoral all empty), stubby
+// body, antennae extending past x=1 from the head. The descriptor's
+// `groups` field still has all five entries to keep the type valid —
+// the four fin entries are `[0, 0]`.
+
+describe('buildCrawlerGeometry', () => {
+  it('returns a populated FishGeometryDescriptor with paired typed-array buffers', () => {
+    const g = buildCrawlerGeometry();
+    expect(g.positions.length).toBeGreaterThan(0);
+    expect(g.positions.length % 3).toBe(0);
+    expect(g.normals.length).toBe(g.positions.length);
+    expect(g.uvs.length).toBe((g.positions.length / 3) * 2);
+    expect(g.spineUv.length).toBe(g.uvs.length);
+    expect(g.indices.length).toBeGreaterThan(0);
+    expect(g.indices.length % 3).toBe(0);
+  });
+
+  it('has body group populated and all four fin groups empty', () => {
+    const g = buildCrawlerGeometry();
+    expect(g.groups.body[0]).toBe(0);
+    expect(g.groups.body[1]).toBeGreaterThan(0);
+    // No fish fins — empty index ranges.
+    expect(g.groups.caudal).toEqual([0, 0]);
+    expect(g.groups.dorsal).toEqual([0, 0]);
+    expect(g.groups.anal).toEqual([0, 0]);
+    expect(g.groups.pectoral).toEqual([0, 0]);
+  });
+
+  it('produces byte-identical buffers across calls (determinism)', () => {
+    const a = buildCrawlerGeometry();
+    const b = buildCrawlerGeometry();
+    expect(Array.from(a.positions)).toEqual(Array.from(b.positions));
+    expect(Array.from(a.normals)).toEqual(Array.from(b.normals));
+    expect(Array.from(a.uvs)).toEqual(Array.from(b.uvs));
+    expect(Array.from(a.spineUv)).toEqual(Array.from(b.spineUv));
+    expect(Array.from(a.indices)).toEqual(Array.from(b.indices));
+    expect(a.groups).toEqual(b.groups);
+  });
+
+  it('respects the perf budget (≤ 200 vertices — well under the fish 400 cap)', () => {
+    const g = buildCrawlerGeometry();
+    expect(g.positions.length / 3).toBeLessThanOrEqual(200);
+  });
+
+  it('has a stubby body silhouette — ~0.25 depth, ~0.20 lateral', () => {
+    const g = buildCrawlerGeometry();
+    const [bStart, bCount] = g.groups.body;
+    const seen = new Set<number>();
+    for (let i = bStart; i < bStart + bCount; i++) seen.add(g.indices[i]!);
+    let yMin = Infinity;
+    let yMax = -Infinity;
+    let zMin = Infinity;
+    let zMax = -Infinity;
+    for (const v of seen) {
+      const y = g.positions[v * 3 + 1]!;
+      const z = g.positions[v * 3 + 2]!;
+      if (y < yMin) yMin = y;
+      if (y > yMax) yMax = y;
+      if (z < zMin) zMin = z;
+      if (z > zMax) zMax = z;
+    }
+    expect(yMax - yMin).toBeLessThan(0.35);
+    expect(zMax - zMin).toBeLessThan(0.3);
+  });
+
+  it('extends antennae past x = 1.0 forward of the head', () => {
+    const g = buildCrawlerGeometry();
+    // Antennae are appended *after* the body indices, so their vertices
+    // live at vertex indices > body-vertex-count. Walk every position
+    // and confirm at least some vertex reaches into the x > 1.0 region
+    // (forward of the head, since the body spans roughly [0, 1]).
+    let xMax = -Infinity;
+    for (let v = 0; v * 3 < g.positions.length; v++) {
+      const x = g.positions[v * 3]!;
+      if (x > xMax) xMax = x;
+    }
+    expect(xMax).toBeGreaterThan(1.0);
+  });
+
+  it('has a body silhouette that fits the unit-ish X envelope', () => {
+    const g = buildCrawlerGeometry();
+    const [bStart, bCount] = g.groups.body;
+    const seen = new Set<number>();
+    for (let i = bStart; i < bStart + bCount; i++) seen.add(g.indices[i]!);
+    let xMin = Infinity;
+    let xMax = -Infinity;
+    for (const v of seen) {
+      const x = g.positions[v * 3]!;
+      if (x < xMin) xMin = x;
+      if (x > xMax) xMax = x;
+    }
+    expect(xMin).toBeGreaterThanOrEqual(-0.05);
+    expect(xMax).toBeLessThanOrEqual(1.05);
   });
 });

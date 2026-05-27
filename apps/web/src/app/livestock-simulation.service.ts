@@ -728,6 +728,8 @@ function archetypeIdToEnum(id: FishArchetypeId): number {
       return FISH_ARCHETYPE.EEL;
     case 'hatchet-wedge':
       return FISH_ARCHETYPE.HATCHET_WEDGE;
+    case 'crawler':
+      return FISH_ARCHETYPE.CRAWLER;
   }
 }
 

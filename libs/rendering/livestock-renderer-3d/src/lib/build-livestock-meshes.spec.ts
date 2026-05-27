@@ -13,6 +13,7 @@
 import {
   buildBarbGeometry,
   buildCoryCylinderGeometry,
+  buildCrawlerGeometry,
   buildDeepBodiedGeometry,
   buildEelGeometry,
   buildHatchetWedgeGeometry,
@@ -129,6 +130,7 @@ function expectedNameFor(archetypeId: number): string {
     [FISH_ARCHETYPE.CORY_CYLINDER]: 'cory-cylinder',
     [FISH_ARCHETYPE.EEL]: 'eel',
     [FISH_ARCHETYPE.HATCHET_WEDGE]: 'hatchet-wedge',
+    [FISH_ARCHETYPE.CRAWLER]: 'crawler',
   };
   return `aquascape:livestock/${label[archetypeId]!}`;
 }
@@ -143,8 +145,8 @@ describe('buildLivestockMeshes', () => {
     it('returns a named Group containing one InstancedMesh per archetype + food sprite + bubble billboard meshes', () => {
       bundle = buildLivestockMeshes();
       expect(bundle.group.name).toBe('aquascape:livestock');
-      // 6 archetypes + 1 food sprite billboard mesh + 1 bubble billboard mesh.
-      expect(bundle.group.children).toHaveLength(8);
+      // 7 archetypes (F11.6 Wave 2 added crawler) + food sprite mesh + bubble billboard mesh.
+      expect(bundle.group.children).toHaveLength(9);
       for (const child of bundle.group.children) {
         expect((child as InstancedMesh).isInstancedMesh).toBe(true);
       }
@@ -159,6 +161,7 @@ describe('buildLivestockMeshes', () => {
         [FISH_ARCHETYPE.CORY_CYLINDER, buildCoryCylinderGeometry],
         [FISH_ARCHETYPE.EEL, buildEelGeometry],
         [FISH_ARCHETYPE.HATCHET_WEDGE, buildHatchetWedgeGeometry],
+        [FISH_ARCHETYPE.CRAWLER, buildCrawlerGeometry],
       ];
       for (const [archetypeId, builder] of pairs) {
         const mesh = meshForArchetype(bundle, archetypeId);
@@ -429,10 +432,10 @@ describe('buildLivestockMeshes', () => {
     let bundle: LivestockMeshBundle;
     afterEach(() => bundle.dispose());
 
-    it('adds a 7th InstancedMesh dedicated to food sprites', () => {
+    it('adds a dedicated InstancedMesh for food sprites under the same group', () => {
       bundle = buildLivestockMeshes();
-      // 6 archetypes + food sprite + bubble.
-      expect(bundle.group.children).toHaveLength(8);
+      // 7 archetypes (F11.6 Wave 2 added crawler) + food sprite + bubble = 9 children.
+      expect(bundle.group.children).toHaveLength(9);
       expect(bundle.foodSpriteMesh.isInstancedMesh).toBe(true);
       expect(bundle.foodSpriteMesh.name).toBe('aquascape:livestock/food-sprite');
       // The exposed handle is a sibling under the same group, not a
@@ -647,9 +650,10 @@ describe('buildLivestockMeshes', () => {
     let bundle: LivestockMeshBundle;
     afterEach(() => bundle.dispose());
 
-    it('adds an 8th InstancedMesh dedicated to bubbles', () => {
+    it('adds a dedicated InstancedMesh for bubbles under the same group', () => {
       bundle = buildLivestockMeshes();
-      expect(bundle.group.children).toHaveLength(8);
+      // 7 archetypes + food sprite + bubble = 9 children.
+      expect(bundle.group.children).toHaveLength(9);
       expect(bundle.bubbleMesh.isInstancedMesh).toBe(true);
       expect(bundle.bubbleMesh.name).toBe('aquascape:livestock/bubble');
       expect(bundle.group.children).toContain(bundle.bubbleMesh);
@@ -927,8 +931,8 @@ describe('buildLivestockMeshes', () => {
 
     it('clears all children from the group after dispose', () => {
       const bundle = buildLivestockMeshes();
-      // 6 archetypes + 1 food sprite + 1 bubble billboard mesh.
-      expect(bundle.group.children).toHaveLength(8);
+      // 7 archetypes (F11.6 Wave 2 added crawler) + food sprite + bubble = 9 children.
+      expect(bundle.group.children).toHaveLength(9);
       bundle.dispose();
       expect(bundle.group.children).toHaveLength(0);
     });
@@ -995,6 +999,109 @@ describe('buildLivestockMeshes', () => {
       } finally {
         bundle.dispose();
       }
+    });
+  });
+
+  describe('crawler archetype (F11.6 Wave 2)', () => {
+    let bundle: LivestockMeshBundle;
+    afterEach(() => bundle.dispose());
+
+    it('builds a 7th archetype InstancedMesh named "aquascape:livestock/crawler"', () => {
+      bundle = buildLivestockMeshes();
+      const crawler = meshForArchetype(bundle, FISH_ARCHETYPE.CRAWLER);
+      expect(crawler.isInstancedMesh).toBe(true);
+      expect(crawler.name).toBe('aquascape:livestock/crawler');
+    });
+
+    it('matches the crawler InstancedMesh geometry to buildCrawlerGeometry()', () => {
+      bundle = buildLivestockMeshes();
+      const crawler = meshForArchetype(bundle, FISH_ARCHETYPE.CRAWLER);
+      const expectedVerts = buildCrawlerGeometry().positions.length / 3;
+      const got = (crawler.geometry as BufferGeometry).getAttribute('position').count;
+      expect(got).toBe(expectedVerts);
+    });
+
+    it('routes Archetype=CRAWLER entities into the crawler bucket', () => {
+      bundle = buildLivestockMeshes({ maxInstancesPerArchetype: 8 });
+      const snap = makeSnapshot([
+        { archetype: FISH_ARCHETYPE.CRAWLER, position: [10, 5, 20] },
+        { archetype: FISH_ARCHETYPE.SLIM_TETRA, position: [30, 100, 40] },
+        { archetype: FISH_ARCHETYPE.CRAWLER, position: [50, 5, 60] },
+      ]);
+
+      bundle.syncFromSnapshot(snap, 0);
+
+      const crawler = meshForArchetype(bundle, FISH_ARCHETYPE.CRAWLER);
+      const slim = meshForArchetype(bundle, FISH_ARCHETYPE.SLIM_TETRA);
+      expect(crawler.count).toBe(2);
+      expect(slim.count).toBe(1);
+
+      const cPos = (crawler.geometry as BufferGeometry).getAttribute('instancePosition')
+        .array as Float32Array;
+      expect(cPos[0]).toBe(10);
+      expect(cPos[3]).toBe(50);
+    });
+
+    it('zeroes instanceAmpHead + instanceAmpTail on crawler instances after sync (no tail wiggle)', () => {
+      bundle = buildLivestockMeshes({ maxInstancesPerArchetype: 4 });
+      const snap = makeSnapshot([
+        { archetype: FISH_ARCHETYPE.CRAWLER, position: [0, 0, 0], phase: 1.5 },
+        { archetype: FISH_ARCHETYPE.CRAWLER, position: [50, 0, 0], phase: 3.0 },
+      ]);
+      bundle.syncFromSnapshot(snap, 0);
+
+      const crawler = meshForArchetype(bundle, FISH_ARCHETYPE.CRAWLER);
+      const geo = crawler.geometry as BufferGeometry;
+      const ampHead = geo.getAttribute('instanceAmpHead').array as Float32Array;
+      const ampTail = geo.getAttribute('instanceAmpTail').array as Float32Array;
+
+      // Both crawler instances must have zero amp so the carangiform
+      // vertex shader produces zero displacement regardless of phase.
+      expect(ampHead[0]).toBe(0);
+      expect(ampHead[1]).toBe(0);
+      expect(ampTail[0]).toBe(0);
+      expect(ampTail[1]).toBe(0);
+    });
+
+    it('leaves non-crawler archetype amps untouched (default tail-beat preserved)', () => {
+      bundle = buildLivestockMeshes({ maxInstancesPerArchetype: 4 });
+      const snap = makeSnapshot([
+        { archetype: FISH_ARCHETYPE.SLIM_TETRA, position: [0, 100, 0] },
+        { archetype: FISH_ARCHETYPE.CRAWLER, position: [0, 5, 0] },
+      ]);
+      bundle.syncFromSnapshot(snap, 0);
+
+      const slim = meshForArchetype(bundle, FISH_ARCHETYPE.SLIM_TETRA);
+      const ampHead = (slim.geometry as BufferGeometry).getAttribute('instanceAmpHead')
+        .array as Float32Array;
+      const ampTail = (slim.geometry as BufferGeometry).getAttribute('instanceAmpTail')
+        .array as Float32Array;
+      // Construction-time defaults stand for tetras — 0.02 head, 0.12 tail.
+      expect(ampHead[0]).toBeCloseTo(0.02, 5);
+      expect(ampTail[0]).toBeCloseTo(0.12, 5);
+    });
+
+    it('flags the crawler amp attributes as needsUpdate after a sync that wrote zeroes', () => {
+      bundle = buildLivestockMeshes({ maxInstancesPerArchetype: 4 });
+      const snap = makeSnapshot([{ archetype: FISH_ARCHETYPE.CRAWLER, position: [0, 0, 0] }]);
+      bundle.syncFromSnapshot(snap, 0);
+      const crawler = meshForArchetype(bundle, FISH_ARCHETYPE.CRAWLER);
+      const geo = crawler.geometry as BufferGeometry;
+      // `version > 0` means the GPU was asked to upload the zeroed amp.
+      expect((geo.getAttribute('instanceAmpHead') as InstancedBufferAttribute).version).toBe(1);
+      expect((geo.getAttribute('instanceAmpTail') as InstancedBufferAttribute).version).toBe(1);
+    });
+
+    it('disposes the crawler mesh on bundle.dispose()', () => {
+      bundle = buildLivestockMeshes();
+      const crawler = meshForArchetype(bundle, FISH_ARCHETYPE.CRAWLER);
+      const geo = crawler.geometry as BufferGeometry;
+      const mat = crawler.material as ShaderMaterial;
+      const geoSpy = jest.spyOn(geo, 'dispose');
+      const matSpy = jest.spyOn(mat, 'dispose');
+      bundle.dispose();
+      expect(geoSpy).toHaveBeenCalledTimes(1);
+      expect(matSpy).toHaveBeenCalledTimes(1);
     });
   });
 

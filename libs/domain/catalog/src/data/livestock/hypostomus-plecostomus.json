@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.common-pleco",
+  "version": 1,
+  "name": "Common Pleco (Hypostomus plecostomus)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 400,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 22, "maxC": 28 },
+  "pHRange": { "min": 6.5, "max": 7.8 },
+  "schoolingMin": 1,
+  "bioloadClass": "high",
+  "color": "#3a2e22",
+  "description": "Frequently sold as a small juvenile, grows to ~40 cm and produces an enormous bioload. Only suitable in 600L+ tanks. Substring 'pleco' fires both the bottom depth-band and algae-grazer feeding heuristics; explicit `bioloadClass: high` overrides the size-based default and warns F7.2's stocking rules that this is a heavy-waste species despite ostensibly being labelled an algae-eater.",
+  "tags": ["solo", "bottom-dweller", "algae-eater", "pleco", "large-tank"],
+  "compatibilityFlags": { "plantedOK": false, "finNipper": false, "brackish": false },
+  "behavior": {
+    "schooling": { "wCoh": 0 }
+  }
+}

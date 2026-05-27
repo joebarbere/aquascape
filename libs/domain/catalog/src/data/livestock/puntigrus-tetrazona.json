@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.tiger-barb",
+  "version": 1,
+  "name": "Tiger Barb (Puntigrus tetrazona)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 70,
+  "temperament": "semi-aggressive",
+  "temperatureRange": { "minC": 22, "maxC": 27 },
+  "pHRange": { "min": 6.0, "max": 7.5 },
+  "schoolingMin": 8,
+  "bioloadClass": "medium",
+  "color": "#e8a428",
+  "description": "The canonical fin-nipper. Black-banded amber body; constantly chases tankmates when kept in groups smaller than 8 (Keenleyside 1955 — intra-school aggression suppresses heterospecific nipping above the group-size threshold). Avoid with long-finned tankmates (bettas, gouramis, angels). Explicit nipping block — scientific-name id wouldn't trigger the heuristic, so we declare it directly.",
+  "tags": ["schooler", "barb", "midwater", "nipper"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": true, "brackish": false },
+  "behavior": {
+    "nipping": { "groupThreshold": 8, "finFraction": 0.4, "rate": 0.5 }
+  }
+}

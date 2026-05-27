@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.harlequin-rasbora",
+  "version": 1,
+  "name": "Harlequin Rasbora (Trigonostigma heteromorpha)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 45,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 22, "maxC": 27 },
+  "pHRange": { "min": 6.0, "max": 7.5 },
+  "schoolingMin": 6,
+  "bioloadClass": "low",
+  "color": "#d6824f",
+  "description": "Classic copper-orange Southeast Asian rasbora with a black wedge marking. Active mid-water schooler; slightly larger group radius than tetras (wider ZOA) suits its loose, gliding shoals. Hardier and more pH-tolerant than the soft-water tetras.",
+  "tags": ["schooler", "community", "rasbora", "midwater"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false },
+  "behavior": {
+    "schooling": { "ZOA": 110 }
+  }
+}

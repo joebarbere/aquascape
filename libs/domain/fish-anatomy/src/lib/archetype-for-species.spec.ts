@@ -62,11 +62,21 @@ describe('archetypeForSpecies', () => {
   });
 
   describe('group-based mapping', () => {
-    it('treats catalog group=shrimp as slim-tetra placeholder', () => {
-      expect(archetypeForSpecies({ group: 'shrimp' })).toBe('slim-tetra');
+    it('maps catalog group=shrimp to crawler (F11.6 Wave 2)', () => {
+      expect(archetypeForSpecies({ group: 'shrimp' })).toBe('crawler');
     });
-    it('treats catalog group=snail as slim-tetra placeholder', () => {
-      expect(archetypeForSpecies({ group: 'snail' })).toBe('slim-tetra');
+    it('maps catalog group=snail to crawler (F11.6 Wave 2)', () => {
+      expect(archetypeForSpecies({ group: 'snail' })).toBe('crawler');
+    });
+    it('is case-insensitive for shrimp/snail group strings', () => {
+      expect(archetypeForSpecies({ group: 'Shrimp' })).toBe('crawler');
+      expect(archetypeForSpecies({ group: 'SNAIL' })).toBe('crawler');
+    });
+    it('still maps catalog group=fish through the id sniff (regression vs F11.6)', () => {
+      // Adding the crawler branch must not change the fish/unknown
+      // fall-through to id substring matching.
+      expect(archetypeForSpecies({ group: 'fish', id: 'cardinal-tetra' })).toBe('slim-tetra');
+      expect(archetypeForSpecies({ group: 'fish', id: 'tiger-barb' })).toBe('barb');
     });
     it('treats group=tetra as slim-tetra', () => {
       expect(archetypeForSpecies({ group: 'tetra' })).toBe('slim-tetra');

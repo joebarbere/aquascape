@@ -95,6 +95,12 @@ export const FISH_ARCHETYPE = {
   CORY_CYLINDER: 3,
   EEL: 4,
   HATCHET_WEDGE: 5,
+  // F11.6 Wave 2 — shrimp + snail share this archetype. Stubby
+  // substrate-hugging silhouette with antennae instead of fins; the
+  // renderer suppresses the carangiform tail-beat for crawler-tagged
+  // entities and the kinematic system caps their vertical velocity so
+  // they stay glued to the substrate.
+  CRAWLER: 6,
 } as const;
 
 export type FishArchetypeId = (typeof FISH_ARCHETYPE)[keyof typeof FISH_ARCHETYPE];

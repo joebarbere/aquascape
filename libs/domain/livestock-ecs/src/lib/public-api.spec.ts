@@ -62,6 +62,7 @@ describe('public API surface', () => {
   it('exports the archetype + behavior-mode enums', () => {
     expect(FISH_ARCHETYPE.SLIM_TETRA).toBe(0);
     expect(FISH_ARCHETYPE.HATCHET_WEDGE).toBe(5);
+    expect(FISH_ARCHETYPE.CRAWLER).toBe(6); // F11.6 Wave 2 — shrimp + snails
     expect(BEHAVIOR_MODE.FORAGE).toBe(0);
     expect(BEHAVIOR_MODE.PURSUE).toBe(2);
   });

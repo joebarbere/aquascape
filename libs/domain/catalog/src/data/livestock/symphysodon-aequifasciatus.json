@@ -1,0 +1,22 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.discus",
+  "version": 1,
+  "name": "Discus (Symphysodon aequifasciatus)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 200,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 27, "maxC": 31 },
+  "pHRange": { "min": 5.5, "max": 7.0 },
+  "schoolingMin": 4,
+  "bioloadClass": "high",
+  "color": "#d04d36",
+  "description": "Round-bodied Amazonian cichlid prized for its colour morphs; kept in groups of 4-8 to diffuse pair-bond aggression. Sensitive to dissolved organics and temperature swings — `fear.riskBaseline` bumped above the mid preset so they read as twitchier than the average community fish. Substring 'discus' fires the territory heuristic; we keep the cichlid default but lower aggression for the peaceful temperament.",
+  "tags": ["cichlid", "centerpiece", "south-american", "advanced", "discus"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false },
+  "behavior": {
+    "fear": { "riskBaseline": 0.18 },
+    "territory": { "aggression": 50 }
+  }
+}

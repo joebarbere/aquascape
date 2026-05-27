@@ -1,0 +1,18 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.bronze-cory",
+  "version": 1,
+  "name": "Bronze Corydoras (Corydoras aeneus)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 65,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 22, "maxC": 27 },
+  "pHRange": { "min": 6.0, "max": 7.5 },
+  "schoolingMin": 6,
+  "bioloadClass": "medium",
+  "color": "#a6896a",
+  "description": "Classic bronze-armoured cory; larger and more outgoing than the pygmy. Substring 'cory' fires the bottom depth-band heuristic. Smooth fine sand strongly preferred — sharp gravel erodes the barbels over time. Sift the substrate constantly when fed sinking wafers.",
+  "tags": ["schooler", "bottom-dweller", "cory", "soft-substrate"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false }
+}

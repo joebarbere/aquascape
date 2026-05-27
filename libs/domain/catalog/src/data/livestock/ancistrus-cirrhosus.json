@@ -1,0 +1,22 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.bristlenose-pleco",
+  "version": 1,
+  "name": "Bristlenose Pleco (Ancistrus cirrhosus)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 130,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 22, "maxC": 28 },
+  "pHRange": { "min": 6.0, "max": 7.8 },
+  "schoolingMin": 1,
+  "bioloadClass": "high",
+  "color": "#3f3225",
+  "description": "Dwarf pleco — males develop the characteristic bristled rostrum. Solitary (territorial against other male plecos). Substring 'pleco' lives in the common name, not the scientific id 'ancistrus-cirrhosus', so the algae-grazer feeding heuristic is declared explicitly. `schooling.wCoh: 0` disables cohesion. Add explicit `depth:bottom` tag since 'ancistrus' won't match the bottom id-substring list.",
+  "tags": ["solo", "bottom-dweller", "algae-eater", "pleco", "depth:bottom"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false },
+  "behavior": {
+    "schooling": { "wCoh": 0 },
+    "feeding": { "category": "algae-grazer" }
+  }
+}

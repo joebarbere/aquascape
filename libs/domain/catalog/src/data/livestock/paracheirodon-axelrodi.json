@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.cardinal-tetra",
+  "version": 1,
+  "name": "Cardinal Tetra (Paracheirodon axelrodi)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 30,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 23, "maxC": 28 },
+  "pHRange": { "min": 5.0, "max": 7.0 },
+  "schoolingMin": 10,
+  "bioloadClass": "low",
+  "color": "#1f6fcb",
+  "description": "Soft-water Amazonian relative of the neon tetra; iridescent blue stripe runs the full body and a red ventral half stretches head-to-tail. Famous for dense shoaling — keeps tighter formations than neons (wCoh override 1.4). Prefers warmer, more acidic water than the neon and is the better pick for blackwater biotopes.",
+  "tags": ["schooler", "nano", "community", "tetra", "midwater", "blackwater"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false },
+  "behavior": {
+    "schooling": { "wCoh": 1.4 }
+  }
+}

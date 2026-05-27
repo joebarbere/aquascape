@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.pearl-gourami",
+  "version": 1,
+  "name": "Pearl Gourami (Trichopodus leerii)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 110,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 24, "maxC": 28 },
+  "pHRange": { "min": 6.0, "max": 7.5 },
+  "schoolingMin": 1,
+  "bioloadClass": "medium",
+  "color": "#c4a682",
+  "description": "Larger labyrinth fish with iridescent pearled scales and trailing pelvic fin filaments. Surface-oriented like all gouramis. Solitary or in a single male / 2-3 female group; not a true schooler — cohesion disabled via `schooling.wCoh: 0`.",
+  "tags": ["solo", "labyrinth", "centerpiece", "depth:top"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false },
+  "behavior": {
+    "schooling": { "wCoh": 0 }
+  }
+}

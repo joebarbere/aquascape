@@ -73,6 +73,18 @@ BubbleLifetimeSystem      (F11.5 — Position.y += velocityY * dt; despawn at wa
 
 The lib (`livestock-ecs`) does NOT own the accumulator — it just exposes `step(dt)` + `snapshot(alpha)`. The caller (renderer-3d's RAF) owns the loop.
 
+## Performance budget (F11.6)
+
+- **Target: p95 ≤ 4 ms ECS step at n=200 fish** with the full F11.5 system stack (Perception → Fear → Nip → Territory → Feeding → Curiosity → Schooling → Depth → FlowField → SteeringIntegrator → Collision → Kinematic → Animation → FoodSpriteLifetime → BubbleSourceSpawn → BubbleLifetime). At 30 Hz sim that leaves 29 ms of the 33 ms tick for everything else (RAF, render, layout, GC).
+- **How to run the bench:**
+  ```
+  BENCH=1 pnpm exec nx test domain-livestock-ecs -t perf-bench
+  ```
+  Lives in `libs/domain/livestock-ecs/src/lib/perf-bench.spec.ts`. Builds 5 species × 40 fish (one preset per band + nipping + territorial variants), 5 hardscape entries, 2 air-stone bubble sources, 1 baked FlowField, 8 FoodSprites. Warm-up = 60 ticks; measured = 1000 ticks via `performance.now()` deltas.
+- **Opt-in only.** `BENCH` env var; without it the suite reports `1 skipped` and exits in ~150 ms. CI does NOT run the bench — the hard correctness guarantees (no per-tick allocation, byte-identical determinism) live in the system specs + `determinism.spec.ts`, and bench numbers are machine-dependent.
+- **Measured (Apple Silicon laptop, F11.5 stack, no SDF):** mean ≈ 2.6 ms, median ≈ 2.5 ms, **p95 ≈ 3.4 ms**, p99 ≈ 4.1 ms, max ≈ 5.0 ms. First run was under budget — no optimization required. Update this paragraph on a different reference machine if the numbers shift materially.
+- **If you add a new system, run the bench.** Any addition to `step()` is a candidate hot-path regression. The likely hotspots if p95 starts breaching are: `SchoolingSystem` (three-zone neighbour iteration is the heaviest per-tick loop, worst-case O(neighbours-per-cell × n)); `CollisionSystem` fish-vs-fish pair iteration in dense clusters; per-tick allocations in any system; and the snapshot's bubble bubble-sort (`Array.from + sort` on each snapshot has GC overhead at 60 Hz — convert to a pre-allocated index array + insertion sort if it surfaces in a profile). Optimize ONLY where measurement points the finger — premature optimization is unnecessary churn against the "byte-identical determinism" contract.
+
 ## Determinism (load-bearing)
 
 - **Same `(seed, livestock)` → bit-identical world state at every tick.** This is the single invariant the entire stage rests on. The 1000-tick replay spec in `apps/web/src/app/livestock-simulation.service.spec.ts` is the gate. The F11.2 byte-identity test in `libs/domain/livestock-ecs/src/lib/determinism.spec.ts` covers the behaviour-system path (registered species + tickPrng noise).

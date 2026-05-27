@@ -56,6 +56,7 @@ export {
   buildCoryCylinderGeometry,
   buildEelGeometry,
   buildHatchetWedgeGeometry,
+  buildCrawlerGeometry,
 } from './lib/archetypes';
 
 // ─── Species → archetype mapping ──────────────────────────────────────────

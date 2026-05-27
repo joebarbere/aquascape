@@ -9,7 +9,7 @@
 [![main CI](https://github.com/joebarbere/aquascape/actions/workflows/main.yml/badge.svg)](https://github.com/joebarbere/aquascape/actions/workflows/main.yml)
 [![PR CI](https://github.com/joebarbere/aquascape/actions/workflows/pr.yml/badge.svg)](https://github.com/joebarbere/aquascape/actions/workflows/pr.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
-[![Status: Stages 0–7 + 10 + F11.1–F11.5 complete](https://img.shields.io/badge/status-stages%200--7%20%2B%2010%20%2B%20F11.1--F11.5-brightgreen.svg)](#status--roadmap)
+[![Status: Stages 0–7 + 10 + F11.1–F11.6 complete](https://img.shields.io/badge/status-stages%200--7%20%2B%2010%20%2B%20F11.1--F11.6-brightgreen.svg)](#status--roadmap)
 [![Platform: Web + Electron](https://img.shields.io/badge/platform-web%20%2B%20electron-informational.svg)](#platforms)
 
 </div>
@@ -71,7 +71,7 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 
 ### 🐟 Livestock & equipment planning (Stage 7)
 
-- **8 livestock species** — neon tetra, betta, pygmy cory, apistogramma cacatuoides + cherry shrimp + crystal red shrimp + nerite snail + ramshorn snail
+- **24 livestock species** — 20 fish (neon + cardinal + ember tetras, harlequin rasbora, cherry + tiger barb, marbled hatchetfish, dwarf + pearl gourami, angelfish, discus, German blue ram, apistogramma cacatuoides, betta, kuhli loach, pygmy + bronze cory, otocinclus, bristlenose + common pleco) + 2 shrimp (cherry, crystal red) + 2 snails (nerite, ramshorn)
 - **12 equipment entries** — Eheim Pro 4+ / Fluval 207 / AquaClear 50 / sponge filters, Fluval E300 / Eheim Jager 200 / Cobalt Neo-Therm 100 heaters, Twinstar 600S / Chihiros WRGB II Pro 60 / Fluval Plant 3.0 lights, Co2Art SE + ADA Pollen Glass CO2
 - **Stocking guidance** — six rule-based, explainable warnings: bioload vs. tank litres, temperature/pH range intersections, peaceful+aggressive temperament clash, schooling-below-minimum, fin-nipper presence
 - **Inline note editing** on each equipment row
@@ -108,6 +108,7 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 - **F11.3 shipped:** territoriality + nipping + fear. Cichlids defend caves (bourgeois owner-wins chase with fatigue decay), tiger barbs nip long-finned slow-swimming victims (suppressed once their conspecific group hits threshold), startled fish flip into REFUGE mode and dart to the nearest hardscape with `coverScore > 0`. Hardscape gains an optional `coverScore` (loader defaults from category — wood 0.6 / rock 0.4); livestock behaviour gains optional `territory` / `nipping` / required `fear` params. Priority arbitration: Fear → Nip → Territory → Schooling, mode-gated via `BehaviorMode`.
 - **F11.4 shipped:** feeding + grazing + curiosity/glass-surfing. Otocinclus graze algae off rocks (algae score decays under rasping + regrows ~17 min to full), hatchetfish + tetras + cories find food sprites at the right Y-band for their feeding category, shrimp + snails detrivore-wander the substrate; bold species curiously dart at the front pane on a Poisson trigger. A "Feed tank" button in the Livestock tool drops 3–6 food sprites just below the waterline (transient — sprites auto-despawn after 30s). Food sprites render as camera-facing billboards via a 7th InstancedMesh in the livestock renderer.
 - **F11.5 shipped:** flow field + hardscape SDF collision + bubble columns. A new `libs/domain/fluid-sim/` lib bakes a 32³ divergence-free FlowField from filter outflow + intake positions and a 64³ sphere-union HardscapeSdf for collision detection. FlowFieldSystem drags fish slightly toward intakes / away from outflows; CollisionSystem deflects velocity off rocks (tangent-project + repulsion) and separates overlapping fish. Air-stone equipment with `airRateMl > 0` registers as a bubble source — `BUBBLE_SCALE × airRateMl / 60` particles/sec rise from the stone at 150 mm/s, capped at 200 bubbles globally, despawning at the waterline. Catalog gained `EquipmentEntry.flow?` + `airRateMl?`. Bubbles render as an 8th InstancedMesh of small blue-white billboards.
+- **F11.6 shipped:** per-species behaviour presets + perf budget. **24 livestock species** in the catalog now (16 new in this substage: cardinal/ember tetras, harlequin rasbora, cherry/tiger barbs, marbled hatchetfish, dwarf + pearl gourami, angelfish, discus, German blue ram, kuhli loach, bronze cory, otocinclus, bristlenose + common pleco). New 7th procedural archetype — **crawler** — for shrimp + snails (stubby body + antennae, no carangiform wiggle, Y-velocity clamped so they stay on the substrate). A dev-only **behavior debug overlay** (Ctrl/Cmd+Shift+D in dev mode) shows each fish's mode + anchor + refuge — useful for QA and the curious. Perf budget: 3.43 ms p95 ECS step at n=200 fish on Apple Silicon (4 ms target — 14 % headroom).
 
 ### 📦 Templates
 
@@ -171,7 +172,8 @@ The roadmap lives in [`aquascape-development-plan.md`](./aquascape-development-p
 | 11 F11.3 | Territoriality + fin-nipping + hiding/timid — bourgeois owner-wins cave defense with fatigue, group-threshold-suppressed nipping, fear-driven REFUGE mode + nearest-cover refuge. Catalog `HardscapeEntry.coverScore?` + livestock `behavior.{territory,nipping,fear}`. | ✅ |
 | 11 F11.4 | Feeding + grazing + curiosity — hunger drive, six FeedingCategory branches (surface/midwater/substrate/algae-grazer/plant-eater/detritivore), algae score on hardscape (decays under rasping, regrows over sim-time), boldness-gated Poisson glass-surfing, transient food sprites from a "Feed tank" UI button. | ✅ |
 | 11 F11.5 | Flow field + hardscape SDF collision + bubble columns — `libs/domain/fluid-sim/` bakes a divergence-free flow grid from filter equipment; CollisionSystem deflects fish off rocks + separates overlapping pairs; air-stone equipment spawns rising bubble billboards capped at 200 globally. | ✅ |
-| 11 F11.6–F11.7 | Per-species presets + perf budget (F11.6), ambient polish — water surface, day-night, plant sway (F11.7). [Research bibliography](./docs/research/stage-11-livestock-subsystem.md). | 📐 Planned |
+| 11 F11.6 | Per-species presets + perf budget — 24 catalog livestock species; crawler archetype for shrimp + snails; dev-only behavior debug overlay (Ctrl/Cmd+Shift+D); perf benchmark gates 4 ms ECS step at n=200 fish (measured 3.43 ms). | ✅ |
+| 11 F11.7 | Ambient polish — animated water surface, day-night cycle, plant sway. [Research bibliography](./docs/research/stage-11-livestock-subsystem.md). | 📐 Planned |
 | 12 | Release pipeline — `pnpm release <version>`, electron-builder installers, GitHub Releases. Version scheme + first-release tag are an open decision (tracked inside the plan + a forthcoming ADR-0005); the script ships scheme-agnostic. See [`plans/stage-12-release-pipeline.md`](./plans/stage-12-release-pipeline.md). | 📐 Planned |
 
 ---

@@ -1,0 +1,18 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.otocinclus",
+  "version": 1,
+  "name": "Otocinclus (Otocinclus vittatus)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 40,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 22, "maxC": 27 },
+  "pHRange": { "min": 6.0, "max": 7.5 },
+  "schoolingMin": 6,
+  "bioloadClass": "low",
+  "color": "#7d6a4f",
+  "description": "Small South American suckermouth catfish that grazes biofilm + soft algae off plant leaves and hardscape. Substring 'oto' fires both bottom-depth and algae-grazer feeding heuristics. Stock only in well-established planted tanks — they starve quickly in a tank without grazing surfaces.",
+  "tags": ["schooler", "bottom-dweller", "algae-eater", "oto", "planted"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false }
+}

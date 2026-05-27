@@ -12,8 +12,8 @@
  * `Position += Velocity * dt` — the only change is that Velocity is now
  * typically non-zero by the time we run.
  */
-import { defineQuery, type IWorld } from 'bitecs';
-import { AnimationPhase, Position, Velocity } from './components';
+import { defineQuery, hasComponent, type IWorld } from 'bitecs';
+import { AnimationPhase, Archetype, FISH_ARCHETYPE, Position, Velocity } from './components';
 
 export { perceptionSystem } from './perception-system';
 export { schoolingSystem } from './schooling-system';
@@ -33,17 +33,48 @@ const kinematicQuery = defineQuery([Position, Velocity]);
 const animationQuery = defineQuery([AnimationPhase]);
 
 /**
+ * Maximum vertical velocity for crawler-archetype entities (mm/sec).
+ * F11.6 Wave 2 — shrimp + snail are substrate-glued. Without this cap a
+ * fear-startled crawler can pick up a noticeable schooling-noise Y
+ * impulse and momentarily lift off; clamping at the integrator keeps the
+ * substrate-hugging silhouette stable without needing a dedicated
+ * crawler kinematic model. The downward direction is left unclamped so
+ * gravity-like drift toward the substrate (DepthSystem pulling
+ * preferredY=0.05) keeps working at full strength.
+ */
+const CRAWLER_MAX_VY_MM_PER_SEC = 5;
+
+/**
  * Integrate `Position += Velocity * dt`. F11.1 left Velocity at zero so
  * this was effectively a no-op; F11.2 starts populating Velocity via
  * `SteeringIntegrator`, but the per-tick math is unchanged. Post-step
  * AABB clamping lives in `world.ts` (`clampPositionToAabb`) so the
  * kinematic loop itself stays minimal — three multiplies + adds per
  * entity per tick.
+ *
+ * Crawler special-case (F11.6 Wave 2): for entities tagged with
+ * `Archetype === FISH_ARCHETYPE.CRAWLER`, clamp `|Velocity.y|` to
+ * `CRAWLER_MAX_VY_MM_PER_SEC` before integrating. The cap is applied
+ * symmetrically (upper + lower bound) so both an upward startle impulse
+ * and an overshooting downward correction stay bounded. This is the
+ * minimal substrate-glue heuristic — true SDF-gradient surface
+ * conforming locomotion for snails crawling along rock faces is a
+ * future-work item (see `plans/stage-11-animated-livestock.md` F11.6).
  */
 export function kinematicSystem(world: IWorld, dt: number): void {
   // `for...of` narrows the element to `number` (vs. `for (let i…)` indexing
   // which, with `noUncheckedIndexedAccess`, yields `number | undefined`).
   for (const eid of kinematicQuery(world)) {
+    // Crawler Y-velocity clamp — applied in place before integration so
+    // the clamped value is also what subsequent ticks see.
+    if (hasComponent(world, Archetype, eid) && Archetype.id[eid] === FISH_ARCHETYPE.CRAWLER) {
+      const vy = Velocity.y[eid] as number;
+      if (vy > CRAWLER_MAX_VY_MM_PER_SEC) {
+        Velocity.y[eid] = CRAWLER_MAX_VY_MM_PER_SEC;
+      } else if (vy < -CRAWLER_MAX_VY_MM_PER_SEC) {
+        Velocity.y[eid] = -CRAWLER_MAX_VY_MM_PER_SEC;
+      }
+    }
     Position.x[eid] = (Position.x[eid] as number) + (Velocity.x[eid] as number) * dt;
     Position.y[eid] = (Position.y[eid] as number) + (Velocity.y[eid] as number) * dt;
     Position.z[eid] = (Position.z[eid] as number) + (Velocity.z[eid] as number) * dt;

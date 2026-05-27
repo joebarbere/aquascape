@@ -16,7 +16,7 @@
 
 import type { FishGeometryDescriptor } from '../index';
 import { composeFish } from './compose';
-import type { BodyControlPoint } from './body-builder';
+import { buildRevolvedBody, type BodyControlPoint } from './body-builder';
 
 // ─── slim-tetra ───────────────────────────────────────────────────────────
 //
@@ -426,4 +426,161 @@ export function buildHatchetWedgeGeometry(): FishGeometryDescriptor {
     surfaceJitter: 0.0012,
     seed: 0x4a7c,
   });
+}
+
+// ─── crawler ──────────────────────────────────────────────────────────────
+//
+// Shared archetype for shrimp + snails (Stage 11 F11.6 Wave 2). A stubby
+// low ovoid — depth ~0.25, lateral compression ~0.20 — with two thin
+// forward-pointing antennae (snail eye-stalks / shrimp antennae). NO
+// caudal / dorsal / anal / pectoral fins — fins don't apply to crustacean
+// or gastropod silhouettes, and the renderer's per-instance amp zeroing
+// suppresses the carangiform tail-beat for this archetype anyway (the
+// kinematic model for crawlers is substrate-glued slow wander, not
+// schooling fish swim).
+//
+// We bypass `composeFish` (which always builds the four fin groups) and
+// drive the body builder directly, then append the antennae as two thin
+// triangle pairs. Empty `[0, 0]` fin groups keep the descriptor's
+// `groups` shape valid.
+
+/** Stubby ovoid body — substrate-hugging proportions for shrimp + snail. */
+const CRAWLER_BODY: BodyControlPoint[] = [
+  { s: 0.0, ry: 0.005, rz: 0.005 },
+  { s: 0.15, ry: 0.09, rz: 0.07 },
+  { s: 0.4, ry: 0.125, rz: 0.1 },
+  { s: 0.6, ry: 0.125, rz: 0.1 },
+  { s: 0.85, ry: 0.08, rz: 0.06 },
+  { s: 1.0, ry: 0.01, rz: 0.005 },
+];
+
+/**
+ * Antenna half-thickness — drives the cross-section of the thin triangle
+ * pair. Tiny on purpose: antennae read as "lines" against the body, not
+ * as flat blades.
+ */
+const ANTENNA_HALF_THICKNESS = 0.006;
+/** Antenna forward extension from the head (in BL units). */
+const ANTENNA_LENGTH = 0.4;
+/** Lateral spread of antennae from the spine centreline. */
+const ANTENNA_LATERAL = 0.04;
+/** Slight upward tilt of antennae tip vs. root (shrimp + snail both lift theirs). */
+const ANTENNA_UP_TILT = 0.04;
+
+/**
+ * Append a single thin "antenna" — modelled as two triangles forming a
+ * narrow blade in the XZ plane near the head. Returns nothing; mutates
+ * the context arrays in place.
+ */
+function pushAntenna(
+  ctx: {
+    positions: number[];
+    normals: number[];
+    uvs: number[];
+    indices: number[];
+    spineUv: number[];
+  },
+  rootZ: number,
+): void {
+  // Root at the head (s≈0.05), small Z offset to the side.
+  const rx = 0.05;
+  const ry = 0.02; // attach slightly above the spine (head-top)
+  const rz = rootZ;
+  // Tip — forward + slightly lateral + tilted up.
+  const tx = rx + ANTENNA_LENGTH;
+  const ty = ry + ANTENNA_UP_TILT;
+  const tz = rootZ + Math.sign(rootZ) * ANTENNA_LATERAL;
+
+  // Build a thin blade: 4 verts (root-near, root-far, tip-near, tip-far)
+  // joined by 2 triangles. The "near/far" offset is along Y so the
+  // antenna reads from any orbit angle (top-down + side-on both catch
+  // edge thickness).
+  const baseIdx = ctx.positions.length / 3;
+
+  // Up-normal — every vertex shares the same upward face normal; the
+  // antennae are too thin for a per-face lighting story to matter.
+  const nx = 0;
+  const ny = 1;
+  const nz = 0;
+
+  // root-lower
+  ctx.positions.push(rx, ry - ANTENNA_HALF_THICKNESS, rz);
+  ctx.normals.push(nx, ny, nz);
+  ctx.uvs.push(0, 0);
+  ctx.spineUv.push(rx, 0);
+  // root-upper
+  ctx.positions.push(rx, ry + ANTENNA_HALF_THICKNESS, rz);
+  ctx.normals.push(nx, ny, nz);
+  ctx.uvs.push(0, 1);
+  ctx.spineUv.push(rx, 0);
+  // tip-lower
+  ctx.positions.push(tx, ty - ANTENNA_HALF_THICKNESS, tz);
+  ctx.normals.push(nx, ny, nz);
+  ctx.uvs.push(1, 0);
+  ctx.spineUv.push(tx, 0);
+  // tip-upper
+  ctx.positions.push(tx, ty + ANTENNA_HALF_THICKNESS, tz);
+  ctx.normals.push(nx, ny, nz);
+  ctx.uvs.push(1, 1);
+  ctx.spineUv.push(tx, 0);
+
+  // Two triangles: (root-lower, tip-lower, root-upper),
+  // (root-upper, tip-lower, tip-upper).
+  ctx.indices.push(baseIdx + 0, baseIdx + 2, baseIdx + 1);
+  ctx.indices.push(baseIdx + 1, baseIdx + 2, baseIdx + 3);
+}
+
+export function buildCrawlerGeometry(): FishGeometryDescriptor {
+  // 'craw' folded — stable per-build seed (passed to the body builder so
+  // its jitter PRNG produces byte-identical output across calls).
+  const CRAWLER_SEED = 0xc7a4;
+  // Drive the body builder directly so we can append antennae (rather
+  // than fins) afterwards.
+  const xSegments = 12;
+  const radialSegments = 10;
+  const body = buildRevolvedBody(CRAWLER_BODY, {
+    xSegments,
+    radialSegments,
+    surfaceJitter: 0.0008,
+    seed: CRAWLER_SEED,
+  });
+
+  // The body builder hands us plain `number[]` buffers; we append the
+  // antennae onto the same arrays so the final descriptor still has one
+  // contiguous vertex / index buffer (matches every other archetype).
+  const ctx = {
+    positions: body.positions,
+    normals: body.normals,
+    uvs: body.uvs,
+    indices: body.indices,
+    spineUv: body.spineUv,
+  };
+
+  const bodyIndexCount = body.indexCount;
+
+  // Two antennae — right (+z) and left (-z).
+  pushAntenna(ctx, 0.025);
+  pushAntenna(ctx, -0.025);
+
+  if (ctx.positions.length / 3 >= 65536) {
+    throw new Error('buildCrawlerGeometry: vertex count exceeds Uint16Array range');
+  }
+
+  return {
+    positions: new Float32Array(ctx.positions),
+    normals: new Float32Array(ctx.normals),
+    uvs: new Float32Array(ctx.uvs),
+    indices: new Uint16Array(ctx.indices),
+    spineUv: new Float32Array(ctx.spineUv),
+    groups: {
+      // Body is one contiguous index range starting at 0.
+      body: [0, bodyIndexCount],
+      // No fins — empty index ranges keep the descriptor type valid
+      // without confusing per-fin material passes.
+      caudal: [0, 0],
+      dorsal: [0, 0],
+      anal: [0, 0],
+      pectoral: [0, 0],
+    },
+  };
 }

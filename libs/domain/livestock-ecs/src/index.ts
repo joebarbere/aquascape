@@ -39,6 +39,7 @@ export {
   FISH_ARCHETYPE,
   BEHAVIOR_MODE,
   HARDSCAPE_CATEGORY,
+  NO_ENTITY_REF,
   NO_INTEREST,
   type FishArchetypeId,
   type BehaviorModeId,

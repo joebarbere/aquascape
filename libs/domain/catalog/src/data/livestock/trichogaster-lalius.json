@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.dwarf-gourami",
+  "version": 1,
+  "name": "Dwarf Gourami (Trichogaster lalius)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 80,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 24, "maxC": 28 },
+  "pHRange": { "min": 6.0, "max": 7.5 },
+  "schoolingMin": 1,
+  "bioloadClass": "medium",
+  "color": "#3a8fc7",
+  "description": "Labyrinth-breathing centrepiece fish from South Asia; kept singly or as a bonded pair. Surfaces frequently to gulp air, so tag forces the top depth band. `schooling.wCoh: 0` disables cohesion entirely — dwarf gouramis are solitary, not shoaling.",
+  "tags": ["solo", "labyrinth", "centerpiece", "depth:top"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false },
+  "behavior": {
+    "schooling": { "wCoh": 0 }
+  }
+}

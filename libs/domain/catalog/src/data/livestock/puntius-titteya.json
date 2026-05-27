@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.cherry-barb",
+  "version": 1,
+  "name": "Cherry Barb (Puntius titteya)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 50,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 23, "maxC": 27 },
+  "pHRange": { "min": 6.0, "max": 7.5 },
+  "schoolingMin": 6,
+  "bioloadClass": "medium",
+  "color": "#c93a3a",
+  "description": "Sri Lankan small barb that, unlike most of its genus, is reliably peaceful in community planted tanks. Males flush deep cherry-red when courting. Explicit `nipping: null` opts OUT of the generic barb / nipper heuristic — cherry barbs are documented exceptions.",
+  "tags": ["schooler", "community", "barb", "midwater"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false },
+  "behavior": {
+    "nipping": null
+  }
+}

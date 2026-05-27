@@ -135,6 +135,8 @@ import type {
 import { SceneActions, SelectionActions, selectScene, selectSelectedIds } from '@aquascape/state';
 import { Store } from '@ngrx/store';
 
+import { BehaviorDebugOverlayComponent } from './behavior-debug-overlay.component';
+import { BehaviorDebugService } from './behavior-debug.service';
 import { attachDebugHook, detachDebugHook } from './debug-hook';
 import { defaultViewport } from './default-viewport';
 import { applyMoveDrag, applyRotateDrag, applyScaleDrag } from './drag-math';
@@ -191,6 +193,7 @@ type DragState =
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     BackdropPanelComponent,
+    BehaviorDebugOverlayComponent,
     CommonModule,
     CompositionOverlaysComponent,
     EditorShellComponent,
@@ -516,6 +519,12 @@ type DragState =
       <!-- Backdrop scrim for the phone drawers. Click to close. Pointer-events
            only active in phone mode + when a drawer is open (CSS gates this). -->
       <div class="drawer-scrim" aria-hidden="true" (click)="closePhoneDrawers()"></div>
+
+      <!-- Stage 11 F11.6 Wave 4 — dev-only behavior debug overlay. Hidden in
+           production builds (gated by isDevMode inside the component) AND
+           hidden until the user presses Ctrl+Shift+D. Position is fixed so
+           it floats above every other layer without affecting layout. -->
+      <aquascape-behavior-debug-overlay></aquascape-behavior-debug-overlay>
     </div>
   `,
   styles: [
@@ -674,6 +683,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   // the 3D view. The service persists across 2D↔3D toggles; the renderer
   // just reads its `getWorld()` each render and steps it in the RAF tick.
   private readonly livestockSim = inject(LivestockSimulationService);
+  // Stage 11 F11.6 Wave 4 — toggle flag for the behavior debug overlay.
+  // Flipped by the Ctrl+Shift+D HostListener below. The overlay component
+  // reads `enabled()` itself; the AppComponent just owns the chord.
+  private readonly behaviorDebug = inject(BehaviorDebugService);
 
   private readonly fileService: FileService = inject(FILE_SERVICE);
   private readonly dialogService: DialogService = inject(DIALOG_SERVICE);
@@ -1417,6 +1430,39 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
     this.store.dispatch(SelectionActions.clearSelection());
+  }
+
+  /**
+   * Stage 11 F11.6 Wave 4 — dev-only Ctrl+Shift+D chord toggles the
+   * behavior-debug overlay. The chord covers both Windows/Linux (Ctrl)
+   * and macOS (Cmd via the `meta.shift.d` alias) so a contributor on
+   * either platform can flip it without reloading. The overlay component
+   * itself gates on `isDevMode()` so the chord in a production build
+   * just flips an invisible flag — no DOM impact, no leak risk.
+   *
+   * Caveat: we don't preventDefault() the chord on the keyboard event;
+   * if a future browser claims `Ctrl+Shift+D` for a built-in (e.g.
+   * Firefox's bookmark-bar toggle), the chord will still fire here AND
+   * trigger the browser default. That's acceptable for a dev-only
+   * affordance — the trade-off would be intercepting a keystroke the
+   * user might want delivered to the browser.
+   */
+  @HostListener('document:keydown.control.shift.d', ['$event'])
+  @HostListener('document:keydown.meta.shift.d', ['$event'])
+  onToggleBehaviorDebug(event: KeyboardEvent): void {
+    // Ignore the chord while the user is typing in a text field — same
+    // policy as the selection-inspector shortcuts (see app-shell caveat).
+    const target = event.target as HTMLElement | null;
+    if (
+      target !== null &&
+      (target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT')
+    ) {
+      return;
+    }
+    event.preventDefault();
+    this.behaviorDebug.toggle();
   }
 
   // ── Drag lifecycle ────────────────────────────────────────────────────

@@ -1,0 +1,18 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.kuhli-loach",
+  "version": 1,
+  "name": "Kuhli Loach (Pangio kuhlii)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 90,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 24, "maxC": 28 },
+  "pHRange": { "min": 5.5, "max": 7.0 },
+  "schoolingMin": 5,
+  "bioloadClass": "low",
+  "color": "#7a4226",
+  "description": "Eel-shaped Southeast Asian loach that lives between hardscape crevices and emerges at dusk. Substring 'kuhli' fires both the bottom depth-band and the timid curiosity heuristic (boldness 0.05, ratePerSec 0.005). Needs soft substrate and dense hardscape cover or it hides constantly out of sight.",
+  "tags": ["nocturnal", "bottom-dweller", "loach", "kuhli", "soft-substrate"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false }
+}

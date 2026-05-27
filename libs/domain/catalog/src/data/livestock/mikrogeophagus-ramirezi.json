@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.german-blue-ram",
+  "version": 1,
+  "name": "German Blue Ram (Mikrogeophagus ramirezi)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 60,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 26, "maxC": 30 },
+  "pHRange": { "min": 5.5, "max": 7.0 },
+  "schoolingMin": 1,
+  "bioloadClass": "medium",
+  "color": "#5b8fc2",
+  "description": "Dwarf Venezuelan cichlid; kept as a single male or a bonded pair. The 'ram' substring fires the territory heuristic and inherits the cichlid default — we just lower aggression to match the peaceful temperament. Demands warm, soft, slightly acidic water; not for newly-cycled tanks.",
+  "tags": ["cichlid", "centerpiece", "south-american", "dwarf-cichlid", "advanced"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false },
+  "behavior": {
+    "territory": { "aggression": 55 }
+  }
+}

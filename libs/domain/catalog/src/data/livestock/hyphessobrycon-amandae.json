@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "livestock.fish.ember-tetra",
+  "version": 1,
+  "name": "Ember Tetra (Hyphessobrycon amandae)",
+  "kind": "livestock",
+  "group": "fish",
+  "adultSize": 20,
+  "temperament": "peaceful",
+  "temperatureRange": { "minC": 23, "maxC": 28 },
+  "pHRange": { "min": 5.5, "max": 7.0 },
+  "schoolingMin": 8,
+  "bioloadClass": "low",
+  "color": "#e2622a",
+  "description": "Tiny warm-orange nano tetra from the Rio das Mortes basin. Forms looser shoals than the neon / cardinal tetras (wCoh override 0.8) and tends to spread across the mid-water column rather than packing tightly. Excellent first fish for a 40L+ planted nano.",
+  "tags": ["schooler", "nano", "community", "tetra", "midwater"],
+  "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false },
+  "behavior": {
+    "schooling": { "wCoh": 0.8 }
+  }
+}
