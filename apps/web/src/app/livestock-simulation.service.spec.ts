@@ -250,6 +250,66 @@ describe('LivestockSimulationService — determinism', () => {
     }
   });
 
+  it('clusters spawn positions per species so neighbours start inside each other\'s schooling ZOA', () => {
+    // Regression for the second F11.7 video: three neon tetras spawned at
+    // uniform random across the default 1000 × 400 × 400 tank land ~280
+    // mm apart on average (cube-root of the volume per fish), well beyond
+    // MID_PRESET's ZOA = 90 mm — so schooling cohesion never fires and
+    // the fish drift as singletons. After the cluster-spawn fix every
+    // pairwise distance for fish of the same species must be ≤
+    // 2 × clusterRadius ≤ ZOA, which puts neighbours in each other's
+    // zone-of-attraction from tick 1.
+    const livestock = [entry('e1', 'livestock.fish.neon-tetra', 6)];
+    const { service } = setup(sceneWithLivestock(livestock, 11));
+    const snap = service.getWorld()!.snapshot(0);
+    expect(snap.entityCount).toBe(6);
+    const pos = snap.position;
+    // MID_PRESET.schooling.ZOA = 90; clusterRadius = 90 × 0.5 = 45 →
+    // max pairwise distance ≤ 2 × 45 = 90 mm = ZOA. Allow a ~5 % float
+    // tolerance so the assertion isn't sensitive to seededHash01 edge
+    // values.
+    const MAX_PAIRWISE_MM = 95;
+    for (let i = 0; i < snap.entityCount; i++) {
+      for (let j = i + 1; j < snap.entityCount; j++) {
+        const dx = (pos[i * 3 + 0]! - pos[j * 3 + 0]!);
+        const dy = (pos[i * 3 + 1]! - pos[j * 3 + 1]!);
+        const dz = (pos[i * 3 + 2]! - pos[j * 3 + 2]!);
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        expect(d).toBeLessThanOrEqual(MAX_PAIRWISE_MM);
+      }
+    }
+  });
+
+  it('keeps spawned fish at least bodyLength from each face (no body extending through the glass)', () => {
+    // Regression for the second F11.7 video: with the prior half-body
+    // wall inset the tail extended through the OPPOSITE wall whenever
+    // a fish spawned within `halfBody` of it. The fix bumps both the
+    // spawn inset AND the integrator wall projection to a full
+    // `bodyLength`, so on the very first tick every fish (nose at
+    // Position) has at least one body-length of clearance from every
+    // face — no body can extend through the glass regardless of
+    // orientation.
+    const livestock = [entry('e1', 'livestock.fish.neon-tetra', 12)];
+    const { service } = setup(sceneWithLivestock(livestock, 13));
+    const snap = service.getWorld()!.snapshot(0);
+    const scene = defaultScene();
+    // BodyLength for neon tetras is 30 mm per the catalog (smaller than
+    // the 35 mm fallback). The spawn inset is `max(SPAWN_WALL_INSET_MM,
+    // bodyLengthMm)` = max(20, 30) = 30.
+    const MIN_WALL_DIST = 30;
+    for (let i = 0; i < snap.entityCount; i++) {
+      const x = snap.position[i * 3 + 0]!;
+      const y = snap.position[i * 3 + 1]!;
+      const z = snap.position[i * 3 + 2]!;
+      expect(x).toBeGreaterThanOrEqual(MIN_WALL_DIST);
+      expect(x).toBeLessThanOrEqual(scene.tank.width - MIN_WALL_DIST);
+      expect(y).toBeGreaterThanOrEqual(MIN_WALL_DIST);
+      expect(y).toBeLessThanOrEqual(scene.tank.height - MIN_WALL_DIST);
+      expect(z).toBeGreaterThanOrEqual(MIN_WALL_DIST);
+      expect(z).toBeLessThanOrEqual(scene.tank.depth - MIN_WALL_DIST);
+    }
+  });
+
   it('falls back to a default archetype + body length when the catalog ref is unknown', () => {
     // Don't register the entry in the catalog — service should still
     // spawn rather than throw. F11.2 emits a single console.warn on the

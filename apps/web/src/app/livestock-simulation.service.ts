@@ -117,6 +117,16 @@ import { LivestockPulseActions, selectScene } from '@aquascape/state';
 const FALLBACK_BODY_LENGTH_MM = 35;
 /** Inset from each interior wall so spawned fish never start inside the glass. */
 const SPAWN_WALL_INSET_MM = 20;
+/** Minimum cluster radius (mm) used when a species has no resolved
+ *  SchoolingParams to derive a tighter value. Keeps shrimp/snail spawns
+ *  reasonably close while staying inside the AABB. */
+const MIN_CLUSTER_RADIUS_MM = 40;
+/** Fraction of `schooling.ZOA` used as the cluster radius when a behaviour
+ *  is resolved. ZOA × 0.5 puts spawn-time neighbours within each other's
+ *  zone-of-attraction so cohesion fires from tick 1 — without this, three
+ *  tetras dropped into a 1000 × 400 × 400 tank land ~280 mm apart and
+ *  schooling never engages because every fish is beyond the others' ZOA. */
+const CLUSTER_RADIUS_ZOA_FRACTION = 0.5;
 /** F11.4 — wall inset for food-sprite XZ positions (mm). Smaller than the
  *  fish inset because sprites are visually tiny billboards, not ellipsoids. */
 const FOOD_SPRITE_WALL_INSET_MM = 30;
@@ -622,13 +632,44 @@ export class LivestockSimulationService implements OnDestroy {
     // passes a unique key tuple so the stream is reproducible.
     const entrySeed = (scene.seed ^ hashStringTo32(entry.id)) | 0;
 
+    // Cluster every fish of this entry around a single deterministic
+    // species centre. Three tetras spawned individually at uniform
+    // random across a 1000 × 400 × 400 tank land ~280 mm apart, well
+    // beyond MID_PRESET's ZOA = 90 mm; schooling cohesion never fires
+    // and the fish wander as singletons. Clustering puts neighbours
+    // inside each other's ZOA from tick 1 so the school engages
+    // immediately. The behaviour-bus presets (TOP / MID / BOTTOM) all
+    // have ZOA ≥ 80 mm; species with a tighter override get a
+    // proportionally tighter cluster.
+    const schoolingZoa = species.resolved?.schooling.ZOA ?? 0;
+    const clusterRadius = Math.max(
+      MIN_CLUSTER_RADIUS_MM,
+      schoolingZoa * CLUSTER_RADIUS_ZOA_FRACTION,
+    );
+
     // Inset bounds so a spawned fish never starts clipping the glass.
-    const minX = Math.min(SPAWN_WALL_INSET_MM, scene.tank.width * 0.5);
-    const maxX = Math.max(scene.tank.width - SPAWN_WALL_INSET_MM, minX);
-    const minY = Math.min(SPAWN_WALL_INSET_MM, scene.tank.height * 0.5);
-    const maxY = Math.max(scene.tank.height - SPAWN_WALL_INSET_MM, minY);
-    const minZ = Math.min(SPAWN_WALL_INSET_MM, scene.tank.depth * 0.5);
-    const maxZ = Math.max(scene.tank.depth - SPAWN_WALL_INSET_MM, minZ);
+    // The wall inset is `bodyLength` (matches steeringIntegrator's
+    // wall projection inset — fish stay clear of all six faces). The
+    // cluster centre adds `clusterRadius` on top so per-fish offsets
+    // stay inside the inset zone.
+    const wallInset = Math.max(SPAWN_WALL_INSET_MM, bodyLengthMm);
+    const centreInset = wallInset + clusterRadius;
+    const cMinX = Math.min(centreInset, scene.tank.width * 0.5);
+    const cMaxX = Math.max(scene.tank.width - centreInset, cMinX);
+    const cMinY = Math.min(centreInset, scene.tank.height * 0.5);
+    const cMaxY = Math.max(scene.tank.height - centreInset, cMinY);
+    const cMinZ = Math.min(centreInset, scene.tank.depth * 0.5);
+    const cMaxZ = Math.max(scene.tank.depth - centreInset, cMinZ);
+
+    // Species-centre PRNG keys — picked well clear of the per-fish key
+    // tuples (i ∈ [0, quantity), axis ∈ [0, 4]) so the streams don't
+    // collide and re-spawn determinism stays byte-stable.
+    const cRx = seededHash01(entrySeed, 0x10000, 0);
+    const cRy = seededHash01(entrySeed, 0x10000, 1);
+    const cRz = seededHash01(entrySeed, 0x10000, 2);
+    const cx = cMinX + cRx * (cMaxX - cMinX);
+    const cy = cMinY + cRy * (cMaxY - cMinY);
+    const cz = cMinZ + cRz * (cMaxZ - cMinZ);
 
     for (let i = 0; i < entry.quantity; i++) {
       // Six independent random reads per spawn — partition by `i` AND
@@ -640,9 +681,16 @@ export class LivestockSimulationService implements OnDestroy {
       const rYaw = seededHash01(entrySeed, i, 3);
       const rPhase = seededHash01(entrySeed, i, 4);
 
-      const x = minX + rx * (maxX - minX);
-      const y = minY + ry * (maxY - minY);
-      const z = minZ + rz * (maxZ - minZ);
+      // Per-fish offset is in `[-clusterRadius, +clusterRadius]`. Mapped
+      // through the same uniform-[0, 1) reads used by the pre-clustered
+      // spawn so the bit pattern of the random draws stays the same;
+      // only the spatial mapping changes.
+      const ox = (rx * 2 - 1) * clusterRadius;
+      const oy = (ry * 2 - 1) * clusterRadius;
+      const oz = (rz * 2 - 1) * clusterRadius;
+      const x = cx + ox;
+      const y = cy + oy;
+      const z = cz + oz;
 
       // Random Y rotation as a unit quaternion `(0, sin(θ/2), 0, cos(θ/2))`.
       const yaw = rYaw * Math.PI * 2;

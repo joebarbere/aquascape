@@ -127,28 +127,32 @@ export function steeringIntegrator(world: LivestockWorld, dt: number): void {
       speed = Math.hypot(vx, vy, vz);
     }
 
-    // 3. Wall projection against the tank AABB, inset by half a body
-    //    length on every face. The inset accounts for the rendered mesh
-    //    extending `bodyLength` along the swim axis from the per-instance
-    //    Position (which is the NOSE, per `body-builder.ts`'s pose
-    //    convention). Half-body is a deliberately conservative middle
-    //    ground — symmetric on every face means we don't need to know
-    //    which direction the body extends per axis, and the visual
-    //    "fish poking through the glass" goes away even when DepthSystem
-    //    applies a strong vertical force on a fish near the surface.
-    const halfBody = (BodyLength.mm[eid] as number) * 0.5;
+    // 3. Wall projection against the tank AABB, inset by a full body
+    //    length on every face. Per the pose convention (see this file's
+    //    header), Position is the NOSE and the body extends `bodyLength`
+    //    along the geometry's local +X axis in WORLD space — which after
+    //    the orientation update is the direction OPPOSITE to motion. The
+    //    half-body symmetric inset shipped in the first F11.7 triage
+    //    landed only half the fix: it prevented the nose from poking
+    //    through the +motion-direction wall, but the TAIL still extended
+    //    `halfBody` past the −motion-direction wall whenever the fish
+    //    was spawned or pushed near it. A full-body symmetric inset is
+    //    over-restrictive (fish can't get within `bodyLength` of any
+    //    wall) but is the simplest direction-free way to guarantee the
+    //    body never extends through the glass.
+    const bodyLength = BodyLength.mm[eid] as number;
     const px = Position.x[eid] as number;
     const py = Position.y[eid] as number;
     const pz = Position.z[eid] as number;
     const nextX = px + vx * dt;
     const nextY = py + vy * dt;
     const nextZ = pz + vz * dt;
-    if (nextX < aabb.minX + halfBody && vx < 0) vx = 0;
-    if (nextX > aabb.maxX - halfBody && vx > 0) vx = 0;
-    if (nextY < aabb.minY + halfBody && vy < 0) vy = 0;
-    if (nextY > aabb.maxY - halfBody && vy > 0) vy = 0;
-    if (nextZ < aabb.minZ + halfBody && vz < 0) vz = 0;
-    if (nextZ > aabb.maxZ - halfBody && vz > 0) vz = 0;
+    if (nextX < aabb.minX + bodyLength && vx < 0) vx = 0;
+    if (nextX > aabb.maxX - bodyLength && vx > 0) vx = 0;
+    if (nextY < aabb.minY + bodyLength && vy < 0) vy = 0;
+    if (nextY > aabb.maxY - bodyLength && vy > 0) vy = 0;
+    if (nextZ < aabb.minZ + bodyLength && vz < 0) vz = 0;
+    if (nextZ > aabb.maxZ - bodyLength && vz > 0) vz = 0;
     // Recompute speed if a projection landed.
     speed = Math.hypot(vx, vy, vz);
 

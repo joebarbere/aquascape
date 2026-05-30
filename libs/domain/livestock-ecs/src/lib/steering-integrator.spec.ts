@@ -286,14 +286,14 @@ describe('steeringIntegrator — F11.7 pitch clamp', () => {
 });
 
 describe('steeringIntegrator — F11.7 body-extent wall inset', () => {
-  it('projects velocity at the AABB face inset by bodyLength / 2 (nose stays inside the glass)', () => {
+  it('projects velocity at the AABB face inset by a full bodyLength (nose + tail both stay inside the glass)', () => {
     const w = createLivestockWorld(0, { tankAabb: TANK });
     const handle = w.registerSpeciesBehavior(1, MID_PRESET);
-    // Spawn 10 mm from the +X wall. BodyLength = 30 mm → halfBody = 15 mm.
-    // Without the inset the projection fires only when `nextX > maxX` —
-    // for SIM_DT = 1/30 and vx = 100, nextX = 1000 − 10 + 100/30 ≈ 993.3,
-    // still inside, no projection, fish leaves the tank. With the inset
-    // the projection fires once `nextX > maxX − 15 = 985`.
+    // Spawn 10 mm from the +X wall. BodyLength = 30 mm. Without the
+    // inset the projection fires only when `nextX > maxX` — for SIM_DT
+    // = 1/30 and vx = 100, nextX = 1000 − 10 + 100/30 ≈ 993.3, still
+    // inside, no projection, fish leaves the tank. With the bodyLength
+    // inset the projection fires once `nextX > maxX − 30 = 970`.
     const eid = spawn(w, { x: TANK.maxX - 10, y: 200, z: 200 }, handle);
     Velocity.x[eid] = 100;
     Velocity.y[eid] = 0;
@@ -308,7 +308,7 @@ describe('steeringIntegrator — F11.7 body-extent wall inset', () => {
   it('does not project Velocity when the body still fits inside the inset AABB', () => {
     const w = createLivestockWorld(0, { tankAabb: TANK });
     const handle = w.registerSpeciesBehavior(1, MID_PRESET);
-    // Spawn well clear of any wall — half-body inset shouldn't matter.
+    // Spawn well clear of any wall — body-length inset shouldn't matter.
     const eid = spawn(w, { x: 500, y: 200, z: 200 }, handle);
     Velocity.x[eid] = 50;
     Velocity.y[eid] = 0;
@@ -318,5 +318,24 @@ describe('steeringIntegrator — F11.7 body-extent wall inset', () => {
     Force.z[eid] = 0;
     steeringIntegrator(w, SIM_DT);
     expect(Velocity.x[eid]).toBeCloseTo(50, 5);
+  });
+
+  it('fires the wall projection when nose is within bodyLength of a face — even when prior half-body inset would have missed it', () => {
+    // Regression for the second F11.7 video: with a halfBody (15 mm) inset
+    // and a 35 mm body, a fish 25 mm from the wall + heading into the
+    // wall would NOT have been projection-blocked (`nextX > maxX - 15`
+    // not yet true). With the full bodyLength inset (30 mm) it is.
+    const w = createLivestockWorld(0, { tankAabb: TANK });
+    const handle = w.registerSpeciesBehavior(1, MID_PRESET);
+    const eid = spawn(w, { x: TANK.maxX - 25, y: 200, z: 200 }, handle);
+    Velocity.x[eid] = 50; // heading into the +X wall
+    Velocity.y[eid] = 0;
+    Velocity.z[eid] = 0;
+    Force.x[eid] = 0;
+    Force.y[eid] = 0;
+    Force.z[eid] = 0;
+    steeringIntegrator(w, SIM_DT);
+    // nextX = (maxX − 25) + 50/30 ≈ maxX − 23.3, which is > maxX − 30 → projection fires.
+    expect(Velocity.x[eid]).toBe(0);
   });
 });
