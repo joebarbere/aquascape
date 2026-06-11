@@ -79,6 +79,54 @@ describe('buildWaterMesh — material', () => {
   });
 });
 
+describe('buildWaterMesh — surface caustic shimmer (fidelity follow-up)', () => {
+  it('fragment shader contains the procedural caustic function, world-anchored + time-driven', () => {
+    const { mesh } = buildWaterMesh(sceneOf());
+    const src = (mesh.material as ShaderMaterial).fragmentShader;
+    // The layered-sine caustic (same flavour as caustics.ts's aqCaustic).
+    expect(src).toContain('float aqWaterCaustic(vec2 p, float t)');
+    // Sampled in world XZ via the existing varying, driven by uTime.
+    expect(src).toMatch(/aqWaterCaustic\(\s*vWorldPosition\.xz\s*,\s*uTime\s*\)/);
+    // Scaled by the day-night-driven strength uniform.
+    expect(src).toContain('uCausticStrength');
+  });
+
+  it('the caustic ADDED alpha is capped so the surface never turns opaque', () => {
+    const { mesh } = buildWaterMesh(sceneOf());
+    const src = (mesh.material as ShaderMaterial).fragmentShader;
+    // The cap constant exists and the alpha contribution routes through min().
+    expect(src).toContain('WATER_CAUSTIC_ALPHA_CAP');
+    expect(src).toMatch(/min\(\s*caus\s*\*\s*[0-9.]+\s*,\s*WATER_CAUSTIC_ALPHA_CAP\s*\)/);
+    // The base alpha behaviour stays recognisable (0.20 + spec ramp).
+    expect(src).toMatch(/0\.20\s*\+\s*spec\s*\*\s*0\.35/);
+  });
+
+  it('exposes a uCausticStrength uniform defaulting to 1 (noon)', () => {
+    const { mesh } = buildWaterMesh(sceneOf());
+    const mat = mesh.material as ShaderMaterial;
+    expect(mat.uniforms['uCausticStrength']).toBeDefined();
+    expect(mat.uniforms['uCausticStrength']!.value).toBe(1);
+  });
+
+  it('setCausticStrength writes the uniform (clamped at 0)', () => {
+    const handle = buildWaterMesh(sceneOf());
+    const mat = handle.mesh.material as ShaderMaterial;
+    handle.setCausticStrength(0.4);
+    expect(mat.uniforms['uCausticStrength']!.value).toBeCloseTo(0.4, 5);
+    handle.setCausticStrength(-2);
+    expect(mat.uniforms['uCausticStrength']!.value).toBe(0);
+  });
+
+  it('setCausticStrength is a no-op after dispose (render + dispose race)', () => {
+    const handle = buildWaterMesh(sceneOf());
+    const mat = handle.mesh.material as ShaderMaterial;
+    handle.setCausticStrength(0.7);
+    handle.dispose();
+    handle.setCausticStrength(0.1);
+    expect(mat.uniforms['uCausticStrength']!.value).toBeCloseTo(0.7, 5);
+  });
+});
+
 describe('buildWaterMesh — vertex shader amplitude clamp', () => {
   it('vertex shader contains both stacked sine bands', () => {
     const { mesh } = buildWaterMesh(sceneOf());

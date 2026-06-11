@@ -539,10 +539,19 @@ function makeGeometry(descriptor: FishGeometryDescriptor): BufferGeometry {
   geo.setAttribute('position', new BufferAttribute(descriptor.positions, 3));
   geo.setAttribute('normal', new BufferAttribute(descriptor.normals, 3));
   geo.setAttribute('uv', new BufferAttribute(descriptor.uvs, 2));
-  // `spineUv` is stride-2 (the body builder stores `(s, 0)` per vertex —
-  // see `body-builder.ts:230`). The shader reads only `.x` but we keep
-  // the second channel reserved per `FishGeometryDescriptor`'s docs.
-  geo.setAttribute('spineUv', new BufferAttribute(descriptor.spineUv, 2));
+  // `spineUv` is stride-2. `.x` is the nose→tail spine coordinate; `.y`
+  // carries the per-vertex FIN_TYPE code (body 0, caudal 1, dorsal 2,
+  // anal 3, pectoral 4), PACKED here from `descriptor.finType`. The
+  // domain descriptor authors `spineUv.y = 0` everywhere and keeps
+  // `finType` as its own buffer — but the shader program sits at
+  // ANGLE/SwiftShader's MAX_VERTEX_ATTRIBS = 16 budget (three's prefix
+  // declares position + normal + uv + the 4-slot instanceMatrix = 7;
+  // our 9 custom attributes make 16 — DECLARED attributes count against
+  // the limit on that translator, active or not). Declaring a 17th
+  // `finType` attribute fails program linking ("Too many attributes")
+  // and NO fish render, so the code rides the spare `spineUv.y` channel
+  // instead. The vertex shader's FIN FLUTTER block decodes it from there.
+  geo.setAttribute('spineUv', new BufferAttribute(packFinTypeIntoSpineUv(descriptor), 2));
 
   geo.setIndex(new BufferAttribute(descriptor.indices, 1));
 
@@ -559,6 +568,23 @@ function makeGeometry(descriptor: FishGeometryDescriptor): BufferGeometry {
   geo.addGroup(g.pectoral[0], g.pectoral[1], 4);
 
   return geo;
+}
+
+/**
+ * Interleave `descriptor.finType` into the second channel of a copy of
+ * `descriptor.spineUv`. The domain buffer authors `(s, 0)` per vertex, so
+ * the packed result is `(s, finTypeCode)` — codes are small integers
+ * (0–4), which keeps the fragment shader's scale-shimmer term (driven by
+ * `fract(spineUv.y)`) exactly as inert as it was when the channel was a
+ * constant 0. Returns a fresh array; the descriptor's buffers are shared
+ * across bundles and must not be mutated.
+ */
+function packFinTypeIntoSpineUv(descriptor: FishGeometryDescriptor): Float32Array {
+  const packed = new Float32Array(descriptor.spineUv);
+  for (let i = 0; i < descriptor.finType.length; i++) {
+    packed[i * 2 + 1] = descriptor.finType[i] as number;
+  }
+  return packed;
 }
 
 function makeMaterial(bodyColor: Color): ShaderMaterial {

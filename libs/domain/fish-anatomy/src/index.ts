@@ -24,6 +24,15 @@
  * reads `spineUv.x` to compute the per-vertex sinusoid; the second
  * channel is reserved for future per-vertex tuning (e.g., dampening near
  * the head).
+ *
+ * `finType` carries one `FIN_TYPE` code per vertex (BODY = 0,
+ * CAUDAL = 1, DORSAL = 2, ANAL = 3, PECTORAL = 4) so the renderer's
+ * vertex shader can flutter each fin independently of the carangiform
+ * spine wave. Length = vertex count (one float per vertex). The crawler
+ * archetype (no fins) is all zeros. Kept as its own buffer here for a
+ * clean domain contract; the 3D renderer PACKS it into `spineUv.y` at
+ * upload time because its shader program sits at the WebGL 16-attribute
+ * budget (see `docs/caveats/livestock-ecs.md` → "Per-fin animation").
  */
 export type FishGeometryDescriptor = {
   positions: Float32Array;
@@ -31,6 +40,7 @@ export type FishGeometryDescriptor = {
   uvs: Float32Array;
   indices: Uint16Array;
   spineUv: Float32Array;
+  finType: Float32Array;
   groups: {
     body: [number, number];
     caudal: [number, number];
@@ -47,6 +57,9 @@ export type FishGeometryDescriptor = {
  * decide whether to invalidate caches.
  */
 export const FISH_ANATOMY_VERSION = '0.1.0';
+
+// ─── Per-vertex fin-type codes ────────────────────────────────────────────
+export { FIN_TYPE, type FinTypeCode } from './lib/fin-type';
 
 // ─── Archetype builders ───────────────────────────────────────────────────
 export {

@@ -1,6 +1,7 @@
 import type { RenderSurface, Viewport } from '@aquascape/rendering/renderer-api';
 import type { Catalog, CatalogEntry, CatalogKind } from '@aquascape/domain/catalog';
 import type { HardscapeObject, Layer, Scene } from '@aquascape/domain/scene-model';
+import { DataTexture, EquirectangularReflectionMapping } from 'three';
 import {
   type RendererFactory,
   type RendererLike,
@@ -858,53 +859,106 @@ describe('Three3DRenderer — day-night cycle', () => {
     raf.uninstall();
   });
 
-  it('applies dayNightLookup.backgroundTint to threeScene.background', () => {
+  it('assigns the gradient backdrop texture to threeScene.background and tints it via backgroundTint', () => {
     const raf = stubRaf();
     const stub = new StubRenderer();
     const r = new Three3DRenderer(makeFactory(stub));
     r.attach(makeSurface());
-    // Use a pure red so the channel relationship survives Three.js's
-    // sRGB-to-linear conversion (which is non-linear per channel but
-    // preserves zero-vs-nonzero). Asserting exact channels against an
-    // arbitrary hex would be brittle against colour-management swaps.
     r.render(sceneOf(600, 360, 300), viewport, {
       dayNightLookup: {
         ambientColor: '#ffffff',
         directionalIntensity: 1,
-        backgroundTint: '#ff0000',
+        backgroundTint: '#ffffff',
         emissiveBoost: 0,
       },
     });
     const rAny = r as unknown as {
-      threeScene: { background: { isColor: true; r: number; g: number; b: number } | null } | null;
+      threeScene: { background: DataTexture | null } | null;
+      backdropTexture: DataTexture | null;
     };
     const bg = rAny.threeScene!.background;
-    expect(bg).not.toBeNull();
-    expect(bg!.isColor).toBe(true);
-    // Pure red: r is the strongest channel after sRGB → linear conversion.
-    expect(bg!.r).toBeGreaterThan(bg!.g);
-    expect(bg!.r).toBeGreaterThan(bg!.b);
-    expect(bg!.g).toBeCloseTo(0, 5);
-    expect(bg!.b).toBeCloseTo(0, 5);
-    // Now change the background and verify the in-place mutation works
-    // (Color.set on the same reference rather than allocating a new Color).
-    const firstBgRef = bg;
+    expect(bg).toBeInstanceOf(DataTexture);
+    // The scene background IS the renderer's single cached backdrop texture.
+    expect(bg).toBe(rAny.backdropTexture);
+    expect(bg!.mapping).toBe(EquirectangularReflectionMapping);
+    const noonPixels = Array.from(bg!.image.data as Uint8Array);
+
+    // Tint change (midnight-ish): SAME texture object, pixel data rewritten
+    // in place + flagged for re-upload — no re-allocation per render.
+    // (`needsUpdate` is setter-only on Texture; `version` is the
+    // observable re-upload counter it bumps.)
+    const versionBefore = bg!.version;
     r.render(sceneOf(600, 360, 300), viewport, {
       dayNightLookup: {
         ambientColor: '#ffffff',
-        directionalIntensity: 1,
-        backgroundTint: '#0000ff',
-        emissiveBoost: 0,
+        directionalIntensity: 0.05,
+        backgroundTint: '#101018',
+        emissiveBoost: 0.4,
       },
     });
-    const secondBgRef = (
-      rAny.threeScene!.background as { isColor: true; r: number; g: number; b: number }
-    );
-    expect(secondBgRef).toBe(firstBgRef);
-    // Now blue should dominate.
-    expect(secondBgRef.b).toBeGreaterThan(secondBgRef.r);
-    expect(secondBgRef.b).toBeGreaterThan(secondBgRef.g);
+    const bg2 = rAny.threeScene!.background;
+    expect(bg2).toBe(bg);
+    expect(bg2!.version).toBeGreaterThan(versionBefore);
+    const midnightPixels = Array.from(bg2!.image.data as Uint8Array);
+    expect(midnightPixels).not.toEqual(noonPixels);
+    // Midnight darkens: every RGB byte ≤ its noon counterpart.
+    for (let i = 0; i < noonPixels.length; i += 4) {
+      expect(midnightPixels[i]!).toBeLessThanOrEqual(noonPixels[i]!);
+      expect(midnightPixels[i + 1]!).toBeLessThanOrEqual(noonPixels[i + 1]!);
+      expect(midnightPixels[i + 2]!).toBeLessThanOrEqual(noonPixels[i + 2]!);
+    }
+
+    // Unchanged tint: data is NOT rewritten (cached-tint short-circuit) —
+    // `version` stays put because nothing re-flags the upload.
+    const versionAfterTint = bg!.version;
+    r.render(sceneOf(600, 360, 300), viewport, {
+      dayNightLookup: {
+        ambientColor: '#ffffff',
+        directionalIntensity: 0.05,
+        backgroundTint: '#101018',
+        emissiveBoost: 0.4,
+      },
+    });
+    expect(rAny.threeScene!.background).toBe(bg);
+    expect(bg!.version).toBe(versionAfterTint);
     r.dispose();
+    raf.uninstall();
+  });
+
+  it('without dayNightLookup the backdrop texture is still the background (untinted default)', () => {
+    // The backdrop must work in the headless-stub path too — DataTexture
+    // construction needs no GL, so it is NOT behind the WebGLRenderer guard.
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport);
+    const rAny = r as unknown as {
+      threeScene: { background: DataTexture | null } | null;
+      backdropTint: string | null;
+    };
+    expect(rAny.threeScene!.background).toBeInstanceOf(DataTexture);
+    expect(rAny.backdropTint).toBe('#ffffff');
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('dispose releases the backdrop texture and detaches it from the scene', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport);
+    const rAny = r as unknown as {
+      backdropTexture: DataTexture | null;
+      backdropTint: string | null;
+    };
+    const tex = rAny.backdropTexture!;
+    const spy = jest.spyOn(tex, 'dispose');
+    r.dispose();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(rAny.backdropTexture).toBeNull();
+    expect(rAny.backdropTint).toBeNull();
     raf.uninstall();
   });
 
@@ -1074,6 +1128,42 @@ describe('Three3DRenderer — day-night cycle', () => {
     };
     expect(rAny.currentAmbientLight).toBeNull();
     expect(rAny.currentDirectionalLight).toBeNull();
+    raf.uninstall();
+  });
+});
+
+// ─── Bucket 0 — render-target capability gate ─────────────────────────────
+
+describe('Three3DRenderer — render-target capability gate', () => {
+  it('getRenderTargetEffectsSupported is false before attach', () => {
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()));
+    expect(r.getRenderTargetEffectsSupported()).toBe(false);
+  });
+
+  it('stays false under the headless stub renderer (no real WebGLRenderer → no probe)', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(), viewport);
+    // The probe lives in setupComposer, which no-ops for non-WebGLRenderer
+    // factories — exactly the conservative default the gate wants: when we
+    // can't prove a hardware context, render-target effects stay off.
+    expect(r.getRenderTargetEffectsSupported()).toBe(false);
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('resets to false after dispose', () => {
+    const raf = stubRaf();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()));
+    r.attach(makeSurface());
+    // Force the flag on to prove dispose clears it (the stub path never
+    // sets it, so flip it directly).
+    (r as unknown as { renderTargetEffectsSupported: boolean }).renderTargetEffectsSupported =
+      true;
+    r.dispose();
+    expect(r.getRenderTargetEffectsSupported()).toBe(false);
     raf.uninstall();
   });
 });

@@ -16,6 +16,7 @@
  */
 
 import { crossVec3, normalizeVec3, type Vec3 } from '@aquascape/domain/geometry';
+import { FIN_TYPE, type FinTypeCode } from './fin-type';
 
 export interface FinBuilderContext {
   positions: number[];
@@ -23,6 +24,8 @@ export interface FinBuilderContext {
   uvs: number[];
   indices: number[];
   spineUv: number[];
+  /** One `FIN_TYPE` code per vertex; each fin builder pushes its own. */
+  finType: number[];
 }
 
 function pushVertex(
@@ -32,12 +35,14 @@ function pushVertex(
   u: number,
   vCoord: number,
   spineS: number,
+  finCode: FinTypeCode,
 ): number {
   const index = ctx.positions.length / 3;
   ctx.positions.push(v.x, v.y, v.z);
   ctx.normals.push(n.x, n.y, n.z);
   ctx.uvs.push(u, vCoord);
   ctx.spineUv.push(spineS, 0);
+  ctx.finType.push(finCode);
   return index;
 }
 
@@ -88,16 +93,16 @@ export function buildCaudalFin(
 
   // Upper lobe triangle: attach, tipUpper, fork (CCW when seen from +z).
   const n1 = faceNormal(attach, tipUpper, fork);
-  const a1 = pushVertex(ctx, attach, n1, 0, 0.5, spineS);
-  const b1 = pushVertex(ctx, tipUpper, n1, 1, 1, spineS);
-  const c1 = pushVertex(ctx, fork, n1, 0.5, 0.5, spineS);
+  const a1 = pushVertex(ctx, attach, n1, 0, 0.5, spineS, FIN_TYPE.CAUDAL);
+  const b1 = pushVertex(ctx, tipUpper, n1, 1, 1, spineS, FIN_TYPE.CAUDAL);
+  const c1 = pushVertex(ctx, fork, n1, 0.5, 0.5, spineS, FIN_TYPE.CAUDAL);
   ctx.indices.push(a1, b1, c1);
 
   // Lower lobe triangle: attach, fork, tipLower.
   const n2 = faceNormal(attach, fork, tipLower);
-  const a2 = pushVertex(ctx, attach, n2, 0, 0.5, spineS);
-  const b2 = pushVertex(ctx, fork, n2, 0.5, 0.5, spineS);
-  const c2 = pushVertex(ctx, tipLower, n2, 1, 0, spineS);
+  const a2 = pushVertex(ctx, attach, n2, 0, 0.5, spineS, FIN_TYPE.CAUDAL);
+  const b2 = pushVertex(ctx, fork, n2, 0.5, 0.5, spineS, FIN_TYPE.CAUDAL);
+  const c2 = pushVertex(ctx, tipLower, n2, 1, 0, spineS, FIN_TYPE.CAUDAL);
   ctx.indices.push(a2, b2, c2);
 
   return { indexStart, indexCount: ctx.indices.length - indexStart };
@@ -134,10 +139,12 @@ export function buildSpineRibbonFin(
   // normal points the right way after the cross product.
   const [w0, w1, w2] =
     sign === 1 ? [attachFront, peak, attachBack] : [attachFront, attachBack, peak];
+  // Fin-type code follows the sign: +1 = dorsal (above), -1 = anal (below).
+  const finCode = sign === 1 ? FIN_TYPE.DORSAL : FIN_TYPE.ANAL;
   const n = faceNormal(w0, w1, w2);
-  const a = pushVertex(ctx, w0, n, 0, 0, spineS);
-  const b = pushVertex(ctx, w1, n, 0.5, 1, spineS);
-  const c = pushVertex(ctx, w2, n, 1, 0, spineS);
+  const a = pushVertex(ctx, w0, n, 0, 0, spineS, finCode);
+  const b = pushVertex(ctx, w1, n, 0.5, 1, spineS, finCode);
+  const c = pushVertex(ctx, w2, n, 1, 0, spineS, finCode);
   ctx.indices.push(a, b, c);
 
   return { indexStart, indexCount: ctx.indices.length - indexStart };
@@ -163,9 +170,9 @@ export function buildPectoralFin(
   const spineS = root.x;
   const [w0, w1, w2] = sign === 1 ? [root, tip, back] : [root, back, tip];
   const n = faceNormal(w0, w1, w2);
-  const a = pushVertex(ctx, w0, n, 0, 0, spineS);
-  const b = pushVertex(ctx, w1, n, 1, 1, spineS);
-  const c = pushVertex(ctx, w2, n, 1, 0, spineS);
+  const a = pushVertex(ctx, w0, n, 0, 0, spineS, FIN_TYPE.PECTORAL);
+  const b = pushVertex(ctx, w1, n, 1, 1, spineS, FIN_TYPE.PECTORAL);
+  const c = pushVertex(ctx, w2, n, 1, 0, spineS, FIN_TYPE.PECTORAL);
   ctx.indices.push(a, b, c);
   return { indexStart, indexCount: ctx.indices.length - indexStart };
 }

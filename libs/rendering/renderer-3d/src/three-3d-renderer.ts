@@ -79,7 +79,6 @@ import type {
 import {
   ACESFilmicToneMapping,
   AmbientLight,
-  Color,
   DirectionalLight,
   Group,
   InstancedMesh,
@@ -189,6 +188,11 @@ const defaultRendererFactory: RendererFactory = (canvas) => {
   renderer.shadowMap.type = PCFSoftShadowMap;
   return renderer;
 };
+import {
+  detectRenderTargetEffectsSupport,
+  type RenderTargetGlContextLike,
+} from './render-target-support';
+import { buildBackdropTexture, updateBackdropTint } from './scene-builder/backdrop';
 import { buildCamera, tankCenter } from './scene-builder/camera';
 import {
   CAUSTIC_MATERIALS_KEY,
@@ -372,11 +376,20 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    */
   private static readonly DEFAULT_AMBIENT_COLOR = 0xffffff;
   /**
-   * Stage 11 F11.7 Wave 3 — default scene background. Matches the
-   * `setClearColor(0x1a2030)` call in `attach()` so a render without
-   * `dayNightLookup` reads identically to pre-F11.7 behaviour.
+   * The conceptual base of the scene background — also the `setClearColor`
+   * value in `attach()` (the gradient backdrop covers the clear colour, but
+   * an empty pre-render canvas still reads as "3D scene"). The backdrop's
+   * mid-band gradient stop (`scene-builder/backdrop.ts`) is this same
+   * `0x1a2030` tone so the default look stays in the pre-fidelity family.
    */
   private static readonly DEFAULT_BACKGROUND_COLOR = 0x1a2030;
+  /**
+   * Fidelity follow-up (scenic backdrop) — the identity tint used for the
+   * no-`dayNightLookup` reset path. White = the backdrop gradient as
+   * authored; the day-night cycle darkens/tints it via
+   * `lookup.backgroundTint`.
+   */
+  private static readonly DEFAULT_BACKDROP_TINT = '#ffffff';
 
   /**
    * Fidelity pass — image-based-lighting environment. Built once on
@@ -390,6 +403,20 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
   private envSourceTexture: DataTexture | null = null;
   private envTexture: Texture | null = null;
   /**
+   * Fidelity follow-up (scenic backdrop) — the ONE cached gradient backdrop
+   * texture assigned to `threeScene.background`. Built lazily on the first
+   * `applyDayNightLookup` run (i.e. the first `render()`); when the
+   * effective tint changes, the pixel data is rewritten IN PLACE +
+   * `needsUpdate` (a few KB, per render, never per frame) instead of
+   * re-allocating. `backdropTint` caches the last-applied tint so an
+   * unchanged tint costs one string compare. NOT gated behind
+   * `instanceof WebGLRenderer` — `DataTexture` construction needs no GL,
+   * so the headless stub path gets the same background object. Disposed in
+   * `dispose()` alongside the env textures.
+   */
+  private backdropTexture: DataTexture | null = null;
+  private backdropTint: string | null = null;
+  /**
    * Fidelity pass (bloom) — the postprocessing pipeline. Built once on
    * `attach()` (only with a real `WebGLRenderer`); when present, the render
    * loop paints through `composer.render()` instead of `renderer.render()`.
@@ -399,6 +426,15 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    */
   private composer: EffectComposer | null = null;
   private bloomPass: UnrealBloomPass | null = null;
+  /**
+   * Bucket-0 capability gate — whether render-target / multi-pass effects
+   * (SSAO, screen-space refraction) are safe on the attached GL context.
+   * Computed in `setupComposer` (real `WebGLRenderer` only) via
+   * `detectRenderTargetEffectsSupport`; `false` before attach, under the
+   * headless test stub, and after `dispose()`. Read via
+   * `getRenderTargetEffectsSupported()`.
+   */
+  private renderTargetEffectsSupported = false;
 
   /**
    * @param rendererFactory injectable WebGLRenderer factory. The default
@@ -470,8 +506,10 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     renderer.setSize(surface.width, surface.height, false);
     // Soft dark-blue clear color so the canvas reads as "3D scene" not
     // "the renderer is broken" even when the scene is empty. Matches
-    // the 2D renderer's wall-background default in spirit.
-    renderer.setClearColor?.(0x1a2030, 1);
+    // the 2D renderer's wall-background default in spirit. The gradient
+    // backdrop assigned on the first render covers it; this is just the
+    // pre-render fallback.
+    renderer.setClearColor?.(Three3DRenderer.DEFAULT_BACKGROUND_COLOR, 1);
     this.renderer = renderer;
 
     this.threeScene = new ThreeScene();
@@ -588,11 +626,12 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       // material's `uTime` uniform. `updatePlantSwayTime` is a no-op when
       // the group has no sway materials attached (e.g. before the first
       // `render()` or for an empty scene), so the unconditional call is
-      // safe. Flow-coupling (fidelity pass) is baked into each material's
-      // amplitude at BUILD time from `options.flowField` (see `plant-mesh.
-      // ts`), so the per-frame tick only advances `uTime` — the flow factor
-      // is static per render, which is correct (the field is re-baked when
-      // equipment changes, which re-fires a render).
+      // safe. Flow-coupling (fidelity pass + follow-up) is baked into each
+      // material's amplitude AND oscillation frequency at BUILD time from
+      // `options.flowField` (see `plant-mesh.ts`), so the per-frame tick
+      // only advances `uTime` — the flow factor is static per render,
+      // which is correct (the field is re-baked when equipment changes,
+      // which re-fires a render) and keeps the motion smooth.
       if (this.currentPlantGroup !== null) {
         updatePlantSwayTime(this.currentPlantGroup, now / 1000);
       }
@@ -722,6 +761,13 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     this.ensureWaterMeshForTank(scene);
     if (this.waterMesh !== null) {
       content.add(this.waterMesh.mesh);
+      // Fidelity follow-up (water caustics) — scale the surface caustic
+      // shimmer by the same day-night directional level the substrate +
+      // hardscape caustics use (`setCausticIntensity` above), so the
+      // water's bright rim shimmer fades out at night in lockstep.
+      this.waterMesh.setCausticStrength(
+        options.dayNightLookup?.directionalIntensity ?? 1,
+      );
     }
 
     // Stage 11 F11.1 — livestock InstancedMesh bundle. The world is owned
@@ -874,15 +920,20 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
   /**
    * Stage 11 F11.7 Wave 3 — apply the day-night `DayNightLookup` to the
    * cached lights + scene background. **Mutation-only**: each field is a
-   * cheap in-place write (Color.set + intensity = float + Scene.background
-   * = Color.set), no Three.js object allocation per render.
+   * cheap in-place write (Color.set + intensity = float + an in-place
+   * backdrop-texture rewrite, only when the tint actually changed), no
+   * Three.js object allocation per render in the steady state.
+   *
+   * The background is the cached gradient backdrop texture (fidelity
+   * follow-up — see `applyBackdropTint`), tinted by `lookup.backgroundTint`
+   * rather than a flat `Color`.
    *
    * When `lookup` is undefined, every field is reset to its editorial
    * default (ambient = white, directional = the captured `baseDirectional
-   * Intensity`, background = `DEFAULT_BACKGROUND_COLOR`). This means a
-   * host that toggles the day-night UI off mid-session sees the lighting
-   * snap back to the pre-F11.7 look without needing a re-render with
-   * different inputs.
+   * Intensity`, backdrop = the untinted `DEFAULT_BACKDROP_TINT` gradient).
+   * This means a host that toggles the day-night UI off mid-session sees
+   * the lighting snap back to the default look without needing a re-render
+   * with different inputs.
    *
    * Note on directional COLOUR: the sun is white in v1. The cycle's
    * warm/cool tint rides on the ambient channel alone — adding the sun
@@ -901,14 +952,7 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       if (this.currentDirectionalLight !== null) {
         this.currentDirectionalLight.intensity = this.baseDirectionalIntensity;
       }
-      if (
-        tScene.background !== null &&
-        (tScene.background as Color).isColor
-      ) {
-        (tScene.background as Color).set(Three3DRenderer.DEFAULT_BACKGROUND_COLOR);
-      } else {
-        tScene.background = new Color(Three3DRenderer.DEFAULT_BACKGROUND_COLOR);
-      }
+      this.applyBackdropTint(Three3DRenderer.DEFAULT_BACKDROP_TINT, tScene);
       return;
     }
     if (this.currentAmbientLight !== null) {
@@ -918,16 +962,33 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       this.currentDirectionalLight.intensity =
         this.baseDirectionalIntensity * lookup.directionalIntensity;
     }
-    // Mutate `Scene.background` in place when it's already a Color (the
-    // common case after the first day-night render); otherwise allocate.
-    // This shaves a Color allocation off the steady-state cycle.
-    if (
-      tScene.background !== null &&
-      (tScene.background as Color).isColor
-    ) {
-      (tScene.background as Color).set(lookup.backgroundTint);
-    } else {
-      tScene.background = new Color(lookup.backgroundTint);
+    this.applyBackdropTint(lookup.backgroundTint, tScene);
+  }
+
+  /**
+   * Fidelity follow-up (scenic backdrop) — ensure `threeScene.background`
+   * is the cached gradient backdrop texture, tinted by `tint`. One texture
+   * for the renderer's lifetime: the first call builds it; subsequent
+   * calls with a CHANGED tint rewrite its pixel data in place (`updateBackdropTint`
+   * — a few KB + `needsUpdate`, per render, never per frame); an unchanged
+   * tint is one string compare. Runs in `render()` via
+   * `applyDayNightLookup`, so it is a pure function of `RenderOptions` —
+   * idempotency holds.
+   *
+   * Deliberately NOT behind the `instanceof WebGLRenderer` guard: a
+   * `DataTexture` needs no GL context, so the headless unit-stub path gets
+   * the same backdrop object the real renderer paints.
+   */
+  private applyBackdropTint(tint: string, tScene: ThreeScene): void {
+    if (this.backdropTexture === null) {
+      this.backdropTexture = buildBackdropTexture(tint);
+      this.backdropTint = tint;
+    } else if (this.backdropTint !== tint) {
+      updateBackdropTint(this.backdropTexture, tint);
+      this.backdropTint = tint;
+    }
+    if (tScene.background !== this.backdropTexture) {
+      tScene.background = this.backdropTexture;
     }
   }
 
@@ -993,6 +1054,13 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     surface: RenderSurface,
   ): void {
     if (!(renderer instanceof WebGLRenderer)) return;
+    // Bucket-0 capability gate — probe the real GL context once per init.
+    // Bloom below stays UNGATED (single-target, SwiftShader-validated);
+    // this flag exists for the FUTURE render-target passes. See
+    // `getRenderTargetEffectsSupported` for the contract.
+    this.renderTargetEffectsSupported = detectRenderTargetEffectsSupport(
+      renderer.getContext() as RenderTargetGlContextLike,
+    );
     if (this.composer !== null) return;
     const w = Math.max(1, surface.width);
     const h = Math.max(1, surface.height);
@@ -1010,6 +1078,28 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     composer.addPass(new OutputPass());
     this.composer = composer;
     this.bloomPass = bloom;
+  }
+
+  /**
+   * **The Bucket-0 render-target capability gate.** Returns whether
+   * render-target / multi-pass post-processing effects are safe on the
+   * attached GL context — i.e. the context is provably hardware-
+   * accelerated (not SwiftShader / llvmpipe / softpipe) AND depth
+   * textures are available. Returns `false` before `attach()`, under
+   * the headless stub renderer, and after `dispose()`.
+   *
+   * **Contract: when SSAO / screen-space-refraction / any other
+   * extra-render-target pass is added to the composer, its construction
+   * MUST be conditional on this flag**, falling back to the plain
+   * RenderPass → bloom → OutputPass path when it returns `false`. The
+   * SSAO attempt that ignored this rendered a fully blank canvas under
+   * SwiftShader (the path the e2e + headless visual loop run on) — see
+   * `docs/caveats/e2e.md` and `docs/caveats/renderer-3d.md` →
+   * "Render-target capability gate". Bloom stays UNGATED: it is
+   * single-target and validated working under SwiftShader.
+   */
+  getRenderTargetEffectsSupported(): boolean {
+    return this.renderTargetEffectsSupported;
   }
 
   /**
@@ -1256,6 +1346,16 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     this.currentDirectionalLight = null;
     this.baseDirectionalIntensity = 1;
 
+    // Fidelity follow-up (scenic backdrop) — release the cached backdrop
+    // texture. Detach from the scene first so nothing samples a disposed
+    // texture during teardown.
+    if (this.threeScene !== null) this.threeScene.background = null;
+    if (this.backdropTexture !== null) {
+      this.backdropTexture.dispose();
+      this.backdropTexture = null;
+    }
+    this.backdropTint = null;
+
     // Fidelity pass — release the IBL environment textures (PMREM product +
     // raw equirect source). Detach from the scene first so nothing samples
     // a disposed texture during teardown.
@@ -1278,6 +1378,9 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       this.bloomPass.dispose();
       this.bloomPass = null;
     }
+    // Bucket-0 gate — back to the pre-attach default; the next real
+    // `setupComposer` run re-probes the (possibly different) context.
+    this.renderTargetEffectsSupported = false;
 
     if (this.renderer !== null) {
       this.renderer.dispose();

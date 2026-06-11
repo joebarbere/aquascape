@@ -38,16 +38,18 @@
  * The host renderer caches the sway materials on `group.userData
  * ['aquascape:plantSwayMaterials']` and advances `uTime` each RAF tick.
  *
- * **Flow-coupled sway (fidelity pass):** the F11.7 deferral is now closed.
- * When `RenderOptions.flowField` is supplied (the host's
+ * **Flow-coupled sway (fidelity pass + follow-up):** the F11.7 deferral is
+ * now closed. When `RenderOptions.flowField` is supplied (the host's
  * `LivestockSimulationService` bakes it for the livestock sim), each plant's
  * sway AMPLITUDE is scaled by the local current magnitude at its base —
  * plants in a filter outflow wave harder, dead-zone plants barely move
  * (`flowAmpAt` → `[FLOW_AMP_MIN, FLOW_AMP_MAX]`, fed to `uFlowAmp` /
- * `aFlowAmp`). We couple amplitude rather than the baked frequency: it reads
- * the same and is a one-multiplier shader change. Opt-in — with no flow
- * field every factor is 1.0 and the sway is byte-for-byte the pre-fidelity
- * constant. The oscillation frequency stays a constant 1.2 Hz.
+ * `aFlowAmp`). The FREQUENCY couples to the same flow factor too (fidelity
+ * follow-up, Bucket 3): outflow plants wave faster as well as wider, damped
+ * by `FLOW_FREQ_COUPLING` so frequency shifts half as hard as amplitude.
+ * Opt-in — with no flow field every factor is exactly 1.0 and both the
+ * amplitude and the 1.2 Hz base frequency are byte-for-byte the
+ * pre-fidelity constants.
  */
 
 import type { Catalog, PlantEntry } from '@aquascape/domain/catalog';
@@ -99,9 +101,9 @@ const SCATTER_FLIP_Y_SEED_MIX = 0x85ebca77;
 const SWAY_MAX_MM = 5.0;
 
 /**
- * Sway oscillation frequency, Hertz. A constant — the F11.7 plan calls
- * for coupling to the flow-field magnitude at each plant's base; that
- * coupling is deferred (see header).
+ * Base sway oscillation frequency, Hertz. This is the still-water /
+ * no-flow-field frequency; with a flow field the effective frequency is
+ * scaled by the flow factor through `FLOW_FREQ_COUPLING` (see below).
  */
 const SWAY_FREQ_HZ = 1.2;
 
@@ -114,10 +116,9 @@ const SWAY_FREQ_2PI = 2 * Math.PI * SWAY_FREQ_HZ;
  * local current magnitude at its base — closing the F11.7 "plants near a
  * filter outflow visibly wave; plants in dead zones barely move" deferral.
  *
- * We couple amplitude (not the baked frequency) deliberately: it reads the
- * same ("waves harder in current") and is a one-multiplier shader change that
- * doesn't disturb the existing per-instance phase / frequency wiring. The
- * coupling is OPT-IN — with no flow field every factor is exactly 1.0, so the
+ * The coupling drives BOTH the amplitude (directly) and the oscillation
+ * frequency (damped through `FLOW_FREQ_COUPLING` — see that constant). It is
+ * OPT-IN — with no flow field every factor is exactly 1.0, so the
  * pre-fidelity sway is byte-for-byte unchanged.
  *
  * `FLOW_REF_MMPS` is the current magnitude (mm/s) that saturates the response;
@@ -127,6 +128,32 @@ const SWAY_FREQ_2PI = 2 * Math.PI * SWAY_FREQ_HZ;
 const FLOW_REF_MMPS = 80;
 const FLOW_AMP_MIN = 0.4;
 const FLOW_AMP_MAX = 2.4;
+
+/**
+ * Flow-coupled sway FREQUENCY damping (fidelity follow-up, Bucket 3) —
+ * outflow plants wave *faster*, not just wider. The effective shader
+ * frequency is:
+ *
+ *     swayFreq = SWAY_FREQ_2PI · mix(1.0, flowFactor, FLOW_FREQ_COUPLING)
+ *
+ * where `flowFactor` is the SAME `uFlowAmp` / `aFlowAmp` value that scales
+ * the amplitude — no new attribute or uniform. At 0.5 the frequency shifts
+ * half as hard as the amplitude (an outflow plant at amp ×2.4 oscillates at
+ * ×1.7 ≈ 2.0 Hz; a dead-zone plant at amp ×0.4 slows to ×0.7 ≈ 0.84 Hz), so
+ * still water stays calm rather than sluggish.
+ *
+ * INVARIANTS:
+ *  - **No flow field ⇒ flow factor is exactly 1.0 ⇒ `mix` folds to 1.0 ⇒
+ *    the frequency is identical to the pre-fidelity constant 1.2 Hz.** The
+ *    coupling is a pure opt-in, like the amplitude coupling.
+ *  - The flow factor is baked per render (uniform / instanced attribute),
+ *    so the frequency is CONSTANT per render and the motion stays smooth.
+ *    When the field re-bakes (equipment change → new render) the phase of
+ *    `sin(uTime · swayFreq + phase)` jumps — the same accepted discontinuity
+ *    the existing amplitude jump has (a one-frame pop on an explicit edit,
+ *    not a per-frame artefact).
+ */
+export const FLOW_FREQ_COUPLING = 0.5;
 
 /**
  * Sample the flow field at a plant base and map its magnitude into the
@@ -681,7 +708,12 @@ export function createPlantSwayMaterial(
         float plantPosFactor = clamp(1.0 - ${plantBaseExpr} / uTankHeight, 0.0, 1.0);
         float vertexHeightFactor = clamp(position.y / uSilhouetteHeight, 0.0, 1.0);
         float swayAmp = ${SWAY_MAX_MM.toFixed(4)} * plantPosFactor * vertexHeightFactor * ${flowAmpExpr};
-        float swayX = swayAmp * sin(uTime * ${SWAY_FREQ_2PI.toFixed(6)} + ${phaseExpr});
+        // Flow-coupled frequency: the same flow factor that scales the
+        // amplitude shifts the frequency, damped by FLOW_FREQ_COUPLING.
+        // No flow field => factor is exactly 1.0 => mix folds to 1.0 and
+        // the frequency is the pre-fidelity 1.2 Hz constant.
+        float swayFreq = ${SWAY_FREQ_2PI.toFixed(6)} * mix(1.0, ${flowAmpExpr}, ${FLOW_FREQ_COUPLING.toFixed(4)});
+        float swayX = swayAmp * sin(uTime * swayFreq + ${phaseExpr});
         transformed.x += swayX;
       }
       `,
