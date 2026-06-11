@@ -12,6 +12,16 @@
 [![Status: Stages 0–7 + 10 + 11 complete](https://img.shields.io/badge/status-stages%200--7%20%2B%2010%20%2B%2011-brightgreen.svg)](#status--roadmap)
 [![Platform: Web + Electron](https://img.shields.io/badge/platform-web%20%2B%20electron-informational.svg)](#platforms)
 
+<br />
+
+<!-- GitHub renders <video> with a relative src on the rendered README; the
+     linked poster below is the always-works fallback. -->
+<video src="docs/media/demo-3d.webm" poster="docs/media/demo-3d-poster.png" controls muted loop playsinline width="760"></video>
+
+<a href="docs/media/demo-3d.webm"><img src="docs/media/demo-3d-poster.png" width="760" alt="Aquascape 3D simulation — transmissive glass, caustics, schooling fish, day-night cycle" /></a>
+
+<sub>▶ **[Watch the 3D simulation demo (WebM)](docs/media/demo-3d.webm)** — orbit a planted tank, watch caustics dance across the substrate, and scrub a full day→night cycle. Generated headlessly by [`tools/demo/record-demo.mjs`](tools/demo/record-demo.mjs).</sub>
+
 </div>
 
 ---

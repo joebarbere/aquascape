@@ -65,6 +65,22 @@ pnpm exec nx run web-e2e:e2e            # boots `nx serve web` + runs specs
 
 If `nx serve web` is already running (dev loop), Playwright reuses it. Reports + traces land in `dist/.playwright/apps/web-e2e/`.
 
+## Demo recorder + headless visual validation (`tools/demo/record-demo.mjs`)
+
+The README's 3D demo (`docs/media/demo-3d.webm` + `…-poster.png`) is generated headlessly by `tools/demo/record-demo.mjs` — it drives the dev server with Playwright (load the Jungle template → add a tetra school + sponge filter → 3D → orbit + day-night scrub), records WebM, and trims the scene-setup footage with ffmpeg. Regenerate after a visible renderer change:
+
+```bash
+pnpm exec nx serve web                 # terminal 1
+node tools/demo/record-demo.mjs        # terminal 2
+```
+
+**Software-WebGL gotchas (load-bearing for any headless visual work here):**
+
+- **WebGL works headless via SwiftShader**, but only with the launch args `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist`. Without them the 3D canvas is blank.
+- **The main thread is saturated** by the RAF render loop, so every CDP round-trip (mouse move, `evaluate`, click) is slow. Keep the call COUNT low; resolve an element to a HANDLE once rather than re-querying a locator per frame; lean on `sleep` (no round-trip) for animation hold time. The recorder time-compresses the resulting long capture with ffmpeg.
+- **`PLAYWRIGHT_CHROMIUM`** overrides the browser binary — set it when Playwright's managed download is unavailable (e.g. CDN blocked) and a system / pre-provisioned chromium must be used. The recorder + any ad-hoc validation script reads it.
+- **The Playwright-bundled ffmpeg is a MINIMAL build** — VP8 encoder only (no VP9), and only the `pad`/`crop`/`scale` filters (no `setpts`/`fps`). Speed-changes use the `-itsscale` INPUT option, not a filter; frame extraction uses `-ss T -frames:v 1`, not `-vf fps=`.
+
 ## Anti-patterns to refuse
 
 - **Pixel-perfect snapshot tests.** Flaky for what they catch. Variance/diff floors above are the pattern.
