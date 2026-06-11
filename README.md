@@ -12,6 +12,16 @@
 [![Status: Stages 0–7 + 10 + 11 complete](https://img.shields.io/badge/status-stages%200--7%20%2B%2010%20%2B%2011-brightgreen.svg)](#status--roadmap)
 [![Platform: Web + Electron](https://img.shields.io/badge/platform-web%20%2B%20electron-informational.svg)](#platforms)
 
+<br />
+
+<!-- GitHub renders <video> with a relative src on the rendered README; the
+     linked poster below is the always-works fallback. -->
+<video src="docs/media/demo-3d.webm" poster="docs/media/demo-3d-poster.png" controls muted loop playsinline width="760"></video>
+
+<a href="docs/media/demo-3d.webm"><img src="docs/media/demo-3d-poster.png" width="760" alt="Aquascape 3D simulation — transmissive glass, caustics, schooling fish, day-night cycle" /></a>
+
+<sub>▶ **[Watch the 3D simulation demo (WebM)](docs/media/demo-3d.webm)** — orbit a planted tank, watch caustics dance across the substrate, and scrub a full day→night cycle. Generated headlessly by [`tools/demo/record-demo.mjs`](tools/demo/record-demo.mjs).</sub>
+
 </div>
 
 ---
@@ -245,7 +255,7 @@ The libs below all ship today. Empty placeholders: `libs/ui/`, `apps/desktop-e2e
 #### Rendering
 
 - `libs/rendering/renderer-api/` + `libs/rendering/renderer-2d/` — `SceneRenderer` interface + `Canvas2DRenderer`. Paint order: **backdrop photo** → **wall background** → tank background → grid → tank outline → **substrate** → water tint → frame overlay → **hardscape silhouettes** → **plants** → **composition overlays** → **snap alignment guides** → **selection handles**. `hitTest` is fully wired with handle-beats-body when a selection is supplied. F5.3 overlays accept an `OverlayOptions` parameter on `render()` only (not `hitTest` — they are non-interactive); the call is a true no-op when omitted or when every flag is false. Idempotent, DPR-aware, listener-clean on dispose.
-- `libs/rendering/renderer-3d/` (Stage 10) — `Three3DRenderer` implements the same `SceneRenderer` interface against Three.js + WebGL. Per-element scene builders (`tank-mesh.ts` for the glass box + frame styling, `substrate-mesh.ts` extruding the profile, `hardscape-mesh.ts` + `plant-mesh.ts` extruding the catalog silhouettes, `lighting.ts` for ambient + directional, `camera.ts` for the framed perspective view). OrbitControls binds to the canvas for orbit / zoom / pan. `hitTest` returns `null` (read-only — no selection or editing in 3D). `Viewport` is 2D-only and the 3D renderer ignores it; OrbitControls is the camera source of truth. Idempotent + leak-safe — the rebuild path disposes prior geometries + materials before swapping.
+- `libs/rendering/renderer-3d/` (Stage 10) — `Three3DRenderer` implements the same `SceneRenderer` interface against Three.js + WebGL. Per-element scene builders (`tank-mesh.ts` for the glass box + frame styling, `substrate-mesh.ts` extruding the profile, `hardscape-mesh.ts` + `plant-mesh.ts` extruding the catalog silhouettes, `lighting.ts` for ambient + directional, `camera.ts` for the framed perspective view). OrbitControls binds to the canvas for orbit / zoom / pan. `hitTest` returns `null` (read-only — no selection or editing in 3D). `Viewport` is 2D-only and the 3D renderer ignores it; OrbitControls is the camera source of truth. Idempotent + leak-safe — the rebuild path disposes prior geometries + materials before swapping. **Fidelity pass:** PR1 — ACES filmic tone mapping + sRGB output, a deterministic PMREM image-based-lighting environment (`environment.ts` — guarded behind a real `WebGLRenderer`), soft `PCFSoftShadowMap` shadows from the key light, and physically-based transmissive glass. PR2 — procedural underwater **caustics** on substrate + hardscape (`caustics.ts`, ticked off the wall clock, faded at night). PR3 — **flow-coupled plant sway** (`RenderOptions.flowField` scales sway amplitude by the local filter current) + an **iridescent fish sheen** (grazing-angle fresnel in the livestock shader). PR4 — **startle-wave propagation** (a fleeing fish scares nearby neighbours so fear ripples through a school; deterministic, replay-safe). Then, **validated headlessly via Playwright** (SwiftShader WebGL): **EffectComposer bloom**, **helical bubble wobble**, and a **predator entity** (a tagged fish — e.g. the angelfish — that prey fear + flee). The demo above is recorded headlessly by [`tools/demo/record-demo.mjs`](tools/demo/record-demo.mjs). Only **screen-space water-surface refraction** remains deferred (the transmissive glass already supplies the dominant refraction) — see the renderer-3d + livestock-ecs caveats.
 
 #### Platform
 

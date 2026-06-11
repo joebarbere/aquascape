@@ -38,6 +38,11 @@ const moduleNameMapper: Record<string, string | string[]> = pathsToModuleNameMap
 // import path runs OrbitControls' module-level code under jest.
 moduleNameMapper['^three/examples/jsm/controls/OrbitControls$'] =
   '<rootDir>/../../libs/rendering/renderer-3d/src/__mocks__/orbit-controls-stub.ts';
+// Fidelity pass (bloom) — same dance for the postprocessing addons: apps/web
+// imports `Three3DRenderer` (which imports these) via `SCENE_RENDERER_3D`.
+moduleNameMapper[
+  '^three/examples/jsm/postprocessing/(EffectComposer|RenderPass|UnrealBloomPass|OutputPass)$'
+] = '<rootDir>/../../libs/rendering/renderer-3d/src/__mocks__/postprocessing-stub.ts';
 
 const config: Config = {
   displayName: 'web',

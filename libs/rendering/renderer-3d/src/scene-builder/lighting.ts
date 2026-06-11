@@ -1,37 +1,64 @@
 /**
  * Lighting rig for the Stage 10 F10.1 Three.js renderer.
  *
- * v1 ships a two-light setup: a soft ambient fill plus a single directional
- * key light positioned at front-top-right. This reads as "tank on a desk
- * under room lighting" — not photorealistic, just legible.
+ * Ships a three-light setup: a soft ambient fill, a sky/ground hemisphere
+ * fill, and a single directional key light positioned at front-top-right.
+ * As of the Stage 11 fidelity pass the key light also CASTS SOFT SHADOWS
+ * and the scene carries an image-based-lighting environment (set on the
+ * renderer side — see `three-3d-renderer.ts`), so the ambient + hemisphere
+ * fills are pulled back from their original "lean bright because we have no
+ * environment" levels: an over-bright ambient flattens the very shadows we
+ * now cast.
  *
- * EXPLICIT FUTURE WORK (NOT in v1):
- *   - Day/night cycle (animate the directional intensity + colour temp).
+ * Shadows (fidelity pass)
+ * -----------------------
+ * The key light casts into a single `PCFSoftShadowMap` (configured on the
+ * renderer). Its shadow camera is an orthographic frustum framed to the
+ * tank AABB with a generous pad, near/far bracketed to the light→tank
+ * distance. `normalBias` is scaled to the tank's millimetre dimensions to
+ * defeat shadow acne on the steeply-angled extruded substrate / hardscape
+ * faces without introducing visible peter-panning.
+ *
+ * EXPLICIT FUTURE WORK (NOT yet):
  *   - Point lights inside the tank to mimic a real planted LED bar.
- *   - Shadow maps. We deliberately keep `castShadow` off everywhere in v1
- *     because shadow maps are expensive and the visual win is marginal at
- *     typical mid-tier hardware framerates. Re-enable once the renderer
- *     has perf headroom.
+ *   - A coloured (warm/cool) sun on the day-night ramp — today the cycle's
+ *     temperature shift rides on the ambient channel alone.
  */
 
 import type { Tank } from '@aquascape/domain/scene-model';
 import { AmbientLight, DirectionalLight, Group, HemisphereLight, Vector3 } from 'three';
 
 /**
- * Ambient fill — keeps shaded faces readable. v1 deliberately leans
- * bright because we don't have a HemisphereLight or environment map yet,
- * so without strong ambient the underside / back of every mesh would
- * read as a featureless dark blob against the dark clear color.
+ * Ambient fill — keeps shaded faces readable. Pulled back from the original
+ * 0.7 now that the scene carries an IBL environment + casts shadows: strong
+ * uniform ambient washes out the directional key's shading and flattens the
+ * shadows. 0.45 keeps back / underside faces legible without erasing depth.
  */
-const AMBIENT_INTENSITY = 0.7;
+const AMBIENT_INTENSITY = 0.45;
 /** Directional key light intensity. */
 const KEY_INTENSITY = 1.0;
 /**
  * Soft "sky fill" hemisphere light — bluish from above, warm earthy from
- * below. Cheap and reads a lot more natural than a single directional
- * key against pure ambient, which is what v1 shipped initially.
+ * below. Pulled back from 0.4 for the same reason as ambient: the IBL
+ * environment now supplies most of the soft directional fill.
  */
-const HEMI_INTENSITY = 0.4;
+const HEMI_INTENSITY = 0.3;
+
+/** Shadow map resolution (square). 2048 reads crisp on a single key light. */
+const SHADOW_MAP_SIZE = 2048;
+/**
+ * Constant depth bias. Small negative value nudges the comparison toward
+ * the light to kill the last of the surface-acne shimmer the `normalBias`
+ * doesn't catch on near-grazing faces.
+ */
+const SHADOW_BIAS = -0.0005;
+/**
+ * `normalBias` as a fraction of the tank's largest dimension. The scene is
+ * in millimetres (tanks are hundreds of mm), so a unit-scale normalBias
+ * would be invisibly small; scaling to the tank defeats acne on the
+ * extruded slabs. ~0.2 % of the max dimension ≈ 1.2 mm on a 600 mm tank.
+ */
+const SHADOW_NORMAL_BIAS_FRAC = 0.002;
 
 /**
  * Build the v1 lighting group. The group contains an ambient + one
@@ -65,9 +92,28 @@ export function buildLighting(tank: Tank): Group {
   // to the scene here (Three.js handles parented targets transparently
   // when only the position matters). Disposing the group disposes the
   // target along with it.
-  key.target.position.copy(new Vector3(tank.width / 2, tank.height / 2, tank.depth / 2));
-  // Shadows OFF in v1. See the file header.
-  key.castShadow = false;
+  const center = new Vector3(tank.width / 2, tank.height / 2, tank.depth / 2);
+  key.target.position.copy(center);
+
+  // Soft shadows (fidelity pass). Frame the orthographic shadow camera to
+  // the tank AABB with a pad so steep extruded faces near the rim don't
+  // clip out of the shadow frustum. near/far bracket the light→tank
+  // distance tightly for depth precision.
+  key.castShadow = true;
+  key.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+  const maxDim = Math.max(tank.width, tank.height, tank.depth);
+  const span = maxDim; // half-extent of the ortho frustum (pads the tank)
+  const lightDist = key.position.distanceTo(center);
+  const shadowCam = key.shadow.camera;
+  shadowCam.left = -span;
+  shadowCam.right = span;
+  shadowCam.top = span;
+  shadowCam.bottom = -span;
+  shadowCam.near = Math.max(1, lightDist - maxDim * 1.5);
+  shadowCam.far = lightDist + maxDim * 1.5;
+  shadowCam.updateProjectionMatrix();
+  key.shadow.bias = SHADOW_BIAS;
+  key.shadow.normalBias = maxDim * SHADOW_NORMAL_BIAS_FRAC;
   group.add(key);
   // Add the target as well so it participates in the scene graph and is
   // disposed cleanly when the group is removed.

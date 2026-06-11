@@ -16,14 +16,17 @@
 
 import type { Tank, TankStyle } from '@aquascape/domain/scene-model';
 import {
+  BackSide,
   BoxGeometry,
   DoubleSide,
   EdgesGeometry,
+  FrontSide,
   Group,
   LineBasicMaterial,
   LineSegments,
   Mesh,
   MeshBasicMaterial,
+  MeshPhysicalMaterial,
   PlaneGeometry,
 } from 'three';
 
@@ -56,30 +59,74 @@ export function buildTankMesh(tank: Tank): Group {
 }
 
 /**
- * The glass box — barely-tinted plain transparency. We deliberately do
- * NOT use `MeshPhysicalMaterial.transmission` here: physical transmission
- * needs an environment to refract through, and against an empty
- * dark-blue clear color the glass renders as a near-opaque dark tint
- * (the symptom that made "I see nothing in 3D" the first reported bug).
- * `MeshBasicMaterial` with low opacity reads cleanly as "clear glass"
- * regardless of what's behind it.
+ * The glass box — physically-based transmissive glass (fidelity pass).
  *
- * Two-sided so the camera inside an orbit volume sees both faces.
- * Centred so the box's front-bottom-left interior corner is at the
- * world origin (matching `aqua-document.ts`).
+ * The original v1 used `MeshBasicMaterial` with low opacity because
+ * `MeshPhysicalMaterial.transmission` needs an *environment* to refract /
+ * reflect through; against the old empty dark clear color it rendered as a
+ * near-opaque dark tint ("I see nothing in 3D"). Now that the renderer sets
+ * an IBL environment (`scene.environment`, see `three-3d-renderer.ts`), the
+ * glass has something to reflect and refract, so we can ship real glass: a
+ * Fresnel-bright rim, a faint blue body tint, and a clear refractive
+ * interior. `attenuationDistance` is left at its default (∞) so the large
+ * millimetre-scale tank doesn't darken the contents seen through the glass.
+ *
+ * Single-sided (`FrontSide`) — the camera orbits OUTSIDE the tank, so we
+ * render the outward-facing glass and let the contents show through via
+ * transmission. `depthWrite: false` keeps the glass from occluding the
+ * transparent water surface + fish behind it in the depth sort.
+ *
+ * A faint additive inner shell (`buildGlassInnerSheen`) gives the box a
+ * readable silhouette from grazing angles where a perfectly clear pane
+ * would otherwise vanish — cheap insurance against the "is the tank even
+ * there?" read.
+ *
+ * Centred so the box's front-bottom-left interior corner is at the world
+ * origin (matching `aqua-document.ts`).
  */
 function buildGlassBox(tank: Tank): Mesh {
   const geo = new BoxGeometry(tank.width, tank.height, tank.depth);
-  const mat = new MeshBasicMaterial({
-    color: 0xb8d8e0,
+  const mat = new MeshPhysicalMaterial({
+    color: 0xeaf4f6,
+    metalness: 0,
+    roughness: 0.03,
+    transmission: 1,
+    ior: 1.45,
+    thickness: 6,
     transparent: true,
-    opacity: 0.12,
-    side: DoubleSide,
     depthWrite: false,
+    side: FrontSide,
+    envMapIntensity: 1,
   });
   const mesh = new Mesh(geo, mat);
   mesh.name = 'aquascape:tank/glass';
   mesh.position.set(tank.width / 2, tank.height / 2, tank.depth / 2);
+  // No shadows on glass — a transmissive pane neither casts a meaningful
+  // shadow nor needs to receive one.
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  mesh.add(buildGlassInnerSheen(tank));
+  return mesh;
+}
+
+/**
+ * A faint inner shell rendered on the BackSide so the tank keeps a legible
+ * edge/silhouette from grazing angles where the clear transmissive pane
+ * alone would disappear. Very low opacity — it reads as the cool tint of
+ * water-filled glass, not as a visible wall. Parented to the glass mesh so
+ * it shares the box centre + is disposed by the same `disposeNode` walk.
+ */
+function buildGlassInnerSheen(tank: Tank): Mesh {
+  const geo = new BoxGeometry(tank.width, tank.height, tank.depth);
+  const mat = new MeshBasicMaterial({
+    color: 0xb8d8e0,
+    transparent: true,
+    opacity: 0.05,
+    side: BackSide,
+    depthWrite: false,
+  });
+  const mesh = new Mesh(geo, mat);
+  mesh.name = 'aquascape:tank/glass-sheen';
   return mesh;
 }
 

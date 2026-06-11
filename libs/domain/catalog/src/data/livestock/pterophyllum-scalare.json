@@ -12,7 +12,8 @@
   "schoolingMin": 1,
   "bioloadClass": "high",
   "color": "#bfb097",
-  "description": "Deep-bodied South American cichlid; the 'angelfish' substring fires both depth-band (none — fish default) and territory heuristics. Explicit territory block tunes the cichlid default to angelfish-specific values — they bond into pairs that defend a small cone around the chosen spawning surface but otherwise tolerate community tankmates.",
+  "predator": true,
+  "description": "Deep-bodied South American cichlid; the 'angelfish' substring fires both depth-band (none — fish default) and territory heuristics. Explicit territory block tunes the cichlid default to angelfish-specific values — they bond into pairs that defend a small cone around the chosen spawning surface but otherwise tolerate community tankmates. Flagged `predator` (Stage 11 fidelity pass): in the 3D sim, small community fish (neon tetras, ember tetras) accumulate fear-risk near an angelfish and dart for cover — accurate to the real tank, where adult angels will pick off nano fish.",
   "tags": ["cichlid", "centerpiece", "south-american", "angelfish"],
   "compatibilityFlags": { "plantedOK": true, "finNipper": false, "brackish": false },
   "behavior": {

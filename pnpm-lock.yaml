@@ -213,6 +213,8 @@ importers:
 
   libs/domain/fish-anatomy: {}
 
+  libs/domain/fluid-sim: {}
+
   libs/domain/geometry: {}
 
   libs/domain/growth-sim: {}

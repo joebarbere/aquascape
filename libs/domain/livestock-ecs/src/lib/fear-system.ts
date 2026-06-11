@@ -25,7 +25,7 @@
  * counts down; when it reaches 0 the fish flips back to FORAGE and
  * `refugeEid` resets to 0.
  */
-import { defineQuery } from 'bitecs';
+import { defineQuery, hasComponent } from 'bitecs';
 import {
   BehaviorMode,
   BEHAVIOR_MODE,
@@ -35,11 +35,13 @@ import {
   Hardscape,
   NO_ENTITY_REF,
   Position,
+  Predator,
 } from './components';
 import type { LivestockWorld } from './world';
 
 const fearQuery = defineQuery([Position, BehaviorParamsRef, FearState, BehaviorMode, Force]);
 const hardscapeQuery = defineQuery([Hardscape, Position]);
+const predatorQuery = defineQuery([Predator, Position]);
 
 /**
  * Per-second risk decay rate. Half-life = ln(2) / 0.5 ≈ 1.39 s. Tuned so a
@@ -55,6 +57,39 @@ const RISK_DECAY_RATE = 0.5;
  * depth-restore forces so the steering integrator clamps it sensibly.
  */
 const REFUGE_FORCE_MAGNITUDE = 250;
+
+/**
+ * Startle-wave propagation (fidelity pass). When a fish bolts to REFUGE it
+ * scares nearby conspecifics — a fleeing neighbour is itself a risk cue. We
+ * queue a distance-attenuated startle for those neighbours so fear RIPPLES
+ * through a school over successive ticks (a "startle wave") instead of every
+ * fish reacting in lockstep to the same external cue.
+ *
+ * `STARTLE_PROP_RADIUS_MM` is the neighbour reach; `STARTLE_PROP_MAGNITUDE`
+ * the impulse at zero distance (well below a typical `threshold` so it nudges
+ * risk rather than instantly flipping the whole tank — risk decay then damps
+ * the wave so it dies out instead of self-sustaining). Propagated impulses are
+ * applied NEXT tick (queued into `pendingStartles` after the loop), which is
+ * what makes it a travelling wave rather than an instantaneous flash.
+ *
+ * Determinism: the grid query order is fixed and impulses are summed
+ * (order-independent), so two identical worlds propagate identically — the
+ * byte-identical replay holds.
+ */
+const STARTLE_PROP_RADIUS_MM = 150;
+const STARTLE_PROP_MAGNITUDE = 0.4;
+
+/**
+ * Predator proximity fear (fidelity pass). A prey fish within
+ * `PREDATOR_FEAR_RADIUS_MM` of a roaming predator accumulates risk at up to
+ * `PREDATOR_FEAR_GAIN_PER_S` per second (linear distance falloff, nearest
+ * predator wins). This is a CONTINUOUS source (not a one-off startle) so the
+ * prey stays scared while the predator lingers and emerges once it leaves —
+ * the gain is set comfortably above the decay so a close predator reliably
+ * flips prey to REFUGE within ~1 s.
+ */
+const PREDATOR_FEAR_RADIUS_MM = 280;
+const PREDATOR_FEAR_GAIN_PER_S = 2.2;
 
 /**
  * Map a species `coverPreference` enum to a hardscape category id.
@@ -84,6 +119,15 @@ export function fearSystem(world: LivestockWorld, dt: number): void {
   // ticks within one world. We snapshot the hardscape list once per tick;
   // it doesn't change mid-tick.
   const hardscapeEids = hardscapeQuery(ecs);
+  // Predators (roaming risk sources). Usually empty — the proximity scan
+  // below early-outs when there are none.
+  const predatorEids = predatorQuery(ecs);
+
+  // Startle-wave propagation accumulator. Allocated LAZILY — only when a
+  // fish actually flips to REFUGE this tick (rare) — so a calm tank pays
+  // zero per-tick allocation, matching the pre-fidelity steady state.
+  // Merged into `pendingStartles` AFTER the loop so impulses land NEXT tick.
+  let propagated: Map<number, number> | null = null;
 
   for (const eid of fearQuery(ecs)) {
     const handle = BehaviorParamsRef.handleIdx[eid] as number;
@@ -103,6 +147,11 @@ export function fearSystem(world: LivestockWorld, dt: number): void {
       risk += startle;
       startles.delete(eid);
     }
+    // Predator proximity — a continuous risk source while a predator lingers
+    // nearby. Predators don't fear (skip the scan for predator entities).
+    if (predatorEids.length > 0 && !hasComponent(ecs, Predator, eid)) {
+      risk += predatorProximityRisk(eid, predatorEids, dt);
+    }
     FearState.risk[eid] = risk;
 
     const mode = BehaviorMode.mode[eid] as number;
@@ -121,6 +170,9 @@ export function fearSystem(world: LivestockWorld, dt: number): void {
       const sy = Position.y[eid] as number;
       const sz = Position.z[eid] as number;
       FearState.refugeEid[eid] = pickRefuge(hardscapeEids, sx, sy, sz, preferred);
+      // This fish JUST bolted — scare its neighbours (next-tick impulses).
+      propagated ??= new Map<number, number>();
+      propagateStartle(world, eid, sx, sy, sz, propagated);
     }
 
     // 3. Emergence — while risk is above threshold, hold the timer;
@@ -180,6 +232,73 @@ export function fearSystem(world: LivestockWorld, dt: number): void {
       // persist into the next step.
       startles.delete(key);
     }
+  }
+
+  // Startle-wave propagation — apply the queued neighbour impulses NEXT tick.
+  // Done AFTER the cleanup above (which empties `startles`) so they survive
+  // into the next `fearSystem` run. Additive with any host-injected startle.
+  if (propagated !== null) {
+    for (const [neighbor, mag] of propagated) {
+      startles.set(neighbor, (startles.get(neighbor) ?? 0) + mag);
+    }
+  }
+}
+
+/**
+ * Queue distance-attenuated startle impulses for every conspecific within
+ * `STARTLE_PROP_RADIUS_MM` of a fish that just bolted. Uses the SpatialGrid
+ * PerceptionSystem rebuilt this tick (broad-phase), then filters to the true
+ * radius. Skips self. Deterministic: grid iteration order is fixed and the
+ * accumulation is additive (order-independent).
+ */
+/**
+ * Risk contribution this tick from the nearest predator within
+ * `PREDATOR_FEAR_RADIUS_MM` of the prey at `preyEid`. Linear distance
+ * falloff × `PREDATOR_FEAR_GAIN_PER_S` × `dt`. Returns 0 when no predator is
+ * in range. Deterministic: iterates `predatorEids` in fixed eid order and
+ * takes the nearest (distance comparison is order-independent).
+ */
+function predatorProximityRisk(
+  preyEid: number,
+  predatorEids: ArrayLike<number> & Iterable<number>,
+  dt: number,
+): number {
+  const px = Position.x[preyEid] as number;
+  const py = Position.y[preyEid] as number;
+  const pz = Position.z[preyEid] as number;
+  let nearest = Infinity;
+  for (const pred of predatorEids) {
+    if (pred === preyEid) continue;
+    const dx = (Position.x[pred] as number) - px;
+    const dy = (Position.y[pred] as number) - py;
+    const dz = (Position.z[pred] as number) - pz;
+    const d = Math.hypot(dx, dy, dz);
+    if (d < nearest) nearest = d;
+  }
+  if (nearest >= PREDATOR_FEAR_RADIUS_MM) return 0;
+  const falloff = 1 - nearest / PREDATOR_FEAR_RADIUS_MM;
+  return PREDATOR_FEAR_GAIN_PER_S * falloff * dt;
+}
+
+function propagateStartle(
+  world: LivestockWorld,
+  selfEid: number,
+  sx: number,
+  sy: number,
+  sz: number,
+  out: Map<number, number>,
+): void {
+  const neighbours = world.spatialGrid.query(sx, sy, sz, STARTLE_PROP_RADIUS_MM);
+  for (const n of neighbours) {
+    if (n === selfEid) continue;
+    const dx = (Position.x[n] as number) - sx;
+    const dy = (Position.y[n] as number) - sy;
+    const dz = (Position.z[n] as number) - sz;
+    const dist = Math.hypot(dx, dy, dz);
+    // The grid broad-phase returns whole cells; filter to the true radius.
+    if (dist >= STARTLE_PROP_RADIUS_MM) continue;
+    const falloff = 1 - dist / STARTLE_PROP_RADIUS_MM;
+    out.set(n, (out.get(n) ?? 0) + STARTLE_PROP_MAGNITUDE * falloff);
   }
 }
 

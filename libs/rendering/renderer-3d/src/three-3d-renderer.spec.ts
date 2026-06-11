@@ -286,6 +286,25 @@ describe('Three3DRenderer — attach / render / dispose', () => {
     const r = new Three3DRenderer(() => new StubRenderer());
     expect(() => r.render(sceneOf(), viewport)).not.toThrow();
   });
+
+  it('bloom composer stays null under the headless stub — paint falls back to direct render', () => {
+    // The EffectComposer pipeline is only built behind `instanceof
+    // WebGLRenderer`, which the stub is not. So the composer + bloom pass
+    // stay null and `paint()` routes through the stub's `render()` — proven
+    // by the render counter still incrementing.
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    const before = stub.renders;
+    r.render(sceneOf(), viewport);
+    expect(stub.renders).toBeGreaterThan(before);
+    const rAny = r as unknown as { composer: unknown; bloomPass: unknown };
+    expect(rAny.composer).toBeNull();
+    expect(rAny.bloomPass).toBeNull();
+    r.dispose();
+    raf.uninstall();
+  });
 });
 
 // ─── Dispose discipline (long-running) ───────────────────────────────────

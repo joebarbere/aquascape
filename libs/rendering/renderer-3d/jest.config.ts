@@ -25,6 +25,10 @@ export default {
   moduleNameMapper: {
     '^three/examples/jsm/controls/OrbitControls$':
       '<rootDir>/src/__mocks__/orbit-controls-stub.ts',
+    // Fidelity pass (bloom) — the postprocessing addons are ESM-only; redirect
+    // them to a single stub so the module-level imports resolve under Jest.
+    '^three/examples/jsm/postprocessing/(EffectComposer|RenderPass|UnrealBloomPass|OutputPass)$':
+      '<rootDir>/src/__mocks__/postprocessing-stub.ts',
   },
   coverageDirectory: '../../../coverage/libs/rendering/renderer-3d',
   collectCoverageFrom: [

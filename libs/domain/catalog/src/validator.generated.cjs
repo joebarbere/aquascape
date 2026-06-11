@@ -41,7 +41,7 @@ var require_ucs2length = __commonJS({
   }
 });
 
-// node_modules/.cache/aquascape-validators/jKi0RK/entry.cjs
+// node_modules/.cache/aquascape-validators/7Sramo/entry.cjs
 module.exports = validate20;
 module.exports.default = validate20;
 var schema32 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "material", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "substrate" }, "material": { "enum": ["soil", "sand", "gravel"] }, "color": { "$ref": "#/$defs/HexColor" }, "grainSize": { "type": "number", "exclusiveMinimum": 0 } } };
@@ -1723,7 +1723,7 @@ function validate25(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate25.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema43 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "group", "adultSize", "temperament", "temperatureRange", "pHRange", "schoolingMin", "bioloadClass", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "livestock" }, "group": { "enum": ["fish", "shrimp", "snail"] }, "adultSize": { "type": "number", "exclusiveMinimum": 0, "description": "Typical adult body length in millimetres." }, "temperament": { "enum": ["peaceful", "semi-aggressive", "aggressive"] }, "temperatureRange": { "type": "object", "required": ["minC", "maxC"], "additionalProperties": false, "properties": { "minC": { "type": "number", "minimum": 0, "maximum": 40 }, "maxC": { "type": "number", "minimum": 0, "maximum": 40 } }, "description": "Water temperature tolerance window in Celsius. Manifest authors must ensure minC < maxC; JSON Schema cannot enforce cross-field comparisons declaratively." }, "pHRange": { "type": "object", "required": ["min", "max"], "additionalProperties": false, "properties": { "min": { "type": "number", "minimum": 4, "maximum": 9.5 }, "max": { "type": "number", "minimum": 4, "maximum": 9.5 } }, "description": "Water pH tolerance window. Manifest authors must ensure min < max; JSON Schema cannot enforce cross-field comparisons declaratively." }, "schoolingMin": { "type": "integer", "minimum": 1, "description": "Minimum recommended group size. 1 = solitary / non-schooling." }, "bioloadClass": { "enum": ["low", "medium", "high"] }, "color": { "$ref": "#/$defs/HexColor" }, "compatibilityFlags": { "type": "object", "additionalProperties": false, "properties": { "plantedOK": { "type": "boolean" }, "finNipper": { "type": "boolean" }, "brackish": { "type": "boolean" } }, "description": "Pre-baked answers for the Stage 7 F7.2 compatibility rule engine." }, "behavior": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.2 per-species overrides for the schooling + vertical-stratification + animation params. Every subfield is optional; absent fields fall back to the per-group preset via `resolveBehavior()` in `@aquascape/domain/livestock-behaviors`. Manifests authored before schemaVersion 3 lack this block entirely and load unchanged.", "properties": { "schooling": { "type": "object", "additionalProperties": false, "description": "Couzin 2002 three-zone + Reynolds 1987 weighted steering. Distances in millimetres; speeds in mm/sec.", "properties": { "ZOR": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of repulsion radius (mm). Below this, neighbours push us away." }, "ZOO": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of orientation radius (mm). Between ZOR and ZOO, headings align." }, "ZOA": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of attraction radius (mm). Between ZOO and ZOA, steer toward centroid." }, "blindAngle": { "type": "number", "minimum": 0, "maximum": 3.141592653589793, "description": "Blind cone behind the fish (radians, total angle subtended). Range [0, \u03C0]." }, "vPref": { "type": "number", "exclusiveMinimum": 0, "description": "Preferred cruise speed (mm/sec)." }, "vMax": { "type": "number", "exclusiveMinimum": 0, "description": "Hard cap on instantaneous speed (mm/sec)." }, "turnMax": { "type": "number", "exclusiveMinimum": 0, "description": "Maximum heading change (rad/sec)." }, "wSep": { "type": "number", "minimum": 0, "description": "Reynolds separation weight." }, "wAli": { "type": "number", "minimum": 0, "description": "Reynolds alignment weight." }, "wCoh": { "type": "number", "minimum": 0, "description": "Reynolds cohesion weight." }, "noise": { "type": "number", "minimum": 0, "description": "Per-tick noise magnitude as a fraction of vPref. Typical 0..0.2." } } }, "depth": { "type": "object", "additionalProperties": false, "description": "Vertical-stratification spring centred on a preferred fraction of tank height.", "properties": { "preferredY": { "type": "number", "minimum": 0, "maximum": 1, "description": "Preferred Y as a fraction of tank height (0 = substrate, 1 = waterline)." }, "bandWidth": { "type": "number", "minimum": 0, "maximum": 1, "description": "Band half-width as a fraction of tank height. Inside this, only noise applies." }, "returnForce": { "type": "number", "minimum": 0, "description": "Restoring force magnitude when outside the band (mm/sec\xB2 equivalent)." } } }, "animation": { "type": "object", "additionalProperties": false, "description": "Carangiform tail-beat parameters consumed by the renderer-3d vertex shader.", "properties": { "tailBeatFreq": { "type": "number", "exclusiveMinimum": 0, "description": "Tail-beat frequency (Hz)." }, "ampHead": { "type": "number", "minimum": 0, "maximum": 1, "description": "Amplitude at the head end (fraction of body length)." }, "ampTail": { "type": "number", "minimum": 0, "maximum": 1, "description": "Amplitude at the tail tip (fraction of body length)." }, "envelopeExp": { "type": "number", "exclusiveMinimum": 0, "description": "Spine envelope exponent in `amp(s) = ampHead + (ampTail\u2212ampHead) * pow(s, env)`." } } }, "territory": { "oneOf": [{ "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 territoriality params (Brown 1964 + Adams 2001). All subfields optional \u2014 only declared keys override the per-species heuristic; absent keys fall back to the heuristic's defaults.", "properties": { "coreRadius": { "type": "number", "exclusiveMinimum": 0, "description": "Inner defense radius (mm). Non-conspecifics inside this get chased." }, "displayRadius": { "type": "number", "exclusiveMinimum": 0, "description": "Outer display radius (mm). Owner posts but does not chase between core and display." }, "aggression": { "type": "number", "exclusiveMinimum": 0, "description": "Chase-force magnitude (mm/sec\xB2 equivalent). Higher = more aggressive pursuit." }, "fatigueRate": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second decay rate of accumulated fatigue. Scales chase force downward over sustained defense." } } }, { "type": "null", "description": "Explicit `null` opts OUT of the per-species heuristic \u2014 e.g. a peaceful dwarf cichlid that should NOT inherit the cichlid territory default." }] }, "nipping": { "oneOf": [{ "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 fin-nipping params (Keenleyside 1955 + Magurran 1990). All subfields optional.", "properties": { "groupThreshold": { "type": "integer", "minimum": 1, "description": "Minimum conspecific count visible nearby to suppress nipping. Below this, the fish nips." }, "finFraction": { "type": "number", "minimum": 0, "maximum": 1, "description": "Minimum fraction of body length the target's longest fin must reach to be a candidate." }, "rate": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second Poisson rate at which an eligible nip attempt fires when conditions hold." } } }, { "type": "null", "description": "Explicit `null` opts OUT of the per-species nipping heuristic." }] }, "fear": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 anti-predator / fear params (Lima & Dill 1990). No `| null` \u2014 every fish carries fear; manifest authors can only tune values.", "properties": { "riskBaseline": { "type": "number", "minimum": 0, "description": "Baseline anxiety added to every tick's risk integration. Higher = always-jumpy species." }, "threshold": { "type": "number", "exclusiveMinimum": 0, "description": "Risk level above which the FORAGE \u2192 REFUGE mode flip fires." }, "coverPreference": { "enum": ["plants", "caves", "wood", "any"], "description": "Which hardscape coverScore source the species prefers when seeking a refuge. `'any'` = no preference (nearest cover wins)." }, "emergenceDelay": { "type": "number", "minimum": 0, "description": "Seconds to wait in REFUGE mode after risk drops below threshold before flipping back to FORAGE." } } }, "feeding": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.4 feeding params. `category` drives FeedingSystem target selection (surface flake vs. midwater pellet vs. substrate wafer, plus algae-grazer / plant-eater / detritivore passive uptake). No `| null` \u2014 every fish has hunger; absent fields fall back to per-species defaults via `resolveBehavior()`.", "properties": { "hungerRatePerSec": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second hunger accrual. Higher = species reads as visibly hungry faster between feedings." }, "threshold": { "type": "number", "exclusiveMinimum": 0, "description": "Hunger level above which the fish actively seeks food. Typically in [0, 2]; can exceed 1 for species that tolerate longer fasts before showing it." }, "category": { "enum": ["surface", "midwater", "substrate", "algae-grazer", "plant-eater", "detritivore"], "description": "Feeding-strategy bucket consumed by FeedingSystem target selection." } } }, "curiosity": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.4 curiosity / glass-surfing params. Drives the chance + duration of the glass-surf investigation behavior. No `| null` \u2014 `ratePerSec = 0` is the documented way to disable glass-surfing entirely for a species.", "properties": { "boldness": { "type": "number", "minimum": 0, "maximum": 1, "description": "How likely a curious bout is to fire when an opportunity presents itself. 0 = always shy, 1 = always investigates." }, "ratePerSec": { "type": "number", "minimum": 0, "description": "Per-second Poisson rate at which a curiosity bout fires. 0 disables glass-surfing entirely for the species." }, "dwellSec": { "type": "number", "exclusiveMinimum": 0, "description": "Seconds the fish lingers at the investigated target before returning to FORAGE." } } } } } } };
+var schema43 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "group", "adultSize", "temperament", "temperatureRange", "pHRange", "schoolingMin", "bioloadClass", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "livestock" }, "group": { "enum": ["fish", "shrimp", "snail"] }, "adultSize": { "type": "number", "exclusiveMinimum": 0, "description": "Typical adult body length in millimetres." }, "temperament": { "enum": ["peaceful", "semi-aggressive", "aggressive"] }, "temperatureRange": { "type": "object", "required": ["minC", "maxC"], "additionalProperties": false, "properties": { "minC": { "type": "number", "minimum": 0, "maximum": 40 }, "maxC": { "type": "number", "minimum": 0, "maximum": 40 } }, "description": "Water temperature tolerance window in Celsius. Manifest authors must ensure minC < maxC; JSON Schema cannot enforce cross-field comparisons declaratively." }, "pHRange": { "type": "object", "required": ["min", "max"], "additionalProperties": false, "properties": { "min": { "type": "number", "minimum": 4, "maximum": 9.5 }, "max": { "type": "number", "minimum": 4, "maximum": 9.5 } }, "description": "Water pH tolerance window. Manifest authors must ensure min < max; JSON Schema cannot enforce cross-field comparisons declaratively." }, "schoolingMin": { "type": "integer", "minimum": 1, "description": "Minimum recommended group size. 1 = solitary / non-schooling." }, "bioloadClass": { "enum": ["low", "medium", "high"] }, "color": { "$ref": "#/$defs/HexColor" }, "predator": { "type": "boolean", "description": "Stage 11 fidelity pass \u2014 when true, this species spawns as a roaming PREDATOR in the 3D simulation: nearby prey fish accumulate fear-risk and flee to cover (livestock-ecs FearSystem). Additive + optional; no manifest version bump." }, "compatibilityFlags": { "type": "object", "additionalProperties": false, "properties": { "plantedOK": { "type": "boolean" }, "finNipper": { "type": "boolean" }, "brackish": { "type": "boolean" } }, "description": "Pre-baked answers for the Stage 7 F7.2 compatibility rule engine." }, "behavior": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.2 per-species overrides for the schooling + vertical-stratification + animation params. Every subfield is optional; absent fields fall back to the per-group preset via `resolveBehavior()` in `@aquascape/domain/livestock-behaviors`. Manifests authored before schemaVersion 3 lack this block entirely and load unchanged.", "properties": { "schooling": { "type": "object", "additionalProperties": false, "description": "Couzin 2002 three-zone + Reynolds 1987 weighted steering. Distances in millimetres; speeds in mm/sec.", "properties": { "ZOR": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of repulsion radius (mm). Below this, neighbours push us away." }, "ZOO": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of orientation radius (mm). Between ZOR and ZOO, headings align." }, "ZOA": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of attraction radius (mm). Between ZOO and ZOA, steer toward centroid." }, "blindAngle": { "type": "number", "minimum": 0, "maximum": 3.141592653589793, "description": "Blind cone behind the fish (radians, total angle subtended). Range [0, \u03C0]." }, "vPref": { "type": "number", "exclusiveMinimum": 0, "description": "Preferred cruise speed (mm/sec)." }, "vMax": { "type": "number", "exclusiveMinimum": 0, "description": "Hard cap on instantaneous speed (mm/sec)." }, "turnMax": { "type": "number", "exclusiveMinimum": 0, "description": "Maximum heading change (rad/sec)." }, "wSep": { "type": "number", "minimum": 0, "description": "Reynolds separation weight." }, "wAli": { "type": "number", "minimum": 0, "description": "Reynolds alignment weight." }, "wCoh": { "type": "number", "minimum": 0, "description": "Reynolds cohesion weight." }, "noise": { "type": "number", "minimum": 0, "description": "Per-tick noise magnitude as a fraction of vPref. Typical 0..0.2." } } }, "depth": { "type": "object", "additionalProperties": false, "description": "Vertical-stratification spring centred on a preferred fraction of tank height.", "properties": { "preferredY": { "type": "number", "minimum": 0, "maximum": 1, "description": "Preferred Y as a fraction of tank height (0 = substrate, 1 = waterline)." }, "bandWidth": { "type": "number", "minimum": 0, "maximum": 1, "description": "Band half-width as a fraction of tank height. Inside this, only noise applies." }, "returnForce": { "type": "number", "minimum": 0, "description": "Restoring force magnitude when outside the band (mm/sec\xB2 equivalent)." } } }, "animation": { "type": "object", "additionalProperties": false, "description": "Carangiform tail-beat parameters consumed by the renderer-3d vertex shader.", "properties": { "tailBeatFreq": { "type": "number", "exclusiveMinimum": 0, "description": "Tail-beat frequency (Hz)." }, "ampHead": { "type": "number", "minimum": 0, "maximum": 1, "description": "Amplitude at the head end (fraction of body length)." }, "ampTail": { "type": "number", "minimum": 0, "maximum": 1, "description": "Amplitude at the tail tip (fraction of body length)." }, "envelopeExp": { "type": "number", "exclusiveMinimum": 0, "description": "Spine envelope exponent in `amp(s) = ampHead + (ampTail\u2212ampHead) * pow(s, env)`." } } }, "territory": { "oneOf": [{ "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 territoriality params (Brown 1964 + Adams 2001). All subfields optional \u2014 only declared keys override the per-species heuristic; absent keys fall back to the heuristic's defaults.", "properties": { "coreRadius": { "type": "number", "exclusiveMinimum": 0, "description": "Inner defense radius (mm). Non-conspecifics inside this get chased." }, "displayRadius": { "type": "number", "exclusiveMinimum": 0, "description": "Outer display radius (mm). Owner posts but does not chase between core and display." }, "aggression": { "type": "number", "exclusiveMinimum": 0, "description": "Chase-force magnitude (mm/sec\xB2 equivalent). Higher = more aggressive pursuit." }, "fatigueRate": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second decay rate of accumulated fatigue. Scales chase force downward over sustained defense." } } }, { "type": "null", "description": "Explicit `null` opts OUT of the per-species heuristic \u2014 e.g. a peaceful dwarf cichlid that should NOT inherit the cichlid territory default." }] }, "nipping": { "oneOf": [{ "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 fin-nipping params (Keenleyside 1955 + Magurran 1990). All subfields optional.", "properties": { "groupThreshold": { "type": "integer", "minimum": 1, "description": "Minimum conspecific count visible nearby to suppress nipping. Below this, the fish nips." }, "finFraction": { "type": "number", "minimum": 0, "maximum": 1, "description": "Minimum fraction of body length the target's longest fin must reach to be a candidate." }, "rate": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second Poisson rate at which an eligible nip attempt fires when conditions hold." } } }, { "type": "null", "description": "Explicit `null` opts OUT of the per-species nipping heuristic." }] }, "fear": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 anti-predator / fear params (Lima & Dill 1990). No `| null` \u2014 every fish carries fear; manifest authors can only tune values.", "properties": { "riskBaseline": { "type": "number", "minimum": 0, "description": "Baseline anxiety added to every tick's risk integration. Higher = always-jumpy species." }, "threshold": { "type": "number", "exclusiveMinimum": 0, "description": "Risk level above which the FORAGE \u2192 REFUGE mode flip fires." }, "coverPreference": { "enum": ["plants", "caves", "wood", "any"], "description": "Which hardscape coverScore source the species prefers when seeking a refuge. `'any'` = no preference (nearest cover wins)." }, "emergenceDelay": { "type": "number", "minimum": 0, "description": "Seconds to wait in REFUGE mode after risk drops below threshold before flipping back to FORAGE." } } }, "feeding": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.4 feeding params. `category` drives FeedingSystem target selection (surface flake vs. midwater pellet vs. substrate wafer, plus algae-grazer / plant-eater / detritivore passive uptake). No `| null` \u2014 every fish has hunger; absent fields fall back to per-species defaults via `resolveBehavior()`.", "properties": { "hungerRatePerSec": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second hunger accrual. Higher = species reads as visibly hungry faster between feedings." }, "threshold": { "type": "number", "exclusiveMinimum": 0, "description": "Hunger level above which the fish actively seeks food. Typically in [0, 2]; can exceed 1 for species that tolerate longer fasts before showing it." }, "category": { "enum": ["surface", "midwater", "substrate", "algae-grazer", "plant-eater", "detritivore"], "description": "Feeding-strategy bucket consumed by FeedingSystem target selection." } } }, "curiosity": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.4 curiosity / glass-surfing params. Drives the chance + duration of the glass-surf investigation behavior. No `| null` \u2014 `ratePerSec = 0` is the documented way to disable glass-surfing entirely for a species.", "properties": { "boldness": { "type": "number", "minimum": 0, "maximum": 1, "description": "How likely a curious bout is to fire when an opportunity presents itself. 0 = always shy, 1 = always investigates." }, "ratePerSec": { "type": "number", "minimum": 0, "description": "Per-second Poisson rate at which a curiosity bout fires. 0 disables glass-surfing entirely for the species." }, "dwellSec": { "type": "number", "exclusiveMinimum": 0, "description": "Seconds the fish lingers at the investigated target before returning to FORAGE." } } } } } } };
 function validate27(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -2362,23 +2362,23 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.compatibilityFlags !== void 0) {
-      let data21 = data.compatibilityFlags;
-      if (data21 && typeof data21 == "object" && !Array.isArray(data21)) {
-        for (const key3 in data21) {
-          if (!(key3 === "plantedOK" || key3 === "finNipper" || key3 === "brackish")) {
-            const err60 = { instancePath: instancePath + "/compatibilityFlags", schemaPath: "#/properties/compatibilityFlags/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key3 }, message: "must NOT have additional properties" };
-            if (vErrors === null) {
-              vErrors = [err60];
-            } else {
-              vErrors.push(err60);
-            }
-            errors++;
-          }
+    if (data.predator !== void 0) {
+      if (typeof data.predator !== "boolean") {
+        const err60 = { instancePath: instancePath + "/predator", schemaPath: "#/properties/predator/type", keyword: "type", params: { type: "boolean" }, message: "must be boolean" };
+        if (vErrors === null) {
+          vErrors = [err60];
+        } else {
+          vErrors.push(err60);
         }
-        if (data21.plantedOK !== void 0) {
-          if (typeof data21.plantedOK !== "boolean") {
-            const err61 = { instancePath: instancePath + "/compatibilityFlags/plantedOK", schemaPath: "#/properties/compatibilityFlags/properties/plantedOK/type", keyword: "type", params: { type: "boolean" }, message: "must be boolean" };
+        errors++;
+      }
+    }
+    if (data.compatibilityFlags !== void 0) {
+      let data22 = data.compatibilityFlags;
+      if (data22 && typeof data22 == "object" && !Array.isArray(data22)) {
+        for (const key3 in data22) {
+          if (!(key3 === "plantedOK" || key3 === "finNipper" || key3 === "brackish")) {
+            const err61 = { instancePath: instancePath + "/compatibilityFlags", schemaPath: "#/properties/compatibilityFlags/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key3 }, message: "must NOT have additional properties" };
             if (vErrors === null) {
               vErrors = [err61];
             } else {
@@ -2387,9 +2387,9 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
             errors++;
           }
         }
-        if (data21.finNipper !== void 0) {
-          if (typeof data21.finNipper !== "boolean") {
-            const err62 = { instancePath: instancePath + "/compatibilityFlags/finNipper", schemaPath: "#/properties/compatibilityFlags/properties/finNipper/type", keyword: "type", params: { type: "boolean" }, message: "must be boolean" };
+        if (data22.plantedOK !== void 0) {
+          if (typeof data22.plantedOK !== "boolean") {
+            const err62 = { instancePath: instancePath + "/compatibilityFlags/plantedOK", schemaPath: "#/properties/compatibilityFlags/properties/plantedOK/type", keyword: "type", params: { type: "boolean" }, message: "must be boolean" };
             if (vErrors === null) {
               vErrors = [err62];
             } else {
@@ -2398,9 +2398,9 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
             errors++;
           }
         }
-        if (data21.brackish !== void 0) {
-          if (typeof data21.brackish !== "boolean") {
-            const err63 = { instancePath: instancePath + "/compatibilityFlags/brackish", schemaPath: "#/properties/compatibilityFlags/properties/brackish/type", keyword: "type", params: { type: "boolean" }, message: "must be boolean" };
+        if (data22.finNipper !== void 0) {
+          if (typeof data22.finNipper !== "boolean") {
+            const err63 = { instancePath: instancePath + "/compatibilityFlags/finNipper", schemaPath: "#/properties/compatibilityFlags/properties/finNipper/type", keyword: "type", params: { type: "boolean" }, message: "must be boolean" };
             if (vErrors === null) {
               vErrors = [err63];
             } else {
@@ -2409,124 +2409,126 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
             errors++;
           }
         }
+        if (data22.brackish !== void 0) {
+          if (typeof data22.brackish !== "boolean") {
+            const err64 = { instancePath: instancePath + "/compatibilityFlags/brackish", schemaPath: "#/properties/compatibilityFlags/properties/brackish/type", keyword: "type", params: { type: "boolean" }, message: "must be boolean" };
+            if (vErrors === null) {
+              vErrors = [err64];
+            } else {
+              vErrors.push(err64);
+            }
+            errors++;
+          }
+        }
       } else {
-        const err64 = { instancePath: instancePath + "/compatibilityFlags", schemaPath: "#/properties/compatibilityFlags/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err65 = { instancePath: instancePath + "/compatibilityFlags", schemaPath: "#/properties/compatibilityFlags/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
-          vErrors = [err64];
+          vErrors = [err65];
         } else {
-          vErrors.push(err64);
+          vErrors.push(err65);
         }
         errors++;
       }
     }
     if (data.behavior !== void 0) {
-      let data25 = data.behavior;
-      if (data25 && typeof data25 == "object" && !Array.isArray(data25)) {
-        for (const key4 in data25) {
+      let data26 = data.behavior;
+      if (data26 && typeof data26 == "object" && !Array.isArray(data26)) {
+        for (const key4 in data26) {
           if (!(key4 === "schooling" || key4 === "depth" || key4 === "animation" || key4 === "territory" || key4 === "nipping" || key4 === "fear" || key4 === "feeding" || key4 === "curiosity")) {
-            const err65 = { instancePath: instancePath + "/behavior", schemaPath: "#/properties/behavior/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key4 }, message: "must NOT have additional properties" };
+            const err66 = { instancePath: instancePath + "/behavior", schemaPath: "#/properties/behavior/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key4 }, message: "must NOT have additional properties" };
             if (vErrors === null) {
-              vErrors = [err65];
+              vErrors = [err66];
             } else {
-              vErrors.push(err65);
+              vErrors.push(err66);
             }
             errors++;
           }
         }
-        if (data25.schooling !== void 0) {
-          let data26 = data25.schooling;
-          if (data26 && typeof data26 == "object" && !Array.isArray(data26)) {
-            for (const key5 in data26) {
+        if (data26.schooling !== void 0) {
+          let data27 = data26.schooling;
+          if (data27 && typeof data27 == "object" && !Array.isArray(data27)) {
+            for (const key5 in data27) {
               if (!func5.call(schema43.properties.behavior.properties.schooling.properties, key5)) {
-                const err66 = { instancePath: instancePath + "/behavior/schooling", schemaPath: "#/properties/behavior/properties/schooling/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key5 }, message: "must NOT have additional properties" };
+                const err67 = { instancePath: instancePath + "/behavior/schooling", schemaPath: "#/properties/behavior/properties/schooling/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key5 }, message: "must NOT have additional properties" };
                 if (vErrors === null) {
-                  vErrors = [err66];
+                  vErrors = [err67];
                 } else {
-                  vErrors.push(err66);
+                  vErrors.push(err67);
                 }
                 errors++;
               }
             }
-            if (data26.ZOR !== void 0) {
-              let data27 = data26.ZOR;
-              if (typeof data27 == "number" && isFinite(data27)) {
-                if (data27 <= 0 || isNaN(data27)) {
-                  const err67 = { instancePath: instancePath + "/behavior/schooling/ZOR", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOR/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
-                  if (vErrors === null) {
-                    vErrors = [err67];
-                  } else {
-                    vErrors.push(err67);
-                  }
-                  errors++;
-                }
-              } else {
-                const err68 = { instancePath: instancePath + "/behavior/schooling/ZOR", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOR/type", keyword: "type", params: { type: "number" }, message: "must be number" };
-                if (vErrors === null) {
-                  vErrors = [err68];
-                } else {
-                  vErrors.push(err68);
-                }
-                errors++;
-              }
-            }
-            if (data26.ZOO !== void 0) {
-              let data28 = data26.ZOO;
+            if (data27.ZOR !== void 0) {
+              let data28 = data27.ZOR;
               if (typeof data28 == "number" && isFinite(data28)) {
                 if (data28 <= 0 || isNaN(data28)) {
-                  const err69 = { instancePath: instancePath + "/behavior/schooling/ZOO", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOO/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  const err68 = { instancePath: instancePath + "/behavior/schooling/ZOR", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOR/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
                   if (vErrors === null) {
-                    vErrors = [err69];
+                    vErrors = [err68];
                   } else {
-                    vErrors.push(err69);
+                    vErrors.push(err68);
                   }
                   errors++;
                 }
               } else {
-                const err70 = { instancePath: instancePath + "/behavior/schooling/ZOO", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOO/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err69 = { instancePath: instancePath + "/behavior/schooling/ZOR", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOR/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err70];
+                  vErrors = [err69];
                 } else {
-                  vErrors.push(err70);
+                  vErrors.push(err69);
                 }
                 errors++;
               }
             }
-            if (data26.ZOA !== void 0) {
-              let data29 = data26.ZOA;
+            if (data27.ZOO !== void 0) {
+              let data29 = data27.ZOO;
               if (typeof data29 == "number" && isFinite(data29)) {
                 if (data29 <= 0 || isNaN(data29)) {
-                  const err71 = { instancePath: instancePath + "/behavior/schooling/ZOA", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOA/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  const err70 = { instancePath: instancePath + "/behavior/schooling/ZOO", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOO/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
                   if (vErrors === null) {
-                    vErrors = [err71];
+                    vErrors = [err70];
                   } else {
-                    vErrors.push(err71);
+                    vErrors.push(err70);
                   }
                   errors++;
                 }
               } else {
-                const err72 = { instancePath: instancePath + "/behavior/schooling/ZOA", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOA/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err71 = { instancePath: instancePath + "/behavior/schooling/ZOO", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOO/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err72];
+                  vErrors = [err71];
                 } else {
-                  vErrors.push(err72);
+                  vErrors.push(err71);
                 }
                 errors++;
               }
             }
-            if (data26.blindAngle !== void 0) {
-              let data30 = data26.blindAngle;
+            if (data27.ZOA !== void 0) {
+              let data30 = data27.ZOA;
               if (typeof data30 == "number" && isFinite(data30)) {
-                if (data30 > 3.141592653589793 || isNaN(data30)) {
-                  const err73 = { instancePath: instancePath + "/behavior/schooling/blindAngle", schemaPath: "#/properties/behavior/properties/schooling/properties/blindAngle/maximum", keyword: "maximum", params: { comparison: "<=", limit: 3.141592653589793 }, message: "must be <= 3.141592653589793" };
+                if (data30 <= 0 || isNaN(data30)) {
+                  const err72 = { instancePath: instancePath + "/behavior/schooling/ZOA", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOA/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
                   if (vErrors === null) {
-                    vErrors = [err73];
+                    vErrors = [err72];
                   } else {
-                    vErrors.push(err73);
+                    vErrors.push(err72);
                   }
                   errors++;
                 }
-                if (data30 < 0 || isNaN(data30)) {
-                  const err74 = { instancePath: instancePath + "/behavior/schooling/blindAngle", schemaPath: "#/properties/behavior/properties/schooling/properties/blindAngle/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+              } else {
+                const err73 = { instancePath: instancePath + "/behavior/schooling/ZOA", schemaPath: "#/properties/behavior/properties/schooling/properties/ZOA/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err73];
+                } else {
+                  vErrors.push(err73);
+                }
+                errors++;
+              }
+            }
+            if (data27.blindAngle !== void 0) {
+              let data31 = data27.blindAngle;
+              if (typeof data31 == "number" && isFinite(data31)) {
+                if (data31 > 3.141592653589793 || isNaN(data31)) {
+                  const err74 = { instancePath: instancePath + "/behavior/schooling/blindAngle", schemaPath: "#/properties/behavior/properties/schooling/properties/blindAngle/maximum", keyword: "maximum", params: { comparison: "<=", limit: 3.141592653589793 }, message: "must be <= 3.141592653589793" };
                   if (vErrors === null) {
                     vErrors = [err74];
                   } else {
@@ -2534,208 +2536,208 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
                   }
                   errors++;
                 }
-              } else {
-                const err75 = { instancePath: instancePath + "/behavior/schooling/blindAngle", schemaPath: "#/properties/behavior/properties/schooling/properties/blindAngle/type", keyword: "type", params: { type: "number" }, message: "must be number" };
-                if (vErrors === null) {
-                  vErrors = [err75];
-                } else {
-                  vErrors.push(err75);
-                }
-                errors++;
-              }
-            }
-            if (data26.vPref !== void 0) {
-              let data31 = data26.vPref;
-              if (typeof data31 == "number" && isFinite(data31)) {
-                if (data31 <= 0 || isNaN(data31)) {
-                  const err76 = { instancePath: instancePath + "/behavior/schooling/vPref", schemaPath: "#/properties/behavior/properties/schooling/properties/vPref/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                if (data31 < 0 || isNaN(data31)) {
+                  const err75 = { instancePath: instancePath + "/behavior/schooling/blindAngle", schemaPath: "#/properties/behavior/properties/schooling/properties/blindAngle/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
                   if (vErrors === null) {
-                    vErrors = [err76];
+                    vErrors = [err75];
                   } else {
-                    vErrors.push(err76);
+                    vErrors.push(err75);
                   }
                   errors++;
                 }
               } else {
-                const err77 = { instancePath: instancePath + "/behavior/schooling/vPref", schemaPath: "#/properties/behavior/properties/schooling/properties/vPref/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err76 = { instancePath: instancePath + "/behavior/schooling/blindAngle", schemaPath: "#/properties/behavior/properties/schooling/properties/blindAngle/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err77];
+                  vErrors = [err76];
                 } else {
-                  vErrors.push(err77);
+                  vErrors.push(err76);
                 }
                 errors++;
               }
             }
-            if (data26.vMax !== void 0) {
-              let data32 = data26.vMax;
+            if (data27.vPref !== void 0) {
+              let data32 = data27.vPref;
               if (typeof data32 == "number" && isFinite(data32)) {
                 if (data32 <= 0 || isNaN(data32)) {
-                  const err78 = { instancePath: instancePath + "/behavior/schooling/vMax", schemaPath: "#/properties/behavior/properties/schooling/properties/vMax/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  const err77 = { instancePath: instancePath + "/behavior/schooling/vPref", schemaPath: "#/properties/behavior/properties/schooling/properties/vPref/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
                   if (vErrors === null) {
-                    vErrors = [err78];
+                    vErrors = [err77];
                   } else {
-                    vErrors.push(err78);
+                    vErrors.push(err77);
                   }
                   errors++;
                 }
               } else {
-                const err79 = { instancePath: instancePath + "/behavior/schooling/vMax", schemaPath: "#/properties/behavior/properties/schooling/properties/vMax/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err78 = { instancePath: instancePath + "/behavior/schooling/vPref", schemaPath: "#/properties/behavior/properties/schooling/properties/vPref/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err79];
+                  vErrors = [err78];
                 } else {
-                  vErrors.push(err79);
+                  vErrors.push(err78);
                 }
                 errors++;
               }
             }
-            if (data26.turnMax !== void 0) {
-              let data33 = data26.turnMax;
+            if (data27.vMax !== void 0) {
+              let data33 = data27.vMax;
               if (typeof data33 == "number" && isFinite(data33)) {
                 if (data33 <= 0 || isNaN(data33)) {
-                  const err80 = { instancePath: instancePath + "/behavior/schooling/turnMax", schemaPath: "#/properties/behavior/properties/schooling/properties/turnMax/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  const err79 = { instancePath: instancePath + "/behavior/schooling/vMax", schemaPath: "#/properties/behavior/properties/schooling/properties/vMax/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
                   if (vErrors === null) {
-                    vErrors = [err80];
+                    vErrors = [err79];
                   } else {
-                    vErrors.push(err80);
+                    vErrors.push(err79);
                   }
                   errors++;
                 }
               } else {
-                const err81 = { instancePath: instancePath + "/behavior/schooling/turnMax", schemaPath: "#/properties/behavior/properties/schooling/properties/turnMax/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err80 = { instancePath: instancePath + "/behavior/schooling/vMax", schemaPath: "#/properties/behavior/properties/schooling/properties/vMax/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err81];
+                  vErrors = [err80];
                 } else {
-                  vErrors.push(err81);
+                  vErrors.push(err80);
                 }
                 errors++;
               }
             }
-            if (data26.wSep !== void 0) {
-              let data34 = data26.wSep;
+            if (data27.turnMax !== void 0) {
+              let data34 = data27.turnMax;
               if (typeof data34 == "number" && isFinite(data34)) {
-                if (data34 < 0 || isNaN(data34)) {
-                  const err82 = { instancePath: instancePath + "/behavior/schooling/wSep", schemaPath: "#/properties/behavior/properties/schooling/properties/wSep/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                if (data34 <= 0 || isNaN(data34)) {
+                  const err81 = { instancePath: instancePath + "/behavior/schooling/turnMax", schemaPath: "#/properties/behavior/properties/schooling/properties/turnMax/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
                   if (vErrors === null) {
-                    vErrors = [err82];
+                    vErrors = [err81];
                   } else {
-                    vErrors.push(err82);
+                    vErrors.push(err81);
                   }
                   errors++;
                 }
               } else {
-                const err83 = { instancePath: instancePath + "/behavior/schooling/wSep", schemaPath: "#/properties/behavior/properties/schooling/properties/wSep/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err82 = { instancePath: instancePath + "/behavior/schooling/turnMax", schemaPath: "#/properties/behavior/properties/schooling/properties/turnMax/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err83];
+                  vErrors = [err82];
                 } else {
-                  vErrors.push(err83);
+                  vErrors.push(err82);
                 }
                 errors++;
               }
             }
-            if (data26.wAli !== void 0) {
-              let data35 = data26.wAli;
+            if (data27.wSep !== void 0) {
+              let data35 = data27.wSep;
               if (typeof data35 == "number" && isFinite(data35)) {
                 if (data35 < 0 || isNaN(data35)) {
-                  const err84 = { instancePath: instancePath + "/behavior/schooling/wAli", schemaPath: "#/properties/behavior/properties/schooling/properties/wAli/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  const err83 = { instancePath: instancePath + "/behavior/schooling/wSep", schemaPath: "#/properties/behavior/properties/schooling/properties/wSep/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
                   if (vErrors === null) {
-                    vErrors = [err84];
+                    vErrors = [err83];
                   } else {
-                    vErrors.push(err84);
+                    vErrors.push(err83);
                   }
                   errors++;
                 }
               } else {
-                const err85 = { instancePath: instancePath + "/behavior/schooling/wAli", schemaPath: "#/properties/behavior/properties/schooling/properties/wAli/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err84 = { instancePath: instancePath + "/behavior/schooling/wSep", schemaPath: "#/properties/behavior/properties/schooling/properties/wSep/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err85];
+                  vErrors = [err84];
                 } else {
-                  vErrors.push(err85);
+                  vErrors.push(err84);
                 }
                 errors++;
               }
             }
-            if (data26.wCoh !== void 0) {
-              let data36 = data26.wCoh;
+            if (data27.wAli !== void 0) {
+              let data36 = data27.wAli;
               if (typeof data36 == "number" && isFinite(data36)) {
                 if (data36 < 0 || isNaN(data36)) {
-                  const err86 = { instancePath: instancePath + "/behavior/schooling/wCoh", schemaPath: "#/properties/behavior/properties/schooling/properties/wCoh/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  const err85 = { instancePath: instancePath + "/behavior/schooling/wAli", schemaPath: "#/properties/behavior/properties/schooling/properties/wAli/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
                   if (vErrors === null) {
-                    vErrors = [err86];
+                    vErrors = [err85];
                   } else {
-                    vErrors.push(err86);
+                    vErrors.push(err85);
                   }
                   errors++;
                 }
               } else {
-                const err87 = { instancePath: instancePath + "/behavior/schooling/wCoh", schemaPath: "#/properties/behavior/properties/schooling/properties/wCoh/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err86 = { instancePath: instancePath + "/behavior/schooling/wAli", schemaPath: "#/properties/behavior/properties/schooling/properties/wAli/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err87];
+                  vErrors = [err86];
                 } else {
-                  vErrors.push(err87);
+                  vErrors.push(err86);
                 }
                 errors++;
               }
             }
-            if (data26.noise !== void 0) {
-              let data37 = data26.noise;
+            if (data27.wCoh !== void 0) {
+              let data37 = data27.wCoh;
               if (typeof data37 == "number" && isFinite(data37)) {
                 if (data37 < 0 || isNaN(data37)) {
-                  const err88 = { instancePath: instancePath + "/behavior/schooling/noise", schemaPath: "#/properties/behavior/properties/schooling/properties/noise/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  const err87 = { instancePath: instancePath + "/behavior/schooling/wCoh", schemaPath: "#/properties/behavior/properties/schooling/properties/wCoh/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
                   if (vErrors === null) {
-                    vErrors = [err88];
+                    vErrors = [err87];
                   } else {
-                    vErrors.push(err88);
+                    vErrors.push(err87);
                   }
                   errors++;
                 }
               } else {
-                const err89 = { instancePath: instancePath + "/behavior/schooling/noise", schemaPath: "#/properties/behavior/properties/schooling/properties/noise/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err88 = { instancePath: instancePath + "/behavior/schooling/wCoh", schemaPath: "#/properties/behavior/properties/schooling/properties/wCoh/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err89];
+                  vErrors = [err88];
                 } else {
-                  vErrors.push(err89);
+                  vErrors.push(err88);
+                }
+                errors++;
+              }
+            }
+            if (data27.noise !== void 0) {
+              let data38 = data27.noise;
+              if (typeof data38 == "number" && isFinite(data38)) {
+                if (data38 < 0 || isNaN(data38)) {
+                  const err89 = { instancePath: instancePath + "/behavior/schooling/noise", schemaPath: "#/properties/behavior/properties/schooling/properties/noise/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err89];
+                  } else {
+                    vErrors.push(err89);
+                  }
+                  errors++;
+                }
+              } else {
+                const err90 = { instancePath: instancePath + "/behavior/schooling/noise", schemaPath: "#/properties/behavior/properties/schooling/properties/noise/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err90];
+                } else {
+                  vErrors.push(err90);
                 }
                 errors++;
               }
             }
           } else {
-            const err90 = { instancePath: instancePath + "/behavior/schooling", schemaPath: "#/properties/behavior/properties/schooling/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            const err91 = { instancePath: instancePath + "/behavior/schooling", schemaPath: "#/properties/behavior/properties/schooling/type", keyword: "type", params: { type: "object" }, message: "must be object" };
             if (vErrors === null) {
-              vErrors = [err90];
+              vErrors = [err91];
             } else {
-              vErrors.push(err90);
+              vErrors.push(err91);
             }
             errors++;
           }
         }
-        if (data25.depth !== void 0) {
-          let data38 = data25.depth;
-          if (data38 && typeof data38 == "object" && !Array.isArray(data38)) {
-            for (const key6 in data38) {
+        if (data26.depth !== void 0) {
+          let data39 = data26.depth;
+          if (data39 && typeof data39 == "object" && !Array.isArray(data39)) {
+            for (const key6 in data39) {
               if (!(key6 === "preferredY" || key6 === "bandWidth" || key6 === "returnForce")) {
-                const err91 = { instancePath: instancePath + "/behavior/depth", schemaPath: "#/properties/behavior/properties/depth/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key6 }, message: "must NOT have additional properties" };
+                const err92 = { instancePath: instancePath + "/behavior/depth", schemaPath: "#/properties/behavior/properties/depth/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key6 }, message: "must NOT have additional properties" };
                 if (vErrors === null) {
-                  vErrors = [err91];
+                  vErrors = [err92];
                 } else {
-                  vErrors.push(err91);
+                  vErrors.push(err92);
                 }
                 errors++;
               }
             }
-            if (data38.preferredY !== void 0) {
-              let data39 = data38.preferredY;
-              if (typeof data39 == "number" && isFinite(data39)) {
-                if (data39 > 1 || isNaN(data39)) {
-                  const err92 = { instancePath: instancePath + "/behavior/depth/preferredY", schemaPath: "#/properties/behavior/properties/depth/properties/preferredY/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
-                  if (vErrors === null) {
-                    vErrors = [err92];
-                  } else {
-                    vErrors.push(err92);
-                  }
-                  errors++;
-                }
-                if (data39 < 0 || isNaN(data39)) {
-                  const err93 = { instancePath: instancePath + "/behavior/depth/preferredY", schemaPath: "#/properties/behavior/properties/depth/properties/preferredY/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+            if (data39.preferredY !== void 0) {
+              let data40 = data39.preferredY;
+              if (typeof data40 == "number" && isFinite(data40)) {
+                if (data40 > 1 || isNaN(data40)) {
+                  const err93 = { instancePath: instancePath + "/behavior/depth/preferredY", schemaPath: "#/properties/behavior/properties/depth/properties/preferredY/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
                   if (vErrors === null) {
                     vErrors = [err93];
                   } else {
@@ -2743,30 +2745,30 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
                   }
                   errors++;
                 }
+                if (data40 < 0 || isNaN(data40)) {
+                  const err94 = { instancePath: instancePath + "/behavior/depth/preferredY", schemaPath: "#/properties/behavior/properties/depth/properties/preferredY/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err94];
+                  } else {
+                    vErrors.push(err94);
+                  }
+                  errors++;
+                }
               } else {
-                const err94 = { instancePath: instancePath + "/behavior/depth/preferredY", schemaPath: "#/properties/behavior/properties/depth/properties/preferredY/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err95 = { instancePath: instancePath + "/behavior/depth/preferredY", schemaPath: "#/properties/behavior/properties/depth/properties/preferredY/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err94];
+                  vErrors = [err95];
                 } else {
-                  vErrors.push(err94);
+                  vErrors.push(err95);
                 }
                 errors++;
               }
             }
-            if (data38.bandWidth !== void 0) {
-              let data40 = data38.bandWidth;
-              if (typeof data40 == "number" && isFinite(data40)) {
-                if (data40 > 1 || isNaN(data40)) {
-                  const err95 = { instancePath: instancePath + "/behavior/depth/bandWidth", schemaPath: "#/properties/behavior/properties/depth/properties/bandWidth/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
-                  if (vErrors === null) {
-                    vErrors = [err95];
-                  } else {
-                    vErrors.push(err95);
-                  }
-                  errors++;
-                }
-                if (data40 < 0 || isNaN(data40)) {
-                  const err96 = { instancePath: instancePath + "/behavior/depth/bandWidth", schemaPath: "#/properties/behavior/properties/depth/properties/bandWidth/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+            if (data39.bandWidth !== void 0) {
+              let data41 = data39.bandWidth;
+              if (typeof data41 == "number" && isFinite(data41)) {
+                if (data41 > 1 || isNaN(data41)) {
+                  const err96 = { instancePath: instancePath + "/behavior/depth/bandWidth", schemaPath: "#/properties/behavior/properties/depth/properties/bandWidth/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
                   if (vErrors === null) {
                     vErrors = [err96];
                   } else {
@@ -2774,98 +2776,98 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
                   }
                   errors++;
                 }
-              } else {
-                const err97 = { instancePath: instancePath + "/behavior/depth/bandWidth", schemaPath: "#/properties/behavior/properties/depth/properties/bandWidth/type", keyword: "type", params: { type: "number" }, message: "must be number" };
-                if (vErrors === null) {
-                  vErrors = [err97];
-                } else {
-                  vErrors.push(err97);
-                }
-                errors++;
-              }
-            }
-            if (data38.returnForce !== void 0) {
-              let data41 = data38.returnForce;
-              if (typeof data41 == "number" && isFinite(data41)) {
                 if (data41 < 0 || isNaN(data41)) {
-                  const err98 = { instancePath: instancePath + "/behavior/depth/returnForce", schemaPath: "#/properties/behavior/properties/depth/properties/returnForce/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  const err97 = { instancePath: instancePath + "/behavior/depth/bandWidth", schemaPath: "#/properties/behavior/properties/depth/properties/bandWidth/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
                   if (vErrors === null) {
-                    vErrors = [err98];
+                    vErrors = [err97];
                   } else {
-                    vErrors.push(err98);
+                    vErrors.push(err97);
                   }
                   errors++;
                 }
               } else {
-                const err99 = { instancePath: instancePath + "/behavior/depth/returnForce", schemaPath: "#/properties/behavior/properties/depth/properties/returnForce/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err98 = { instancePath: instancePath + "/behavior/depth/bandWidth", schemaPath: "#/properties/behavior/properties/depth/properties/bandWidth/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err99];
+                  vErrors = [err98];
                 } else {
-                  vErrors.push(err99);
+                  vErrors.push(err98);
+                }
+                errors++;
+              }
+            }
+            if (data39.returnForce !== void 0) {
+              let data42 = data39.returnForce;
+              if (typeof data42 == "number" && isFinite(data42)) {
+                if (data42 < 0 || isNaN(data42)) {
+                  const err99 = { instancePath: instancePath + "/behavior/depth/returnForce", schemaPath: "#/properties/behavior/properties/depth/properties/returnForce/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err99];
+                  } else {
+                    vErrors.push(err99);
+                  }
+                  errors++;
+                }
+              } else {
+                const err100 = { instancePath: instancePath + "/behavior/depth/returnForce", schemaPath: "#/properties/behavior/properties/depth/properties/returnForce/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err100];
+                } else {
+                  vErrors.push(err100);
                 }
                 errors++;
               }
             }
           } else {
-            const err100 = { instancePath: instancePath + "/behavior/depth", schemaPath: "#/properties/behavior/properties/depth/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            const err101 = { instancePath: instancePath + "/behavior/depth", schemaPath: "#/properties/behavior/properties/depth/type", keyword: "type", params: { type: "object" }, message: "must be object" };
             if (vErrors === null) {
-              vErrors = [err100];
+              vErrors = [err101];
             } else {
-              vErrors.push(err100);
+              vErrors.push(err101);
             }
             errors++;
           }
         }
-        if (data25.animation !== void 0) {
-          let data42 = data25.animation;
-          if (data42 && typeof data42 == "object" && !Array.isArray(data42)) {
-            for (const key7 in data42) {
+        if (data26.animation !== void 0) {
+          let data43 = data26.animation;
+          if (data43 && typeof data43 == "object" && !Array.isArray(data43)) {
+            for (const key7 in data43) {
               if (!(key7 === "tailBeatFreq" || key7 === "ampHead" || key7 === "ampTail" || key7 === "envelopeExp")) {
-                const err101 = { instancePath: instancePath + "/behavior/animation", schemaPath: "#/properties/behavior/properties/animation/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key7 }, message: "must NOT have additional properties" };
+                const err102 = { instancePath: instancePath + "/behavior/animation", schemaPath: "#/properties/behavior/properties/animation/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key7 }, message: "must NOT have additional properties" };
                 if (vErrors === null) {
-                  vErrors = [err101];
+                  vErrors = [err102];
                 } else {
-                  vErrors.push(err101);
+                  vErrors.push(err102);
                 }
                 errors++;
               }
             }
-            if (data42.tailBeatFreq !== void 0) {
-              let data43 = data42.tailBeatFreq;
-              if (typeof data43 == "number" && isFinite(data43)) {
-                if (data43 <= 0 || isNaN(data43)) {
-                  const err102 = { instancePath: instancePath + "/behavior/animation/tailBeatFreq", schemaPath: "#/properties/behavior/properties/animation/properties/tailBeatFreq/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+            if (data43.tailBeatFreq !== void 0) {
+              let data44 = data43.tailBeatFreq;
+              if (typeof data44 == "number" && isFinite(data44)) {
+                if (data44 <= 0 || isNaN(data44)) {
+                  const err103 = { instancePath: instancePath + "/behavior/animation/tailBeatFreq", schemaPath: "#/properties/behavior/properties/animation/properties/tailBeatFreq/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
                   if (vErrors === null) {
-                    vErrors = [err102];
+                    vErrors = [err103];
                   } else {
-                    vErrors.push(err102);
+                    vErrors.push(err103);
                   }
                   errors++;
                 }
               } else {
-                const err103 = { instancePath: instancePath + "/behavior/animation/tailBeatFreq", schemaPath: "#/properties/behavior/properties/animation/properties/tailBeatFreq/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err104 = { instancePath: instancePath + "/behavior/animation/tailBeatFreq", schemaPath: "#/properties/behavior/properties/animation/properties/tailBeatFreq/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err103];
+                  vErrors = [err104];
                 } else {
-                  vErrors.push(err103);
+                  vErrors.push(err104);
                 }
                 errors++;
               }
             }
-            if (data42.ampHead !== void 0) {
-              let data44 = data42.ampHead;
-              if (typeof data44 == "number" && isFinite(data44)) {
-                if (data44 > 1 || isNaN(data44)) {
-                  const err104 = { instancePath: instancePath + "/behavior/animation/ampHead", schemaPath: "#/properties/behavior/properties/animation/properties/ampHead/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
-                  if (vErrors === null) {
-                    vErrors = [err104];
-                  } else {
-                    vErrors.push(err104);
-                  }
-                  errors++;
-                }
-                if (data44 < 0 || isNaN(data44)) {
-                  const err105 = { instancePath: instancePath + "/behavior/animation/ampHead", schemaPath: "#/properties/behavior/properties/animation/properties/ampHead/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+            if (data43.ampHead !== void 0) {
+              let data45 = data43.ampHead;
+              if (typeof data45 == "number" && isFinite(data45)) {
+                if (data45 > 1 || isNaN(data45)) {
+                  const err105 = { instancePath: instancePath + "/behavior/animation/ampHead", schemaPath: "#/properties/behavior/properties/animation/properties/ampHead/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
                   if (vErrors === null) {
                     vErrors = [err105];
                   } else {
@@ -2873,30 +2875,30 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
                   }
                   errors++;
                 }
+                if (data45 < 0 || isNaN(data45)) {
+                  const err106 = { instancePath: instancePath + "/behavior/animation/ampHead", schemaPath: "#/properties/behavior/properties/animation/properties/ampHead/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err106];
+                  } else {
+                    vErrors.push(err106);
+                  }
+                  errors++;
+                }
               } else {
-                const err106 = { instancePath: instancePath + "/behavior/animation/ampHead", schemaPath: "#/properties/behavior/properties/animation/properties/ampHead/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err107 = { instancePath: instancePath + "/behavior/animation/ampHead", schemaPath: "#/properties/behavior/properties/animation/properties/ampHead/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err106];
+                  vErrors = [err107];
                 } else {
-                  vErrors.push(err106);
+                  vErrors.push(err107);
                 }
                 errors++;
               }
             }
-            if (data42.ampTail !== void 0) {
-              let data45 = data42.ampTail;
-              if (typeof data45 == "number" && isFinite(data45)) {
-                if (data45 > 1 || isNaN(data45)) {
-                  const err107 = { instancePath: instancePath + "/behavior/animation/ampTail", schemaPath: "#/properties/behavior/properties/animation/properties/ampTail/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
-                  if (vErrors === null) {
-                    vErrors = [err107];
-                  } else {
-                    vErrors.push(err107);
-                  }
-                  errors++;
-                }
-                if (data45 < 0 || isNaN(data45)) {
-                  const err108 = { instancePath: instancePath + "/behavior/animation/ampTail", schemaPath: "#/properties/behavior/properties/animation/properties/ampTail/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+            if (data43.ampTail !== void 0) {
+              let data46 = data43.ampTail;
+              if (typeof data46 == "number" && isFinite(data46)) {
+                if (data46 > 1 || isNaN(data46)) {
+                  const err108 = { instancePath: instancePath + "/behavior/animation/ampTail", schemaPath: "#/properties/behavior/properties/animation/properties/ampTail/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
                   if (vErrors === null) {
                     vErrors = [err108];
                   } else {
@@ -2904,171 +2906,165 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
                   }
                   errors++;
                 }
-              } else {
-                const err109 = { instancePath: instancePath + "/behavior/animation/ampTail", schemaPath: "#/properties/behavior/properties/animation/properties/ampTail/type", keyword: "type", params: { type: "number" }, message: "must be number" };
-                if (vErrors === null) {
-                  vErrors = [err109];
-                } else {
-                  vErrors.push(err109);
-                }
-                errors++;
-              }
-            }
-            if (data42.envelopeExp !== void 0) {
-              let data46 = data42.envelopeExp;
-              if (typeof data46 == "number" && isFinite(data46)) {
-                if (data46 <= 0 || isNaN(data46)) {
-                  const err110 = { instancePath: instancePath + "/behavior/animation/envelopeExp", schemaPath: "#/properties/behavior/properties/animation/properties/envelopeExp/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                if (data46 < 0 || isNaN(data46)) {
+                  const err109 = { instancePath: instancePath + "/behavior/animation/ampTail", schemaPath: "#/properties/behavior/properties/animation/properties/ampTail/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
                   if (vErrors === null) {
-                    vErrors = [err110];
+                    vErrors = [err109];
                   } else {
-                    vErrors.push(err110);
+                    vErrors.push(err109);
                   }
                   errors++;
                 }
               } else {
-                const err111 = { instancePath: instancePath + "/behavior/animation/envelopeExp", schemaPath: "#/properties/behavior/properties/animation/properties/envelopeExp/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err110 = { instancePath: instancePath + "/behavior/animation/ampTail", schemaPath: "#/properties/behavior/properties/animation/properties/ampTail/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err111];
+                  vErrors = [err110];
                 } else {
-                  vErrors.push(err111);
+                  vErrors.push(err110);
+                }
+                errors++;
+              }
+            }
+            if (data43.envelopeExp !== void 0) {
+              let data47 = data43.envelopeExp;
+              if (typeof data47 == "number" && isFinite(data47)) {
+                if (data47 <= 0 || isNaN(data47)) {
+                  const err111 = { instancePath: instancePath + "/behavior/animation/envelopeExp", schemaPath: "#/properties/behavior/properties/animation/properties/envelopeExp/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err111];
+                  } else {
+                    vErrors.push(err111);
+                  }
+                  errors++;
+                }
+              } else {
+                const err112 = { instancePath: instancePath + "/behavior/animation/envelopeExp", schemaPath: "#/properties/behavior/properties/animation/properties/envelopeExp/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err112];
+                } else {
+                  vErrors.push(err112);
                 }
                 errors++;
               }
             }
           } else {
-            const err112 = { instancePath: instancePath + "/behavior/animation", schemaPath: "#/properties/behavior/properties/animation/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            const err113 = { instancePath: instancePath + "/behavior/animation", schemaPath: "#/properties/behavior/properties/animation/type", keyword: "type", params: { type: "object" }, message: "must be object" };
             if (vErrors === null) {
-              vErrors = [err112];
+              vErrors = [err113];
             } else {
-              vErrors.push(err112);
+              vErrors.push(err113);
             }
             errors++;
           }
         }
-        if (data25.territory !== void 0) {
-          let data47 = data25.territory;
-          const _errs104 = errors;
+        if (data26.territory !== void 0) {
+          let data48 = data26.territory;
+          const _errs106 = errors;
           let valid14 = false;
           let passing0 = null;
-          const _errs105 = errors;
-          if (data47 && typeof data47 == "object" && !Array.isArray(data47)) {
-            for (const key8 in data47) {
+          const _errs107 = errors;
+          if (data48 && typeof data48 == "object" && !Array.isArray(data48)) {
+            for (const key8 in data48) {
               if (!(key8 === "coreRadius" || key8 === "displayRadius" || key8 === "aggression" || key8 === "fatigueRate")) {
-                const err113 = { instancePath: instancePath + "/behavior/territory", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key8 }, message: "must NOT have additional properties" };
+                const err114 = { instancePath: instancePath + "/behavior/territory", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key8 }, message: "must NOT have additional properties" };
                 if (vErrors === null) {
-                  vErrors = [err113];
+                  vErrors = [err114];
                 } else {
-                  vErrors.push(err113);
+                  vErrors.push(err114);
                 }
                 errors++;
               }
             }
-            if (data47.coreRadius !== void 0) {
-              let data48 = data47.coreRadius;
-              if (typeof data48 == "number" && isFinite(data48)) {
-                if (data48 <= 0 || isNaN(data48)) {
-                  const err114 = { instancePath: instancePath + "/behavior/territory/coreRadius", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/properties/coreRadius/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
-                  if (vErrors === null) {
-                    vErrors = [err114];
-                  } else {
-                    vErrors.push(err114);
-                  }
-                  errors++;
-                }
-              } else {
-                const err115 = { instancePath: instancePath + "/behavior/territory/coreRadius", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/properties/coreRadius/type", keyword: "type", params: { type: "number" }, message: "must be number" };
-                if (vErrors === null) {
-                  vErrors = [err115];
-                } else {
-                  vErrors.push(err115);
-                }
-                errors++;
-              }
-            }
-            if (data47.displayRadius !== void 0) {
-              let data49 = data47.displayRadius;
+            if (data48.coreRadius !== void 0) {
+              let data49 = data48.coreRadius;
               if (typeof data49 == "number" && isFinite(data49)) {
                 if (data49 <= 0 || isNaN(data49)) {
-                  const err116 = { instancePath: instancePath + "/behavior/territory/displayRadius", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/properties/displayRadius/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  const err115 = { instancePath: instancePath + "/behavior/territory/coreRadius", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/properties/coreRadius/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
                   if (vErrors === null) {
-                    vErrors = [err116];
+                    vErrors = [err115];
                   } else {
-                    vErrors.push(err116);
+                    vErrors.push(err115);
                   }
                   errors++;
                 }
               } else {
-                const err117 = { instancePath: instancePath + "/behavior/territory/displayRadius", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/properties/displayRadius/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err116 = { instancePath: instancePath + "/behavior/territory/coreRadius", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/properties/coreRadius/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err117];
+                  vErrors = [err116];
                 } else {
-                  vErrors.push(err117);
+                  vErrors.push(err116);
                 }
                 errors++;
               }
             }
-            if (data47.aggression !== void 0) {
-              let data50 = data47.aggression;
+            if (data48.displayRadius !== void 0) {
+              let data50 = data48.displayRadius;
               if (typeof data50 == "number" && isFinite(data50)) {
                 if (data50 <= 0 || isNaN(data50)) {
-                  const err118 = { instancePath: instancePath + "/behavior/territory/aggression", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/properties/aggression/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  const err117 = { instancePath: instancePath + "/behavior/territory/displayRadius", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/properties/displayRadius/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
                   if (vErrors === null) {
-                    vErrors = [err118];
+                    vErrors = [err117];
                   } else {
-                    vErrors.push(err118);
+                    vErrors.push(err117);
                   }
                   errors++;
                 }
               } else {
-                const err119 = { instancePath: instancePath + "/behavior/territory/aggression", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/properties/aggression/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err118 = { instancePath: instancePath + "/behavior/territory/displayRadius", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/properties/displayRadius/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err119];
+                  vErrors = [err118];
                 } else {
-                  vErrors.push(err119);
+                  vErrors.push(err118);
                 }
                 errors++;
               }
             }
-            if (data47.fatigueRate !== void 0) {
-              let data51 = data47.fatigueRate;
+            if (data48.aggression !== void 0) {
+              let data51 = data48.aggression;
               if (typeof data51 == "number" && isFinite(data51)) {
                 if (data51 <= 0 || isNaN(data51)) {
-                  const err120 = { instancePath: instancePath + "/behavior/territory/fatigueRate", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/properties/fatigueRate/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  const err119 = { instancePath: instancePath + "/behavior/territory/aggression", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/properties/aggression/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
                   if (vErrors === null) {
-                    vErrors = [err120];
+                    vErrors = [err119];
                   } else {
-                    vErrors.push(err120);
+                    vErrors.push(err119);
                   }
                   errors++;
                 }
               } else {
-                const err121 = { instancePath: instancePath + "/behavior/territory/fatigueRate", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/properties/fatigueRate/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err120 = { instancePath: instancePath + "/behavior/territory/aggression", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/properties/aggression/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err121];
+                  vErrors = [err120];
                 } else {
-                  vErrors.push(err121);
+                  vErrors.push(err120);
+                }
+                errors++;
+              }
+            }
+            if (data48.fatigueRate !== void 0) {
+              let data52 = data48.fatigueRate;
+              if (typeof data52 == "number" && isFinite(data52)) {
+                if (data52 <= 0 || isNaN(data52)) {
+                  const err121 = { instancePath: instancePath + "/behavior/territory/fatigueRate", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/properties/fatigueRate/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err121];
+                  } else {
+                    vErrors.push(err121);
+                  }
+                  errors++;
+                }
+              } else {
+                const err122 = { instancePath: instancePath + "/behavior/territory/fatigueRate", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/properties/fatigueRate/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err122];
+                } else {
+                  vErrors.push(err122);
                 }
                 errors++;
               }
             }
           } else {
-            const err122 = { instancePath: instancePath + "/behavior/territory", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/type", keyword: "type", params: { type: "object" }, message: "must be object" };
-            if (vErrors === null) {
-              vErrors = [err122];
-            } else {
-              vErrors.push(err122);
-            }
-            errors++;
-          }
-          var _valid0 = _errs105 === errors;
-          if (_valid0) {
-            valid14 = true;
-            passing0 = 0;
-          }
-          const _errs116 = errors;
-          if (data47 !== null) {
-            const err123 = { instancePath: instancePath + "/behavior/territory", schemaPath: "#/properties/behavior/properties/territory/oneOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+            const err123 = { instancePath: instancePath + "/behavior/territory", schemaPath: "#/properties/behavior/properties/territory/oneOf/0/type", keyword: "type", params: { type: "object" }, message: "must be object" };
             if (vErrors === null) {
               vErrors = [err123];
             } else {
@@ -3076,7 +3072,22 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
             }
             errors++;
           }
-          var _valid0 = _errs116 === errors;
+          var _valid0 = _errs107 === errors;
+          if (_valid0) {
+            valid14 = true;
+            passing0 = 0;
+          }
+          const _errs118 = errors;
+          if (data48 !== null) {
+            const err124 = { instancePath: instancePath + "/behavior/territory", schemaPath: "#/properties/behavior/properties/territory/oneOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+            if (vErrors === null) {
+              vErrors = [err124];
+            } else {
+              vErrors.push(err124);
+            }
+            errors++;
+          }
+          var _valid0 = _errs118 === errors;
           if (_valid0 && valid14) {
             valid14 = false;
             passing0 = [passing0, 1];
@@ -3087,46 +3098,34 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
             }
           }
           if (!valid14) {
-            const err124 = { instancePath: instancePath + "/behavior/territory", schemaPath: "#/properties/behavior/properties/territory/oneOf", keyword: "oneOf", params: { passingSchemas: passing0 }, message: "must match exactly one schema in oneOf" };
+            const err125 = { instancePath: instancePath + "/behavior/territory", schemaPath: "#/properties/behavior/properties/territory/oneOf", keyword: "oneOf", params: { passingSchemas: passing0 }, message: "must match exactly one schema in oneOf" };
             if (vErrors === null) {
-              vErrors = [err124];
+              vErrors = [err125];
             } else {
-              vErrors.push(err124);
+              vErrors.push(err125);
             }
             errors++;
           } else {
-            errors = _errs104;
+            errors = _errs106;
             if (vErrors !== null) {
-              if (_errs104) {
-                vErrors.length = _errs104;
+              if (_errs106) {
+                vErrors.length = _errs106;
               } else {
                 vErrors = null;
               }
             }
           }
         }
-        if (data25.nipping !== void 0) {
-          let data52 = data25.nipping;
-          const _errs119 = errors;
+        if (data26.nipping !== void 0) {
+          let data53 = data26.nipping;
+          const _errs121 = errors;
           let valid16 = false;
           let passing1 = null;
-          const _errs120 = errors;
-          if (data52 && typeof data52 == "object" && !Array.isArray(data52)) {
-            for (const key9 in data52) {
+          const _errs122 = errors;
+          if (data53 && typeof data53 == "object" && !Array.isArray(data53)) {
+            for (const key9 in data53) {
               if (!(key9 === "groupThreshold" || key9 === "finFraction" || key9 === "rate")) {
-                const err125 = { instancePath: instancePath + "/behavior/nipping", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key9 }, message: "must NOT have additional properties" };
-                if (vErrors === null) {
-                  vErrors = [err125];
-                } else {
-                  vErrors.push(err125);
-                }
-                errors++;
-              }
-            }
-            if (data52.groupThreshold !== void 0) {
-              let data53 = data52.groupThreshold;
-              if (!(typeof data53 == "number" && (!(data53 % 1) && !isNaN(data53)) && isFinite(data53))) {
-                const err126 = { instancePath: instancePath + "/behavior/nipping/groupThreshold", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/properties/groupThreshold/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+                const err126 = { instancePath: instancePath + "/behavior/nipping", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key9 }, message: "must NOT have additional properties" };
                 if (vErrors === null) {
                   vErrors = [err126];
                 } else {
@@ -3134,23 +3133,21 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
                 }
                 errors++;
               }
-              if (typeof data53 == "number" && isFinite(data53)) {
-                if (data53 < 1 || isNaN(data53)) {
-                  const err127 = { instancePath: instancePath + "/behavior/nipping/groupThreshold", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/properties/groupThreshold/minimum", keyword: "minimum", params: { comparison: ">=", limit: 1 }, message: "must be >= 1" };
-                  if (vErrors === null) {
-                    vErrors = [err127];
-                  } else {
-                    vErrors.push(err127);
-                  }
-                  errors++;
-                }
-              }
             }
-            if (data52.finFraction !== void 0) {
-              let data54 = data52.finFraction;
+            if (data53.groupThreshold !== void 0) {
+              let data54 = data53.groupThreshold;
+              if (!(typeof data54 == "number" && (!(data54 % 1) && !isNaN(data54)) && isFinite(data54))) {
+                const err127 = { instancePath: instancePath + "/behavior/nipping/groupThreshold", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/properties/groupThreshold/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+                if (vErrors === null) {
+                  vErrors = [err127];
+                } else {
+                  vErrors.push(err127);
+                }
+                errors++;
+              }
               if (typeof data54 == "number" && isFinite(data54)) {
-                if (data54 > 1 || isNaN(data54)) {
-                  const err128 = { instancePath: instancePath + "/behavior/nipping/finFraction", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/properties/finFraction/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
+                if (data54 < 1 || isNaN(data54)) {
+                  const err128 = { instancePath: instancePath + "/behavior/nipping/groupThreshold", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/properties/groupThreshold/minimum", keyword: "minimum", params: { comparison: ">=", limit: 1 }, message: "must be >= 1" };
                   if (vErrors === null) {
                     vErrors = [err128];
                   } else {
@@ -3158,8 +3155,13 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
                   }
                   errors++;
                 }
-                if (data54 < 0 || isNaN(data54)) {
-                  const err129 = { instancePath: instancePath + "/behavior/nipping/finFraction", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/properties/finFraction/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+              }
+            }
+            if (data53.finFraction !== void 0) {
+              let data55 = data53.finFraction;
+              if (typeof data55 == "number" && isFinite(data55)) {
+                if (data55 > 1 || isNaN(data55)) {
+                  const err129 = { instancePath: instancePath + "/behavior/nipping/finFraction", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/properties/finFraction/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
                   if (vErrors === null) {
                     vErrors = [err129];
                   } else {
@@ -3167,55 +3169,49 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
                   }
                   errors++;
                 }
-              } else {
-                const err130 = { instancePath: instancePath + "/behavior/nipping/finFraction", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/properties/finFraction/type", keyword: "type", params: { type: "number" }, message: "must be number" };
-                if (vErrors === null) {
-                  vErrors = [err130];
-                } else {
-                  vErrors.push(err130);
-                }
-                errors++;
-              }
-            }
-            if (data52.rate !== void 0) {
-              let data55 = data52.rate;
-              if (typeof data55 == "number" && isFinite(data55)) {
-                if (data55 <= 0 || isNaN(data55)) {
-                  const err131 = { instancePath: instancePath + "/behavior/nipping/rate", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/properties/rate/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                if (data55 < 0 || isNaN(data55)) {
+                  const err130 = { instancePath: instancePath + "/behavior/nipping/finFraction", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/properties/finFraction/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
                   if (vErrors === null) {
-                    vErrors = [err131];
+                    vErrors = [err130];
                   } else {
-                    vErrors.push(err131);
+                    vErrors.push(err130);
                   }
                   errors++;
                 }
               } else {
-                const err132 = { instancePath: instancePath + "/behavior/nipping/rate", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/properties/rate/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err131 = { instancePath: instancePath + "/behavior/nipping/finFraction", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/properties/finFraction/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err132];
+                  vErrors = [err131];
                 } else {
-                  vErrors.push(err132);
+                  vErrors.push(err131);
+                }
+                errors++;
+              }
+            }
+            if (data53.rate !== void 0) {
+              let data56 = data53.rate;
+              if (typeof data56 == "number" && isFinite(data56)) {
+                if (data56 <= 0 || isNaN(data56)) {
+                  const err132 = { instancePath: instancePath + "/behavior/nipping/rate", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/properties/rate/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err132];
+                  } else {
+                    vErrors.push(err132);
+                  }
+                  errors++;
+                }
+              } else {
+                const err133 = { instancePath: instancePath + "/behavior/nipping/rate", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/properties/rate/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err133];
+                } else {
+                  vErrors.push(err133);
                 }
                 errors++;
               }
             }
           } else {
-            const err133 = { instancePath: instancePath + "/behavior/nipping", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/type", keyword: "type", params: { type: "object" }, message: "must be object" };
-            if (vErrors === null) {
-              vErrors = [err133];
-            } else {
-              vErrors.push(err133);
-            }
-            errors++;
-          }
-          var _valid1 = _errs120 === errors;
-          if (_valid1) {
-            valid16 = true;
-            passing1 = 0;
-          }
-          const _errs129 = errors;
-          if (data52 !== null) {
-            const err134 = { instancePath: instancePath + "/behavior/nipping", schemaPath: "#/properties/behavior/properties/nipping/oneOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+            const err134 = { instancePath: instancePath + "/behavior/nipping", schemaPath: "#/properties/behavior/properties/nipping/oneOf/0/type", keyword: "type", params: { type: "object" }, message: "must be object" };
             if (vErrors === null) {
               vErrors = [err134];
             } else {
@@ -3223,7 +3219,22 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
             }
             errors++;
           }
-          var _valid1 = _errs129 === errors;
+          var _valid1 = _errs122 === errors;
+          if (_valid1) {
+            valid16 = true;
+            passing1 = 0;
+          }
+          const _errs131 = errors;
+          if (data53 !== null) {
+            const err135 = { instancePath: instancePath + "/behavior/nipping", schemaPath: "#/properties/behavior/properties/nipping/oneOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+            if (vErrors === null) {
+              vErrors = [err135];
+            } else {
+              vErrors.push(err135);
+            }
+            errors++;
+          }
+          var _valid1 = _errs131 === errors;
           if (_valid1 && valid16) {
             valid16 = false;
             passing1 = [passing1, 1];
@@ -3234,86 +3245,74 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
             }
           }
           if (!valid16) {
-            const err135 = { instancePath: instancePath + "/behavior/nipping", schemaPath: "#/properties/behavior/properties/nipping/oneOf", keyword: "oneOf", params: { passingSchemas: passing1 }, message: "must match exactly one schema in oneOf" };
+            const err136 = { instancePath: instancePath + "/behavior/nipping", schemaPath: "#/properties/behavior/properties/nipping/oneOf", keyword: "oneOf", params: { passingSchemas: passing1 }, message: "must match exactly one schema in oneOf" };
             if (vErrors === null) {
-              vErrors = [err135];
+              vErrors = [err136];
             } else {
-              vErrors.push(err135);
+              vErrors.push(err136);
             }
             errors++;
           } else {
-            errors = _errs119;
+            errors = _errs121;
             if (vErrors !== null) {
-              if (_errs119) {
-                vErrors.length = _errs119;
+              if (_errs121) {
+                vErrors.length = _errs121;
               } else {
                 vErrors = null;
               }
             }
           }
         }
-        if (data25.fear !== void 0) {
-          let data56 = data25.fear;
-          if (data56 && typeof data56 == "object" && !Array.isArray(data56)) {
-            for (const key10 in data56) {
+        if (data26.fear !== void 0) {
+          let data57 = data26.fear;
+          if (data57 && typeof data57 == "object" && !Array.isArray(data57)) {
+            for (const key10 in data57) {
               if (!(key10 === "riskBaseline" || key10 === "threshold" || key10 === "coverPreference" || key10 === "emergenceDelay")) {
-                const err136 = { instancePath: instancePath + "/behavior/fear", schemaPath: "#/properties/behavior/properties/fear/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key10 }, message: "must NOT have additional properties" };
+                const err137 = { instancePath: instancePath + "/behavior/fear", schemaPath: "#/properties/behavior/properties/fear/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key10 }, message: "must NOT have additional properties" };
                 if (vErrors === null) {
-                  vErrors = [err136];
+                  vErrors = [err137];
                 } else {
-                  vErrors.push(err136);
+                  vErrors.push(err137);
                 }
                 errors++;
               }
             }
-            if (data56.riskBaseline !== void 0) {
-              let data57 = data56.riskBaseline;
-              if (typeof data57 == "number" && isFinite(data57)) {
-                if (data57 < 0 || isNaN(data57)) {
-                  const err137 = { instancePath: instancePath + "/behavior/fear/riskBaseline", schemaPath: "#/properties/behavior/properties/fear/properties/riskBaseline/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
-                  if (vErrors === null) {
-                    vErrors = [err137];
-                  } else {
-                    vErrors.push(err137);
-                  }
-                  errors++;
-                }
-              } else {
-                const err138 = { instancePath: instancePath + "/behavior/fear/riskBaseline", schemaPath: "#/properties/behavior/properties/fear/properties/riskBaseline/type", keyword: "type", params: { type: "number" }, message: "must be number" };
-                if (vErrors === null) {
-                  vErrors = [err138];
-                } else {
-                  vErrors.push(err138);
-                }
-                errors++;
-              }
-            }
-            if (data56.threshold !== void 0) {
-              let data58 = data56.threshold;
+            if (data57.riskBaseline !== void 0) {
+              let data58 = data57.riskBaseline;
               if (typeof data58 == "number" && isFinite(data58)) {
-                if (data58 <= 0 || isNaN(data58)) {
-                  const err139 = { instancePath: instancePath + "/behavior/fear/threshold", schemaPath: "#/properties/behavior/properties/fear/properties/threshold/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                if (data58 < 0 || isNaN(data58)) {
+                  const err138 = { instancePath: instancePath + "/behavior/fear/riskBaseline", schemaPath: "#/properties/behavior/properties/fear/properties/riskBaseline/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
                   if (vErrors === null) {
-                    vErrors = [err139];
+                    vErrors = [err138];
                   } else {
-                    vErrors.push(err139);
+                    vErrors.push(err138);
                   }
                   errors++;
                 }
               } else {
-                const err140 = { instancePath: instancePath + "/behavior/fear/threshold", schemaPath: "#/properties/behavior/properties/fear/properties/threshold/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err139 = { instancePath: instancePath + "/behavior/fear/riskBaseline", schemaPath: "#/properties/behavior/properties/fear/properties/riskBaseline/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err140];
+                  vErrors = [err139];
                 } else {
-                  vErrors.push(err140);
+                  vErrors.push(err139);
                 }
                 errors++;
               }
             }
-            if (data56.coverPreference !== void 0) {
-              let data59 = data56.coverPreference;
-              if (!(data59 === "plants" || data59 === "caves" || data59 === "wood" || data59 === "any")) {
-                const err141 = { instancePath: instancePath + "/behavior/fear/coverPreference", schemaPath: "#/properties/behavior/properties/fear/properties/coverPreference/enum", keyword: "enum", params: { allowedValues: schema43.properties.behavior.properties.fear.properties.coverPreference.enum }, message: "must be equal to one of the allowed values" };
+            if (data57.threshold !== void 0) {
+              let data59 = data57.threshold;
+              if (typeof data59 == "number" && isFinite(data59)) {
+                if (data59 <= 0 || isNaN(data59)) {
+                  const err140 = { instancePath: instancePath + "/behavior/fear/threshold", schemaPath: "#/properties/behavior/properties/fear/properties/threshold/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err140];
+                  } else {
+                    vErrors.push(err140);
+                  }
+                  errors++;
+                }
+              } else {
+                const err141 = { instancePath: instancePath + "/behavior/fear/threshold", schemaPath: "#/properties/behavior/properties/fear/properties/threshold/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
                   vErrors = [err141];
                 } else {
@@ -3322,100 +3321,100 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
                 errors++;
               }
             }
-            if (data56.emergenceDelay !== void 0) {
-              let data60 = data56.emergenceDelay;
-              if (typeof data60 == "number" && isFinite(data60)) {
-                if (data60 < 0 || isNaN(data60)) {
-                  const err142 = { instancePath: instancePath + "/behavior/fear/emergenceDelay", schemaPath: "#/properties/behavior/properties/fear/properties/emergenceDelay/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+            if (data57.coverPreference !== void 0) {
+              let data60 = data57.coverPreference;
+              if (!(data60 === "plants" || data60 === "caves" || data60 === "wood" || data60 === "any")) {
+                const err142 = { instancePath: instancePath + "/behavior/fear/coverPreference", schemaPath: "#/properties/behavior/properties/fear/properties/coverPreference/enum", keyword: "enum", params: { allowedValues: schema43.properties.behavior.properties.fear.properties.coverPreference.enum }, message: "must be equal to one of the allowed values" };
+                if (vErrors === null) {
+                  vErrors = [err142];
+                } else {
+                  vErrors.push(err142);
+                }
+                errors++;
+              }
+            }
+            if (data57.emergenceDelay !== void 0) {
+              let data61 = data57.emergenceDelay;
+              if (typeof data61 == "number" && isFinite(data61)) {
+                if (data61 < 0 || isNaN(data61)) {
+                  const err143 = { instancePath: instancePath + "/behavior/fear/emergenceDelay", schemaPath: "#/properties/behavior/properties/fear/properties/emergenceDelay/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
                   if (vErrors === null) {
-                    vErrors = [err142];
+                    vErrors = [err143];
                   } else {
-                    vErrors.push(err142);
+                    vErrors.push(err143);
                   }
                   errors++;
                 }
               } else {
-                const err143 = { instancePath: instancePath + "/behavior/fear/emergenceDelay", schemaPath: "#/properties/behavior/properties/fear/properties/emergenceDelay/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err144 = { instancePath: instancePath + "/behavior/fear/emergenceDelay", schemaPath: "#/properties/behavior/properties/fear/properties/emergenceDelay/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err143];
+                  vErrors = [err144];
                 } else {
-                  vErrors.push(err143);
+                  vErrors.push(err144);
                 }
                 errors++;
               }
             }
           } else {
-            const err144 = { instancePath: instancePath + "/behavior/fear", schemaPath: "#/properties/behavior/properties/fear/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            const err145 = { instancePath: instancePath + "/behavior/fear", schemaPath: "#/properties/behavior/properties/fear/type", keyword: "type", params: { type: "object" }, message: "must be object" };
             if (vErrors === null) {
-              vErrors = [err144];
+              vErrors = [err145];
             } else {
-              vErrors.push(err144);
+              vErrors.push(err145);
             }
             errors++;
           }
         }
-        if (data25.feeding !== void 0) {
-          let data61 = data25.feeding;
-          if (data61 && typeof data61 == "object" && !Array.isArray(data61)) {
-            for (const key11 in data61) {
+        if (data26.feeding !== void 0) {
+          let data62 = data26.feeding;
+          if (data62 && typeof data62 == "object" && !Array.isArray(data62)) {
+            for (const key11 in data62) {
               if (!(key11 === "hungerRatePerSec" || key11 === "threshold" || key11 === "category")) {
-                const err145 = { instancePath: instancePath + "/behavior/feeding", schemaPath: "#/properties/behavior/properties/feeding/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key11 }, message: "must NOT have additional properties" };
+                const err146 = { instancePath: instancePath + "/behavior/feeding", schemaPath: "#/properties/behavior/properties/feeding/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key11 }, message: "must NOT have additional properties" };
                 if (vErrors === null) {
-                  vErrors = [err145];
+                  vErrors = [err146];
                 } else {
-                  vErrors.push(err145);
+                  vErrors.push(err146);
                 }
                 errors++;
               }
             }
-            if (data61.hungerRatePerSec !== void 0) {
-              let data62 = data61.hungerRatePerSec;
-              if (typeof data62 == "number" && isFinite(data62)) {
-                if (data62 <= 0 || isNaN(data62)) {
-                  const err146 = { instancePath: instancePath + "/behavior/feeding/hungerRatePerSec", schemaPath: "#/properties/behavior/properties/feeding/properties/hungerRatePerSec/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
-                  if (vErrors === null) {
-                    vErrors = [err146];
-                  } else {
-                    vErrors.push(err146);
-                  }
-                  errors++;
-                }
-              } else {
-                const err147 = { instancePath: instancePath + "/behavior/feeding/hungerRatePerSec", schemaPath: "#/properties/behavior/properties/feeding/properties/hungerRatePerSec/type", keyword: "type", params: { type: "number" }, message: "must be number" };
-                if (vErrors === null) {
-                  vErrors = [err147];
-                } else {
-                  vErrors.push(err147);
-                }
-                errors++;
-              }
-            }
-            if (data61.threshold !== void 0) {
-              let data63 = data61.threshold;
+            if (data62.hungerRatePerSec !== void 0) {
+              let data63 = data62.hungerRatePerSec;
               if (typeof data63 == "number" && isFinite(data63)) {
                 if (data63 <= 0 || isNaN(data63)) {
-                  const err148 = { instancePath: instancePath + "/behavior/feeding/threshold", schemaPath: "#/properties/behavior/properties/feeding/properties/threshold/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  const err147 = { instancePath: instancePath + "/behavior/feeding/hungerRatePerSec", schemaPath: "#/properties/behavior/properties/feeding/properties/hungerRatePerSec/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
                   if (vErrors === null) {
-                    vErrors = [err148];
+                    vErrors = [err147];
                   } else {
-                    vErrors.push(err148);
+                    vErrors.push(err147);
                   }
                   errors++;
                 }
               } else {
-                const err149 = { instancePath: instancePath + "/behavior/feeding/threshold", schemaPath: "#/properties/behavior/properties/feeding/properties/threshold/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err148 = { instancePath: instancePath + "/behavior/feeding/hungerRatePerSec", schemaPath: "#/properties/behavior/properties/feeding/properties/hungerRatePerSec/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err149];
+                  vErrors = [err148];
                 } else {
-                  vErrors.push(err149);
+                  vErrors.push(err148);
                 }
                 errors++;
               }
             }
-            if (data61.category !== void 0) {
-              let data64 = data61.category;
-              if (!(data64 === "surface" || data64 === "midwater" || data64 === "substrate" || data64 === "algae-grazer" || data64 === "plant-eater" || data64 === "detritivore")) {
-                const err150 = { instancePath: instancePath + "/behavior/feeding/category", schemaPath: "#/properties/behavior/properties/feeding/properties/category/enum", keyword: "enum", params: { allowedValues: schema43.properties.behavior.properties.feeding.properties.category.enum }, message: "must be equal to one of the allowed values" };
+            if (data62.threshold !== void 0) {
+              let data64 = data62.threshold;
+              if (typeof data64 == "number" && isFinite(data64)) {
+                if (data64 <= 0 || isNaN(data64)) {
+                  const err149 = { instancePath: instancePath + "/behavior/feeding/threshold", schemaPath: "#/properties/behavior/properties/feeding/properties/threshold/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err149];
+                  } else {
+                    vErrors.push(err149);
+                  }
+                  errors++;
+                }
+              } else {
+                const err150 = { instancePath: instancePath + "/behavior/feeding/threshold", schemaPath: "#/properties/behavior/properties/feeding/properties/threshold/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
                   vErrors = [err150];
                 } else {
@@ -3424,44 +3423,47 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
                 errors++;
               }
             }
-          } else {
-            const err151 = { instancePath: instancePath + "/behavior/feeding", schemaPath: "#/properties/behavior/properties/feeding/type", keyword: "type", params: { type: "object" }, message: "must be object" };
-            if (vErrors === null) {
-              vErrors = [err151];
-            } else {
-              vErrors.push(err151);
-            }
-            errors++;
-          }
-        }
-        if (data25.curiosity !== void 0) {
-          let data65 = data25.curiosity;
-          if (data65 && typeof data65 == "object" && !Array.isArray(data65)) {
-            for (const key12 in data65) {
-              if (!(key12 === "boldness" || key12 === "ratePerSec" || key12 === "dwellSec")) {
-                const err152 = { instancePath: instancePath + "/behavior/curiosity", schemaPath: "#/properties/behavior/properties/curiosity/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key12 }, message: "must NOT have additional properties" };
+            if (data62.category !== void 0) {
+              let data65 = data62.category;
+              if (!(data65 === "surface" || data65 === "midwater" || data65 === "substrate" || data65 === "algae-grazer" || data65 === "plant-eater" || data65 === "detritivore")) {
+                const err151 = { instancePath: instancePath + "/behavior/feeding/category", schemaPath: "#/properties/behavior/properties/feeding/properties/category/enum", keyword: "enum", params: { allowedValues: schema43.properties.behavior.properties.feeding.properties.category.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
-                  vErrors = [err152];
+                  vErrors = [err151];
                 } else {
-                  vErrors.push(err152);
+                  vErrors.push(err151);
                 }
                 errors++;
               }
             }
-            if (data65.boldness !== void 0) {
-              let data66 = data65.boldness;
-              if (typeof data66 == "number" && isFinite(data66)) {
-                if (data66 > 1 || isNaN(data66)) {
-                  const err153 = { instancePath: instancePath + "/behavior/curiosity/boldness", schemaPath: "#/properties/behavior/properties/curiosity/properties/boldness/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
-                  if (vErrors === null) {
-                    vErrors = [err153];
-                  } else {
-                    vErrors.push(err153);
-                  }
-                  errors++;
+          } else {
+            const err152 = { instancePath: instancePath + "/behavior/feeding", schemaPath: "#/properties/behavior/properties/feeding/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            if (vErrors === null) {
+              vErrors = [err152];
+            } else {
+              vErrors.push(err152);
+            }
+            errors++;
+          }
+        }
+        if (data26.curiosity !== void 0) {
+          let data66 = data26.curiosity;
+          if (data66 && typeof data66 == "object" && !Array.isArray(data66)) {
+            for (const key12 in data66) {
+              if (!(key12 === "boldness" || key12 === "ratePerSec" || key12 === "dwellSec")) {
+                const err153 = { instancePath: instancePath + "/behavior/curiosity", schemaPath: "#/properties/behavior/properties/curiosity/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key12 }, message: "must NOT have additional properties" };
+                if (vErrors === null) {
+                  vErrors = [err153];
+                } else {
+                  vErrors.push(err153);
                 }
-                if (data66 < 0 || isNaN(data66)) {
-                  const err154 = { instancePath: instancePath + "/behavior/curiosity/boldness", schemaPath: "#/properties/behavior/properties/curiosity/properties/boldness/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                errors++;
+              }
+            }
+            if (data66.boldness !== void 0) {
+              let data67 = data66.boldness;
+              if (typeof data67 == "number" && isFinite(data67)) {
+                if (data67 > 1 || isNaN(data67)) {
+                  const err154 = { instancePath: instancePath + "/behavior/curiosity/boldness", schemaPath: "#/properties/behavior/properties/curiosity/properties/boldness/maximum", keyword: "maximum", params: { comparison: "<=", limit: 1 }, message: "must be <= 1" };
                   if (vErrors === null) {
                     vErrors = [err154];
                   } else {
@@ -3469,86 +3471,95 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
                   }
                   errors++;
                 }
-              } else {
-                const err155 = { instancePath: instancePath + "/behavior/curiosity/boldness", schemaPath: "#/properties/behavior/properties/curiosity/properties/boldness/type", keyword: "type", params: { type: "number" }, message: "must be number" };
-                if (vErrors === null) {
-                  vErrors = [err155];
-                } else {
-                  vErrors.push(err155);
-                }
-                errors++;
-              }
-            }
-            if (data65.ratePerSec !== void 0) {
-              let data67 = data65.ratePerSec;
-              if (typeof data67 == "number" && isFinite(data67)) {
                 if (data67 < 0 || isNaN(data67)) {
-                  const err156 = { instancePath: instancePath + "/behavior/curiosity/ratePerSec", schemaPath: "#/properties/behavior/properties/curiosity/properties/ratePerSec/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  const err155 = { instancePath: instancePath + "/behavior/curiosity/boldness", schemaPath: "#/properties/behavior/properties/curiosity/properties/boldness/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
                   if (vErrors === null) {
-                    vErrors = [err156];
+                    vErrors = [err155];
                   } else {
-                    vErrors.push(err156);
+                    vErrors.push(err155);
                   }
                   errors++;
                 }
               } else {
-                const err157 = { instancePath: instancePath + "/behavior/curiosity/ratePerSec", schemaPath: "#/properties/behavior/properties/curiosity/properties/ratePerSec/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err156 = { instancePath: instancePath + "/behavior/curiosity/boldness", schemaPath: "#/properties/behavior/properties/curiosity/properties/boldness/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err157];
+                  vErrors = [err156];
                 } else {
-                  vErrors.push(err157);
+                  vErrors.push(err156);
                 }
                 errors++;
               }
             }
-            if (data65.dwellSec !== void 0) {
-              let data68 = data65.dwellSec;
+            if (data66.ratePerSec !== void 0) {
+              let data68 = data66.ratePerSec;
               if (typeof data68 == "number" && isFinite(data68)) {
-                if (data68 <= 0 || isNaN(data68)) {
-                  const err158 = { instancePath: instancePath + "/behavior/curiosity/dwellSec", schemaPath: "#/properties/behavior/properties/curiosity/properties/dwellSec/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                if (data68 < 0 || isNaN(data68)) {
+                  const err157 = { instancePath: instancePath + "/behavior/curiosity/ratePerSec", schemaPath: "#/properties/behavior/properties/curiosity/properties/ratePerSec/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
                   if (vErrors === null) {
-                    vErrors = [err158];
+                    vErrors = [err157];
                   } else {
-                    vErrors.push(err158);
+                    vErrors.push(err157);
                   }
                   errors++;
                 }
               } else {
-                const err159 = { instancePath: instancePath + "/behavior/curiosity/dwellSec", schemaPath: "#/properties/behavior/properties/curiosity/properties/dwellSec/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                const err158 = { instancePath: instancePath + "/behavior/curiosity/ratePerSec", schemaPath: "#/properties/behavior/properties/curiosity/properties/ratePerSec/type", keyword: "type", params: { type: "number" }, message: "must be number" };
                 if (vErrors === null) {
-                  vErrors = [err159];
+                  vErrors = [err158];
                 } else {
-                  vErrors.push(err159);
+                  vErrors.push(err158);
+                }
+                errors++;
+              }
+            }
+            if (data66.dwellSec !== void 0) {
+              let data69 = data66.dwellSec;
+              if (typeof data69 == "number" && isFinite(data69)) {
+                if (data69 <= 0 || isNaN(data69)) {
+                  const err159 = { instancePath: instancePath + "/behavior/curiosity/dwellSec", schemaPath: "#/properties/behavior/properties/curiosity/properties/dwellSec/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+                  if (vErrors === null) {
+                    vErrors = [err159];
+                  } else {
+                    vErrors.push(err159);
+                  }
+                  errors++;
+                }
+              } else {
+                const err160 = { instancePath: instancePath + "/behavior/curiosity/dwellSec", schemaPath: "#/properties/behavior/properties/curiosity/properties/dwellSec/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err160];
+                } else {
+                  vErrors.push(err160);
                 }
                 errors++;
               }
             }
           } else {
-            const err160 = { instancePath: instancePath + "/behavior/curiosity", schemaPath: "#/properties/behavior/properties/curiosity/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            const err161 = { instancePath: instancePath + "/behavior/curiosity", schemaPath: "#/properties/behavior/properties/curiosity/type", keyword: "type", params: { type: "object" }, message: "must be object" };
             if (vErrors === null) {
-              vErrors = [err160];
+              vErrors = [err161];
             } else {
-              vErrors.push(err160);
+              vErrors.push(err161);
             }
             errors++;
           }
         }
       } else {
-        const err161 = { instancePath: instancePath + "/behavior", schemaPath: "#/properties/behavior/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err162 = { instancePath: instancePath + "/behavior", schemaPath: "#/properties/behavior/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
-          vErrors = [err161];
+          vErrors = [err162];
         } else {
-          vErrors.push(err161);
+          vErrors.push(err162);
         }
         errors++;
       }
     }
   } else {
-    const err162 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+    const err163 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
     if (vErrors === null) {
-      vErrors = [err162];
+      vErrors = [err163];
     } else {
-      vErrors.push(err162);
+      vErrors.push(err163);
     }
     errors++;
   }

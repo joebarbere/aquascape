@@ -129,6 +129,23 @@ describe('plant-mesh builder — single specimen', () => {
     expect(mat.color.getHexString()).toBe('114433');
   });
 
+  it('builds a CROSS-PLANE geometry — volume in both X and Z (fidelity pass)', () => {
+    // carpetEntry naturalSize is 30 (w) × 20 (h) × 20 (d). The cross-plane
+    // merges the silhouette slab with a copy rotated 90° about Y, so the
+    // bounding box spans both X (~width) and Z (~width) — not a thin card.
+    const catalog = makeCatalog([carpetEntry()]);
+    const group = buildPlantMeshes(sceneWithPlants([plant()]), catalog, undefined);
+    const geo = (group.children[0] as Mesh).geometry;
+    geo.computeBoundingBox();
+    const bb = geo.boundingBox!;
+    const xExtent = bb.max.x - bb.min.x;
+    const zExtent = bb.max.z - bb.min.z;
+    // Both axes carry real extent (the crossed slab gives Z ~ the silhouette
+    // width, far thicker than the old single-extrusion card).
+    expect(xExtent).toBeGreaterThan(10);
+    expect(zExtent).toBeGreaterThan(10);
+  });
+
   it('honours previewAgeWeeks for growth scale', () => {
     const catalog = makeCatalog([carpetEntry()]);
     // Same plant rendered at age 0 vs age 100 → different mesh scale.
@@ -455,5 +472,96 @@ describe('plant-mesh emissive boost (F11.7 Wave 3 day-night)', () => {
   it('updatePlantEmissiveBoost is a no-op on a group with no sway materials', () => {
     const empty = new Group();
     expect(() => updatePlantEmissiveBoost(empty, 0.4)).not.toThrow();
+  });
+});
+
+// ─── Fidelity pass — flow-coupled sway ───────────────────────────────────
+
+import type { FlowField } from '@aquascape/domain/fluid-sim';
+
+/** A uniform constant-velocity flow field for deterministic sampling. */
+function uniformFlowField(magMmPerSec: number): FlowField {
+  const g = 2;
+  const n = g * g * g;
+  return {
+    gx: g,
+    gy: g,
+    gz: g,
+    origin: { x: 0, y: 0, z: 0 },
+    cellSize: 1000,
+    u: new Float32Array(n).fill(magMmPerSec),
+    v: new Float32Array(n),
+    w: new Float32Array(n),
+  };
+}
+
+describe('plant-mesh flow-coupled sway (fidelity pass)', () => {
+  it('single specimen: uFlowAmp defaults to 1.0 with no flow field', () => {
+    const catalog = makeCatalog([carpetEntry()]);
+    const group = buildPlantMeshes(sceneWithPlants([plant()]), catalog, undefined);
+    const mat = (group.children[0] as Mesh).material as MeshStandardMaterial;
+    const shader = compileMaterialShader(mat);
+    expect(shader.uniforms['uFlowAmp']!.value).toBe(1);
+    // The flow multiplier is wired into the swayAmp expression.
+    expect(shader.vertexShader).toContain('uFlowAmp');
+  });
+
+  it('single specimen: strong current pushes uFlowAmp toward the ceiling', () => {
+    const catalog = makeCatalog([carpetEntry()]);
+    const group = buildPlantMeshes(
+      sceneWithPlants([plant()]),
+      catalog,
+      undefined,
+      uniformFlowField(200),
+    );
+    const mat = (group.children[0] as Mesh).material as MeshStandardMaterial;
+    const shader = compileMaterialShader(mat);
+    // 200 mm/s saturates the response → FLOW_AMP_MAX (2.4).
+    expect(shader.uniforms['uFlowAmp']!.value).toBeCloseTo(2.4, 5);
+  });
+
+  it('single specimen: still water (zero current) drops uFlowAmp to the dead-zone floor', () => {
+    const catalog = makeCatalog([carpetEntry()]);
+    const group = buildPlantMeshes(
+      sceneWithPlants([plant()]),
+      catalog,
+      undefined,
+      uniformFlowField(0),
+    );
+    const mat = (group.children[0] as Mesh).material as MeshStandardMaterial;
+    const shader = compileMaterialShader(mat);
+    expect(shader.uniforms['uFlowAmp']!.value).toBeCloseTo(0.4, 5);
+  });
+
+  it('scatter InstancedMesh carries a per-instance aFlowAmp attribute in range', () => {
+    const catalog = makeCatalog([carpetEntry()]);
+    const dense = plant({
+      scatter: {
+        polygon: [
+          { x: 0, y: 0 },
+          { x: 100, y: 0 },
+          { x: 100, y: 100 },
+          { x: 0, y: 100 },
+        ],
+        density: 100,
+      },
+    });
+    const group = buildPlantMeshes(
+      sceneWithPlants([dense]),
+      catalog,
+      undefined,
+      uniformFlowField(200),
+    );
+    const patch = group.children[0] as InstancedMesh;
+    const flow = patch.geometry.getAttribute('aFlowAmp');
+    expect(flow).toBeDefined();
+    const arr = flow.array as Float32Array;
+    for (let i = 0; i < arr.length; i++) {
+      expect(arr[i]).toBeGreaterThanOrEqual(0.4 - 1e-4);
+      expect(arr[i]).toBeLessThanOrEqual(2.4 + 1e-4);
+    }
+    // The instanced shader reads the per-instance attribute.
+    const shader = compileMaterialShader(patch.material as MeshStandardMaterial);
+    expect(shader.vertexShader).toContain('attribute float aFlowAmp');
   });
 });

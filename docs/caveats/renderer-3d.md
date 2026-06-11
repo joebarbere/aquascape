@@ -5,7 +5,9 @@
 ## Scope of v1 (Stage 10 F10.1–F10.3)
 
 - **Read-only / simulation-only.** `hitTest()` returns `null` unconditionally. No selection handles in 3D. No participation in the drag / marquee / inspector pipeline. Editing always happens in 2D; flipping to 3D is for visualisation.
-- **Future scope NOT in v1:** dynamic lighting (day/night cycle), water simulation (refraction / ripples), animated plants (sway / growth-in-motion), fish *behaviours* (steering, schooling, etc. — though F11.1 has already landed static animated fish meshes via the new ECS pipeline; see `livestock-ecs.md`), photorealistic textures, shadows. The scene-builder per-element factoring (`tank-mesh.ts` / `substrate-mesh.ts` / etc.) is the seam those land along — one file per scene-element kind, additive changes.
+- **Shipped since v1:** dynamic lighting (day/night cycle — F11.7 Wave 3), an animated water surface + plant sway (F11.7), ECS-driven animated fish (F11.1+), and — as of the **fidelity pass** — filmic tone mapping + colour management, image-based lighting (IBL), soft shadows, and physically-based transmissive glass (see "Lighting, tone mapping, IBL & shadows" below).
+- **Shipped in the fidelity pass:** tone mapping + IBL + soft shadows + transmissive glass (PR1); animated **caustics** (below); **bloom** via EffectComposer (below); **flow-coupled plant sway** (`RenderOptions.flowField` from `LivestockSimulationService.getFlowField()` scales each plant's sway amplitude by the local current — `flowAmpAt` → `uFlowAmp` / `aFlowAmp`, opt-in, amplitude not frequency); an iridescent **fish sheen** (`livestock-renderer-3d`); plus the ECS-side **bubble wobble** + **startle-wave / predator** behaviour (see `livestock-ecs.md`).
+- **Still deferred:** **screen-space water refraction** of the SURFACE plane — needs an extra render-target pre-pass that complicates the now-EffectComposer render loop, and the transmissive **glass** (PR1) already supplies the dominant refraction read of the tank contents, so it's low incremental value for the cost. Also: SSAO (the EffectComposer seam is ready — add an `SSAOPass`, gate behind a perf check) and photorealistic albedo/normal textures. The scene-builder per-element factoring is the seam those land along.
 
 ## ECS-driven livestock content group (Stage 11 F11.1)
 
@@ -32,9 +34,50 @@ Material: `ShaderMaterial` with `transparent: true`, `depthWrite: false`, `side:
 
 Cached on the renderer (`this.waterMesh: WaterMeshHandle | null`, tagged by `WxHxD`). Tank resize disposes + rebuilds. RAF tick calls `waterMesh.updateTime(performance.now() / 1000)` every frame; the handle no-ops after dispose so a stale tick is safe. Same detach-before-`disposeNode` discipline as the livestock bundle — the cached mesh must be removed from `currentContent` before the rebuild walker disposes the tree, otherwise the shared geometry + material would be GPU-disposed every render.
 
-**Caustics: deferred.** The F11.7 plan calls for noise-texture caustics modulating the directional light's intensity on substrate + hardscape. Shipping that requires either a fragile `onBeforeCompile` patch on the standard PBR material or bespoke ShaderMaterials for substrate + hardscape — both are larger changes than the water plane itself. The water surface alone is a meaningful visual win and caustics belong in a follow-up (F11.7.1).
+**Caustics: shipped (fidelity pass).** See "Animated caustics" below — the `onBeforeCompile` patch the F11.7 note worried about turned out clean: a procedural (no-texture) caustic injected into the substrate + hardscape `MeshStandardMaterial`s.
 
-**Refraction: out of scope.** A proper refraction approximation needs a screen-space pre-pass (extra render target). The fragment's specular highlight + alpha ramp is the visual scope v1 ships.
+**Refraction: still deferred.** A proper screen-space refraction of the *water surface* needs an extra render-target pre-pass (a single-pass shader can't sample the framebuffer it's writing to). The now-transmissive **glass** (PR1) already supplies the dominant refraction read of the tank contents, so water-surface refraction is low incremental value for the render-target cost; revisit if demand surfaces.
+
+**Post-processing bloom: shipped (fidelity pass).** See "Post-processing bloom" below — the `EffectComposer` pipeline (RenderPass → UnrealBloomPass → OutputPass) is wired and headless-validated. Tone mapping is applied **once**, by OutputPass: `renderer.toneMapping = ACESFilmic` + OutputPass = correct single application (verified visually — the scene is neither washed out nor double-darkened).
+
+## Post-processing bloom (fidelity pass)
+
+The render loop paints through an `EffectComposer` when a real `WebGLRenderer` is present: **RenderPass → UnrealBloomPass → OutputPass**.
+
+- **Addon wiring (the OrbitControls dance × 4):** `three/examples/jsm/postprocessing/{EffectComposer,RenderPass,UnrealBloomPass,OutputPass}` are ESM-only addons. They're resolved for tsc via `apps/web/tsconfig.app.json` path-maps + an ambient shim (`apps/web/src/three-orbitcontrols.d.ts`), and stubbed for Jest via `src/__mocks__/postprocessing-stub.ts` mapped in BOTH `libs/rendering/renderer-3d/jest.config.ts` and `apps/web/jest.config.ts` (the app constructs a real `Three3DRenderer` through `SCENE_RENDERER_3D`).
+- **Guarded + fallback:** `setupComposer` no-ops unless `renderer instanceof WebGLRenderer`, so the headless unit stub never builds it. `paint()` routes through `composer.render()` when present, else `renderer.render(scene, camera)` — which is what keeps the stub's render-counter assertions valid. The composer's `RenderPass` holds the persistent `camera` reference (reframing mutates that object in place, never replaces it), so it stays valid across tank changes.
+- **Tuning:** `BLOOM_STRENGTH = 0.35`, `BLOOM_RADIUS = 0.4`, `BLOOM_THRESHOLD = 0.85` — high threshold so only the brightest pixels (water specular, caustic filaments, bubble + night-emissive highlights) bleed, not the whole image.
+- **Tone mapping lands once:** `renderer.toneMapping = ACESFilmic` + `OutputPass` is the correct single-application combo (validated headlessly — see `tools/demo/record-demo.mjs` + `docs/caveats/e2e.md`). Don't ALSO add a manual tonemap pass.
+- **Resize:** `composer.setSize` + `bloomPass.setSize` are driven from `attach()`'s idempotent-resize path alongside `renderer.setSize`. Disposed in `dispose()`.
+
+## Surface detail — substrate grain, cross-plane plants, hardscape texture (fidelity enhancements)
+
+Grounded in headless captures (the render was a "low-poly cardboard diorama" — black-void substrate + flat-card plants + smooth-plastic rock). Three no-addon fixes, all validated visually:
+
+- **Substrate grain** (`scene-builder/substrate-grain.ts`): `onBeforeCompile` patch adding a deterministic 2-octave world-space value-noise grain + an up-facing tonal lift, additive on the final fragment colour. Stops dark aquasoil crushing to a flat black void — it reads as granular soil. Applied AFTER caustics (chains the prior `onBeforeCompile`).
+- **Cross-plane plants** (`plant-mesh.ts` `buildSilhouetteGeometry`): the silhouette slab is merged with a copy rotated 90° about Y (a `+`-section) so plants have volume from any angle instead of reading as a 2D card (worst on tall stems). `mergeGeometries` is a tiny core-three manual merge (no `BufferGeometryUtils` addon). Same Y range, so the sway shader's height factor is unchanged; works for both the single-mesh + `InstancedMesh` (scatter) paths.
+- **Hardscape texture** (`scene-builder/hardscape-texture.ts`): `onBeforeCompile` patch adding a multi-octave 3D value-noise brightness variation so rocks read as textured stone, not moulded plastic. Chains caustics like the substrate grain.
+
+All three are **additive on the final colour** (authored catalog colours preserved), pure + deterministic (world position in, no texture/RNG → idempotency holds), and unit-tested via the shader-stub `onBeforeCompile` pattern (`surface-detail.spec.ts` + the cross-plane bounding-box test in `plant-mesh.spec.ts`). **Don't stack a fourth `onBeforeCompile` without chaining `prev`** — caustics → grain/texture already chain; a non-chaining patch silently drops the earlier ones.
+
+## Animated caustics (fidelity pass)
+
+`scene-builder/caustics.ts` patches the substrate + hardscape `MeshStandardMaterial`s (via `onBeforeCompile`) to add a dancing underwater caustic highlight — the strongest "this is underwater" cue the render has.
+
+- **Procedural, not a sampled texture.** A small layered-sine `aqCaustic(worldXZ, t)` function in the fragment shader — no texture upload, no addon, no RNG. Sampled in WORLD space (the vertex patch captures `vCausticWorld` + `vCausticUp` itself rather than relying on `<worldpos_vertex>`, which only emits under certain material defines) so the pattern is anchored to the tank, not sliding across surfaces as the camera orbits.
+- **Modulated** by `clamp(worldNormal.y)` (light comes from above → up-facing faces catch it) and a mild depth factor, added as a cool highlight AFTER the standard pipeline (`<dithering_fragment>`) like the plant emissive boost.
+- **Collected like plant sway.** The builders stash each patched material on `group.userData[CAUSTIC_MATERIALS_KEY]`; the renderer flattens substrate + hardscape lists into `this.causticMaterials`, advances `uCausticTime` every RAF tick (same wall clock as the water + sway), and scales `uCausticStrength` by the day-night `directionalIntensity` per render so caustics fade out at night. Determinism holds: the only time-varying input is `uTime`. Materials are owned by their meshes (disposed by `disposeNode`); `causticMaterials` is a non-owning view cleared on rebuild + dispose.
+
+## Lighting, tone mapping, IBL & shadows (fidelity pass)
+
+The renderer's realism baseline is four compounding renderer-side changes — **all core `three`, no `examples/jsm` addons**, so no tsconfig/jest addon wiring was needed.
+
+- **Tone mapping + colour management.** `defaultRendererFactory` sets `renderer.toneMapping = ACESFilmicToneMapping` (exposure `1.1`) + `renderer.outputColorSpace = SRGBColorSpace`. ACES rolls off the water specular + bubble highlights instead of clipping to flat white. These are set in the FACTORY (on the real `WebGLRenderer`); the headless test stub never sees them.
+- **IBL environment.** `scene-builder/environment.ts` builds a deterministic equirectangular gradient `DataTexture` (sky→horizon→floor); the renderer PMREM-filters it (`PMREMGenerator`) and assigns `scene.environment` + `scene.environmentIntensity = ENV_INTENSITY` (0.35). This is what gives `MeshStandard`/`MeshPhysical` materials something to reflect. **Guarded behind `renderer instanceof WebGLRenderer`** — `PMREMGenerator` needs a GL context, so the node test stub skips it. `buildEnvEquirectTexture()` itself is pure + unit-tested (no GL). Both the source `DataTexture` and the PMREM product texture are disposed on teardown (`envSourceTexture` / `envTexture`).
+- **Soft shadows.** `renderer.shadowMap.enabled = true` + `PCFSoftShadowMap` (factory). The directional key light (`lighting.ts`) now `castShadow = true` with an **orthographic** shadow camera framed to the tank AABB (`±maxDim` frustum, near/far bracketing the light→tank distance). `normalBias` is scaled to the millimetre scene (`maxDim × 0.002` ≈ 1.2 mm on a 600 mm tank) to defeat acne on the steep extruded faces. Substrate `receiveShadow` (no cast — slab self-shadow reads as noise); hardscape + plants `castShadow` + `receiveShadow`. **Plant sway doesn't propagate to the shadow** — the shadow depth pass uses Three's default depth material, not the `onBeforeCompile`-patched colour material — an accepted mismatch at typical sway amplitude.
+- **Real glass.** `tank-mesh.ts`'s glass box is now `MeshPhysicalMaterial` (`transmission: 1`, `ior: 1.45`, low `roughness`, `FrontSide`, `depthWrite: false`). The old `MeshBasicMaterial` low-opacity tint was a workaround for having **no environment** to refract through; now that the IBL env exists, real transmissive glass reads as wet glass with a Fresnel rim. A faint `BackSide` inner-sheen shell (`aquascape:tank/glass-sheen`, 5 % opacity, parented to the glass mesh) keeps the tank's silhouette legible at grazing angles where a perfectly clear pane would vanish. `attenuationDistance` is left at ∞ so the contents seen through the glass don't darken.
+
+**Why ambient + hemisphere were pulled back** (0.7→0.45, 0.4→0.3): strong uniform fill flattens the very shadows we now cast and washes out the directional key. The IBL env supplies most of the soft fill the old over-bright ambient was compensating for.
 
 ## Hardscape + plant placement pipeline (Stage 10 v1.1)
 

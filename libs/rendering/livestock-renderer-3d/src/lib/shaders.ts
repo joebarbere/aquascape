@@ -22,6 +22,15 @@
  * `scene-builder/lighting.ts`'s shape without importing it — keeping
  * `livestock-renderer-3d` independent of `renderer-3d`).
  *
+ * Fidelity pass — the fragment shader adds a grazing-angle FRESNEL SHEEN
+ * (tinted cool blue-green, hue-shifted with the fresnel) plus a subtle
+ * procedural scale shimmer along the spine UV, so bodies read as wet,
+ * scale-catching fish rather than flat-shaded clay. The sheen only ever
+ * brightens the silhouette rim (it's keyed off the view angle), and the
+ * shimmer modulates the sheen — never the base albedo — so it can't wash
+ * the fish out. No per-instance data needed; it works off the existing
+ * view-space normal + spine UV.
+ *
  * We use `ShaderMaterial` (not `MeshStandardMaterial`) because the
  * carangiform deformation needs per-vertex access to `spineUv` and
  * `instancePhase` — patching that into a Standard material via
@@ -57,6 +66,9 @@ attribute float instancePhase;
 attribute float instanceTailBeatFreq;
 attribute float instanceAmpHead;
 attribute float instanceAmpTail;
+// Fidelity pass — per-instance body colour (linear-ish RGB). Lets two species
+// sharing one archetype (e.g. neon vs cardinal tetra) read distinct.
+attribute vec3 instanceColor;
 
 // Global uniforms.
 uniform float uTime;
@@ -68,6 +80,13 @@ uniform vec3 uDirectionalColor;
 // Varyings consumed by the fragment shader.
 varying vec3 vLitColor;
 varying vec3 vNormalWorld;
+// Fidelity pass — view-space normal + view direction for the fresnel
+// iridescent sheen, and the spine UV for the procedural scale shimmer.
+varying vec3 vViewNormal;
+varying vec3 vViewDir;
+varying vec2 vSpineUv;
+// Per-instance body colour passed through to the fragment stage.
+varying vec3 vInstColor;
 
 // Rotate vector v by unit quaternion q = (x, y, z, w). Standard
 // Rodrigues-via-quaternion form: v + 2 * q.xyz x (q.xyz x v + q.w * v).
@@ -99,7 +118,18 @@ void main() {
   float ndotl = max(dot(nRot, uDirectionalDir), 0.0);
   vLitColor = uAmbientColor + uDirectionalColor * ndotl;
 
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(worldPos, 1.0);
+  // Fidelity pass — view-space basis for the fresnel sheen. modelViewMatrix
+  // carries view x model(mirror); worldPos is the instance vertex in the
+  // mesh local frame, so mvPosition is the view-space position and
+  // mat3(modelViewMatrix) * nRot the view-space normal (uniform scale, so
+  // no inverse-transpose needed).
+  vec4 mvPosition = modelViewMatrix * vec4(worldPos, 1.0);
+  vViewDir = normalize(-mvPosition.xyz);
+  vViewNormal = normalize(mat3(modelViewMatrix) * nRot);
+  vSpineUv = spineUv;
+  vInstColor = instanceColor;
+
+  gl_Position = projectionMatrix * mvPosition;
 }
 `;
 
@@ -112,15 +142,37 @@ void main() {
 export const LIVESTOCK_FRAGMENT_SHADER = /* glsl */ `
 precision highp float;
 
+#define PI 3.141592653589793
+
 uniform vec3 uBodyColor;
 
 varying vec3 vLitColor;
 varying vec3 vNormalWorld;
+varying vec3 vViewNormal;
+varying vec3 vViewDir;
+varying vec2 vSpineUv;
+varying vec3 vInstColor;
 
 void main() {
-  // Multiplicative shading — keeps body colour identifiable while still
-  // reading the directional key on the lit hemisphere.
-  vec3 rgb = uBodyColor * vLitColor;
+  // Per-instance body colour drives the shading (the uBodyColor uniform is
+  // the build-time default, kept for the no-snapshot path). Multiplicative
+  // shading keeps the colour identifiable while reading the directional key.
+  vec3 rgb = vInstColor * vLitColor;
+
+  // ── IRIDESCENT SHEEN (fidelity pass) ────────────────────────────────
+  // A grazing-angle fresnel term gives the body the wet, scale-catching
+  // sheen real fish have — strongest at the silhouette edge, absent
+  // face-on. We tint it cool blue-green and shift the hue slightly with
+  // the fresnel so it reads iridescent rather than as a flat rim light.
+  float fres = pow(1.0 - clamp(dot(normalize(vViewNormal), normalize(vViewDir)), 0.0, 1.0), 3.0);
+  vec3 sheen = mix(vec3(0.30, 0.55, 0.85), vec3(0.55, 0.85, 0.70), fres);
+  // Subtle high-frequency scale shimmer along the body, modulating the
+  // sheen (never the base albedo) so a wrong-orientation read can't wash
+  // the fish out — it only ever brightens the already-grazing rim.
+  float scales = 0.5 + 0.5 * sin(vSpineUv.x * 60.0) * sin(vSpineUv.y * 24.0);
+  rgb += fres * sheen * (0.18 + 0.10 * scales);
+  // ── /IRIDESCENT SHEEN ───────────────────────────────────────────────
+
   gl_FragColor = vec4(rgb, 1.0);
 }
 `;

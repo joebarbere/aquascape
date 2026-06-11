@@ -20,6 +20,9 @@ import { sampleCatmullRom } from '@aquascape/domain/geometry';
 import type { CatalogRef, Scene, SubstrateRegion } from '@aquascape/domain/scene-model';
 import { Group, Mesh, MeshStandardMaterial, Shape, ExtrudeGeometry } from 'three';
 
+import { applyCaustics, CAUSTIC_MATERIALS_KEY } from './caustics';
+import { applySubstrateGrain } from './substrate-grain';
+
 /** Catalog-miss / catalog-omitted fallback colour. */
 const FALLBACK_COLOR = '#7b6a4a';
 /** Roughness for substrate material. Substrate is grainy, not glossy. */
@@ -48,11 +51,22 @@ export function buildSubstrateMeshes(scene: Scene, catalog: Catalog | undefined)
   group.name = 'aquascape:substrate';
   const tankW = scene.tank.width;
   const tankD = scene.tank.depth;
+  // The substrate floor is the primary canvas for caustics — collect the
+  // patched materials so the host can advance their `uCausticTime`.
+  const causticMaterials: MeshStandardMaterial[] = [];
+  group.userData[CAUSTIC_MATERIALS_KEY] = causticMaterials;
   if (tankW <= 0 || tankD <= 0) return group;
 
   for (const region of scene.substrate.regions) {
     const mesh = buildRegionMesh(region, tankW, tankD, catalog);
-    if (mesh !== null) group.add(mesh);
+    if (mesh !== null) {
+      // Caustics first, then grain chains on top (grain lifts the dark soil
+      // out of a flat black void + reads as granular).
+      applyCaustics(mesh.material as MeshStandardMaterial, scene.tank.height);
+      applySubstrateGrain(mesh.material as MeshStandardMaterial);
+      causticMaterials.push(mesh.material as MeshStandardMaterial);
+      group.add(mesh);
+    }
   }
   return group;
 }
@@ -112,6 +126,11 @@ function buildRegionMesh(
   const mat = new MeshStandardMaterial({ color, roughness: ROUGHNESS });
   const mesh = new Mesh(geo, mat);
   mesh.name = `aquascape:substrate/${region.id}`;
+  // The substrate is the tank floor — it RECEIVES the key light's shadows
+  // (hardscape + plants drop onto it) but doesn't cast: a slab self-
+  // shadowing its own steep extruded faces reads as noise, not depth.
+  mesh.receiveShadow = true;
+  mesh.castShadow = false;
   // Shift the mesh in Z by the inset so the front face sits at
   // z = GLASS_INSET_MM (and the back face at z = tankDepth - inset).
   mesh.position.z = GLASS_INSET_MM;

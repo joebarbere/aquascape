@@ -77,6 +77,7 @@ import type {
   Viewport,
 } from '@aquascape/rendering/renderer-api';
 import {
+  ACESFilmicToneMapping,
   AmbientLight,
   Color,
   DirectionalLight,
@@ -84,12 +85,19 @@ import {
   InstancedMesh,
   Mesh,
   Object3D,
+  PCFSoftShadowMap,
+  type MeshStandardMaterial,
   PerspectiveCamera,
+  PMREMGenerator,
   Scene as ThreeScene,
   Spherical,
+  SRGBColorSpace,
+  type Texture,
+  Vector2,
   Vector3,
   WebGLRenderer,
   type BufferGeometry,
+  type DataTexture,
   type Material,
 } from 'three';
 // Note: `three/examples/jsm/controls/OrbitControls` (no `.js` extension) is
@@ -101,6 +109,14 @@ import {
 // Jest redirects this import to a CJS stub via `moduleNameMapper`; see
 // `src/__mocks__/orbit-controls-stub.ts`.
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+// Fidelity pass (bloom) — postprocessing addons. Same ESM-addon resolution
+// story as OrbitControls (tsconfig path-map + ambient shim in the app; a Jest
+// stub in this lib + the app). Only constructed behind an `instanceof
+// WebGLRenderer` guard, so the headless test stub never touches them.
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 
 /**
  * Subset of `WebGLRenderer` the orchestrator actually calls. Lets test
@@ -156,9 +172,30 @@ export interface Orbital3DControls {
   addChangeListener(cb: () => void): () => void;
 }
 
-const defaultRendererFactory: RendererFactory = (canvas) =>
-  new WebGLRenderer({ canvas, antialias: true, alpha: true });
+const defaultRendererFactory: RendererFactory = (canvas) => {
+  const renderer = new WebGLRenderer({ canvas, antialias: true, alpha: true });
+  // Fidelity pass — colour management + filmic tone mapping. ACES rolls off
+  // the bright water specular + bubble highlights instead of clipping them
+  // to flat white, and the sRGB output space makes the catalog colours read
+  // as authored (Three.js interprets material colours as sRGB and works in
+  // linear space internally). `outputColorSpace` is the modern-Three default
+  // but we set it explicitly so a future Three bump can't silently change it.
+  renderer.outputColorSpace = SRGBColorSpace;
+  renderer.toneMapping = ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+  // Soft shadows from the single directional key light (configured in
+  // `scene-builder/lighting.ts`).
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = PCFSoftShadowMap;
+  return renderer;
+};
 import { buildCamera, tankCenter } from './scene-builder/camera';
+import {
+  CAUSTIC_MATERIALS_KEY,
+  setCausticIntensity,
+  updateCausticTime,
+} from './scene-builder/caustics';
+import { buildEnvEquirectTexture, ENV_INTENSITY } from './scene-builder/environment';
 import { buildHardscapeMeshes } from './scene-builder/hardscape-mesh';
 import { buildLighting } from './scene-builder/lighting';
 import {
@@ -169,6 +206,16 @@ import {
 import { buildSubstrateMeshes } from './scene-builder/substrate-mesh';
 import { buildTankMesh } from './scene-builder/tank-mesh';
 import { buildWaterMesh, type WaterMeshHandle } from './scene-builder/water-mesh';
+
+/**
+ * Fidelity pass (bloom) — UnrealBloomPass tuning. High threshold so only the
+ * brightest pixels (water specular, caustic filaments, bubble + night
+ * highlights) bloom; modest strength + radius so it reads as a gentle wet
+ * sheen, not a haze.
+ */
+const BLOOM_STRENGTH = 0.35;
+const BLOOM_RADIUS = 0.4;
+const BLOOM_THRESHOLD = 0.85;
 
 /** Damping factor for orbit interactions. 0.08 reads smooth on mid-tier HW. */
 const ORBIT_DAMPING = 0.08;
@@ -288,6 +335,15 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    */
   private currentPlantGroup: Group | null = null;
   /**
+   * Fidelity pass (caustics) — the flat list of substrate + hardscape
+   * materials patched with the animated caustic shader. Re-collected every
+   * `render()` from the freshly-built substrate + hardscape groups; the RAF
+   * tick advances each one's `uCausticTime`. The materials are owned by their
+   * meshes (disposed by `disposeNode`), so this is just a non-owning view —
+   * cleared on rebuild + dispose.
+   */
+  private causticMaterials: MeshStandardMaterial[] = [];
+  /**
    * Stage 11 F11.7 Wave 3 — cached references to the lighting rig's
    * Ambient + Directional lights. Set in `ensureLightingForTank` after
    * every (re)build of the lighting group; nulled in `dispose()`. The
@@ -323,6 +379,28 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
   private static readonly DEFAULT_BACKGROUND_COLOR = 0x1a2030;
 
   /**
+   * Fidelity pass — image-based-lighting environment. Built once on
+   * `attach()` (only when a real `WebGLRenderer` is present — the PMREM
+   * pre-filter needs a GL context), assigned to `threeScene.environment`,
+   * and disposed on teardown. `envSourceTexture` is the raw equirect
+   * gradient; `envTexture` is its PMREM-filtered product (what materials
+   * actually sample). Both need explicit disposal — Three.js leaks GPU
+   * textures otherwise.
+   */
+  private envSourceTexture: DataTexture | null = null;
+  private envTexture: Texture | null = null;
+  /**
+   * Fidelity pass (bloom) — the postprocessing pipeline. Built once on
+   * `attach()` (only with a real `WebGLRenderer`); when present, the render
+   * loop paints through `composer.render()` instead of `renderer.render()`.
+   * RenderPass → a subtle UnrealBloomPass (water specular / caustics / bubble
+   * highlights glow) → OutputPass (tone mapping + sRGB). Disposed on teardown;
+   * the headless stub leaves all three null and falls back to direct render.
+   */
+  private composer: EffectComposer | null = null;
+  private bloomPass: UnrealBloomPass | null = null;
+
+  /**
    * @param rendererFactory injectable WebGLRenderer factory. The default
    * constructs a real `THREE.WebGLRenderer`; tests inject a stub so they
    * don't need a real WebGL context.
@@ -354,6 +432,9 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       this.surface = surface;
       this.renderer.setPixelRatio(surface.devicePixelRatio);
       this.renderer.setSize(surface.width, surface.height, false);
+      // Keep the bloom composer's render targets sized to the canvas.
+      this.composer?.setSize(surface.width, surface.height);
+      this.bloomPass?.setSize(surface.width, surface.height);
       if (this.camera !== null) {
         const aspect = surface.width === 0 || surface.height === 0
           ? 1
@@ -395,6 +476,12 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
 
     this.threeScene = new ThreeScene();
 
+    // Fidelity pass — build + attach the IBL environment. Guarded on a real
+    // `WebGLRenderer` because `PMREMGenerator` needs a GL context; the test
+    // stub skips this branch (materials simply render without reflections in
+    // the headless unit env, which never paints pixels anyway).
+    this.setupEnvironment(renderer, this.threeScene);
+
     // Camera framed to a placeholder tank; the first `render` call
     // re-frames against the real tank. We DO build a camera here (rather
     // than waiting for the first render) so the animation tick can call
@@ -435,6 +522,10 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     // position, but the rig itself is otherwise stable across frames.
     // First `render` call re-builds it once we have the real tank.
     this.lighting = null;
+
+    // Fidelity pass (bloom) — build the postprocessing pipeline now that the
+    // scene + camera exist. No-op under the headless stub renderer.
+    this.setupComposer(renderer, this.threeScene, this.camera, surface);
 
     // Kick off the animation loop. It only runs OrbitControls' damping
     // tick and `renderer.render`; it does NOT rebuild the scene graph.
@@ -497,18 +588,23 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       // material's `uTime` uniform. `updatePlantSwayTime` is a no-op when
       // the group has no sway materials attached (e.g. before the first
       // `render()` or for an empty scene), so the unconditional call is
-      // safe. **Simplification vs. plan:** F11.7 also called for sway
-      // frequency to couple to the F11.5 flow-field magnitude at each
-      // plant's base. The renderer doesn't have direct access to the
-      // livestock-ecs world's flow field; wiring that through is bigger
-      // than F11.7 calls for. v1 uses a constant 1.2 Hz sway frequency.
-      // Flow-coupling deferred — tracked as a Stage 11 follow-up.
+      // safe. Flow-coupling (fidelity pass) is baked into each material's
+      // amplitude at BUILD time from `options.flowField` (see `plant-mesh.
+      // ts`), so the per-frame tick only advances `uTime` — the flow factor
+      // is static per render, which is correct (the field is re-baked when
+      // equipment changes, which re-fires a render).
       if (this.currentPlantGroup !== null) {
         updatePlantSwayTime(this.currentPlantGroup, now / 1000);
       }
 
+      // Fidelity pass (caustics) — advance the substrate + hardscape caustic
+      // shader's time uniform off the same wall clock as the water + sway.
+      if (this.causticMaterials.length > 0) {
+        updateCausticTime(this.causticMaterials, now / 1000);
+      }
+
       ctl?.update();
-      r.render(s, c);
+      this.paint(r, s, c);
       this.rafHandle = raf.requestAnimationFrame(tick);
     };
     this.rafHandle = raf.requestAnimationFrame(tick);
@@ -572,17 +668,36 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       // poke `uTime` on torn-down uniforms before the new group is built
       // a few lines down. Reassigned below.
       this.currentPlantGroup = null;
+      // Fidelity pass (caustics) — same reasoning: the substrate + hardscape
+      // materials were just disposed; drop the non-owning view. Reassigned
+      // when the new substrate + hardscape groups are built below.
+      this.causticMaterials = [];
     }
     const content = new Object3D();
     content.name = 'aquascape:content';
     content.add(buildTankMesh(scene.tank));
-    content.add(buildSubstrateMeshes(scene, catalog));
-    content.add(buildHardscapeMeshes(scene, catalog));
+    const substrateGroup = buildSubstrateMeshes(scene, catalog);
+    const hardscapeGroup = buildHardscapeMeshes(scene, catalog);
+    content.add(substrateGroup);
+    content.add(hardscapeGroup);
+    // Fidelity pass (caustics) — collect the patched substrate + hardscape
+    // materials so the RAF tick can advance their animation. Scale intensity
+    // by the day-night directional level so caustics fade out at night.
+    this.causticMaterials = [
+      ...((substrateGroup.userData[CAUSTIC_MATERIALS_KEY] as MeshStandardMaterial[] | undefined) ??
+        []),
+      ...((hardscapeGroup.userData[CAUSTIC_MATERIALS_KEY] as MeshStandardMaterial[] | undefined) ??
+        []),
+    ];
+    setCausticIntensity(
+      this.causticMaterials,
+      options.dayNightLookup?.directionalIntensity ?? 1,
+    );
     // Stage 11 F11.7 — retain a handle on the plant group so the RAF tick
     // can drive its sway materials' `uTime` uniform. The group itself is
     // rebuilt + GPU-disposed every render (no caching), but we always
     // re-point this handle at the latest group so per-frame ticks land.
-    const plantGroup = buildPlantMeshes(scene, catalog, previewAgeWeeks);
+    const plantGroup = buildPlantMeshes(scene, catalog, previewAgeWeeks, options.flowField);
     this.currentPlantGroup = plantGroup;
     content.add(plantGroup);
     // Stage 11 F11.7 Wave 3 — write the day-night `emissiveBoost` into the
@@ -657,7 +772,7 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     //    even when no animation tick is running (Node tests, headless
     //    smoke). The animation tick will keep painting after this.
     const c = this.camera;
-    if (c !== null) r.render(tScene, c);
+    if (c !== null) this.paint(r, tScene, c);
   }
 
   /**
@@ -832,6 +947,83 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     }
     this.waterMesh = buildWaterMesh(scene);
     this.waterMeshTag = tag;
+  }
+
+  /**
+   * Fidelity pass — build the PMREM-filtered IBL environment and attach it
+   * to the scene. No-op unless `renderer` is a real `WebGLRenderer`
+   * (`PMREMGenerator` needs a GL context; the headless unit-test stub skips
+   * this). Idempotent: if an environment already exists it's left in place.
+   *
+   * The PMREM pre-filter is deterministic given the fixed gradient source,
+   * so this does NOT threaten the renderer's idempotency contract.
+   */
+  private setupEnvironment(renderer: RendererLike, tScene: ThreeScene): void {
+    if (!(renderer instanceof WebGLRenderer)) return;
+    if (this.envTexture !== null) {
+      tScene.environment = this.envTexture;
+      return;
+    }
+    const source = buildEnvEquirectTexture();
+    const pmrem = new PMREMGenerator(renderer);
+    pmrem.compileEquirectangularShader();
+    const target = pmrem.fromEquirectangular(source);
+    pmrem.dispose();
+    this.envSourceTexture = source;
+    this.envTexture = target.texture;
+    tScene.environment = this.envTexture;
+    // Scale the IBL contribution globally so it fills shading + supplies
+    // reflections without flattening the directional key's shadows.
+    (tScene as ThreeScene & { environmentIntensity: number }).environmentIntensity =
+      ENV_INTENSITY;
+  }
+
+  /**
+   * Fidelity pass (bloom) — build the EffectComposer pipeline. No-op unless
+   * `renderer` is a real `WebGLRenderer`. The UnrealBloomPass is tuned low
+   * (high threshold, modest strength) so only genuinely bright pixels — the
+   * water-surface specular, caustic filaments, bubble + day-night highlights —
+   * bleed, rather than hazing the whole image. OutputPass applies the tone
+   * mapping + sRGB conversion as the final step.
+   */
+  private setupComposer(
+    renderer: RendererLike,
+    tScene: ThreeScene,
+    camera: PerspectiveCamera,
+    surface: RenderSurface,
+  ): void {
+    if (!(renderer instanceof WebGLRenderer)) return;
+    if (this.composer !== null) return;
+    const w = Math.max(1, surface.width);
+    const h = Math.max(1, surface.height);
+    const composer = new EffectComposer(renderer);
+    composer.setPixelRatio(surface.devicePixelRatio);
+    composer.setSize(w, h);
+    composer.addPass(new RenderPass(tScene, camera));
+    const bloom = new UnrealBloomPass(
+      new Vector2(w, h),
+      BLOOM_STRENGTH,
+      BLOOM_RADIUS,
+      BLOOM_THRESHOLD,
+    );
+    composer.addPass(bloom);
+    composer.addPass(new OutputPass());
+    this.composer = composer;
+    this.bloomPass = bloom;
+  }
+
+  /**
+   * Paint one frame. Routes through the bloom composer when present, else a
+   * direct `renderer.render`. Centralised so the RAF tick + the synchronous
+   * paint in `render()` share one path (and the headless stub still counts a
+   * `renderer.render` call for its assertions).
+   */
+  private paint(r: RendererLike, tScene: ThreeScene, camera: PerspectiveCamera): void {
+    if (this.composer !== null) {
+      this.composer.render();
+    } else {
+      r.render(tScene, camera);
+    }
   }
 
   // ─── hitTest ──────────────────────────────────────────────────────────
@@ -1029,6 +1221,9 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     // geometries + materials were disposed by `disposeNode` above; this is
     // just our reference.
     this.currentPlantGroup = null;
+    // Fidelity pass (caustics) — drop the non-owning material view (the
+    // materials themselves were disposed by `disposeNode` above).
+    this.causticMaterials = [];
 
     // Stage 11 F11.1 — release the GPU resources behind the livestock
     // bundle. The world itself is owned by the host (it survives a
@@ -1060,6 +1255,29 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     this.currentAmbientLight = null;
     this.currentDirectionalLight = null;
     this.baseDirectionalIntensity = 1;
+
+    // Fidelity pass — release the IBL environment textures (PMREM product +
+    // raw equirect source). Detach from the scene first so nothing samples
+    // a disposed texture during teardown.
+    if (this.threeScene !== null) this.threeScene.environment = null;
+    if (this.envTexture !== null) {
+      this.envTexture.dispose();
+      this.envTexture = null;
+    }
+    if (this.envSourceTexture !== null) {
+      this.envSourceTexture.dispose();
+      this.envSourceTexture = null;
+    }
+
+    // Fidelity pass (bloom) — release the composer's render targets + passes.
+    if (this.composer !== null) {
+      this.composer.dispose();
+      this.composer = null;
+    }
+    if (this.bloomPass !== null) {
+      this.bloomPass.dispose();
+      this.bloomPass = null;
+    }
 
     if (this.renderer !== null) {
       this.renderer.dispose();

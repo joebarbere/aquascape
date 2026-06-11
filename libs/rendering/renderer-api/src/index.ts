@@ -25,6 +25,7 @@
 // space and never write back to the Scene.
 
 import type { Catalog } from '@aquascape/domain/catalog';
+import type { FlowField } from '@aquascape/domain/fluid-sim';
 import type { Vec2 } from '@aquascape/domain/geometry';
 import type { LivestockWorld } from '@aquascape/domain/livestock-ecs';
 import type { Scene, ObjectId, LayerId } from '@aquascape/domain/scene-model';
@@ -273,6 +274,20 @@ export interface RenderOptions {
     readonly backgroundTint: string;
     readonly emissiveBoost: number;
   };
+  /**
+   * Fidelity pass — the baked tank flow field (filter / pump current),
+   * already computed by the host's `LivestockSimulationService` for the
+   * livestock simulation. When present, the 3D renderer couples plant SWAY
+   * to the local current: plants in a filter outflow wave harder + faster;
+   * plants in a dead zone barely move. This closes the F11.7 "flow-coupled
+   * sway frequency" deferral. The 2D renderer ignores it.
+   *
+   * The renderer samples flow magnitude at each plant's base ON THE CPU at
+   * build time (via `sampleFlowField`) and bakes it into the sway shader's
+   * per-instance / uniform amplitude + frequency — no 3D-texture sampler in
+   * the shader. Omitted ⇒ the pre-fidelity constant-frequency sway.
+   */
+  readonly flowField?: FlowField;
 }
 
 /**

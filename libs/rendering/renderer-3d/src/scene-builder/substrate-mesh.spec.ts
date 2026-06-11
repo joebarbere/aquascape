@@ -101,4 +101,19 @@ describe('substrate-mesh builder', () => {
     const group = buildSubstrateMeshes(scene, undefined);
     expect(group.children.length).toBe(0);
   });
+
+  it('receives shadows but does not cast them (fidelity pass)', () => {
+    const group = buildSubstrateMeshes(makeScene([region()]), undefined);
+    const mesh = group.children[0] as Mesh;
+    expect(mesh.receiveShadow).toBe(true);
+    expect(mesh.castShadow).toBe(false);
+  });
+
+  it('patches region materials with caustics and exposes them on group userData', () => {
+    const group = buildSubstrateMeshes(makeScene([region()]), undefined);
+    const mats = group.userData['aquascape:causticMaterials'] as MeshStandardMaterial[];
+    expect(Array.isArray(mats)).toBe(true);
+    expect(mats.length).toBe(1);
+    expect(mats[0]!.userData['causticUniforms']).toBeDefined();
+  });
 });

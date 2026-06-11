@@ -38,7 +38,9 @@ import type {
 } from '@aquascape/domain/scene-model';
 import { ExtrudeGeometry, Group, Mesh, MeshStandardMaterial, Shape } from 'three';
 
+import { applyCaustics, CAUSTIC_MATERIALS_KEY } from './caustics';
 import { applyHardscapeNoise, seedFromHardscape } from './hardscape-noise';
+import { applyHardscapeTexture } from './hardscape-texture';
 import { computeZonedZ } from './layer-zone-z';
 import { substrateHeightAt } from './substrate-height';
 import { clampToScene } from './tank-clamp';
@@ -57,13 +59,23 @@ const ROUGHNESS = 0.85;
 export function buildHardscapeMeshes(scene: Scene, catalog: Catalog | undefined): Group {
   const group = new Group();
   group.name = 'aquascape:hardscape';
+  // Caustics dance over rocks + wood too — collect the patched materials.
+  const causticMaterials: MeshStandardMaterial[] = [];
+  group.userData[CAUSTIC_MATERIALS_KEY] = causticMaterials;
   for (const layer of scene.layers) {
     if (!layer.visible) continue;
     for (const obj of layer.objects) {
       if (obj.kind !== 'hardscape') continue;
       const entry = resolveHardscapeEntry(obj.ref, catalog);
       const mesh = buildHardscapeMesh(obj, entry, scene, layer);
-      if (mesh !== null) group.add(mesh);
+      if (mesh !== null) {
+        // Caustics first, then the procedural stone texture chains on top so
+        // rocks read as textured stone rather than smooth moulded plastic.
+        applyCaustics(mesh.material as MeshStandardMaterial, scene.tank.height);
+        applyHardscapeTexture(mesh.material as MeshStandardMaterial);
+        causticMaterials.push(mesh.material as MeshStandardMaterial);
+        group.add(mesh);
+      }
     }
   }
   return group;
@@ -130,6 +142,10 @@ export function buildHardscapeMesh(
   const mat = new MeshStandardMaterial({ color, roughness: ROUGHNESS });
   const mesh = new Mesh(geo, mat);
   mesh.name = `aquascape:hardscape/${obj.id}`;
+  // Rocks + wood are the primary shadow casters in the scene; they also
+  // receive (a tall rock shadowing a shorter one reads as real depth).
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
 
   if (scene !== undefined) {
     applyTransform(mesh, obj, scene, layer, {

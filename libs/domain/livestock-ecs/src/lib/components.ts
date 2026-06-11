@@ -207,6 +207,32 @@ export const Hardscape = defineComponent({
 });
 
 /**
+ * Tag for predator fish (fidelity pass). A predator is an ordinary fish
+ * entity — it lives in the same `Position` / `Velocity` / `Archetype` slabs
+ * and is drawn like any other fish — but FearSystem treats it as a roaming
+ * RISK SOURCE: prey within `PREDATOR_FEAR_RADIUS_MM` accumulate risk
+ * proportional to proximity, which drives the existing fear → refuge →
+ * startle-wave pipeline. Predators don't fear other predators (or
+ * themselves). Set via `spawnFish({ predator: true })`; the
+ * `LivestockSimulationService` flags it from the catalog row's `predator`.
+ *
+ * Because a predator is just a tagged fish (no new snapshot slab), the
+ * `WorldSnapshot` shape is unchanged and the byte-identical replay holds.
+ */
+export const Predator = defineComponent();
+
+/**
+ * Per-fish body colour (fidelity pass — enhancement). Linear-ish RGB in
+ * `[0, 1]`, set at spawn from the catalog row's display colour
+ * (`spawnFish({ colorRgb })`). Surfaced in `WorldSnapshot.color` so the
+ * renderer can drive a per-instance colour attribute — previously every fish
+ * of an archetype shared ONE body colour, so a neon tetra and a cardinal
+ * tetra (both SLIM_TETRA) were indistinguishable. Static per fish → the
+ * byte-identical replay holds.
+ */
+export const BodyColor = defineComponent({ r: Types.f32, g: Types.f32, b: Types.f32 });
+
+/**
  * Hardscape category enum. Mirrors the catalog's `HardscapeEntry.category`
  * (wood/rock/plant/other); the loader maps catalog rows to these integers
  * before calling `world.registerHardscape`.
