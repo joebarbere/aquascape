@@ -32,6 +32,7 @@ import {
   LIVESTOCK_BUBBLE_FRAGMENT_SHADER,
   LIVESTOCK_BUBBLE_VERTEX_SHADER,
   LIVESTOCK_FOOD_VERTEX_SHADER,
+  LIVESTOCK_FRAGMENT_SHADER,
   LIVESTOCK_VERTEX_SHADER,
 } from './shaders';
 
@@ -584,6 +585,32 @@ describe('buildLivestockMeshes', () => {
     });
   });
 
+  describe('body shader iridescent sheen (fidelity pass)', () => {
+    it('vertex shader exports the view-space basis + spine UV for the sheen', () => {
+      expect(LIVESTOCK_VERTEX_SHADER).toContain('vViewNormal');
+      expect(LIVESTOCK_VERTEX_SHADER).toContain('vViewDir');
+      expect(LIVESTOCK_VERTEX_SHADER).toContain('vSpineUv');
+      // gl_Position is now written from the reused mvPosition.
+      expect(LIVESTOCK_VERTEX_SHADER).toMatch(
+        /gl_Position\s*=\s*projectionMatrix\s*\*\s*mvPosition/,
+      );
+    });
+
+    it('fragment shader adds a fresnel sheen on top of the base albedo', () => {
+      // The fresnel term + additive sheen are load-bearing for the wet,
+      // scale-catching read — a rewrite that drops them trips this.
+      expect(LIVESTOCK_FRAGMENT_SHADER).toContain('fres');
+      expect(LIVESTOCK_FRAGMENT_SHADER).toMatch(/rgb\s*\+=\s*fres/);
+      // Base albedo still drives the body colour (sheen is additive, not a
+      // replacement) so fish stay identifiable.
+      expect(LIVESTOCK_FRAGMENT_SHADER).toMatch(/rgb\s*=\s*uBodyColor\s*\*\s*vLitColor/);
+    });
+
+    it('the carangiform spine block is preserved (sheen is additive only)', () => {
+      expect(LIVESTOCK_VERTEX_SHADER).toContain('CARANGIFORM SPINE DEFORMATION');
+    });
+  });
+
   describe('food sprite billboard shader', () => {
     it('contains the view-space billboard formula `mvPosition.xy += position.xy`', () => {
       // Load-bearing — without this line the quad stays in world-space
@@ -976,9 +1003,15 @@ describe('buildLivestockMeshes', () => {
       expect(LIVESTOCK_VERTEX_SHADER).toMatch(/rotateByQuat\(\s*normal\s*,\s*instanceQuat\s*\)/);
     });
 
-    it('multiplies by projectionMatrix * modelViewMatrix for the final clip-space write', () => {
+    it('writes clip space from projectionMatrix * mvPosition (view-space position)', () => {
+      // The fidelity-pass sheen reuses `mvPosition = modelViewMatrix *
+      // vec4(worldPos, 1.0)` for the view-space basis, so the final write
+      // multiplies the cached `mvPosition` rather than re-deriving it.
       expect(LIVESTOCK_VERTEX_SHADER).toMatch(
-        /gl_Position\s*=\s*projectionMatrix\s*\*\s*modelViewMatrix\s*\*\s*vec4\(\s*worldPos/,
+        /vec4\s+mvPosition\s*=\s*modelViewMatrix\s*\*\s*vec4\(\s*worldPos/,
+      );
+      expect(LIVESTOCK_VERTEX_SHADER).toMatch(
+        /gl_Position\s*=\s*projectionMatrix\s*\*\s*mvPosition/,
       );
     });
 
