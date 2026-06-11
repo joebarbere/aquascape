@@ -44,6 +44,18 @@
       "@aquascape/ui": ["libs/ui/src/index.ts"],
       "three/examples/jsm/controls/OrbitControls": [
         "node_modules/three/examples/jsm/controls/OrbitControls.js"
+      ],
+      "three/examples/jsm/postprocessing/EffectComposer": [
+        "node_modules/three/examples/jsm/postprocessing/EffectComposer.js"
+      ],
+      "three/examples/jsm/postprocessing/RenderPass": [
+        "node_modules/three/examples/jsm/postprocessing/RenderPass.js"
+      ],
+      "three/examples/jsm/postprocessing/UnrealBloomPass": [
+        "node_modules/three/examples/jsm/postprocessing/UnrealBloomPass.js"
+      ],
+      "three/examples/jsm/postprocessing/OutputPass": [
+        "node_modules/three/examples/jsm/postprocessing/OutputPass.js"
       ]
     }
   },

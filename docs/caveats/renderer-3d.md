@@ -38,7 +38,17 @@ Cached on the renderer (`this.waterMesh: WaterMeshHandle | null`, tagged by `WxH
 
 **Refraction: still deferred.** A proper screen-space refraction of the *water surface* needs an extra render-target pre-pass (a single-pass shader can't sample the framebuffer it's writing to). The now-transmissive **glass** (PR1) already supplies the dominant refraction read of the tank contents, so water-surface refraction is low incremental value for the render-target cost; revisit if demand surfaces.
 
-**Post-processing bloom: deferred (infrastructure + validation).** `EffectComposer` + `UnrealBloomPass` would make the water specular + bubble highlights glow, but it needs the `three/examples/jsm/postprocessing/*` ESM addons wired through tsconfig path-maps + jest stubs (the OrbitControls dance × 4 modules) AND careful tone-mapping integration (OutputPass vs the renderer's ACES) that wants visual validation in a real browser. Tracked as a follow-up; the render loop's single `renderer.render(scene, camera)` is the seam it slots into (guard a `composer.render()` behind `instanceof WebGLRenderer`, fall back to the direct call for the headless stub).
+**Post-processing bloom: shipped (fidelity pass).** See "Post-processing bloom" below — the `EffectComposer` pipeline (RenderPass → UnrealBloomPass → OutputPass) is wired and headless-validated. Tone mapping is applied **once**, by OutputPass: `renderer.toneMapping = ACESFilmic` + OutputPass = correct single application (verified visually — the scene is neither washed out nor double-darkened).
+
+## Post-processing bloom (fidelity pass)
+
+The render loop paints through an `EffectComposer` when a real `WebGLRenderer` is present: **RenderPass → UnrealBloomPass → OutputPass**.
+
+- **Addon wiring (the OrbitControls dance × 4):** `three/examples/jsm/postprocessing/{EffectComposer,RenderPass,UnrealBloomPass,OutputPass}` are ESM-only addons. They're resolved for tsc via `apps/web/tsconfig.app.json` path-maps + an ambient shim (`apps/web/src/three-orbitcontrols.d.ts`), and stubbed for Jest via `src/__mocks__/postprocessing-stub.ts` mapped in BOTH `libs/rendering/renderer-3d/jest.config.ts` and `apps/web/jest.config.ts` (the app constructs a real `Three3DRenderer` through `SCENE_RENDERER_3D`).
+- **Guarded + fallback:** `setupComposer` no-ops unless `renderer instanceof WebGLRenderer`, so the headless unit stub never builds it. `paint()` routes through `composer.render()` when present, else `renderer.render(scene, camera)` — which is what keeps the stub's render-counter assertions valid. The composer's `RenderPass` holds the persistent `camera` reference (reframing mutates that object in place, never replaces it), so it stays valid across tank changes.
+- **Tuning:** `BLOOM_STRENGTH = 0.35`, `BLOOM_RADIUS = 0.4`, `BLOOM_THRESHOLD = 0.85` — high threshold so only the brightest pixels (water specular, caustic filaments, bubble + night-emissive highlights) bleed, not the whole image.
+- **Tone mapping lands once:** `renderer.toneMapping = ACESFilmic` + `OutputPass` is the correct single-application combo (validated headlessly — see `tools/demo/record-demo.mjs` + `docs/caveats/e2e.md`). Don't ALSO add a manual tonemap pass.
+- **Resize:** `composer.setSize` + `bloomPass.setSize` are driven from `attach()`'s idempotent-resize path alongside `renderer.setSize`. Disposed in `dispose()`.
 
 ## Animated caustics (fidelity pass)
 

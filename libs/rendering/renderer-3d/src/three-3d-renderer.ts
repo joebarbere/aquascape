@@ -93,6 +93,7 @@ import {
   Spherical,
   SRGBColorSpace,
   type Texture,
+  Vector2,
   Vector3,
   WebGLRenderer,
   type BufferGeometry,
@@ -108,6 +109,14 @@ import {
 // Jest redirects this import to a CJS stub via `moduleNameMapper`; see
 // `src/__mocks__/orbit-controls-stub.ts`.
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+// Fidelity pass (bloom) — postprocessing addons. Same ESM-addon resolution
+// story as OrbitControls (tsconfig path-map + ambient shim in the app; a Jest
+// stub in this lib + the app). Only constructed behind an `instanceof
+// WebGLRenderer` guard, so the headless test stub never touches them.
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 
 /**
  * Subset of `WebGLRenderer` the orchestrator actually calls. Lets test
@@ -197,6 +206,16 @@ import {
 import { buildSubstrateMeshes } from './scene-builder/substrate-mesh';
 import { buildTankMesh } from './scene-builder/tank-mesh';
 import { buildWaterMesh, type WaterMeshHandle } from './scene-builder/water-mesh';
+
+/**
+ * Fidelity pass (bloom) — UnrealBloomPass tuning. High threshold so only the
+ * brightest pixels (water specular, caustic filaments, bubble + night
+ * highlights) bloom; modest strength + radius so it reads as a gentle wet
+ * sheen, not a haze.
+ */
+const BLOOM_STRENGTH = 0.35;
+const BLOOM_RADIUS = 0.4;
+const BLOOM_THRESHOLD = 0.85;
 
 /** Damping factor for orbit interactions. 0.08 reads smooth on mid-tier HW. */
 const ORBIT_DAMPING = 0.08;
@@ -370,6 +389,16 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    */
   private envSourceTexture: DataTexture | null = null;
   private envTexture: Texture | null = null;
+  /**
+   * Fidelity pass (bloom) — the postprocessing pipeline. Built once on
+   * `attach()` (only with a real `WebGLRenderer`); when present, the render
+   * loop paints through `composer.render()` instead of `renderer.render()`.
+   * RenderPass → a subtle UnrealBloomPass (water specular / caustics / bubble
+   * highlights glow) → OutputPass (tone mapping + sRGB). Disposed on teardown;
+   * the headless stub leaves all three null and falls back to direct render.
+   */
+  private composer: EffectComposer | null = null;
+  private bloomPass: UnrealBloomPass | null = null;
 
   /**
    * @param rendererFactory injectable WebGLRenderer factory. The default
@@ -403,6 +432,9 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       this.surface = surface;
       this.renderer.setPixelRatio(surface.devicePixelRatio);
       this.renderer.setSize(surface.width, surface.height, false);
+      // Keep the bloom composer's render targets sized to the canvas.
+      this.composer?.setSize(surface.width, surface.height);
+      this.bloomPass?.setSize(surface.width, surface.height);
       if (this.camera !== null) {
         const aspect = surface.width === 0 || surface.height === 0
           ? 1
@@ -491,6 +523,10 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     // First `render` call re-builds it once we have the real tank.
     this.lighting = null;
 
+    // Fidelity pass (bloom) — build the postprocessing pipeline now that the
+    // scene + camera exist. No-op under the headless stub renderer.
+    this.setupComposer(renderer, this.threeScene, this.camera, surface);
+
     // Kick off the animation loop. It only runs OrbitControls' damping
     // tick and `renderer.render`; it does NOT rebuild the scene graph.
     // The scene graph is rebuilt only when `render()` is called.
@@ -568,7 +604,7 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       }
 
       ctl?.update();
-      r.render(s, c);
+      this.paint(r, s, c);
       this.rafHandle = raf.requestAnimationFrame(tick);
     };
     this.rafHandle = raf.requestAnimationFrame(tick);
@@ -736,7 +772,7 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     //    even when no animation tick is running (Node tests, headless
     //    smoke). The animation tick will keep painting after this.
     const c = this.camera;
-    if (c !== null) r.render(tScene, c);
+    if (c !== null) this.paint(r, tScene, c);
   }
 
   /**
@@ -940,6 +976,54 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     // reflections without flattening the directional key's shadows.
     (tScene as ThreeScene & { environmentIntensity: number }).environmentIntensity =
       ENV_INTENSITY;
+  }
+
+  /**
+   * Fidelity pass (bloom) — build the EffectComposer pipeline. No-op unless
+   * `renderer` is a real `WebGLRenderer`. The UnrealBloomPass is tuned low
+   * (high threshold, modest strength) so only genuinely bright pixels — the
+   * water-surface specular, caustic filaments, bubble + day-night highlights —
+   * bleed, rather than hazing the whole image. OutputPass applies the tone
+   * mapping + sRGB conversion as the final step.
+   */
+  private setupComposer(
+    renderer: RendererLike,
+    tScene: ThreeScene,
+    camera: PerspectiveCamera,
+    surface: RenderSurface,
+  ): void {
+    if (!(renderer instanceof WebGLRenderer)) return;
+    if (this.composer !== null) return;
+    const w = Math.max(1, surface.width);
+    const h = Math.max(1, surface.height);
+    const composer = new EffectComposer(renderer);
+    composer.setPixelRatio(surface.devicePixelRatio);
+    composer.setSize(w, h);
+    composer.addPass(new RenderPass(tScene, camera));
+    const bloom = new UnrealBloomPass(
+      new Vector2(w, h),
+      BLOOM_STRENGTH,
+      BLOOM_RADIUS,
+      BLOOM_THRESHOLD,
+    );
+    composer.addPass(bloom);
+    composer.addPass(new OutputPass());
+    this.composer = composer;
+    this.bloomPass = bloom;
+  }
+
+  /**
+   * Paint one frame. Routes through the bloom composer when present, else a
+   * direct `renderer.render`. Centralised so the RAF tick + the synchronous
+   * paint in `render()` share one path (and the headless stub still counts a
+   * `renderer.render` call for its assertions).
+   */
+  private paint(r: RendererLike, tScene: ThreeScene, camera: PerspectiveCamera): void {
+    if (this.composer !== null) {
+      this.composer.render();
+    } else {
+      r.render(tScene, camera);
+    }
   }
 
   // ─── hitTest ──────────────────────────────────────────────────────────
@@ -1183,6 +1267,16 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     if (this.envSourceTexture !== null) {
       this.envSourceTexture.dispose();
       this.envSourceTexture = null;
+    }
+
+    // Fidelity pass (bloom) — release the composer's render targets + passes.
+    if (this.composer !== null) {
+      this.composer.dispose();
+      this.composer = null;
+    }
+    if (this.bloomPass !== null) {
+      this.bloomPass.dispose();
+      this.bloomPass = null;
     }
 
     if (this.renderer !== null) {

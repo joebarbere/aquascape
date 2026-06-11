@@ -15,3 +15,19 @@
 declare module 'three/examples/jsm/controls/OrbitControls' {
   export * from 'three/examples/jsm/controls/OrbitControls.js';
 }
+
+// Fidelity pass (bloom) — same shim for the postprocessing addons the
+// renderer-3d lib imports (EffectComposer + RenderPass + UnrealBloomPass +
+// OutputPass). Mapped to their `.js` files in `tsconfig.app.json`.
+declare module 'three/examples/jsm/postprocessing/EffectComposer' {
+  export * from 'three/examples/jsm/postprocessing/EffectComposer.js';
+}
+declare module 'three/examples/jsm/postprocessing/RenderPass' {
+  export * from 'three/examples/jsm/postprocessing/RenderPass.js';
+}
+declare module 'three/examples/jsm/postprocessing/UnrealBloomPass' {
+  export * from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+}
+declare module 'three/examples/jsm/postprocessing/OutputPass' {
+  export * from 'three/examples/jsm/postprocessing/OutputPass.js';
+}
