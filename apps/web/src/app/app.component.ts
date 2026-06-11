@@ -1886,6 +1886,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     // omitting the field on 2D renders keeps the options bag minimal
     // + mirrors the `livestockWorld` pattern above.
     const dayNightLookup = is3d ? this.dayNight.lookup() : null;
+    // Fidelity pass — forward the baked tank flow field in 3D so the renderer
+    // can couple plant sway to the current. Null when no filter/pump
+    // equipment is present (the renderer falls back to constant sway).
+    const flowField = is3d ? this.livestockSim.getFlowField() : null;
     renderer.render(scenePassed, viewport, {
       catalog: coreCatalog,
       selection: this.currentSelection,
@@ -1896,6 +1900,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       ...(backdrop !== null ? { backdropImage: backdrop } : {}),
       ...(livestockWorld !== null ? { livestockWorld } : {}),
       ...(dayNightLookup !== null ? { dayNightLookup } : {}),
+      ...(flowField !== null ? { flowField } : {}),
     });
   }
 

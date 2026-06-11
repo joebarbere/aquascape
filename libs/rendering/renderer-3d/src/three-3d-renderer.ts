@@ -552,12 +552,11 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       // material's `uTime` uniform. `updatePlantSwayTime` is a no-op when
       // the group has no sway materials attached (e.g. before the first
       // `render()` or for an empty scene), so the unconditional call is
-      // safe. **Simplification vs. plan:** F11.7 also called for sway
-      // frequency to couple to the F11.5 flow-field magnitude at each
-      // plant's base. The renderer doesn't have direct access to the
-      // livestock-ecs world's flow field; wiring that through is bigger
-      // than F11.7 calls for. v1 uses a constant 1.2 Hz sway frequency.
-      // Flow-coupling deferred — tracked as a Stage 11 follow-up.
+      // safe. Flow-coupling (fidelity pass) is baked into each material's
+      // amplitude at BUILD time from `options.flowField` (see `plant-mesh.
+      // ts`), so the per-frame tick only advances `uTime` — the flow factor
+      // is static per render, which is correct (the field is re-baked when
+      // equipment changes, which re-fires a render).
       if (this.currentPlantGroup !== null) {
         updatePlantSwayTime(this.currentPlantGroup, now / 1000);
       }
@@ -662,7 +661,7 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     // can drive its sway materials' `uTime` uniform. The group itself is
     // rebuilt + GPU-disposed every render (no caching), but we always
     // re-point this handle at the latest group so per-frame ticks land.
-    const plantGroup = buildPlantMeshes(scene, catalog, previewAgeWeeks);
+    const plantGroup = buildPlantMeshes(scene, catalog, previewAgeWeeks, options.flowField);
     this.currentPlantGroup = plantGroup;
     content.add(plantGroup);
     // Stage 11 F11.7 Wave 3 — write the day-night `emissiveBoost` into the

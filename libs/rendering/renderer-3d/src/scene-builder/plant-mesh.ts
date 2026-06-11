@@ -38,17 +38,20 @@
  * The host renderer caches the sway materials on `group.userData
  * ['aquascape:plantSwayMaterials']` and advances `uTime` each RAF tick.
  *
- * **Simplification vs. the plan:** the spec calls for frequency to couple
- * to the F11.5 flow-field magnitude at the plant base ("plants near a
- * filter outflow visibly wave; plants in dead zones barely move"). The
- * renderer doesn't currently have a handle on the livestock-ecs world's
- * flow field — wiring that through is bigger than F11.7 calls for. For
- * v1 we use a constant 1.2 Hz frequency. Flow-coupling deferred as a
- * follow-up; see the F11.7 plan entry in `plans/stage-11-animated-
- * livestock.md`.
+ * **Flow-coupled sway (fidelity pass):** the F11.7 deferral is now closed.
+ * When `RenderOptions.flowField` is supplied (the host's
+ * `LivestockSimulationService` bakes it for the livestock sim), each plant's
+ * sway AMPLITUDE is scaled by the local current magnitude at its base —
+ * plants in a filter outflow wave harder, dead-zone plants barely move
+ * (`flowAmpAt` → `[FLOW_AMP_MIN, FLOW_AMP_MAX]`, fed to `uFlowAmp` /
+ * `aFlowAmp`). We couple amplitude rather than the baked frequency: it reads
+ * the same and is a one-multiplier shader change. Opt-in — with no flow
+ * field every factor is 1.0 and the sway is byte-for-byte the pre-fidelity
+ * constant. The oscillation frequency stays a constant 1.2 Hz.
  */
 
 import type { Catalog, PlantEntry } from '@aquascape/domain/catalog';
+import { type FlowField, sampleFlowField } from '@aquascape/domain/fluid-sim';
 import { seededHash01 } from '@aquascape/domain/geometry';
 import { plantScale, scatterInPolygon } from '@aquascape/domain/growth-sim';
 import type { CatalogRef, Layer, PlantObject, Scene } from '@aquascape/domain/scene-model';
@@ -102,6 +105,45 @@ const SWAY_FREQ_HZ = 1.2;
 /** 2π × SWAY_FREQ_HZ, pre-baked into the shader source. */
 const SWAY_FREQ_2PI = 2 * Math.PI * SWAY_FREQ_HZ;
 
+/**
+ * Flow-coupled sway (fidelity pass). When a baked `FlowField` is supplied
+ * (`RenderOptions.flowField`), each plant's sway AMPLITUDE is scaled by the
+ * local current magnitude at its base — closing the F11.7 "plants near a
+ * filter outflow visibly wave; plants in dead zones barely move" deferral.
+ *
+ * We couple amplitude (not the baked frequency) deliberately: it reads the
+ * same ("waves harder in current") and is a one-multiplier shader change that
+ * doesn't disturb the existing per-instance phase / frequency wiring. The
+ * coupling is OPT-IN — with no flow field every factor is exactly 1.0, so the
+ * pre-fidelity sway is byte-for-byte unchanged.
+ *
+ * `FLOW_REF_MMPS` is the current magnitude (mm/s) that saturates the response;
+ * `FLOW_AMP_MIN` is the dead-zone floor (plants in still water barely move),
+ * `FLOW_AMP_MAX` the outflow ceiling.
+ */
+const FLOW_REF_MMPS = 80;
+const FLOW_AMP_MIN = 0.4;
+const FLOW_AMP_MAX = 2.4;
+
+/**
+ * Sample the flow field at a plant base and map its magnitude into the
+ * `[FLOW_AMP_MIN, FLOW_AMP_MAX]` sway-amplitude multiplier. Returns 1.0 when
+ * no field is supplied (opt-in: pre-fidelity behaviour preserved). Pure +
+ * deterministic — `sampleFlowField` is a pure trilinear read.
+ */
+function flowAmpAt(
+  flowField: FlowField | undefined,
+  x: number,
+  y: number,
+  z: number,
+): number {
+  if (flowField === undefined) return 1;
+  const v = sampleFlowField(flowField, { x, y, z });
+  const mag = Math.hypot(v.x, v.y, v.z);
+  const norm = Math.min(1, mag / FLOW_REF_MMPS);
+  return FLOW_AMP_MIN + norm * (FLOW_AMP_MAX - FLOW_AMP_MIN);
+}
+
 /** Seed mix for single-specimen phase. Distinct from scatter seed mix. */
 const SINGLE_SPECIMEN_PHASE_SEED_MIX = 0x27d4eb2d;
 /** Seed mix for scatter-instance phase. */
@@ -144,6 +186,7 @@ export function buildPlantMeshes(
   scene: Scene,
   catalog: Catalog | undefined,
   previewAgeWeeks: number | undefined,
+  flowField?: FlowField,
 ): Group {
   const group = new Group();
   group.name = 'aquascape:plants';
@@ -157,8 +200,8 @@ export function buildPlantMeshes(
       const scale = plantScale(entry.growth, obj.growth, previewAgeWeeks);
       const node =
         obj.scatter !== undefined
-          ? buildScatterPatch(obj, entry, scale, scene, swayMaterials)
-          : buildSingleSpecimen(obj, entry, scale, scene, layer, swayMaterials);
+          ? buildScatterPatch(obj, entry, scale, scene, swayMaterials, flowField)
+          : buildSingleSpecimen(obj, entry, scale, scene, layer, swayMaterials, flowField);
       if (node !== null) group.add(node);
     }
   }
@@ -177,6 +220,7 @@ function buildSingleSpecimen(
   scene: Scene,
   layer: Layer,
   swayMaterials: MeshStandardMaterial[],
+  flowField: FlowField | undefined,
 ): Mesh | null {
   const geo = buildSilhouetteGeometry(entry);
   if (geo === null) return null;
@@ -221,6 +265,7 @@ function buildSingleSpecimen(
     plantBaseY: floor,
     tankHeight: scene.tank.height,
     phase,
+    flowAmp: flowAmpAt(flowField, clamped.x, floor, clamped.z),
   });
   swayMaterials.push(mat);
   const mesh = new Mesh(geo, mat);
@@ -265,6 +310,7 @@ function buildScatterPatch(
   growthScale: number,
   scene: Scene,
   swayMaterials: MeshStandardMaterial[],
+  flowField: FlowField | undefined,
 ): Group | InstancedMesh | null {
   const scatter = obj.scatter;
   if (scatter === undefined) return null;
@@ -307,17 +353,21 @@ function buildScatterPatch(
     // shader reads them from `InstancedBufferAttribute`s.
     const phaseArr = new Float32Array(capped.length);
     const baseYArr = new Float32Array(capped.length);
+    const flowAmpArr = new Float32Array(capped.length);
     for (let i = 0; i < capped.length; i++) {
       phaseArr[i] = seededHash01(phaseSeed, idHash, i) * 2 * Math.PI;
       const worldX = capped[i]!.position.x;
-      baseYArr[i] = substrateHeightAt(scene, worldX);
+      const worldZ = capped[i]!.position.y;
+      const baseY = substrateHeightAt(scene, worldX);
+      baseYArr[i] = baseY;
+      flowAmpArr[i] = flowAmpAt(flowField, worldX, baseY, worldZ);
     }
     const mat = createPlantSwayMaterial(entry.color, {
       silhouetteHeight,
-      // For InstancedMesh the per-instance attributes drive `plantBaseY`
-      // and `phase`. The uniforms still need defaults (the non-instanced
-      // shader branch is compiled out, but `onBeforeCompile` returns one
-      // shader, so the uniforms have to exist).
+      // For InstancedMesh the per-instance attributes drive `plantBaseY`,
+      // `phase`, and `flowAmp`. The uniforms still need defaults (the
+      // non-instanced shader branch is compiled out, but `onBeforeCompile`
+      // returns one shader, so the uniforms have to exist).
       plantBaseY: 0,
       tankHeight: scene.tank.height,
       phase: 0,
@@ -336,6 +386,10 @@ function buildScatterPatch(
     instanced.geometry.setAttribute(
       'aPlantBaseY',
       new InstancedBufferAttribute(baseYArr, 1),
+    );
+    instanced.geometry.setAttribute(
+      'aFlowAmp',
+      new InstancedBufferAttribute(flowAmpArr, 1),
     );
     const tmpMat = new Matrix4();
     const pos = new Vector3();
@@ -372,6 +426,7 @@ function buildScatterPatch(
       plantBaseY: worldY,
       tankHeight: scene.tank.height,
       phase: seededHash01(phaseSeed, idHash, i) * 2 * Math.PI,
+      flowAmp: flowAmpAt(flowField, worldX, worldY, worldZ),
     });
     swayMaterials.push(mat);
     const mesh = new Mesh(geo, mat);
@@ -474,6 +529,14 @@ interface SwayMaterialOptions {
   phase: number;
   /** Default false (single-mesh path). When true, expects per-instance attrs. */
   instanced?: boolean;
+  /**
+   * Flow-coupled sway amplitude multiplier (fidelity pass). 1.0 = the
+   * pre-fidelity constant sway; > 1 waves harder (in a filter outflow),
+   * < 1 barely moves (dead zone). Used only when `instanced` is false; the
+   * instanced path drives it per-instance via the `aFlowAmp` attribute.
+   * Defaults to 1.0 so a material built without a flow field is unchanged.
+   */
+  flowAmp?: number;
 }
 
 /**
@@ -524,6 +587,9 @@ export function createPlantSwayMaterial(
     if (!instanced) {
       shader.uniforms['uPlantBaseY'] = { value: opts.plantBaseY };
       shader.uniforms['uPhaseOffset'] = { value: opts.phase };
+      // Flow-coupled sway amplitude (single-specimen). Defaults to 1.0 so a
+      // material built without a flow field reproduces the pre-fidelity sway.
+      shader.uniforms['uFlowAmp'] = { value: opts.flowAmp ?? 1 };
     }
 
     const declarations = instanced
@@ -533,6 +599,7 @@ export function createPlantSwayMaterial(
         uniform float uTankHeight;
         attribute float aPlantPhase;
         attribute float aPlantBaseY;
+        attribute float aFlowAmp;
       `
       : `
         uniform float uTime;
@@ -540,6 +607,7 @@ export function createPlantSwayMaterial(
         uniform float uTankHeight;
         uniform float uPlantBaseY;
         uniform float uPhaseOffset;
+        uniform float uFlowAmp;
       `;
 
     shader.vertexShader = shader.vertexShader.replace(
@@ -560,6 +628,7 @@ export function createPlantSwayMaterial(
     // and its base sway 0 %.
     const plantBaseExpr = instanced ? 'aPlantBaseY' : 'uPlantBaseY';
     const phaseExpr = instanced ? 'aPlantPhase' : 'uPhaseOffset';
+    const flowAmpExpr = instanced ? 'aFlowAmp' : 'uFlowAmp';
     shader.vertexShader = shader.vertexShader.replace(
       '#include <begin_vertex>',
       `
@@ -567,7 +636,7 @@ export function createPlantSwayMaterial(
       {
         float plantPosFactor = clamp(1.0 - ${plantBaseExpr} / uTankHeight, 0.0, 1.0);
         float vertexHeightFactor = clamp(position.y / uSilhouetteHeight, 0.0, 1.0);
-        float swayAmp = ${SWAY_MAX_MM.toFixed(4)} * plantPosFactor * vertexHeightFactor;
+        float swayAmp = ${SWAY_MAX_MM.toFixed(4)} * plantPosFactor * vertexHeightFactor * ${flowAmpExpr};
         float swayX = swayAmp * sin(uTime * ${SWAY_FREQ_2PI.toFixed(6)} + ${phaseExpr});
         transformed.x += swayX;
       }

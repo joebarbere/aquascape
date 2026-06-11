@@ -85,6 +85,7 @@ import { archetypeForSpecies, type FishArchetypeId } from '@aquascape/domain/fis
 import {
   bakeFlowField,
   bakeHardscapeSdf,
+  type FlowField,
   type FlowSource,
   type HardscapeSphere,
 } from '@aquascape/domain/fluid-sim';
@@ -181,6 +182,13 @@ export class LivestockSimulationService implements OnDestroy {
    *  to short-circuit re-spawn when the document changes but livestock
    *  + seed are unchanged. */
   private lastSpawnKey: string | null = null;
+  /**
+   * Fidelity pass — the most-recently baked tank flow field (or null when no
+   * filter/pump equipment is present). Retained so the 3D renderer can couple
+   * plant sway to the current via `RenderOptions.flowField`. The world already
+   * gets this same field via `registerFlowField`; we just keep a handle for
+   * the renderer side too. */
+  private lastFlowField: FlowField | null = null;
 
   constructor() {
     // Subscribe at construction so the first store emission populates
@@ -235,6 +243,16 @@ export class LivestockSimulationService implements OnDestroy {
   getWorld(): LivestockWorld | null {
     if (this.world === null) return null;
     return this.world;
+  }
+
+  /**
+   * Fidelity pass — the most-recently baked tank flow field, or null when the
+   * scene has no filter/pump equipment. The 3D renderer reads this via
+   * `RenderOptions.flowField` to couple plant sway to the current. Returns
+   * null until the first scene with flow-producing equipment is wired.
+   */
+  getFlowField(): FlowField | null {
+    return this.lastFlowField;
   }
 
   ngOnDestroy(): void {
@@ -433,9 +451,12 @@ export class LivestockSimulationService implements OnDestroy {
       max: { x: tankAabb.maxX, y: tankAabb.maxY, z: tankAabb.maxZ },
     };
     if (flowSources.length > 0) {
-      world.registerFlowField(bakeFlowField({ tankAabb: aabb3, sources: flowSources }));
+      const field = bakeFlowField({ tankAabb: aabb3, sources: flowSources });
+      world.registerFlowField(field);
+      this.lastFlowField = field;
     } else {
       world.registerFlowField(null);
+      this.lastFlowField = null;
     }
     if (sphereInputs.length > 0) {
       world.registerHardscapeSdf(bakeHardscapeSdf({ tankAabb: aabb3, hardscape: sphereInputs }));
