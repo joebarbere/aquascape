@@ -40,6 +40,7 @@ import { ExtrudeGeometry, Group, Mesh, MeshStandardMaterial, Shape } from 'three
 
 import { applyCaustics, CAUSTIC_MATERIALS_KEY } from './caustics';
 import { applyHardscapeNoise, seedFromHardscape } from './hardscape-noise';
+import { applyHardscapeTexture } from './hardscape-texture';
 import { computeZonedZ } from './layer-zone-z';
 import { substrateHeightAt } from './substrate-height';
 import { clampToScene } from './tank-clamp';
@@ -68,7 +69,10 @@ export function buildHardscapeMeshes(scene: Scene, catalog: Catalog | undefined)
       const entry = resolveHardscapeEntry(obj.ref, catalog);
       const mesh = buildHardscapeMesh(obj, entry, scene, layer);
       if (mesh !== null) {
+        // Caustics first, then the procedural stone texture chains on top so
+        // rocks read as textured stone rather than smooth moulded plastic.
         applyCaustics(mesh.material as MeshStandardMaterial, scene.tank.height);
+        applyHardscapeTexture(mesh.material as MeshStandardMaterial);
         causticMaterials.push(mesh.material as MeshStandardMaterial);
         group.add(mesh);
       }

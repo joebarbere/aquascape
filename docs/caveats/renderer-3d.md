@@ -50,6 +50,16 @@ The render loop paints through an `EffectComposer` when a real `WebGLRenderer` i
 - **Tone mapping lands once:** `renderer.toneMapping = ACESFilmic` + `OutputPass` is the correct single-application combo (validated headlessly — see `tools/demo/record-demo.mjs` + `docs/caveats/e2e.md`). Don't ALSO add a manual tonemap pass.
 - **Resize:** `composer.setSize` + `bloomPass.setSize` are driven from `attach()`'s idempotent-resize path alongside `renderer.setSize`. Disposed in `dispose()`.
 
+## Surface detail — substrate grain, cross-plane plants, hardscape texture (fidelity enhancements)
+
+Grounded in headless captures (the render was a "low-poly cardboard diorama" — black-void substrate + flat-card plants + smooth-plastic rock). Three no-addon fixes, all validated visually:
+
+- **Substrate grain** (`scene-builder/substrate-grain.ts`): `onBeforeCompile` patch adding a deterministic 2-octave world-space value-noise grain + an up-facing tonal lift, additive on the final fragment colour. Stops dark aquasoil crushing to a flat black void — it reads as granular soil. Applied AFTER caustics (chains the prior `onBeforeCompile`).
+- **Cross-plane plants** (`plant-mesh.ts` `buildSilhouetteGeometry`): the silhouette slab is merged with a copy rotated 90° about Y (a `+`-section) so plants have volume from any angle instead of reading as a 2D card (worst on tall stems). `mergeGeometries` is a tiny core-three manual merge (no `BufferGeometryUtils` addon). Same Y range, so the sway shader's height factor is unchanged; works for both the single-mesh + `InstancedMesh` (scatter) paths.
+- **Hardscape texture** (`scene-builder/hardscape-texture.ts`): `onBeforeCompile` patch adding a multi-octave 3D value-noise brightness variation so rocks read as textured stone, not moulded plastic. Chains caustics like the substrate grain.
+
+All three are **additive on the final colour** (authored catalog colours preserved), pure + deterministic (world position in, no texture/RNG → idempotency holds), and unit-tested via the shader-stub `onBeforeCompile` pattern (`surface-detail.spec.ts` + the cross-plane bounding-box test in `plant-mesh.spec.ts`). **Don't stack a fourth `onBeforeCompile` without chaining `prev`** — caustics → grain/texture already chain; a non-chaining patch silently drops the earlier ones.
+
 ## Animated caustics (fidelity pass)
 
 `scene-builder/caustics.ts` patches the substrate + hardscape `MeshStandardMaterial`s (via `onBeforeCompile`) to add a dancing underwater caustic highlight — the strongest "this is underwater" cue the render has.

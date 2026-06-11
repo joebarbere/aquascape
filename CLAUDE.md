@@ -123,6 +123,20 @@ CI workflows in `.github/workflows/`:
 
 The `document-round-trip` job is REQUIRED on main — a format/loader regression fails the PR.
 
+## Visual validation with Playwright (headless — works on Claude Code web/mobile)
+
+The 3D renderer **can be visually validated headlessly** — drive the running dev server with Playwright, screenshot the canvas, and `Read` the PNG to actually SEE the output. Use this to check any renderer change before committing. The full demo recorder is `tools/demo/record-demo.mjs`; for ad-hoc validation write a small script.
+
+**The load-bearing setup (this remote environment):**
+- A chromium + ffmpeg are pre-provisioned at `/opt/pw-browsers/` (the Playwright CDN is blocked, so `playwright install` fails). Point Playwright at it: `executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'` (or the `PLAYWRIGHT_CHROMIUM` env the recorder reads). ffmpeg: `/opt/pw-browsers/ffmpeg-1011/ffmpeg-linux`.
+- **WebGL needs SwiftShader flags** or the canvas is blank: `args: ['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']`.
+- Import from `@playwright/test` (not `playwright` — not hoisted under pnpm). Run the script from the repo root so node resolves it.
+- Start the server first: `pnpm exec nx serve web` (port 4200). The debug hook `window.__aquascape_debug__` (getViewMode / getEntityCount / getScene) gates "Angular is ready"; switch to 3D via `Control+Shift+3` or the "Switch to 3D view" button; the 3D canvas is `page.locator('canvas').nth(1)`. Orbit by dragging on it.
+- **SwiftShader saturates the main thread** → every CDP round-trip is slow. Keep call COUNT low, resolve an element to a HANDLE once (don't re-query per frame), and lean on `sleep` for animation hold time.
+- The bundled ffmpeg is MINIMAL: VP8 encoder only (no VP9), filters `pad`/`crop`/`scale` only (no `setpts`/`fps`). Speed-change via the `-itsscale` INPUT option; extract frames with `-ss T -frames:v 1`.
+
+Full details + the scene-building UI recipe (templates, adding fish/equipment) live in [`docs/caveats/e2e.md`](docs/caveats/e2e.md).
+
 ## Working with the planning artifacts
 
 - Treat `aquascape-development-plan.md` as the spec. If a request conflicts with it, surface the conflict instead of silently deviating.

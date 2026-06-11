@@ -129,6 +129,23 @@ describe('plant-mesh builder — single specimen', () => {
     expect(mat.color.getHexString()).toBe('114433');
   });
 
+  it('builds a CROSS-PLANE geometry — volume in both X and Z (fidelity pass)', () => {
+    // carpetEntry naturalSize is 30 (w) × 20 (h) × 20 (d). The cross-plane
+    // merges the silhouette slab with a copy rotated 90° about Y, so the
+    // bounding box spans both X (~width) and Z (~width) — not a thin card.
+    const catalog = makeCatalog([carpetEntry()]);
+    const group = buildPlantMeshes(sceneWithPlants([plant()]), catalog, undefined);
+    const geo = (group.children[0] as Mesh).geometry;
+    geo.computeBoundingBox();
+    const bb = geo.boundingBox!;
+    const xExtent = bb.max.x - bb.min.x;
+    const zExtent = bb.max.z - bb.min.z;
+    // Both axes carry real extent (the crossed slab gives Z ~ the silhouette
+    // width, far thicker than the old single-extrusion card).
+    expect(xExtent).toBeGreaterThan(10);
+    expect(zExtent).toBeGreaterThan(10);
+  });
+
   it('honours previewAgeWeeks for growth scale', () => {
     const catalog = makeCatalog([carpetEntry()]);
     // Same plant rendered at age 0 vs age 100 → different mesh scale.

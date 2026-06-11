@@ -21,6 +21,7 @@ import type { CatalogRef, Scene, SubstrateRegion } from '@aquascape/domain/scene
 import { Group, Mesh, MeshStandardMaterial, Shape, ExtrudeGeometry } from 'three';
 
 import { applyCaustics, CAUSTIC_MATERIALS_KEY } from './caustics';
+import { applySubstrateGrain } from './substrate-grain';
 
 /** Catalog-miss / catalog-omitted fallback colour. */
 const FALLBACK_COLOR = '#7b6a4a';
@@ -59,7 +60,10 @@ export function buildSubstrateMeshes(scene: Scene, catalog: Catalog | undefined)
   for (const region of scene.substrate.regions) {
     const mesh = buildRegionMesh(region, tankW, tankD, catalog);
     if (mesh !== null) {
+      // Caustics first, then grain chains on top (grain lifts the dark soil
+      // out of a flat black void + reads as granular).
       applyCaustics(mesh.material as MeshStandardMaterial, scene.tank.height);
+      applySubstrateGrain(mesh.material as MeshStandardMaterial);
       causticMaterials.push(mesh.material as MeshStandardMaterial);
       group.add(mesh);
     }

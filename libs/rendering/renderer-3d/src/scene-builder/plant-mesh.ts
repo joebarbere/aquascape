@@ -56,7 +56,10 @@ import { seededHash01 } from '@aquascape/domain/geometry';
 import { plantScale, scatterInPolygon } from '@aquascape/domain/growth-sim';
 import type { CatalogRef, Layer, PlantObject, Scene } from '@aquascape/domain/scene-model';
 import {
+  type BufferGeometry,
   ExtrudeGeometry,
+  Float32BufferAttribute,
+  BufferGeometry as ThreeBufferGeometry,
   Group,
   InstancedBufferAttribute,
   InstancedMesh,
@@ -447,14 +450,20 @@ function buildScatterPatch(
 }
 
 /**
- * Build the extrusion geometry for one plant silhouette. The geometry is
- * centred about its origin so the object's transform.position lands at the
- * plant's centre-of-mass.
+ * Build the geometry for one plant silhouette as a CROSS-PLANE (fidelity pass
+ * — enhancement A2): the silhouette is extruded into a thin slab, then merged
+ * with a second copy rotated 90° about the vertical axis. The result has
+ * volume from ANY viewing angle, so a plant reads as foliage instead of a flat
+ * cardboard cut-out (the old single-extrusion looked obviously 2D side-on —
+ * worst on tall stems like Vallisneria).
  *
- * Extrusion depth is `naturalSize.depth × DEPTH_MULT` so the plant reads
- * as a leafy cluster instead of a solid block.
+ * The local origin sits at the BOTTOM of the silhouette (Y) and the CENTRE of
+ * each slab (X/Z), so `mesh.position.y = substrateHeight` plants the base on
+ * the substrate and the 90° rotation stays centred. The merged geometry keeps
+ * the same Y range, so the sway shader's `position.y / silhouetteHeight`
+ * height factor is unchanged.
  */
-function buildSilhouetteGeometry(entry: PlantEntry): ExtrudeGeometry | null {
+function buildSilhouetteGeometry(entry: PlantEntry): BufferGeometry | null {
   if (entry.silhouette.length < 3) return null;
   const halfW = entry.naturalSize.width * 0.5;
   const halfH = entry.naturalSize.height * 0.5;
@@ -467,18 +476,53 @@ function buildSilhouetteGeometry(entry: PlantEntry): ExtrudeGeometry | null {
     shape.lineTo(p.x * halfW, p.y * halfH);
   }
   shape.closePath();
-  const geo = new ExtrudeGeometry(shape, {
-    depth,
-    bevelEnabled: false,
-    steps: 1,
-  });
-  // Shift the geometry so its local origin sits at the BOTTOM of the
-  // silhouette (Y) and the CENTRE of the extrusion (Z). This way
-  // `mesh.position.y = substrateHeight` lands the plant's base on the
-  // substrate; without the +halfH shift the plant's centre would be at
-  // floor height and half of it would sink into the substrate.
-  geo.translate(0, halfH, -depth / 2);
-  return geo;
+  const slab = new ExtrudeGeometry(shape, { depth, bevelEnabled: false, steps: 1 });
+  // Origin to silhouette bottom (Y) + extrusion centre (Z).
+  slab.translate(0, halfH, -depth / 2);
+  // Second slab, rotated 90° about the vertical axis → a perpendicular plane.
+  const crossed = slab.clone();
+  crossed.rotateY(Math.PI / 2);
+  const merged = mergeGeometries([slab, crossed]);
+  slab.dispose();
+  crossed.dispose();
+  return merged;
+}
+
+/**
+ * Merge indexed `BufferGeometry`s that share a (position, normal, uv) layout
+ * into one — concatenating attributes + offsetting indices. Core-three only
+ * (no `BufferGeometryUtils` addon). Used to fuse the two cross-plane slabs.
+ */
+function mergeGeometries(geoms: ReadonlyArray<BufferGeometry>): BufferGeometry {
+  const out = new ThreeBufferGeometry();
+  const pos: number[] = [];
+  const nor: number[] = [];
+  const uv: number[] = [];
+  const idx: number[] = [];
+  let base = 0;
+  for (const g of geoms) {
+    if (g.attributes['normal'] === undefined) g.computeVertexNormals();
+    const p = g.attributes['position']!;
+    const n = g.attributes['normal']!;
+    const u = g.attributes['uv'];
+    for (let i = 0; i < p.count; i++) {
+      pos.push(p.getX(i), p.getY(i), p.getZ(i));
+      nor.push(n.getX(i), n.getY(i), n.getZ(i));
+      uv.push(u !== undefined ? u.getX(i) : 0, u !== undefined ? u.getY(i) : 0);
+    }
+    const index = g.index;
+    if (index !== null) {
+      for (let i = 0; i < index.count; i++) idx.push((index.getX(i) as number) + base);
+    } else {
+      for (let i = 0; i < p.count; i++) idx.push(i + base);
+    }
+    base += p.count;
+  }
+  out.setAttribute('position', new Float32BufferAttribute(pos, 3));
+  out.setAttribute('normal', new Float32BufferAttribute(nor, 3));
+  out.setAttribute('uv', new Float32BufferAttribute(uv, 2));
+  out.setIndex(idx);
+  return out;
 }
 
 /**
