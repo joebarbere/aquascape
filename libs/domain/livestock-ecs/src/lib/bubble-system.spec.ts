@@ -173,6 +173,26 @@ describe('bubbleLifetimeSystem — rise + despawn', () => {
     expect(yAfter - yBefore).toBeCloseTo(BUBBLE_DEFAULT_VELOCITY_Y_MM_PER_S * SIM_DT, 3);
   });
 
+  it('bubbles wobble horizontally as they rise (helical drift, fidelity pass)', () => {
+    const w = createLivestockWorld(0, { tankAabb: TANK });
+    w.registerBubbleSources([{ position: { x: 200, y: 20, z: 200 }, airRateMl: 800 }]);
+    bubbleSourceSpawnSystem(w, SIM_DT);
+    const eid = bubbleQuery(w.ecs)[0]!;
+    const x0 = Position.x[eid] as number;
+    const z0 = Position.z[eid] as number;
+    // Rise for a while; the helix should move X and/or Z off the spawn point.
+    let maxDx = 0;
+    let maxDz = 0;
+    for (let i = 0; i < 40; i++) {
+      bubbleLifetimeSystem(w, SIM_DT);
+      if (!bubbleQuery(w.ecs).includes(eid)) break; // popped at waterline
+      maxDx = Math.max(maxDx, Math.abs((Position.x[eid] as number) - x0));
+      maxDz = Math.max(maxDz, Math.abs((Position.z[eid] as number) - z0));
+    }
+    // The bubble drifted laterally (not a straight vertical line).
+    expect(maxDx + maxDz).toBeGreaterThan(1);
+  });
+
   it('bubbles despawn at the waterline (count returns to 0 with no further spawns)', () => {
     const w = createLivestockWorld(0, { tankAabb: TANK });
     w.registerBubbleSources([{ position: { x: 200, y: 20, z: 200 }, airRateMl: 800 }]);

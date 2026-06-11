@@ -74,6 +74,26 @@ export const BUBBLE_WATERLINE_INSET_MM = 10;
 export const BUBBLE_HORIZONTAL_JITTER_MM = 8;
 
 /**
+ * Helical wobble (fidelity pass). A rising air-stone bubble doesn't track a
+ * straight line — it spirals as it sheds vortices. We model that with a
+ * deterministic helical drift driven by the bubble's HEIGHT (not wall-clock),
+ * so the path is a fixed spiral the bubble climbs: `x/z += A·{sin,cos}(k·y +
+ * phase)·dt`, phase per-bubble from `spawnSeq`. Height-driven keeps it pure +
+ * replay-stable (no time accumulator) and means two bubbles at the same height
+ * with the same phase wobble identically. `BUBBLE_WOBBLE_VEL_MM_PER_S` is the
+ * peak lateral speed; `BUBBLE_WOBBLE_WAVENUMBER` sets the spiral pitch.
+ *
+ * This is the lightweight wobble. The full Stam `BubbleStableFluids2D` slice
+ * (`domain/fluid-sim`) — which would add genuine multi-stone column
+ * interaction — stays available for a deeper pass; this delivers the visible
+ * "bubbles spiral up" read at a fraction of the cost.
+ */
+export const BUBBLE_WOBBLE_VEL_MM_PER_S = 28;
+export const BUBBLE_WOBBLE_WAVENUMBER = 0.045;
+/** Golden-ratio-ish phase stride so adjacent spawnSeqs don't wobble in lockstep. */
+const BUBBLE_WOBBLE_PHASE_STRIDE = 2.399963;
+
+/**
  * Conversion factor from `airRateMl` (mL/min) to spawn rate (particles/sec).
  *
  * Calibrated so an 800 mL/min air stone (`equipment.filter.aquaneat-triple-sponge`)
@@ -182,6 +202,15 @@ export function bubbleLifetimeSystem(world: LivestockWorld, dt: number): void {
     } else {
       Position.y[eid] = nextY;
       BubbleParticle.lifetimeSec[eid] = nextLife;
+      // Helical wobble — deterministic spiral drift driven by height. Phase
+      // is per-bubble from spawnSeq; X uses sin, Z uses cos so the path is a
+      // circular helix rather than a planar zig-zag.
+      const phase = (BubbleParticle.spawnSeq[eid] as number) * BUBBLE_WOBBLE_PHASE_STRIDE;
+      const angle = BUBBLE_WOBBLE_WAVENUMBER * nextY + phase;
+      Position.x[eid] =
+        (Position.x[eid] as number) + BUBBLE_WOBBLE_VEL_MM_PER_S * Math.sin(angle) * dt;
+      Position.z[eid] =
+        (Position.z[eid] as number) + BUBBLE_WOBBLE_VEL_MM_PER_S * Math.cos(angle) * dt;
     }
   }
 }
