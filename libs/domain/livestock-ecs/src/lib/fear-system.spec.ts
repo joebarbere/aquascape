@@ -267,4 +267,70 @@ describe('fearSystem', () => {
     const dist = Math.hypot(dx, dz);
     expect(dist).toBeLessThan(Math.hypot(400, 400));
   });
+
+  describe('startle-wave propagation (fidelity pass)', () => {
+    it('a fish that bolts to REFUGE scares a nearby conspecific (next-tick risk)', () => {
+      const w = createLivestockWorld(3, { tankAabb: TANK });
+      const params = clone(MID_PRESET);
+      params.fear.riskBaseline = 0; // isolate propagation from baseline drift
+      params.fear.threshold = 0.6;
+      params.fear.emergenceDelay = 5;
+      const handle = w.registerSpeciesBehavior(1, params);
+      const bolter = w.spawnFish({
+        archetype: FISH_ARCHETYPE.SLIM_TETRA,
+        speciesId: 1,
+        bodyLengthMm: 30,
+        position: { x: 200, y: 100, z: 200 },
+        behaviorHandleIdx: handle,
+      });
+      const neighbour = w.spawnFish({
+        archetype: FISH_ARCHETYPE.SLIM_TETRA,
+        speciesId: 1,
+        bodyLengthMm: 30,
+        position: { x: 240, y: 100, z: 200 }, // 40 mm away — within 150 mm reach
+        behaviorHandleIdx: handle,
+      });
+      // Scare the bolter hard so it flips this tick.
+      w.injectStartle(bolter, 5.0);
+      // Populate the grid, then run fear so the bolter flips + queues the
+      // propagated impulse for the neighbour.
+      perceptionSystem(w);
+      fearSystem(w, SIM_DT);
+      expect(BehaviorMode.mode[bolter]).toBe(BEHAVIOR_MODE.REFUGE);
+      // The neighbour hasn't felt it yet (propagation lands next tick).
+      const before = FearState.risk[neighbour] as number;
+      // Next tick: the queued startle folds into the neighbour's risk.
+      perceptionSystem(w);
+      fearSystem(w, SIM_DT);
+      expect(FearState.risk[neighbour] as number).toBeGreaterThan(before);
+    });
+
+    it('does not propagate when no fish bolts (quiet tank stays calm)', () => {
+      const w = createLivestockWorld(4, { tankAabb: TANK });
+      const params = clone(MID_PRESET);
+      params.fear.riskBaseline = 0;
+      params.fear.threshold = 5; // unreachable — nobody flips
+      const handle = w.registerSpeciesBehavior(1, params);
+      const a = w.spawnFish({
+        archetype: FISH_ARCHETYPE.SLIM_TETRA,
+        speciesId: 1,
+        bodyLengthMm: 30,
+        position: { x: 200, y: 100, z: 200 },
+        behaviorHandleIdx: handle,
+      });
+      const b = w.spawnFish({
+        archetype: FISH_ARCHETYPE.SLIM_TETRA,
+        speciesId: 1,
+        bodyLengthMm: 30,
+        position: { x: 220, y: 100, z: 200 },
+        behaviorHandleIdx: handle,
+      });
+      for (let i = 0; i < 5; i++) {
+        perceptionSystem(w);
+        fearSystem(w, SIM_DT);
+      }
+      expect(FearState.risk[a] as number).toBe(0);
+      expect(FearState.risk[b] as number).toBe(0);
+    });
+  });
 });

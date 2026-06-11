@@ -57,6 +57,27 @@ const RISK_DECAY_RATE = 0.5;
 const REFUGE_FORCE_MAGNITUDE = 250;
 
 /**
+ * Startle-wave propagation (fidelity pass). When a fish bolts to REFUGE it
+ * scares nearby conspecifics — a fleeing neighbour is itself a risk cue. We
+ * queue a distance-attenuated startle for those neighbours so fear RIPPLES
+ * through a school over successive ticks (a "startle wave") instead of every
+ * fish reacting in lockstep to the same external cue.
+ *
+ * `STARTLE_PROP_RADIUS_MM` is the neighbour reach; `STARTLE_PROP_MAGNITUDE`
+ * the impulse at zero distance (well below a typical `threshold` so it nudges
+ * risk rather than instantly flipping the whole tank — risk decay then damps
+ * the wave so it dies out instead of self-sustaining). Propagated impulses are
+ * applied NEXT tick (queued into `pendingStartles` after the loop), which is
+ * what makes it a travelling wave rather than an instantaneous flash.
+ *
+ * Determinism: the grid query order is fixed and impulses are summed
+ * (order-independent), so two identical worlds propagate identically — the
+ * byte-identical replay holds.
+ */
+const STARTLE_PROP_RADIUS_MM = 150;
+const STARTLE_PROP_MAGNITUDE = 0.4;
+
+/**
  * Map a species `coverPreference` enum to a hardscape category id.
  * Returns -1 for `'any'` (no category filter). The mapping mirrors
  * `HARDSCAPE_CATEGORY` in `components.ts`: WOOD=0, ROCK=1, PLANT=2.
@@ -84,6 +105,12 @@ export function fearSystem(world: LivestockWorld, dt: number): void {
   // ticks within one world. We snapshot the hardscape list once per tick;
   // it doesn't change mid-tick.
   const hardscapeEids = hardscapeQuery(ecs);
+
+  // Startle-wave propagation accumulator. Allocated LAZILY — only when a
+  // fish actually flips to REFUGE this tick (rare) — so a calm tank pays
+  // zero per-tick allocation, matching the pre-fidelity steady state.
+  // Merged into `pendingStartles` AFTER the loop so impulses land NEXT tick.
+  let propagated: Map<number, number> | null = null;
 
   for (const eid of fearQuery(ecs)) {
     const handle = BehaviorParamsRef.handleIdx[eid] as number;
@@ -121,6 +148,9 @@ export function fearSystem(world: LivestockWorld, dt: number): void {
       const sy = Position.y[eid] as number;
       const sz = Position.z[eid] as number;
       FearState.refugeEid[eid] = pickRefuge(hardscapeEids, sx, sy, sz, preferred);
+      // This fish JUST bolted — scare its neighbours (next-tick impulses).
+      propagated ??= new Map<number, number>();
+      propagateStartle(world, eid, sx, sy, sz, propagated);
     }
 
     // 3. Emergence — while risk is above threshold, hold the timer;
@@ -180,6 +210,44 @@ export function fearSystem(world: LivestockWorld, dt: number): void {
       // persist into the next step.
       startles.delete(key);
     }
+  }
+
+  // Startle-wave propagation — apply the queued neighbour impulses NEXT tick.
+  // Done AFTER the cleanup above (which empties `startles`) so they survive
+  // into the next `fearSystem` run. Additive with any host-injected startle.
+  if (propagated !== null) {
+    for (const [neighbor, mag] of propagated) {
+      startles.set(neighbor, (startles.get(neighbor) ?? 0) + mag);
+    }
+  }
+}
+
+/**
+ * Queue distance-attenuated startle impulses for every conspecific within
+ * `STARTLE_PROP_RADIUS_MM` of a fish that just bolted. Uses the SpatialGrid
+ * PerceptionSystem rebuilt this tick (broad-phase), then filters to the true
+ * radius. Skips self. Deterministic: grid iteration order is fixed and the
+ * accumulation is additive (order-independent).
+ */
+function propagateStartle(
+  world: LivestockWorld,
+  selfEid: number,
+  sx: number,
+  sy: number,
+  sz: number,
+  out: Map<number, number>,
+): void {
+  const neighbours = world.spatialGrid.query(sx, sy, sz, STARTLE_PROP_RADIUS_MM);
+  for (const n of neighbours) {
+    if (n === selfEid) continue;
+    const dx = (Position.x[n] as number) - sx;
+    const dy = (Position.y[n] as number) - sy;
+    const dz = (Position.z[n] as number) - sz;
+    const dist = Math.hypot(dx, dy, dz);
+    // The grid broad-phase returns whole cells; filter to the true radius.
+    if (dist >= STARTLE_PROP_RADIUS_MM) continue;
+    const falloff = 1 - dist / STARTLE_PROP_RADIUS_MM;
+    out.set(n, (out.get(n) ?? 0) + STARTLE_PROP_MAGNITUDE * falloff);
   }
 }
 
