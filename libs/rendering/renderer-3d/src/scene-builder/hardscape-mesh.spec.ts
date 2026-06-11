@@ -181,6 +181,14 @@ describe('hardscape-mesh builder', () => {
     expect(mat.color.getHexString()).toBe('7a7d84');
   });
 
+  it('casts and receives shadows (fidelity pass)', () => {
+    const catalog = makeCatalog([rockEntry()]);
+    const group = buildHardscapeMeshes(sceneWithLayer([rockObj()]), catalog);
+    const mesh = group.children[0] as Mesh;
+    expect(mesh.castShadow).toBe(true);
+    expect(mesh.receiveShadow).toBe(true);
+  });
+
   it('returns null from the per-object builder when the silhouette is too small', () => {
     const tiny: HardscapeEntry = {
       ...rockEntry(),

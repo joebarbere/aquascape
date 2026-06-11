@@ -1,4 +1,4 @@
-import { LineSegments, Mesh } from 'three';
+import { LineSegments, Mesh, MeshPhysicalMaterial } from 'three';
 import type { Tank } from '@aquascape/domain/scene-model';
 import { buildTankMesh } from './tank-mesh';
 
@@ -27,6 +27,23 @@ describe('tank-mesh builder', () => {
     expect(glass.position.x).toBeCloseTo(300, 5);
     expect(glass.position.y).toBeCloseTo(180, 5);
     expect(glass.position.z).toBeCloseTo(150, 5);
+  });
+
+  it('uses a physically-based transmissive glass material (fidelity pass)', () => {
+    const group = buildTankMesh(tank());
+    const glass = group.children.find(
+      (m) => m instanceof Mesh && m.name === 'aquascape:tank/glass',
+    ) as Mesh;
+    const mat = glass.material as MeshPhysicalMaterial;
+    expect(mat).toBeInstanceOf(MeshPhysicalMaterial);
+    expect(mat.transmission).toBeGreaterThan(0);
+    expect(mat.ior).toBeGreaterThan(1);
+    // Glass neither casts nor receives shadows.
+    expect(glass.castShadow).toBe(false);
+    expect(glass.receiveShadow).toBe(false);
+    // A faint inner sheen shell is parented to the glass for silhouette legibility.
+    const sheen = glass.children.find((c) => c.name === 'aquascape:tank/glass-sheen');
+    expect(sheen).toBeDefined();
   });
 
   it('omits the frame group when style.frame is rimless', () => {

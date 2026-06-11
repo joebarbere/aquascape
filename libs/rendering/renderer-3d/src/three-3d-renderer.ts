@@ -77,6 +77,7 @@ import type {
   Viewport,
 } from '@aquascape/rendering/renderer-api';
 import {
+  ACESFilmicToneMapping,
   AmbientLight,
   Color,
   DirectionalLight,
@@ -84,12 +85,17 @@ import {
   InstancedMesh,
   Mesh,
   Object3D,
+  PCFSoftShadowMap,
   PerspectiveCamera,
+  PMREMGenerator,
   Scene as ThreeScene,
   Spherical,
+  SRGBColorSpace,
+  type Texture,
   Vector3,
   WebGLRenderer,
   type BufferGeometry,
+  type DataTexture,
   type Material,
 } from 'three';
 // Note: `three/examples/jsm/controls/OrbitControls` (no `.js` extension) is
@@ -156,9 +162,25 @@ export interface Orbital3DControls {
   addChangeListener(cb: () => void): () => void;
 }
 
-const defaultRendererFactory: RendererFactory = (canvas) =>
-  new WebGLRenderer({ canvas, antialias: true, alpha: true });
+const defaultRendererFactory: RendererFactory = (canvas) => {
+  const renderer = new WebGLRenderer({ canvas, antialias: true, alpha: true });
+  // Fidelity pass — colour management + filmic tone mapping. ACES rolls off
+  // the bright water specular + bubble highlights instead of clipping them
+  // to flat white, and the sRGB output space makes the catalog colours read
+  // as authored (Three.js interprets material colours as sRGB and works in
+  // linear space internally). `outputColorSpace` is the modern-Three default
+  // but we set it explicitly so a future Three bump can't silently change it.
+  renderer.outputColorSpace = SRGBColorSpace;
+  renderer.toneMapping = ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+  // Soft shadows from the single directional key light (configured in
+  // `scene-builder/lighting.ts`).
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = PCFSoftShadowMap;
+  return renderer;
+};
 import { buildCamera, tankCenter } from './scene-builder/camera';
+import { buildEnvEquirectTexture, ENV_INTENSITY } from './scene-builder/environment';
 import { buildHardscapeMeshes } from './scene-builder/hardscape-mesh';
 import { buildLighting } from './scene-builder/lighting';
 import {
@@ -323,6 +345,18 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
   private static readonly DEFAULT_BACKGROUND_COLOR = 0x1a2030;
 
   /**
+   * Fidelity pass — image-based-lighting environment. Built once on
+   * `attach()` (only when a real `WebGLRenderer` is present — the PMREM
+   * pre-filter needs a GL context), assigned to `threeScene.environment`,
+   * and disposed on teardown. `envSourceTexture` is the raw equirect
+   * gradient; `envTexture` is its PMREM-filtered product (what materials
+   * actually sample). Both need explicit disposal — Three.js leaks GPU
+   * textures otherwise.
+   */
+  private envSourceTexture: DataTexture | null = null;
+  private envTexture: Texture | null = null;
+
+  /**
    * @param rendererFactory injectable WebGLRenderer factory. The default
    * constructs a real `THREE.WebGLRenderer`; tests inject a stub so they
    * don't need a real WebGL context.
@@ -394,6 +428,12 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     this.renderer = renderer;
 
     this.threeScene = new ThreeScene();
+
+    // Fidelity pass — build + attach the IBL environment. Guarded on a real
+    // `WebGLRenderer` because `PMREMGenerator` needs a GL context; the test
+    // stub skips this branch (materials simply render without reflections in
+    // the headless unit env, which never paints pixels anyway).
+    this.setupEnvironment(renderer, this.threeScene);
 
     // Camera framed to a placeholder tank; the first `render` call
     // re-frames against the real tank. We DO build a camera here (rather
@@ -834,6 +874,35 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     this.waterMeshTag = tag;
   }
 
+  /**
+   * Fidelity pass — build the PMREM-filtered IBL environment and attach it
+   * to the scene. No-op unless `renderer` is a real `WebGLRenderer`
+   * (`PMREMGenerator` needs a GL context; the headless unit-test stub skips
+   * this). Idempotent: if an environment already exists it's left in place.
+   *
+   * The PMREM pre-filter is deterministic given the fixed gradient source,
+   * so this does NOT threaten the renderer's idempotency contract.
+   */
+  private setupEnvironment(renderer: RendererLike, tScene: ThreeScene): void {
+    if (!(renderer instanceof WebGLRenderer)) return;
+    if (this.envTexture !== null) {
+      tScene.environment = this.envTexture;
+      return;
+    }
+    const source = buildEnvEquirectTexture();
+    const pmrem = new PMREMGenerator(renderer);
+    pmrem.compileEquirectangularShader();
+    const target = pmrem.fromEquirectangular(source);
+    pmrem.dispose();
+    this.envSourceTexture = source;
+    this.envTexture = target.texture;
+    tScene.environment = this.envTexture;
+    // Scale the IBL contribution globally so it fills shading + supplies
+    // reflections without flattening the directional key's shadows.
+    (tScene as ThreeScene & { environmentIntensity: number }).environmentIntensity =
+      ENV_INTENSITY;
+  }
+
   // ─── hitTest ──────────────────────────────────────────────────────────
 
   /**
@@ -1060,6 +1129,19 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     this.currentAmbientLight = null;
     this.currentDirectionalLight = null;
     this.baseDirectionalIntensity = 1;
+
+    // Fidelity pass — release the IBL environment textures (PMREM product +
+    // raw equirect source). Detach from the scene first so nothing samples
+    // a disposed texture during teardown.
+    if (this.threeScene !== null) this.threeScene.environment = null;
+    if (this.envTexture !== null) {
+      this.envTexture.dispose();
+      this.envTexture = null;
+    }
+    if (this.envSourceTexture !== null) {
+      this.envSourceTexture.dispose();
+      this.envSourceTexture = null;
+    }
 
     if (this.renderer !== null) {
       this.renderer.dispose();

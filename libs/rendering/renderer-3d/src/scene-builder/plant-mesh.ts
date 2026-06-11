@@ -225,6 +225,11 @@ function buildSingleSpecimen(
   swayMaterials.push(mat);
   const mesh = new Mesh(geo, mat);
   mesh.name = `aquascape:plant/${obj.id}`;
+  // Plants cast + receive soft shadows. The shadow-map depth pass uses
+  // Three's default depth material (no sway patch), so the shadow doesn't
+  // sway with the leaves — an acceptable mismatch at typical sway amplitude.
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
   mesh.position.set(clamped.x, floor, clamped.z);
   mesh.rotation.set(
     obj.transform.rotation.x,
@@ -322,6 +327,8 @@ function buildScatterPatch(
 
     const instanced = new InstancedMesh(geo, mat, capped.length);
     instanced.name = `aquascape:plant/${obj.id}`;
+    instanced.castShadow = true;
+    instanced.receiveShadow = true;
     instanced.geometry.setAttribute(
       'aPlantPhase',
       new InstancedBufferAttribute(phaseArr, 1),
@@ -368,6 +375,8 @@ function buildScatterPatch(
     });
     swayMaterials.push(mat);
     const mesh = new Mesh(geo, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     mesh.position.set(worldX, worldY, worldZ);
     // Plant rotation spins about Y axis (vertical) so the leafy cluster
     // rotates around its stem instead of tipping over.

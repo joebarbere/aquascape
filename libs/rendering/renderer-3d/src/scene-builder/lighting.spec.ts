@@ -47,11 +47,29 @@ describe('lighting builder', () => {
     expect(directional.target.position.z).toBeCloseTo(150, 5);
   });
 
-  it('leaves shadow casting off in v1', () => {
+  it('casts soft shadows from the key light (fidelity pass)', () => {
     const rig = buildLighting(tank());
     const directional = rig.children.find(
       (l) => l instanceof DirectionalLight,
     ) as DirectionalLight;
-    expect(directional.castShadow).toBe(false);
+    expect(directional.castShadow).toBe(true);
+    expect(directional.shadow.mapSize.width).toBeGreaterThanOrEqual(1024);
+    expect(directional.shadow.mapSize.height).toBeGreaterThanOrEqual(1024);
+  });
+
+  it('frames the orthographic shadow camera to the tank with a positive near/far bracket', () => {
+    const rig = buildLighting(tank(600, 360, 300));
+    const directional = rig.children.find(
+      (l) => l instanceof DirectionalLight,
+    ) as DirectionalLight;
+    const cam = directional.shadow.camera;
+    // Frustum half-extent covers the tank's largest dimension.
+    expect(cam.right).toBeGreaterThanOrEqual(600);
+    expect(cam.left).toBeLessThanOrEqual(-600);
+    // near/far are a valid, positive bracket (near < far, both > 0).
+    expect(cam.near).toBeGreaterThan(0);
+    expect(cam.far).toBeGreaterThan(cam.near);
+    // normalBias is scaled to the millimetre-scale scene (non-trivial).
+    expect(directional.shadow.normalBias).toBeGreaterThan(0);
   });
 });

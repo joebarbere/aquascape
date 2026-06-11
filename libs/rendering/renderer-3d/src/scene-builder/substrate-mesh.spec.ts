@@ -101,4 +101,11 @@ describe('substrate-mesh builder', () => {
     const group = buildSubstrateMeshes(scene, undefined);
     expect(group.children.length).toBe(0);
   });
+
+  it('receives shadows but does not cast them (fidelity pass)', () => {
+    const group = buildSubstrateMeshes(makeScene([region()]), undefined);
+    const mesh = group.children[0] as Mesh;
+    expect(mesh.receiveShadow).toBe(true);
+    expect(mesh.castShadow).toBe(false);
+  });
 });

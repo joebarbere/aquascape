@@ -130,6 +130,10 @@ export function buildHardscapeMesh(
   const mat = new MeshStandardMaterial({ color, roughness: ROUGHNESS });
   const mesh = new Mesh(geo, mat);
   mesh.name = `aquascape:hardscape/${obj.id}`;
+  // Rocks + wood are the primary shadow casters in the scene; they also
+  // receive (a tall rock shadowing a shorter one reads as real depth).
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
 
   if (scene !== undefined) {
     applyTransform(mesh, obj, scene, layer, {

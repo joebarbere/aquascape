@@ -112,6 +112,11 @@ function buildRegionMesh(
   const mat = new MeshStandardMaterial({ color, roughness: ROUGHNESS });
   const mesh = new Mesh(geo, mat);
   mesh.name = `aquascape:substrate/${region.id}`;
+  // The substrate is the tank floor — it RECEIVES the key light's shadows
+  // (hardscape + plants drop onto it) but doesn't cast: a slab self-
+  // shadowing its own steep extruded faces reads as noise, not depth.
+  mesh.receiveShadow = true;
+  mesh.castShadow = false;
   // Shift the mesh in Z by the inset so the front face sits at
   // z = GLASS_INSET_MM (and the back face at z = tankDepth - inset).
   mesh.position.z = GLASS_INSET_MM;
