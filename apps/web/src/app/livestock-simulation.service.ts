@@ -641,6 +641,10 @@ export class LivestockSimulationService implements OnDestroy {
   ): void {
     const archetype = resolveArchetype(species.catalogRow);
     const bodyLengthMm = resolveBodyLengthMm(species.catalogRow);
+    // Fidelity pass — a catalog row flagged `predator: true` spawns as a
+    // predator; nearby prey fear it (FearSystem). Read off the raw row since
+    // `catalogRow` is intentionally `unknown` at this seam.
+    const isPredator = (species.catalogRow as { predator?: boolean } | null)?.predator === true;
 
     // Animation params come from the resolved behaviour. When we're on
     // the fallback path (NO_BEHAVIOR_HANDLE) `resolved` is null and we
@@ -737,6 +741,7 @@ export class LivestockSimulationService implements OnDestroy {
         ...(anim?.ampTail !== undefined ? { ampTail: anim.ampTail } : {}),
         phaseOffset: rPhase * Math.PI * 2,
         behaviorHandleIdx: species.handleIdx,
+        ...(isPredator ? { predator: true } : {}),
       });
     }
   }

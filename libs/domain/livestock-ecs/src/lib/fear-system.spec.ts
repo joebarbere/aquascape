@@ -305,6 +305,71 @@ describe('fearSystem', () => {
       expect(FearState.risk[neighbour] as number).toBeGreaterThan(before);
     });
 
+    it('prey near a predator accumulate risk and flip to REFUGE; far prey stay calm', () => {
+      const w = createLivestockWorld(5, { tankAabb: TANK });
+      const params = clone(MID_PRESET);
+      params.fear.riskBaseline = 0;
+      params.fear.threshold = 0.6;
+      params.fear.emergenceDelay = 5;
+      const handle = w.registerSpeciesBehavior(1, params);
+      w.registerHardscape([
+        { position: { x: 50, y: 0, z: 50 }, coverScore: 0.6, category: HARDSCAPE_CATEGORY.WOOD },
+      ]);
+      w.spawnFish({
+        archetype: FISH_ARCHETYPE.DEEP_BODIED,
+        speciesId: 2,
+        bodyLengthMm: 120,
+        position: { x: 200, y: 200, z: 200 },
+        behaviorHandleIdx: handle,
+        predator: true,
+      });
+      const near = w.spawnFish({
+        archetype: FISH_ARCHETYPE.SLIM_TETRA,
+        speciesId: 1,
+        bodyLengthMm: 30,
+        position: { x: 260, y: 200, z: 200 }, // 60 mm from predator
+        behaviorHandleIdx: handle,
+      });
+      const far = w.spawnFish({
+        archetype: FISH_ARCHETYPE.SLIM_TETRA,
+        speciesId: 1,
+        bodyLengthMm: 30,
+        position: { x: 800, y: 200, z: 200 }, // 600 mm — outside reach
+        behaviorHandleIdx: handle,
+      });
+      for (let i = 0; i < 45; i++) fearSystem(w, SIM_DT);
+      expect(BehaviorMode.mode[near]).toBe(BEHAVIOR_MODE.REFUGE);
+      expect(FearState.risk[near] as number).toBeGreaterThan(FearState.risk[far] as number);
+      expect(BehaviorMode.mode[far]).toBe(BEHAVIOR_MODE.FORAGE);
+    });
+
+    it('a predator does not fear itself or other predators', () => {
+      const w = createLivestockWorld(6, { tankAabb: TANK });
+      const params = clone(MID_PRESET);
+      params.fear.riskBaseline = 0;
+      params.fear.threshold = 0.6;
+      const handle = w.registerSpeciesBehavior(1, params);
+      const predA = w.spawnFish({
+        archetype: FISH_ARCHETYPE.DEEP_BODIED,
+        speciesId: 2,
+        bodyLengthMm: 120,
+        position: { x: 200, y: 200, z: 200 },
+        behaviorHandleIdx: handle,
+        predator: true,
+      });
+      w.spawnFish({
+        archetype: FISH_ARCHETYPE.DEEP_BODIED,
+        speciesId: 2,
+        bodyLengthMm: 120,
+        position: { x: 230, y: 200, z: 200 }, // right next to predA
+        behaviorHandleIdx: handle,
+        predator: true,
+      });
+      for (let i = 0; i < 45; i++) fearSystem(w, SIM_DT);
+      expect(FearState.risk[predA] as number).toBe(0);
+      expect(BehaviorMode.mode[predA]).toBe(BEHAVIOR_MODE.FORAGE);
+    });
+
     it('does not propagate when no fish bolts (quiet tank stays calm)', () => {
       const w = createLivestockWorld(4, { tankAabb: TANK });
       const params = clone(MID_PRESET);

@@ -227,6 +227,10 @@
         },
         "bioloadClass": { "enum": ["low", "medium", "high"] },
         "color": { "$ref": "#/$defs/HexColor" },
+        "predator": {
+          "type": "boolean",
+          "description": "Stage 11 fidelity pass — when true, this species spawns as a roaming PREDATOR in the 3D simulation: nearby prey fish accumulate fear-risk and flee to cover (livestock-ecs FearSystem). Additive + optional; no manifest version bump."
+        },
         "compatibilityFlags": {
           "type": "object",
           "additionalProperties": false,

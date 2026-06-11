@@ -213,6 +213,15 @@ export interface LivestockEntry extends CatalogEntryBase {
   bioloadClass: 'low' | 'medium' | 'high';
   /** Display swatch in the catalog browser. NOT a rendered silhouette colour. */
   color: HexColor;
+  /**
+   * Stage 11 fidelity pass — when true, this species spawns as a roaming
+   * PREDATOR in the 3D simulation: nearby prey fish accumulate fear-risk and
+   * flee to cover (livestock-ecs FearSystem reads it via
+   * `spawnFish({ predator: true })`). Additive + optional; no manifest
+   * schemaVersion bump (the v3 schema gains it additively like the other
+   * F11.x behaviour fields).
+   */
+  predator?: boolean;
   /** Pre-baked answers for F7.2's compatibility rule engine. */
   compatibilityFlags?: {
     /** True when the species coexists with delicate live plants. */

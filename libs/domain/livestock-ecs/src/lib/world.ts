@@ -46,6 +46,7 @@ import {
   NO_INTEREST,
   Orientation,
   Position,
+  Predator,
   SpeciesId,
   Territory,
   Velocity,
@@ -139,6 +140,13 @@ export interface SpawnOpts {
    * acceptance criteria).
    */
   behaviorHandleIdx?: number;
+  /**
+   * Fidelity pass — flag this fish as a PREDATOR. Tagged with `Predator`;
+   * prey fish gain fear-risk near it (FearSystem), driving the existing
+   * fear → refuge → startle-wave. Default false. A predator is otherwise a
+   * normal fish entity (same snapshot slab), so the replay shape is stable.
+   */
+  predator?: boolean;
 }
 
 /**
@@ -618,6 +626,13 @@ export function createLivestockWorld(
       FearState.risk[eid] = 0;
       FearState.refugeEid[eid] = NO_ENTITY_REF;
       FearState.emergenceTimer[eid] = 0;
+
+      // Fidelity pass — flag predators. A predator is a normal fish entity
+      // (same slabs / snapshot) that FearSystem treats as a roaming risk
+      // source for nearby prey.
+      if (opts.predator === true) {
+        addComponent(ecs, Predator, eid);
+      }
 
       // Territory + NippingDrive are conditional — only attached when the
       // resolved behaviour carries non-null params for that system.

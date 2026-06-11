@@ -25,7 +25,7 @@
  * counts down; when it reaches 0 the fish flips back to FORAGE and
  * `refugeEid` resets to 0.
  */
-import { defineQuery } from 'bitecs';
+import { defineQuery, hasComponent } from 'bitecs';
 import {
   BehaviorMode,
   BEHAVIOR_MODE,
@@ -35,11 +35,13 @@ import {
   Hardscape,
   NO_ENTITY_REF,
   Position,
+  Predator,
 } from './components';
 import type { LivestockWorld } from './world';
 
 const fearQuery = defineQuery([Position, BehaviorParamsRef, FearState, BehaviorMode, Force]);
 const hardscapeQuery = defineQuery([Hardscape, Position]);
+const predatorQuery = defineQuery([Predator, Position]);
 
 /**
  * Per-second risk decay rate. Half-life = ln(2) / 0.5 ≈ 1.39 s. Tuned so a
@@ -78,6 +80,18 @@ const STARTLE_PROP_RADIUS_MM = 150;
 const STARTLE_PROP_MAGNITUDE = 0.4;
 
 /**
+ * Predator proximity fear (fidelity pass). A prey fish within
+ * `PREDATOR_FEAR_RADIUS_MM` of a roaming predator accumulates risk at up to
+ * `PREDATOR_FEAR_GAIN_PER_S` per second (linear distance falloff, nearest
+ * predator wins). This is a CONTINUOUS source (not a one-off startle) so the
+ * prey stays scared while the predator lingers and emerges once it leaves —
+ * the gain is set comfortably above the decay so a close predator reliably
+ * flips prey to REFUGE within ~1 s.
+ */
+const PREDATOR_FEAR_RADIUS_MM = 280;
+const PREDATOR_FEAR_GAIN_PER_S = 2.2;
+
+/**
  * Map a species `coverPreference` enum to a hardscape category id.
  * Returns -1 for `'any'` (no category filter). The mapping mirrors
  * `HARDSCAPE_CATEGORY` in `components.ts`: WOOD=0, ROCK=1, PLANT=2.
@@ -105,6 +119,9 @@ export function fearSystem(world: LivestockWorld, dt: number): void {
   // ticks within one world. We snapshot the hardscape list once per tick;
   // it doesn't change mid-tick.
   const hardscapeEids = hardscapeQuery(ecs);
+  // Predators (roaming risk sources). Usually empty — the proximity scan
+  // below early-outs when there are none.
+  const predatorEids = predatorQuery(ecs);
 
   // Startle-wave propagation accumulator. Allocated LAZILY — only when a
   // fish actually flips to REFUGE this tick (rare) — so a calm tank pays
@@ -129,6 +146,11 @@ export function fearSystem(world: LivestockWorld, dt: number): void {
     if (startle !== undefined && startle > 0) {
       risk += startle;
       startles.delete(eid);
+    }
+    // Predator proximity — a continuous risk source while a predator lingers
+    // nearby. Predators don't fear (skip the scan for predator entities).
+    if (predatorEids.length > 0 && !hasComponent(ecs, Predator, eid)) {
+      risk += predatorProximityRisk(eid, predatorEids, dt);
     }
     FearState.risk[eid] = risk;
 
@@ -229,6 +251,35 @@ export function fearSystem(world: LivestockWorld, dt: number): void {
  * radius. Skips self. Deterministic: grid iteration order is fixed and the
  * accumulation is additive (order-independent).
  */
+/**
+ * Risk contribution this tick from the nearest predator within
+ * `PREDATOR_FEAR_RADIUS_MM` of the prey at `preyEid`. Linear distance
+ * falloff × `PREDATOR_FEAR_GAIN_PER_S` × `dt`. Returns 0 when no predator is
+ * in range. Deterministic: iterates `predatorEids` in fixed eid order and
+ * takes the nearest (distance comparison is order-independent).
+ */
+function predatorProximityRisk(
+  preyEid: number,
+  predatorEids: ArrayLike<number> & Iterable<number>,
+  dt: number,
+): number {
+  const px = Position.x[preyEid] as number;
+  const py = Position.y[preyEid] as number;
+  const pz = Position.z[preyEid] as number;
+  let nearest = Infinity;
+  for (const pred of predatorEids) {
+    if (pred === preyEid) continue;
+    const dx = (Position.x[pred] as number) - px;
+    const dy = (Position.y[pred] as number) - py;
+    const dz = (Position.z[pred] as number) - pz;
+    const d = Math.hypot(dx, dy, dz);
+    if (d < nearest) nearest = d;
+  }
+  if (nearest >= PREDATOR_FEAR_RADIUS_MM) return 0;
+  const falloff = 1 - nearest / PREDATOR_FEAR_RADIUS_MM;
+  return PREDATOR_FEAR_GAIN_PER_S * falloff * dt;
+}
+
 function propagateStartle(
   world: LivestockWorld,
   selfEid: number,
