@@ -21,13 +21,14 @@ Captured a planted "Jungle" scene (substrate + hardscape + layered plants + a te
 
 ### B. Surface richness (next)
 
-4. **SSAO.** Add an `SSAOPass` to the (already-wired) EffectComposer to darken crevices + ground objects on the substrate. The composer seam is ready (one `addPass`); it needs the `SSAOPass` ESM addon wired (path-map + ambient shim + Jest stub, like the bloom passes) and a perf/size gate (it adds passes — heavy under software WebGL). Sequence it AFTER the substrate lift so it deepens contact shadows without re-crushing the floor to black. **(Deferred — next on the ready seam.)**
+4. **SSAO.** Add an `SSAOPass` to the EffectComposer to darken crevices + ground objects on the substrate. **(Attempted + backed out.)** Wired the `SSAOPass` addon and added it to the composer (kernel/min/max tuned for the mm scale), but it rendered a **BLANK canvas under SwiftShader** (the headless/CI software-WebGL path the e2e + the visual-validation loop both use). SSAO's depth/normal/MRT render-target passes don't work reliably there, so it can't be validated headlessly — and shipping it would blank the 3D view for software-rendering users + fail the CI 3D-paint e2e. **Needs a real-GPU validation loop before it can land** (and likely a depth-texture/MRT capability gate so it self-disables on SwiftShader).
+   - **Lesson (load-bearing):** any **render-target / multi-pass** effect (SSAO, and #7 below) must be assumed to break under the SwiftShader validation env. Validate those on a real GPU before committing; don't ship blind.
 5. **Catalog-driven albedo/normal textures.** The honest long-term fix for plants + hardscape + fish — author texture maps per catalog entry. Larger (catalog schema + asset pipeline + loader); the procedural passes above buy most of the realism in the meantime.
 6. **Fish detail.** Per-instance colour/pattern (the renderer shares one body colour per archetype today) + per-fin secondary motion. Needs a per-instance colour attribute on the snapshot.
 
 ### C. Water + scene (lower priority given the transmissive glass already refracts)
 
-7. **Screen-space water-surface refraction.** Render the opaque scene to a target, sample it in the water shader with a normal-offset for true "looking through the surface" distortion. The transmissive glass already gives the dominant refraction, so this is polish; it needs an extra render target threaded around the EffectComposer.
+7. **Screen-space water-surface refraction.** Render the opaque scene to a target, sample it in the water shader with a normal-offset for true "looking through the surface" distortion. The transmissive glass already gives the dominant refraction, so this is polish; it needs an extra render target threaded around the EffectComposer. **Deferred — same render-target risk as SSAO (#4): validate on a real GPU before committing, since the SwiftShader headless loop can't be trusted for render-target passes.**
 8. **Scenic backdrop / environment.** The flat pale-blue background reads as a void behind the glass; a subtle gradient or blurred room backdrop would seat the tank in a space.
 9. **Caustics intensity + on the water surface itself**, and **flow-coupled sway frequency** (today only amplitude couples to flow).
 

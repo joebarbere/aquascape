@@ -80,6 +80,7 @@ node tools/demo/record-demo.mjs        # terminal 2
 - **The main thread is saturated** by the RAF render loop, so every CDP round-trip (mouse move, `evaluate`, click) is slow. Keep the call COUNT low; resolve an element to a HANDLE once rather than re-querying a locator per frame; lean on `sleep` (no round-trip) for animation hold time. The recorder time-compresses the resulting long capture with ffmpeg.
 - **`PLAYWRIGHT_CHROMIUM`** overrides the browser binary — set it when Playwright's managed download is unavailable (e.g. CDN blocked) and a system / pre-provisioned chromium must be used. The recorder + any ad-hoc validation script reads it.
 - **The Playwright-bundled ffmpeg is a MINIMAL build** — VP8 encoder only (no VP9), and only the `pad`/`crop`/`scale` filters (no `setpts`/`fps`). Speed-changes use the `-itsscale` INPUT option, not a filter; frame extraction uses `-ss T -frames:v 1`, not `-vf fps=`.
+- **Render-target / multi-pass post-processing can BLANK the canvas under SwiftShader.** `SSAOPass` (depth + normal + AO targets) was tried and rendered a fully blank 3D view headlessly — and the CI e2e uses the same SwiftShader path, so it would fail the 3D-paint assertion. The single-pass `UnrealBloomPass` + `OutputPass` work fine; the depth/normal/MRT-heavy passes (SSAO, screen-space refraction) do **not**. **Assume any new render-target effect breaks here and validate it on a real GPU before committing — don't ship blind off a headless pass.**
 
 ## Anti-patterns to refuse
 
