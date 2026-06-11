@@ -42,6 +42,20 @@ describe('createLivestockWorld + spawnFish', () => {
     expect(found.length).toBe(2);
   });
 
+  it('surfaces per-fish body colour in the snapshot (default + explicit)', () => {
+    const w = createLivestockWorld(2);
+    spawnDefault(w); // no colorRgb → default silver-blue
+    spawnDefault(w, { colorRgb: [1, 0, 0] as const }); // explicit red
+    const snap = w.snapshot(0);
+    expect(snap.color.length).toBe(snap.entityCount * 3);
+    // Entity 0: default colour is non-black + not pure red.
+    expect(snap.color[0]! + snap.color[1]! + snap.color[2]!).toBeGreaterThan(0.1);
+    // Entity 1: explicit red.
+    expect(snap.color[3]).toBeCloseTo(1, 5);
+    expect(snap.color[4]).toBeCloseTo(0, 5);
+    expect(snap.color[5]).toBeCloseTo(0, 5);
+  });
+
   it('attaches every F11.1 component to each spawned entity', () => {
     const w = createLivestockWorld(7);
     const eid = spawnDefault(w);

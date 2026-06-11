@@ -66,6 +66,9 @@ attribute float instancePhase;
 attribute float instanceTailBeatFreq;
 attribute float instanceAmpHead;
 attribute float instanceAmpTail;
+// Fidelity pass — per-instance body colour (linear-ish RGB). Lets two species
+// sharing one archetype (e.g. neon vs cardinal tetra) read distinct.
+attribute vec3 instanceColor;
 
 // Global uniforms.
 uniform float uTime;
@@ -82,6 +85,8 @@ varying vec3 vNormalWorld;
 varying vec3 vViewNormal;
 varying vec3 vViewDir;
 varying vec2 vSpineUv;
+// Per-instance body colour passed through to the fragment stage.
+varying vec3 vInstColor;
 
 // Rotate vector v by unit quaternion q = (x, y, z, w). Standard
 // Rodrigues-via-quaternion form: v + 2 * q.xyz x (q.xyz x v + q.w * v).
@@ -122,6 +127,7 @@ void main() {
   vViewDir = normalize(-mvPosition.xyz);
   vViewNormal = normalize(mat3(modelViewMatrix) * nRot);
   vSpineUv = spineUv;
+  vInstColor = instanceColor;
 
   gl_Position = projectionMatrix * mvPosition;
 }
@@ -145,11 +151,13 @@ varying vec3 vNormalWorld;
 varying vec3 vViewNormal;
 varying vec3 vViewDir;
 varying vec2 vSpineUv;
+varying vec3 vInstColor;
 
 void main() {
-  // Multiplicative shading — keeps body colour identifiable while still
-  // reading the directional key on the lit hemisphere.
-  vec3 rgb = uBodyColor * vLitColor;
+  // Per-instance body colour drives the shading (the uBodyColor uniform is
+  // the build-time default, kept for the no-snapshot path). Multiplicative
+  // shading keeps the colour identifiable while reading the directional key.
+  vec3 rgb = vInstColor * vLitColor;
 
   // ── IRIDESCENT SHEEN (fidelity pass) ────────────────────────────────
   // A grazing-angle fresnel term gives the body the wet, scale-catching

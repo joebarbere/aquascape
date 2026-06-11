@@ -222,6 +222,17 @@ export const Hardscape = defineComponent({
 export const Predator = defineComponent();
 
 /**
+ * Per-fish body colour (fidelity pass — enhancement). Linear-ish RGB in
+ * `[0, 1]`, set at spawn from the catalog row's display colour
+ * (`spawnFish({ colorRgb })`). Surfaced in `WorldSnapshot.color` so the
+ * renderer can drive a per-instance colour attribute — previously every fish
+ * of an archetype shared ONE body colour, so a neon tetra and a cardinal
+ * tetra (both SLIM_TETRA) were indistinguishable. Static per fish → the
+ * byte-identical replay holds.
+ */
+export const BodyColor = defineComponent({ r: Types.f32, g: Types.f32, b: Types.f32 });
+
+/**
  * Hardscape category enum. Mirrors the catalog's `HardscapeEntry.category`
  * (wood/rock/plant/other); the loader maps catalog rows to these integers
  * before calling `world.registerHardscape`.

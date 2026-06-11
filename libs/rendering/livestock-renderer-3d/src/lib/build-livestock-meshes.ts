@@ -256,6 +256,7 @@ interface ArchetypeSlot {
     instanceTailBeatFreq: InstancedBufferAttribute;
     instanceAmpHead: InstancedBufferAttribute;
     instanceAmpTail: InstancedBufferAttribute;
+    instanceColor: InstancedBufferAttribute;
   };
   /**
    * Write cursor inside `syncFromSnapshot`. Reset to 0 each frame and
@@ -389,7 +390,7 @@ function syncFromSnapshotImpl(
     slot.writeCursor = 0;
   }
 
-  const { entityCount, position, orientation, phase, archetype, scale } = snapshot;
+  const { entityCount, position, orientation, phase, archetype, scale, color } = snapshot;
 
   // One pass over the snapshot. Each entity's archetype byte routes
   // it into the correct bucket. Branchless except for the cap check.
@@ -429,6 +430,11 @@ function syncFromSnapshotImpl(
     (slot.attr.instanceScale.array as Float32Array)[cursor] = scale[i] as number;
     (slot.attr.instancePhase.array as Float32Array)[cursor] = phase[i] as number;
 
+    const colArr = slot.attr.instanceColor.array as Float32Array;
+    colArr[cursor * 3 + 0] = color[i * 3 + 0] as number;
+    colArr[cursor * 3 + 1] = color[i * 3 + 1] as number;
+    colArr[cursor * 3 + 2] = color[i * 3 + 2] as number;
+
     // F11.6 Wave 2 — crawler archetype (shrimp + snail) has no
     // carangiform tail to flex. Zero its per-instance amp on every
     // sync so the vertex shader produces no fish-style wiggle even if
@@ -454,6 +460,7 @@ function syncFromSnapshotImpl(
     slot.attr.instanceQuat.needsUpdate = true;
     slot.attr.instanceScale.needsUpdate = true;
     slot.attr.instancePhase.needsUpdate = true;
+    slot.attr.instanceColor.needsUpdate = true;
     // The crawler slot rewrites ampHead/ampTail every tick (to keep
     // the carangiform deformation suppressed for crawler instances —
     // see the per-entity write above). Flag its amp attributes as
@@ -512,7 +519,7 @@ function buildArchetypeSlot(
   // camera pans.
   mesh.frustumCulled = false;
 
-  const attr = attachInstanceAttributes(geometry, maxInstances);
+  const attr = attachInstanceAttributes(geometry, maxInstances, bodyColor);
 
   return {
     archetypeId,
@@ -585,6 +592,7 @@ function makeMaterial(bodyColor: Color): ShaderMaterial {
 function attachInstanceAttributes(
   geometry: BufferGeometry,
   maxInstances: number,
+  bodyColor: Color,
 ): ArchetypeSlot['attr'] {
   const instancePosition = makeInstancedAttr(maxInstances, 3);
   const instanceQuat = makeInstancedAttr(maxInstances, 4, /* identity quat */ (a) => {
@@ -602,6 +610,15 @@ function attachInstanceAttributes(
   );
   const instanceAmpHead = makeInstancedAttr(maxInstances, 1, (a) => a.fill(DEFAULT_AMP_HEAD));
   const instanceAmpTail = makeInstancedAttr(maxInstances, 1, (a) => a.fill(DEFAULT_AMP_TAIL));
+  // Fidelity pass — per-instance body colour, initialised to the build-time
+  // default so any un-synced (but somehow drawn) instance isn't black.
+  const instanceColor = makeInstancedAttr(maxInstances, 3, (a) => {
+    for (let i = 0; i < maxInstances; i++) {
+      a[i * 3 + 0] = bodyColor.r;
+      a[i * 3 + 1] = bodyColor.g;
+      a[i * 3 + 2] = bodyColor.b;
+    }
+  });
 
   geometry.setAttribute('instancePosition', instancePosition);
   geometry.setAttribute('instanceQuat', instanceQuat);
@@ -610,6 +627,7 @@ function attachInstanceAttributes(
   geometry.setAttribute('instanceTailBeatFreq', instanceTailBeatFreq);
   geometry.setAttribute('instanceAmpHead', instanceAmpHead);
   geometry.setAttribute('instanceAmpTail', instanceAmpTail);
+  geometry.setAttribute('instanceColor', instanceColor);
 
   return {
     instancePosition,
@@ -619,6 +637,7 @@ function attachInstanceAttributes(
     instanceTailBeatFreq,
     instanceAmpHead,
     instanceAmpTail,
+    instanceColor,
   };
 }
 

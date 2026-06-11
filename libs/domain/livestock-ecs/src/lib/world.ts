@@ -44,6 +44,7 @@ import {
   NippingDrive,
   NO_ENTITY_REF,
   NO_INTEREST,
+  BodyColor,
   Orientation,
   Position,
   Predator,
@@ -79,6 +80,17 @@ import {
 export const SIM_DT = 1 / 30;
 /** Convenience reciprocal of `SIM_DT`. */
 export const SIM_HZ = 30;
+
+/**
+ * Default per-fish body colour (silver-blue tetra) when `spawnFish` is called
+ * without `colorRgb`. Matches the renderer's historical `DEFAULT_BODY_COLOR`
+ * (0x9ec5d6) so a fish spawned without a catalog colour looks unchanged.
+ */
+const DEFAULT_BODY_COLOR_RGB: readonly [number, number, number] = [
+  0x9e / 255,
+  0xc5 / 255,
+  0xd6 / 255,
+];
 
 /**
  * Floor for the SpatialGrid cell size. The grid throws on `cellSize <= 0`,
@@ -147,6 +159,13 @@ export interface SpawnOpts {
    * normal fish entity (same snapshot slab), so the replay shape is stable.
    */
   predator?: boolean;
+  /**
+   * Fidelity pass — per-fish body colour, linear-ish RGB in `[0, 1]` (the
+   * host converts the catalog row's hex `color`). Surfaced in
+   * `WorldSnapshot.color` for the renderer's per-instance colour attribute.
+   * Default = `DEFAULT_BODY_COLOR_RGB` (a silver-blue tetra) when omitted.
+   */
+  colorRgb?: readonly [number, number, number];
 }
 
 /**
@@ -223,6 +242,14 @@ export interface WorldSnapshot {
   archetype: Uint8Array;
   /** Body length per entity in mm. Length = `entityCount`. */
   scale: Float32Array;
+  /**
+   * Fidelity pass — per-fish body colour, stride 3 (r,g,b in `[0,1]`).
+   * Length = `entityCount * 3`. The renderer drives a per-instance colour
+   * attribute from this so fish of the same archetype but different species
+   * (e.g. neon vs cardinal tetra, both SLIM_TETRA) read distinct. Pooled like
+   * the other slabs — copy if retained past the next `snapshot()`.
+   */
+  color: Float32Array;
   /**
    * Number of currently-live food sprites. Reset to 0 when none exist.
    * F11.4 addition — surfaces the FoodSprite-tagged entity slab to the
@@ -423,6 +450,8 @@ interface SnapshotPool {
   phase: Float32Array;
   archetype: Uint8Array;
   scale: Float32Array;
+  /** Fidelity pass — stride 3 (r,g,b per fish). Length = `capacity * 3`. */
+  color: Float32Array;
   capacity: number;
   /** F11.4 — food sprite slab. Grown independently of the fish slab. */
   foodSpritePosition: Float32Array;
@@ -444,6 +473,7 @@ function makeSnapshotPool(
     phase: new Float32Array(capacity),
     archetype: new Uint8Array(capacity),
     scale: new Float32Array(capacity),
+    color: new Float32Array(capacity * 3),
     capacity,
     foodSpritePosition: new Float32Array(spriteCapacity * 3),
     foodSpriteCapacity: spriteCapacity,
@@ -633,6 +663,14 @@ export function createLivestockWorld(
       if (opts.predator === true) {
         addComponent(ecs, Predator, eid);
       }
+
+      // Fidelity pass — per-fish body colour (defaults to a silver-blue
+      // tetra when the host doesn't supply one).
+      addComponent(ecs, BodyColor, eid);
+      const rgb = opts.colorRgb ?? DEFAULT_BODY_COLOR_RGB;
+      BodyColor.r[eid] = rgb[0];
+      BodyColor.g[eid] = rgb[1];
+      BodyColor.b[eid] = rgb[2];
 
       // Territory + NippingDrive are conditional — only attached when the
       // resolved behaviour carries non-null params for that system.
@@ -941,6 +979,9 @@ export function createLivestockWorld(
         pool.phase[i] = AnimationPhase.phase[eid] as number;
         pool.archetype[i] = Archetype.id[eid] as number;
         pool.scale[i] = BodyLength.mm[eid] as number;
+        pool.color[i * 3 + 0] = BodyColor.r[eid] as number;
+        pool.color[i * 3 + 1] = BodyColor.g[eid] as number;
+        pool.color[i * 3 + 2] = BodyColor.b[eid] as number;
         i++;
       }
 
@@ -1005,6 +1046,7 @@ export function createLivestockWorld(
         phase: pool.phase.subarray(0, n),
         archetype: pool.archetype.subarray(0, n),
         scale: pool.scale.subarray(0, n),
+        color: pool.color.subarray(0, n * 3),
         foodSpriteCount: m,
         foodSpritePosition: pool.foodSpritePosition.subarray(0, m * 3),
         bubbleCount: b,

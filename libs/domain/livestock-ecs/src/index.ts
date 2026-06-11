@@ -31,6 +31,7 @@ export {
   Curiosity,
   FeedingDrive,
   FoodSprite,
+  BodyColor,
   Force,
   FearState,
   Hardscape,
