@@ -38,6 +38,7 @@ import type {
 } from '@aquascape/domain/scene-model';
 import { ExtrudeGeometry, Group, Mesh, MeshStandardMaterial, Shape } from 'three';
 
+import { applyCaustics, CAUSTIC_MATERIALS_KEY } from './caustics';
 import { applyHardscapeNoise, seedFromHardscape } from './hardscape-noise';
 import { computeZonedZ } from './layer-zone-z';
 import { substrateHeightAt } from './substrate-height';
@@ -57,13 +58,20 @@ const ROUGHNESS = 0.85;
 export function buildHardscapeMeshes(scene: Scene, catalog: Catalog | undefined): Group {
   const group = new Group();
   group.name = 'aquascape:hardscape';
+  // Caustics dance over rocks + wood too — collect the patched materials.
+  const causticMaterials: MeshStandardMaterial[] = [];
+  group.userData[CAUSTIC_MATERIALS_KEY] = causticMaterials;
   for (const layer of scene.layers) {
     if (!layer.visible) continue;
     for (const obj of layer.objects) {
       if (obj.kind !== 'hardscape') continue;
       const entry = resolveHardscapeEntry(obj.ref, catalog);
       const mesh = buildHardscapeMesh(obj, entry, scene, layer);
-      if (mesh !== null) group.add(mesh);
+      if (mesh !== null) {
+        applyCaustics(mesh.material as MeshStandardMaterial, scene.tank.height);
+        causticMaterials.push(mesh.material as MeshStandardMaterial);
+        group.add(mesh);
+      }
     }
   }
   return group;

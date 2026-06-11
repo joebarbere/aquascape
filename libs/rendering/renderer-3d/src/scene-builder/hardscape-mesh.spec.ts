@@ -189,6 +189,15 @@ describe('hardscape-mesh builder', () => {
     expect(mesh.receiveShadow).toBe(true);
   });
 
+  it('patches hardscape materials with caustics and exposes them on group userData', () => {
+    const catalog = makeCatalog([rockEntry()]);
+    const group = buildHardscapeMeshes(sceneWithLayer([rockObj()]), catalog);
+    const mats = group.userData['aquascape:causticMaterials'] as MeshStandardMaterial[];
+    expect(Array.isArray(mats)).toBe(true);
+    expect(mats.length).toBe(1);
+    expect(mats[0]!.userData['causticUniforms']).toBeDefined();
+  });
+
   it('returns null from the per-object builder when the silhouette is too small', () => {
     const tiny: HardscapeEntry = {
       ...rockEntry(),

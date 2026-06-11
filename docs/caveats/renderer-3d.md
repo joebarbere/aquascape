@@ -33,9 +33,19 @@ Material: `ShaderMaterial` with `transparent: true`, `depthWrite: false`, `side:
 
 Cached on the renderer (`this.waterMesh: WaterMeshHandle | null`, tagged by `WxHxD`). Tank resize disposes + rebuilds. RAF tick calls `waterMesh.updateTime(performance.now() / 1000)` every frame; the handle no-ops after dispose so a stale tick is safe. Same detach-before-`disposeNode` discipline as the livestock bundle — the cached mesh must be removed from `currentContent` before the rebuild walker disposes the tree, otherwise the shared geometry + material would be GPU-disposed every render.
 
-**Caustics: deferred.** The F11.7 plan calls for noise-texture caustics modulating the directional light's intensity on substrate + hardscape. Shipping that requires either a fragile `onBeforeCompile` patch on the standard PBR material or bespoke ShaderMaterials for substrate + hardscape — both are larger changes than the water plane itself. The water surface alone is a meaningful visual win and caustics belong in a follow-up (F11.7.1).
+**Caustics: shipped (fidelity pass).** See "Animated caustics" below — the `onBeforeCompile` patch the F11.7 note worried about turned out clean: a procedural (no-texture) caustic injected into the substrate + hardscape `MeshStandardMaterial`s.
 
-**Refraction: out of scope.** A proper refraction approximation needs a screen-space pre-pass (extra render target). The fragment's specular highlight + alpha ramp is the visual scope v1 ships.
+**Refraction: still deferred.** A proper screen-space refraction of the *water surface* needs an extra render-target pre-pass (a single-pass shader can't sample the framebuffer it's writing to). The now-transmissive **glass** (PR1) already supplies the dominant refraction read of the tank contents, so water-surface refraction is low incremental value for the render-target cost; revisit if demand surfaces.
+
+**Post-processing bloom: deferred (infrastructure + validation).** `EffectComposer` + `UnrealBloomPass` would make the water specular + bubble highlights glow, but it needs the `three/examples/jsm/postprocessing/*` ESM addons wired through tsconfig path-maps + jest stubs (the OrbitControls dance × 4 modules) AND careful tone-mapping integration (OutputPass vs the renderer's ACES) that wants visual validation in a real browser. Tracked as a follow-up; the render loop's single `renderer.render(scene, camera)` is the seam it slots into (guard a `composer.render()` behind `instanceof WebGLRenderer`, fall back to the direct call for the headless stub).
+
+## Animated caustics (fidelity pass)
+
+`scene-builder/caustics.ts` patches the substrate + hardscape `MeshStandardMaterial`s (via `onBeforeCompile`) to add a dancing underwater caustic highlight — the strongest "this is underwater" cue the render has.
+
+- **Procedural, not a sampled texture.** A small layered-sine `aqCaustic(worldXZ, t)` function in the fragment shader — no texture upload, no addon, no RNG. Sampled in WORLD space (the vertex patch captures `vCausticWorld` + `vCausticUp` itself rather than relying on `<worldpos_vertex>`, which only emits under certain material defines) so the pattern is anchored to the tank, not sliding across surfaces as the camera orbits.
+- **Modulated** by `clamp(worldNormal.y)` (light comes from above → up-facing faces catch it) and a mild depth factor, added as a cool highlight AFTER the standard pipeline (`<dithering_fragment>`) like the plant emissive boost.
+- **Collected like plant sway.** The builders stash each patched material on `group.userData[CAUSTIC_MATERIALS_KEY]`; the renderer flattens substrate + hardscape lists into `this.causticMaterials`, advances `uCausticTime` every RAF tick (same wall clock as the water + sway), and scales `uCausticStrength` by the day-night `directionalIntensity` per render so caustics fade out at night. Determinism holds: the only time-varying input is `uTime`. Materials are owned by their meshes (disposed by `disposeNode`); `causticMaterials` is a non-owning view cleared on rebuild + dispose.
 
 ## Lighting, tone mapping, IBL & shadows (fidelity pass)
 

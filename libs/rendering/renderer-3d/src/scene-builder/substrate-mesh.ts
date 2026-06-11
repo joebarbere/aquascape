@@ -20,6 +20,8 @@ import { sampleCatmullRom } from '@aquascape/domain/geometry';
 import type { CatalogRef, Scene, SubstrateRegion } from '@aquascape/domain/scene-model';
 import { Group, Mesh, MeshStandardMaterial, Shape, ExtrudeGeometry } from 'three';
 
+import { applyCaustics, CAUSTIC_MATERIALS_KEY } from './caustics';
+
 /** Catalog-miss / catalog-omitted fallback colour. */
 const FALLBACK_COLOR = '#7b6a4a';
 /** Roughness for substrate material. Substrate is grainy, not glossy. */
@@ -48,11 +50,19 @@ export function buildSubstrateMeshes(scene: Scene, catalog: Catalog | undefined)
   group.name = 'aquascape:substrate';
   const tankW = scene.tank.width;
   const tankD = scene.tank.depth;
+  // The substrate floor is the primary canvas for caustics — collect the
+  // patched materials so the host can advance their `uCausticTime`.
+  const causticMaterials: MeshStandardMaterial[] = [];
+  group.userData[CAUSTIC_MATERIALS_KEY] = causticMaterials;
   if (tankW <= 0 || tankD <= 0) return group;
 
   for (const region of scene.substrate.regions) {
     const mesh = buildRegionMesh(region, tankW, tankD, catalog);
-    if (mesh !== null) group.add(mesh);
+    if (mesh !== null) {
+      applyCaustics(mesh.material as MeshStandardMaterial, scene.tank.height);
+      causticMaterials.push(mesh.material as MeshStandardMaterial);
+      group.add(mesh);
+    }
   }
   return group;
 }

@@ -86,6 +86,7 @@ import {
   Mesh,
   Object3D,
   PCFSoftShadowMap,
+  type MeshStandardMaterial,
   PerspectiveCamera,
   PMREMGenerator,
   Scene as ThreeScene,
@@ -180,6 +181,11 @@ const defaultRendererFactory: RendererFactory = (canvas) => {
   return renderer;
 };
 import { buildCamera, tankCenter } from './scene-builder/camera';
+import {
+  CAUSTIC_MATERIALS_KEY,
+  setCausticIntensity,
+  updateCausticTime,
+} from './scene-builder/caustics';
 import { buildEnvEquirectTexture, ENV_INTENSITY } from './scene-builder/environment';
 import { buildHardscapeMeshes } from './scene-builder/hardscape-mesh';
 import { buildLighting } from './scene-builder/lighting';
@@ -309,6 +315,15 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    * frame `uTime` advance has somewhere to land.
    */
   private currentPlantGroup: Group | null = null;
+  /**
+   * Fidelity pass (caustics) — the flat list of substrate + hardscape
+   * materials patched with the animated caustic shader. Re-collected every
+   * `render()` from the freshly-built substrate + hardscape groups; the RAF
+   * tick advances each one's `uCausticTime`. The materials are owned by their
+   * meshes (disposed by `disposeNode`), so this is just a non-owning view —
+   * cleared on rebuild + dispose.
+   */
+  private causticMaterials: MeshStandardMaterial[] = [];
   /**
    * Stage 11 F11.7 Wave 3 — cached references to the lighting rig's
    * Ambient + Directional lights. Set in `ensureLightingForTank` after
@@ -547,6 +562,12 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
         updatePlantSwayTime(this.currentPlantGroup, now / 1000);
       }
 
+      // Fidelity pass (caustics) — advance the substrate + hardscape caustic
+      // shader's time uniform off the same wall clock as the water + sway.
+      if (this.causticMaterials.length > 0) {
+        updateCausticTime(this.causticMaterials, now / 1000);
+      }
+
       ctl?.update();
       r.render(s, c);
       this.rafHandle = raf.requestAnimationFrame(tick);
@@ -612,12 +633,31 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       // poke `uTime` on torn-down uniforms before the new group is built
       // a few lines down. Reassigned below.
       this.currentPlantGroup = null;
+      // Fidelity pass (caustics) — same reasoning: the substrate + hardscape
+      // materials were just disposed; drop the non-owning view. Reassigned
+      // when the new substrate + hardscape groups are built below.
+      this.causticMaterials = [];
     }
     const content = new Object3D();
     content.name = 'aquascape:content';
     content.add(buildTankMesh(scene.tank));
-    content.add(buildSubstrateMeshes(scene, catalog));
-    content.add(buildHardscapeMeshes(scene, catalog));
+    const substrateGroup = buildSubstrateMeshes(scene, catalog);
+    const hardscapeGroup = buildHardscapeMeshes(scene, catalog);
+    content.add(substrateGroup);
+    content.add(hardscapeGroup);
+    // Fidelity pass (caustics) — collect the patched substrate + hardscape
+    // materials so the RAF tick can advance their animation. Scale intensity
+    // by the day-night directional level so caustics fade out at night.
+    this.causticMaterials = [
+      ...((substrateGroup.userData[CAUSTIC_MATERIALS_KEY] as MeshStandardMaterial[] | undefined) ??
+        []),
+      ...((hardscapeGroup.userData[CAUSTIC_MATERIALS_KEY] as MeshStandardMaterial[] | undefined) ??
+        []),
+    ];
+    setCausticIntensity(
+      this.causticMaterials,
+      options.dayNightLookup?.directionalIntensity ?? 1,
+    );
     // Stage 11 F11.7 — retain a handle on the plant group so the RAF tick
     // can drive its sway materials' `uTime` uniform. The group itself is
     // rebuilt + GPU-disposed every render (no caching), but we always
@@ -1098,6 +1138,9 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     // geometries + materials were disposed by `disposeNode` above; this is
     // just our reference.
     this.currentPlantGroup = null;
+    // Fidelity pass (caustics) — drop the non-owning material view (the
+    // materials themselves were disposed by `disposeNode` above).
+    this.causticMaterials = [];
 
     // Stage 11 F11.1 — release the GPU resources behind the livestock
     // bundle. The world itself is owned by the host (it survives a
