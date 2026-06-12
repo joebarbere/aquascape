@@ -1,4 +1,4 @@
-import { Mesh, MeshStandardMaterial } from 'three';
+import { Mesh, MeshStandardMaterial, Texture, type WebGLProgramParametersWithUniforms } from 'three';
 import type {
   Catalog,
   CatalogEntry,
@@ -330,5 +330,51 @@ describe('hardscape noise displacement', () => {
       if (arr[i] !== 0) nonZeroCount++;
     }
     expect(nonZeroCount).toBeGreaterThan(0);
+  });
+});
+
+describe('hardscape catalog textures (Bucket 2)', () => {
+  it('patches with the triplanar texture when refs + resolver exist; chains stone-noise + caustics', () => {
+    const entry: HardscapeEntry = {
+      ...rockEntry(),
+      textures: { albedo: 'stone-gray.albedo.png', roughness: 'stone-gray.roughness.png' },
+    };
+    const catalog = makeCatalog([entry]);
+    const resolver = jest.fn(() => new Texture());
+    const group = buildHardscapeMeshes(sceneWithLayer([rockObj()]), catalog, resolver);
+    const mat = (group.children[0] as Mesh).material as MeshStandardMaterial;
+    const shader = {
+      uniforms: {},
+      vertexShader: ['#include <common>', '#include <beginnormal_vertex>', '#include <begin_vertex>'].join('\n'),
+      fragmentShader: [
+        '#include <common>',
+        '#include <color_fragment>',
+        '#include <roughnessmap_fragment>',
+        '#include <normal_fragment_begin>',
+        '#include <dithering_fragment>',
+      ].join('\n'),
+    } as unknown as WebGLProgramParametersWithUniforms;
+    mat.onBeforeCompile!(shader, undefined as never);
+    expect(shader.fragmentShader).toContain('uAqTexAlbedo');
+    expect(shader.fragmentShader).toContain('aqRockNoise');
+    expect(shader.fragmentShader).toContain('aqCaustic');
+    expect(resolver).toHaveBeenCalledWith('stone-gray.albedo.png', 'albedo');
+  });
+
+  it('does not patch without a resolver (opt-in contract)', () => {
+    const entry: HardscapeEntry = {
+      ...rockEntry(),
+      textures: { albedo: 'stone-gray.albedo.png' },
+    };
+    const catalog = makeCatalog([entry]);
+    const group = buildHardscapeMeshes(sceneWithLayer([rockObj()]), catalog);
+    const mat = (group.children[0] as Mesh).material as MeshStandardMaterial;
+    const shader = {
+      uniforms: {},
+      vertexShader: ['#include <common>', '#include <beginnormal_vertex>', '#include <begin_vertex>'].join('\n'),
+      fragmentShader: ['#include <common>', '#include <color_fragment>', '#include <dithering_fragment>'].join('\n'),
+    } as unknown as WebGLProgramParametersWithUniforms;
+    mat.onBeforeCompile!(shader, undefined as never);
+    expect(shader.fragmentShader).not.toContain('uAqTexAlbedo');
   });
 });

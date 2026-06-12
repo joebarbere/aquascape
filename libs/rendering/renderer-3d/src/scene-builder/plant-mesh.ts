@@ -75,6 +75,14 @@ import {
   type WebGLProgramParametersWithUniforms,
 } from 'three';
 
+import {
+  applyCatalogTextures,
+  resolveTextureSet,
+  TEX_ALBEDO_STRENGTH_PLANT,
+  TEX_TILE_PLANT_MM,
+  type CatalogTextureResolver,
+  type CatalogTextureSet,
+} from './catalog-texture';
 import { computeZonedZ } from './layer-zone-z';
 import { substrateHeightAt } from './substrate-height';
 import { clampToScene } from './tank-clamp';
@@ -217,6 +225,7 @@ export function buildPlantMeshes(
   catalog: Catalog | undefined,
   previewAgeWeeks: number | undefined,
   flowField?: FlowField,
+  resolveTexture?: CatalogTextureResolver,
 ): Group {
   const group = new Group();
   group.name = 'aquascape:plants';
@@ -228,15 +237,39 @@ export function buildPlantMeshes(
       const entry = resolvePlantEntry(obj.ref, catalog);
       if (entry === null) continue;
       const scale = plantScale(entry.growth, obj.growth, previewAgeWeeks);
+      // Bucket 2 — resolve the entry's catalog texture set ONCE per object
+      // (cache-backed; every material this object produces shares it).
+      // Null when the entry has no refs or the host passed no resolver —
+      // the materials are then exactly the pre-Bucket-2 ones.
+      const texSet = resolveTextureSet(entry.textures, resolveTexture);
       const node =
         obj.scatter !== undefined
-          ? buildScatterPatch(obj, entry, scale, scene, swayMaterials, flowField)
-          : buildSingleSpecimen(obj, entry, scale, scene, layer, swayMaterials, flowField);
+          ? buildScatterPatch(obj, entry, scale, scene, swayMaterials, flowField, texSet)
+          : buildSingleSpecimen(obj, entry, scale, scene, layer, swayMaterials, flowField, texSet);
       if (node !== null) group.add(node);
     }
   }
   group.userData[PLANT_SWAY_MATERIALS_KEY] = swayMaterials;
   return group;
+}
+
+/**
+ * Bucket 2 — patch a freshly-created plant sway material with the object's
+ * catalog texture set. Plants use the GENTLER albedo strength (the species'
+ * authored green stays identifiable) and SKIP the normal map (strength 0 —
+ * micro relief reads as noise on the thin cross-plane silhouette slabs,
+ * and the sway displacement would shear it anyway). No-op on null.
+ */
+function applyPlantTextures(
+  mat: MeshStandardMaterial,
+  texSet: CatalogTextureSet | null,
+): void {
+  if (texSet === null) return;
+  applyCatalogTextures(mat, texSet, {
+    tileMm: TEX_TILE_PLANT_MM,
+    albedoStrength: TEX_ALBEDO_STRENGTH_PLANT,
+    normalStrength: 0,
+  });
 }
 
 /**
@@ -251,6 +284,7 @@ function buildSingleSpecimen(
   layer: Layer,
   swayMaterials: MeshStandardMaterial[],
   flowField: FlowField | undefined,
+  texSet: CatalogTextureSet | null,
 ): Mesh | null {
   const geo = buildSilhouetteGeometry(entry);
   if (geo === null) return null;
@@ -297,6 +331,7 @@ function buildSingleSpecimen(
     phase,
     flowAmp: flowAmpAt(flowField, clamped.x, floor, clamped.z),
   });
+  applyPlantTextures(mat, texSet);
   swayMaterials.push(mat);
   const mesh = new Mesh(geo, mat);
   mesh.name = `aquascape:plant/${obj.id}`;
@@ -341,6 +376,7 @@ function buildScatterPatch(
   scene: Scene,
   swayMaterials: MeshStandardMaterial[],
   flowField: FlowField | undefined,
+  texSet: CatalogTextureSet | null,
 ): Group | InstancedMesh | null {
   const scatter = obj.scatter;
   if (scatter === undefined) return null;
@@ -403,6 +439,7 @@ function buildScatterPatch(
       phase: 0,
       instanced: true,
     });
+    applyPlantTextures(mat, texSet);
     swayMaterials.push(mat);
 
     const instanced = new InstancedMesh(geo, mat, capped.length);
@@ -458,6 +495,7 @@ function buildScatterPatch(
       phase: seededHash01(phaseSeed, idHash, i) * 2 * Math.PI,
       flowAmp: flowAmpAt(flowField, worldX, worldY, worldZ),
     });
+    applyPlantTextures(mat, texSet);
     swayMaterials.push(mat);
     const mesh = new Mesh(geo, mat);
     mesh.castShadow = true;

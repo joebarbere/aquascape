@@ -8,5 +8,10 @@
   "color": "#efe7d2",
   "grainSize": 1,
   "description": "Bright white sand, often used for biotope foregrounds. Raises pH and hardness; not suited to acidic planted tanks.",
-  "tags": ["biotope", "marine", "sand"]
+  "tags": ["biotope", "marine", "sand"],
+  "textures": {
+    "albedo": "sand-fine.albedo.png",
+    "normal": "sand-fine.normal.png",
+    "roughness": "sand-fine.roughness.png"
+  }
 }

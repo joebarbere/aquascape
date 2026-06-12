@@ -13,6 +13,7 @@
     "format": "nx format:write",
     "format:check": "nx format:check",
     "precompile:validators": "node tools/precompile-validators.mjs",
+    "generate:textures": "node tools/generate-textures.mjs",
     "icons": "node tools/build-icons.mjs",
     "dev-bundle": "bash tools/build-dev-bundle.sh",
     "restart:desktop": "bash tools/restart-desktop.sh",

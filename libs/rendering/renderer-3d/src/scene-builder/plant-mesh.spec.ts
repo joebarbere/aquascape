@@ -1,4 +1,7 @@
-import { Group, InstancedMesh, Mesh, MeshStandardMaterial, type Shader } from 'three';
+import { Group, InstancedMesh, Mesh, MeshStandardMaterial, type Shader,
+  Texture,
+  type WebGLProgramParametersWithUniforms,
+} from 'three';
 import type {
   Catalog,
   CatalogEntry,
@@ -616,5 +619,47 @@ describe('plant-mesh flow-coupled sway (fidelity pass)', () => {
     expect(shader.vertexShader).toMatch(
       /swayFreq\s*=\s*7\.539822\s*\*\s*mix\(\s*1\.0\s*,\s*uFlowAmp\s*,\s*0\.5000\s*\)/,
     );
+  });
+});
+
+describe('plant catalog textures (Bucket 2)', () => {
+  function texturedEntry(): PlantEntry {
+    return { ...carpetEntry(), textures: { albedo: 'leaf-fine.albedo.png', normal: 'leaf-fine.normal.png' } };
+  }
+  function stub(): WebGLProgramParametersWithUniforms {
+    return {
+      uniforms: {},
+      vertexShader: ['#include <common>', '#include <beginnormal_vertex>', '#include <begin_vertex>'].join('\n'),
+      fragmentShader: [
+        '#include <common>',
+        '#include <color_fragment>',
+        '#include <roughnessmap_fragment>',
+        '#include <normal_fragment_begin>',
+        '#include <dithering_fragment>',
+      ].join('\n'),
+    } as unknown as WebGLProgramParametersWithUniforms;
+  }
+
+  it('patches the single-specimen sway material; sway survives; normal map SKIPPED for plants', () => {
+    const catalog = makeCatalog([texturedEntry()]);
+    const resolver = jest.fn(() => new Texture());
+    const group = buildPlantMeshes(sceneWithPlants([plant()]), catalog, undefined, undefined, resolver);
+    const mat = (group.children[0] as Mesh).material as MeshStandardMaterial;
+    const shader = stub();
+    mat.onBeforeCompile!(shader, undefined as never);
+    expect(shader.fragmentShader).toContain('uAqTexAlbedo');
+    // Plants pass normalStrength 0 — no normal perturbation GLSL.
+    expect(shader.fragmentShader).not.toContain('aqWorldN');
+    // The sway patch is still chained (uTime uniform wired).
+    expect(shader.uniforms['uTime']).toBeDefined();
+  });
+
+  it('does not patch without a resolver (opt-in contract)', () => {
+    const catalog = makeCatalog([texturedEntry()]);
+    const group = buildPlantMeshes(sceneWithPlants([plant()]), catalog, undefined);
+    const mat = (group.children[0] as Mesh).material as MeshStandardMaterial;
+    const shader = stub();
+    mat.onBeforeCompile!(shader, undefined as never);
+    expect(shader.fragmentShader).not.toContain('uAqTexAlbedo');
   });
 });

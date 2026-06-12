@@ -40,6 +40,37 @@ export type HexColor = string;
 /** Discriminated union over catalog content types. */
 export type CatalogKind = 'substrate' | 'tank' | 'hardscape' | 'plant' | 'equipment' | 'livestock';
 
+/**
+ * Optional photorealistic texture maps (Bucket 2 of the 3D fidelity plan,
+ * 3D renderer only). Shared by `SubstrateEntry`, `HardscapeEntry`, and
+ * `PlantEntry`.
+ *
+ * Refs are renderer-agnostic relative file names under the catalog texture
+ * root — the host serves that root at `assets/catalog-textures/` and the 3D
+ * renderer resolves `baseUrl + ref`. The 2D renderer ignores the field
+ * entirely; the 3D renderer samples the maps triplanar in world space (no
+ * UVs in the procedural geometry). An absent field = the procedural-only
+ * pre-Bucket-2 look — every map is optional, so manifests can ship any
+ * subset.
+ *
+ * Texture refs follow the family file-name convention
+ * `<family>.{albedo,normal,roughness}.png` (e.g. `stone-gray.albedo.png`);
+ * the schema constrains each ref to `^[a-z0-9._/-]+\.png$`.
+ *
+ * Livestock is deliberately EXCLUDED: per-species textures fight the
+ * per-archetype InstancedMesh batching in `livestock-renderer-3d` (one draw
+ * call per archetype, per-instance data limited to attribute slabs) —
+ * deferred, documented in the plan.
+ */
+export interface CatalogTextureRefs {
+  /** Base-colour map ref, relative to the catalog texture root. */
+  albedo?: string;
+  /** Tangent-space normal map ref. */
+  normal?: string;
+  /** Roughness map ref (grayscale, 0 = mirror, 1 = matte). */
+  roughness?: string;
+}
+
 /** Shared envelope every catalog entry carries. */
 export interface CatalogEntryBase {
   /** Catalog namespace, e.g. "core", "community:tropiscape". */
@@ -74,6 +105,8 @@ export interface SubstrateEntry extends CatalogEntryBase {
   color: HexColor;
   /** Typical grain diameter (mm). Used for inspector display + future visuals. */
   grainSize?: Millimetres;
+  /** Optional photorealistic texture maps (Bucket 2, 3D renderer only). */
+  textures?: CatalogTextureRefs;
 }
 
 // ─── Hardscape (Stage 3 F3.5) ─────────────────────────────────────────────
@@ -120,6 +153,8 @@ export interface HardscapeEntry extends CatalogEntryBase {
    * entries, only to hardscape rocks + wood + decor.
    */
   coverScore?: number;
+  /** Optional photorealistic texture maps (Bucket 2, 3D renderer only). */
+  textures?: CatalogTextureRefs;
 }
 
 // ─── Plant (Stage 4 F4.1) ─────────────────────────────────────────────────
@@ -160,6 +195,8 @@ export interface PlantEntry extends CatalogEntryBase {
   };
   /** Suggested carpet-brush density (instances per 100 cm²); carpets only. */
   defaultDensity?: number;
+  /** Optional photorealistic texture maps (Bucket 2, 3D renderer only). */
+  textures?: CatalogTextureRefs;
 }
 
 // ─── Livestock (Stage 7 F7.1) ─────────────────────────────────────────────

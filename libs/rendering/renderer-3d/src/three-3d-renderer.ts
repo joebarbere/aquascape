@@ -194,6 +194,7 @@ import {
 } from './render-target-support';
 import { buildBackdropTexture, updateBackdropTint } from './scene-builder/backdrop';
 import { buildCamera, tankCenter } from './scene-builder/camera';
+import type { CatalogTextureResolver } from './scene-builder/catalog-texture';
 import {
   CAUSTIC_MATERIALS_KEY,
   setCausticIntensity,
@@ -210,6 +211,7 @@ import {
 import { buildSubstrateMeshes } from './scene-builder/substrate-mesh';
 import { buildTankMesh } from './scene-builder/tank-mesh';
 import { buildWaterMesh, type WaterMeshHandle } from './scene-builder/water-mesh';
+import { TextureCache } from './texture-cache';
 
 /**
  * Fidelity pass (bloom) — UnrealBloomPass tuning. High threshold so only the
@@ -426,6 +428,16 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    */
   private composer: EffectComposer | null = null;
   private bloomPass: UnrealBloomPass | null = null;
+  /**
+   * Bucket 2 (catalog textures) — URL-keyed texture cache, created lazily
+   * on the first render that supplies `options.catalogTextureBaseUrl` and
+   * kept for the renderer's LIFETIME (textures survive content rebuilds —
+   * the patched materials hold them via `onBeforeCompile` uniforms, which
+   * `disposeNode`'s map-dispose walk never sees). Disposed exactly once,
+   * in `dispose()`. See `texture-cache.ts` for the placeholder-upgrade
+   * contract that keeps still-loading textures visually neutral.
+   */
+  private textureCache: TextureCache | null = null;
   /**
    * Bucket-0 capability gate — whether render-target / multi-pass effects
    * (SSAO, screen-space refraction) are safe on the attached GL context.
@@ -715,8 +727,14 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     const content = new Object3D();
     content.name = 'aquascape:content';
     content.add(buildTankMesh(scene.tank));
-    const substrateGroup = buildSubstrateMeshes(scene, catalog);
-    const hardscapeGroup = buildHardscapeMeshes(scene, catalog);
+    // Bucket 2 — when the host supplies a texture base URL, hand the
+    // builders a cache-backed resolver so catalog `textures` refs become
+    // live (placeholder-first) THREE.Textures. Absent ⇒ undefined ⇒ the
+    // builders skip the patch and the shaders stay byte-identical to the
+    // pre-Bucket-2 render (the opt-in contract on `RenderOptions`).
+    const resolveTexture = this.buildTextureResolver(options.catalogTextureBaseUrl);
+    const substrateGroup = buildSubstrateMeshes(scene, catalog, resolveTexture);
+    const hardscapeGroup = buildHardscapeMeshes(scene, catalog, resolveTexture);
     content.add(substrateGroup);
     content.add(hardscapeGroup);
     // Fidelity pass (caustics) — collect the patched substrate + hardscape
@@ -736,7 +754,13 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     // can drive its sway materials' `uTime` uniform. The group itself is
     // rebuilt + GPU-disposed every render (no caching), but we always
     // re-point this handle at the latest group so per-frame ticks land.
-    const plantGroup = buildPlantMeshes(scene, catalog, previewAgeWeeks, options.flowField);
+    const plantGroup = buildPlantMeshes(
+      scene,
+      catalog,
+      previewAgeWeeks,
+      options.flowField,
+      resolveTexture,
+    );
     this.currentPlantGroup = plantGroup;
     content.add(plantGroup);
     // Stage 11 F11.7 Wave 3 — write the day-night `emissiveBoost` into the
@@ -990,6 +1014,27 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     if (tScene.background !== this.backdropTexture) {
       tScene.background = this.backdropTexture;
     }
+  }
+
+  /**
+   * Bucket 2 — build the catalog-texture resolver for this render, or
+   * `undefined` when the host didn't supply a base URL (the opt-in
+   * contract). Lazily creates the renderer-lifetime `TextureCache` on
+   * first use. The resolver is a pure function of `(baseUrl, ref, kind)`
+   * over an idempotent cache, so repeated renders with the same options
+   * produce identical patched-shader sources — idempotency holds; the
+   * async placeholder→image upgrade is monotonic, matching how the IBL
+   * environment fills in.
+   */
+  private buildTextureResolver(
+    baseUrl: string | undefined,
+  ): CatalogTextureResolver | undefined {
+    if (baseUrl === undefined) return undefined;
+    if (this.textureCache === null) {
+      this.textureCache = new TextureCache();
+    }
+    const cache = this.textureCache;
+    return (ref, kind) => cache.get(baseUrl + ref, kind);
   }
 
   /**
@@ -1381,6 +1426,15 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     // Bucket-0 gate — back to the pre-attach default; the next real
     // `setupComposer` run re-probes the (possibly different) context.
     this.renderTargetEffectsSupported = false;
+
+    // Bucket 2 — release every cached catalog texture. The patched
+    // materials referencing them were disposed by `disposeNode` above;
+    // the textures themselves are owned HERE (uniform references are
+    // invisible to the disposeNode walk by design).
+    if (this.textureCache !== null) {
+      this.textureCache.dispose();
+      this.textureCache = null;
+    }
 
     if (this.renderer !== null) {
       this.renderer.dispose();

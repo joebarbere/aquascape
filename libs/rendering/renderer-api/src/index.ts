@@ -288,6 +288,24 @@ export interface RenderOptions {
    * the shader. Omitted ⇒ the pre-fidelity constant-frequency sway.
    */
   readonly flowField?: FlowField;
+  /**
+   * Bucket 2 (3D fidelity) — base URL the 3D renderer prepends to each
+   * catalog entry's `textures` refs (`CatalogTextureRefs` — optional
+   * albedo / normal / roughness PNGs on substrate / hardscape / plant
+   * entries) to load photorealistic texture maps. The web host serves the
+   * catalog texture pack at `assets/catalog-textures/` and forwards that
+   * path here on 3D renders only.
+   *
+   * The 2D renderer ignores this field. **Omitted ⇒ the procedural-only
+   * pre-Bucket-2 render, bit-identical** — the 3D renderer builds no
+   * texture resolver and leaves every material's shader source untouched.
+   *
+   * Texture assets are 256×256 seamlessly-tiling PNGs: albedo (sRGB,
+   * moderate contrast, mean luminance ~0.5–0.6 — designed to MODULATE the
+   * authored catalog colours, not replace them), normal (tangent-space,
+   * linear), roughness (linear).
+   */
+  readonly catalogTextureBaseUrl?: string;
 }
 
 /**

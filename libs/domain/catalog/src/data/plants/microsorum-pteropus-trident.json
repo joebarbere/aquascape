@@ -38,5 +38,10 @@
     { "x": -0.55, "y": -0.4 },
     { "x": -0.3, "y": -0.55 }
   ],
-  "growth": { "weeksToMature": 13, "sizeAtZero": 0.5 }
+  "growth": { "weeksToMature": 13, "sizeAtZero": 0.5 },
+  "textures": {
+    "albedo": "leaf-broad.albedo.png",
+    "normal": "leaf-broad.normal.png",
+    "roughness": "leaf-broad.roughness.png"
+  }
 }

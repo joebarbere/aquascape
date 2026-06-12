@@ -1167,3 +1167,77 @@ describe('Three3DRenderer — render-target capability gate', () => {
     raf.uninstall();
   });
 });
+
+describe('Three3DRenderer — catalog textures (Bucket 2)', () => {
+  function texturedSubstrateScene(): Scene {
+    const base = sceneOf();
+    return {
+      ...base,
+      substrate: {
+        regions: [
+          {
+            id: 'r1',
+            material: { catalog: 'core', id: 'substrate.soil', version: 1 },
+            fromX: 0,
+            toX: 1,
+            profile: [
+              { x: 0, y: 30 },
+              { x: 1, y: 30 },
+            ],
+          },
+        ],
+      },
+    };
+  }
+  const texturedCatalog = (): Catalog =>
+    makeCatalog([
+      {
+        catalog: 'core',
+        id: 'substrate.soil',
+        version: 1,
+        name: 'Soil',
+        kind: 'substrate',
+        material: 'soil',
+        color: '#2a2520',
+        textures: {
+          albedo: 'soil-dark.albedo.png',
+          normal: 'soil-dark.normal.png',
+          roughness: 'soil-dark.roughness.png',
+        },
+      } as CatalogEntry,
+    ]);
+
+  it('creates the texture cache + resolves refs only when catalogTextureBaseUrl is supplied', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const renderer = new Three3DRenderer(makeFactory(stub));
+    renderer.attach(makeSurface());
+
+    const cacheOf = (): { size(): number } | null =>
+      (renderer as unknown as { textureCache: { size(): number } | null }).textureCache;
+
+    // Without the option: no cache, shaders stay pre-Bucket-2.
+    renderer.render(texturedSubstrateScene(), viewport, { catalog: texturedCatalog() });
+    expect(cacheOf()).toBeNull();
+
+    // With the option: cache created, one texture per distinct ref URL.
+    renderer.render(texturedSubstrateScene(), viewport, {
+      catalog: texturedCatalog(),
+      catalogTextureBaseUrl: 'assets/catalog-textures/',
+    });
+    expect(cacheOf()).not.toBeNull();
+    expect(cacheOf()!.size()).toBe(3);
+
+    // Re-render dedupes (same URLs, same cache entries).
+    renderer.render(texturedSubstrateScene(), viewport, {
+      catalog: texturedCatalog(),
+      catalogTextureBaseUrl: 'assets/catalog-textures/',
+    });
+    expect(cacheOf()!.size()).toBe(3);
+
+    // Dispose releases the cache.
+    renderer.dispose();
+    expect(cacheOf()).toBeNull();
+    raf.uninstall();
+  });
+});

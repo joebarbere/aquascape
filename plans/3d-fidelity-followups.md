@@ -28,7 +28,9 @@ flow-coupled sway **frequency** (`FLOW_FREQ_COUPLING`), and water-surface
 caustics (`uCausticStrength` on the water handle, day-night-faded). All
 headlessly validated; demo regenerated.
 
-**Not yet done** — two buckets, in priority order below:
+**Bucket 2 (catalog-driven textures) also shipped** — see its section below.
+
+**Not yet done** — one bucket:
 
 1. **Render-target / multi-pass effects** (SSAO, screen-space water refraction)
    — BLOCKED on validation, not on code. SSAO was wired + then backed out
@@ -37,8 +39,6 @@ headlessly validated; demo regenerated.
    first — the capability gate is in place, but the *validation-loop choice*
    (local GPU dev vs GPU CI runner vs manual checklist, below) is still an
    open decision for the maintainer.
-2. **Catalog-driven textures** (albedo / normal / roughness maps) — the honest
-   long-term material fix; large (schema + asset pipeline + loader + renderer).
 
 ---
 
@@ -105,27 +105,34 @@ branch — recover from git history). Tasks:
 
 ---
 
-## Bucket 2: catalog-driven textures (large)
+## Bucket 2: catalog-driven textures — ✅ SHIPPED
 
-The procedural passes (substrate grain, stone texture, fish sheen) buy most of
-the realism cheaply; catalog textures are the honest long-term fix for
-photoreal albedo/normal detail. Coordinate with the **catalog-engineer** +
-**renderer-engineer**.
+Landed as a deterministic, fully-offline texture pack (no licensed assets, no
+network) + a world-space triplanar renderer patch:
 
-- **Schema** (`libs/domain/catalog/`): additive optional `textures?: { albedo?,
-  normal?, roughness? }` (asset refs) on substrate / hardscape / plant /
-  livestock entries. Additive → no schemaVersion bump; regenerate
-  `validator.generated.cjs` (`pnpm precompile:validators`).
-- **Asset pipeline** (`tools/`): bundle the texture assets into the catalog
-  build output; keep them content-addressed + deterministic.
-- **Loader** (`libs/domain/catalog/`): expose decoded texture refs; the host
-  loads them with `THREE.TextureLoader` (platform-aware — web vs Electron file
-  access).
-- **Renderer**: apply `map` / `normalMap` / `roughnessMap` to the
-  substrate / hardscape / plant materials (replacing or modulating the
-  procedural passes), and a per-archetype texture for fish (needs UVs that the
-  procedural fish geometry already generates).
-- Triplanar mapping for hardscape (no good UVs on the noise-displaced rock).
+- **✅ Schema** — additive `textures?: { albedo?, normal?, roughness? }`
+  (`CatalogTextureRefs`) on substrate / hardscape / plant entries;
+  schemaVersion stays 3; validator regenerated; all 53 eligible manifests
+  mapped to 9 shared texture families. **Livestock deliberately excluded** —
+  per-species textures fight the per-archetype InstancedMesh batching and the
+  16-attribute shader budget; revisit with a texture array if demand surfaces.
+- **✅ Asset pipeline** — `tools/generate-textures.mjs` (`pnpm
+  generate:textures`): seeded splitmix32 fBm/Worley baker producing 27
+  seamlessly-tiling 256² PNGs (~1.7 MB committed), byte-identical across
+  runs; semantic family names instead of content-addressing (committed files
+  are the source of truth — same policy as the generated validators).
+  Served at `assets/catalog-textures/` via an apps/web asset glob (Electron
+  loads the web dist, so both apps are covered).
+- **✅ Renderer** — `RenderOptions.catalogTextureBaseUrl` (opt-in; absent ⇒
+  byte-identical pre-Bucket-2 shaders), a renderer-lifetime `TextureCache`
+  (neutral-placeholder → in-place image upgrade, no recompile, 404-safe),
+  and a **triplanar world-space** `onBeforeCompile` patch
+  (`scene-builder/catalog-texture.ts`) for substrate + hardscape + plants —
+  albedo/roughness MODULATE the authored catalog colours; normals are
+  swizzled-UDN (plants skip them). Triplanar everywhere, not just hardscape —
+  ExtrudeGeometry UVs are useless on side walls for all three kinds.
+- See `docs/caveats/renderer-3d.md` → "Catalog-driven textures" +
+  `docs/caveats/catalog.md` for the full contracts.
 
 ---
 

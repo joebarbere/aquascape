@@ -8,5 +8,10 @@
   "color": "#7a3a26",
   "grainSize": 3,
   "description": "Porous clay gravel for planted tanks. Inert chemistry; promotes root growth as substrate-only or under aquasoil.",
-  "tags": ["planted", "clay", "gravel"]
+  "tags": ["planted", "clay", "gravel"],
+  "textures": {
+    "albedo": "gravel-mixed.albedo.png",
+    "normal": "gravel-mixed.normal.png",
+    "roughness": "gravel-mixed.roughness.png"
+  }
 }

@@ -556,9 +556,9 @@ describe('validateCatalogEntry (livestock, Stage 7 F7.1)', () => {
     });
 
     it('accepts an explicit null for behavior.territory (opt out)', () => {
-      expect(
-        validateCatalogEntry({ ...validLivestock, behavior: { territory: null } }).ok,
-      ).toBe(true);
+      expect(validateCatalogEntry({ ...validLivestock, behavior: { territory: null } }).ok).toBe(
+        true,
+      );
     });
 
     it('rejects a typo inside behavior.territory (additionalProperties: false)', () => {
@@ -616,9 +616,9 @@ describe('validateCatalogEntry (livestock, Stage 7 F7.1)', () => {
     });
 
     it('accepts an explicit null for behavior.nipping (opt out)', () => {
-      expect(
-        validateCatalogEntry({ ...validLivestock, behavior: { nipping: null } }).ok,
-      ).toBe(true);
+      expect(validateCatalogEntry({ ...validLivestock, behavior: { nipping: null } }).ok).toBe(
+        true,
+      );
     });
 
     it('rejects a typo inside behavior.nipping (additionalProperties: false)', () => {
@@ -699,9 +699,7 @@ describe('validateCatalogEntry (livestock, Stage 7 F7.1)', () => {
     });
 
     it('rejects an explicit null for behavior.fear (no opt-out; fear is required at runtime)', () => {
-      expect(
-        validateCatalogEntry({ ...validLivestock, behavior: { fear: null } }).ok,
-      ).toBe(false);
+      expect(validateCatalogEntry({ ...validLivestock, behavior: { fear: null } }).ok).toBe(false);
     });
 
     it('rejects a typo inside behavior.fear (additionalProperties: false)', () => {
@@ -871,9 +869,9 @@ describe('validateCatalogEntry (livestock, Stage 7 F7.1)', () => {
     });
 
     it('rejects an explicit null for behavior.feeding (no opt-out; feeding is required at runtime)', () => {
-      expect(
-        validateCatalogEntry({ ...validLivestock, behavior: { feeding: null } }).ok,
-      ).toBe(false);
+      expect(validateCatalogEntry({ ...validLivestock, behavior: { feeding: null } }).ok).toBe(
+        false,
+      );
     });
 
     // curiosity ──────────────────────────────────────────────────────────────
@@ -953,9 +951,9 @@ describe('validateCatalogEntry (livestock, Stage 7 F7.1)', () => {
     });
 
     it('rejects an explicit null for behavior.curiosity (no opt-out at the type level)', () => {
-      expect(
-        validateCatalogEntry({ ...validLivestock, behavior: { curiosity: null } }).ok,
-      ).toBe(false);
+      expect(validateCatalogEntry({ ...validLivestock, behavior: { curiosity: null } }).ok).toBe(
+        false,
+      );
     });
 
     // co-existence ───────────────────────────────────────────────────────────
@@ -1147,21 +1145,15 @@ describe('validateCatalogEntry (equipment, Stage 7 F7.3)', () => {
     });
 
     it('accepts a partial flow block (just flowRate)', () => {
-      expect(
-        validateCatalogEntry({ ...validEquipment, flow: { flowRate: 200 } }).ok,
-      ).toBe(true);
+      expect(validateCatalogEntry({ ...validEquipment, flow: { flowRate: 200 } }).ok).toBe(true);
     });
 
     it('accepts flowRate = 0 (sentinel for an equipped-but-off filter)', () => {
-      expect(
-        validateCatalogEntry({ ...validEquipment, flow: { flowRate: 0 } }).ok,
-      ).toBe(true);
+      expect(validateCatalogEntry({ ...validEquipment, flow: { flowRate: 0 } }).ok).toBe(true);
     });
 
     it('rejects a negative flowRate', () => {
-      expect(
-        validateCatalogEntry({ ...validEquipment, flow: { flowRate: -10 } }).ok,
-      ).toBe(false);
+      expect(validateCatalogEntry({ ...validEquipment, flow: { flowRate: -10 } }).ok).toBe(false);
     });
 
     it('rejects a typo at the top of the flow block (additionalProperties: false)', () => {
@@ -1231,40 +1223,246 @@ describe('validateCatalogEntry (equipment, Stage 7 F7.3)', () => {
     });
 
     it('accepts a photoperiodHours value within [0, 24]', () => {
-      expect(
-        validateCatalogEntry({ ...validEquipment, photoperiodHours: 10 }).ok,
-      ).toBe(true);
+      expect(validateCatalogEntry({ ...validEquipment, photoperiodHours: 10 }).ok).toBe(true);
     });
 
     it('accepts photoperiodHours = 0 (sentinel for lights-off cycle)', () => {
-      expect(
-        validateCatalogEntry({ ...validEquipment, photoperiodHours: 0 }).ok,
-      ).toBe(true);
+      expect(validateCatalogEntry({ ...validEquipment, photoperiodHours: 0 }).ok).toBe(true);
     });
 
     it('accepts photoperiodHours = 24 (always-on cycle)', () => {
-      expect(
-        validateCatalogEntry({ ...validEquipment, photoperiodHours: 24 }).ok,
-      ).toBe(true);
+      expect(validateCatalogEntry({ ...validEquipment, photoperiodHours: 24 }).ok).toBe(true);
     });
 
     it('rejects photoperiodHours below 0', () => {
-      expect(
-        validateCatalogEntry({ ...validEquipment, photoperiodHours: -1 }).ok,
-      ).toBe(false);
+      expect(validateCatalogEntry({ ...validEquipment, photoperiodHours: -1 }).ok).toBe(false);
     });
 
     it('rejects photoperiodHours above 24', () => {
-      expect(
-        validateCatalogEntry({ ...validEquipment, photoperiodHours: 25 }).ok,
-      ).toBe(false);
+      expect(validateCatalogEntry({ ...validEquipment, photoperiodHours: 25 }).ok).toBe(false);
     });
 
     it('rejects a non-numeric photoperiodHours', () => {
-      expect(
-        validateCatalogEntry({ ...validEquipment, photoperiodHours: 'all-day' }).ok,
-      ).toBe(false);
+      expect(validateCatalogEntry({ ...validEquipment, photoperiodHours: 'all-day' }).ok).toBe(
+        false,
+      );
     });
+  });
+});
+
+describe('validateCatalogEntry (textures — 3D-fidelity Bucket 2, additive, no schemaVersion bump)', () => {
+  const fullTextures = {
+    albedo: 'stone-gray.albedo.png',
+    normal: 'stone-gray.normal.png',
+    roughness: 'stone-gray.roughness.png',
+  };
+
+  const validSubstrate = {
+    catalog: 'core',
+    id: 'substrate.x.y',
+    version: 1,
+    name: 'X',
+    kind: 'substrate',
+    material: 'soil',
+    color: '#abcdef',
+  };
+
+  const validHardscape = {
+    catalog: 'core',
+    id: 'rock.test',
+    version: 1,
+    name: 'Test rock',
+    kind: 'hardscape',
+    category: 'rock',
+    naturalSize: { width: 100, height: 80, depth: 60 },
+    color: '#abcdef',
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 0, y: 1 },
+    ],
+  };
+
+  const validPlant = {
+    catalog: 'core',
+    id: 'plant.test',
+    version: 1,
+    name: 'Test plant',
+    kind: 'plant',
+    zone: 'foreground',
+    lighting: 'medium',
+    co2: 'low',
+    difficulty: 'easy',
+    color: '#abcdef',
+    naturalSize: { width: 50, height: 50, depth: 50 },
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 0, y: 1 },
+    ],
+    growth: { weeksToMature: 6, sizeAtZero: 0.3 },
+  };
+
+  const validLivestock = {
+    catalog: 'core',
+    id: 'livestock.fish.test',
+    version: 1,
+    name: 'Test fish',
+    kind: 'livestock',
+    group: 'fish',
+    adultSize: 30,
+    temperament: 'peaceful',
+    temperatureRange: { minC: 22, maxC: 26 },
+    pHRange: { min: 6.0, max: 7.5 },
+    schoolingMin: 6,
+    bioloadClass: 'low',
+    color: '#abcdef',
+  };
+
+  const validEquipment = {
+    catalog: 'core',
+    id: 'equipment.filter.test',
+    version: 1,
+    name: 'Test filter',
+    kind: 'equipment',
+    category: 'filter',
+    color: '#abcdef',
+  };
+
+  // ─── accepted on substrate / hardscape / plant ────────────────────────────
+  it('accepts a full textures block on a substrate entry', () => {
+    expect(validateCatalogEntry({ ...validSubstrate, textures: fullTextures })).toEqual({
+      ok: true,
+    });
+  });
+
+  it('accepts a full textures block on a hardscape entry', () => {
+    expect(validateCatalogEntry({ ...validHardscape, textures: fullTextures })).toEqual({
+      ok: true,
+    });
+  });
+
+  it('accepts a full textures block on a plant entry', () => {
+    expect(validateCatalogEntry({ ...validPlant, textures: fullTextures })).toEqual({ ok: true });
+  });
+
+  it('accepts a partial textures block (albedo only)', () => {
+    expect(
+      validateCatalogEntry({
+        ...validSubstrate,
+        textures: { albedo: 'soil-dark.albedo.png' },
+      }).ok,
+    ).toBe(true);
+  });
+
+  it('accepts an empty textures block (all maps optional)', () => {
+    expect(validateCatalogEntry({ ...validHardscape, textures: {} }).ok).toBe(true);
+  });
+
+  it('accepts a subdirectory-qualified ref (pattern allows "/")', () => {
+    expect(
+      validateCatalogEntry({
+        ...validPlant,
+        textures: { albedo: 'community/leaf-fine.albedo.png' },
+      }).ok,
+    ).toBe(true);
+  });
+
+  it('accepts an entry without textures (procedural-only pre-Bucket-2 look)', () => {
+    expect(validateCatalogEntry(validSubstrate).ok).toBe(true);
+    expect(validateCatalogEntry(validHardscape).ok).toBe(true);
+    expect(validateCatalogEntry(validPlant).ok).toBe(true);
+  });
+
+  // ─── rejected on livestock / equipment / tank ─────────────────────────────
+  it('rejects textures on a livestock entry (deliberately excluded — InstancedMesh batching)', () => {
+    expect(validateCatalogEntry({ ...validLivestock, textures: fullTextures }).ok).toBe(false);
+  });
+
+  it('rejects textures on an equipment entry', () => {
+    expect(validateCatalogEntry({ ...validEquipment, textures: fullTextures }).ok).toBe(false);
+  });
+
+  it('rejects textures on a tank-kind entry (no tank branch shipped yet)', () => {
+    expect(
+      validateCatalogEntry({
+        catalog: 'core',
+        id: 'tank.test',
+        version: 1,
+        name: 'Test tank',
+        kind: 'tank',
+        textures: fullTextures,
+      }).ok,
+    ).toBe(false);
+  });
+
+  // ─── ref pattern ──────────────────────────────────────────────────────────
+  it('rejects a non-png extension', () => {
+    expect(
+      validateCatalogEntry({
+        ...validHardscape,
+        textures: { albedo: 'stone-gray.albedo.jpg' },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects an uppercase ref', () => {
+    expect(
+      validateCatalogEntry({
+        ...validHardscape,
+        textures: { albedo: 'Stone-Gray.albedo.png' },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects an empty-string ref (bare ".png" needs at least one name char)', () => {
+    expect(validateCatalogEntry({ ...validHardscape, textures: { albedo: '' } }).ok).toBe(false);
+    expect(validateCatalogEntry({ ...validHardscape, textures: { albedo: '.png' } }).ok).toBe(
+      false,
+    );
+  });
+
+  it('rejects a ref with whitespace', () => {
+    expect(
+      validateCatalogEntry({
+        ...validHardscape,
+        textures: { normal: 'stone gray.normal.png' },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects a non-string ref', () => {
+    expect(validateCatalogEntry({ ...validHardscape, textures: { roughness: 42 } }).ok).toBe(false);
+  });
+
+  it('surfaces the offending path on a bad ref', () => {
+    const result = validateCatalogEntry({
+      ...validSubstrate,
+      textures: { albedo: 'soil-dark.albedo.jpeg' },
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((e) => e.path.includes('textures'))).toBe(true);
+  });
+
+  // ─── typo guard ───────────────────────────────────────────────────────────
+  it('rejects a typo inside textures (additionalProperties: false)', () => {
+    expect(
+      validateCatalogEntry({
+        ...validPlant,
+        // typo: should be `albedo`. Must NOT be silently accepted.
+        textures: { albdeo: 'leaf-fine.albedo.png' },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects an unknown extra map key inside textures', () => {
+    expect(
+      validateCatalogEntry({
+        ...validHardscape,
+        textures: { ...fullTextures, displacement: 'stone-gray.displacement.png' },
+      }).ok,
+    ).toBe(false);
   });
 });
 

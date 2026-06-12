@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aquascape.dev/schemas/catalog-entry-v3.json",
   "title": "CatalogEntry",
-  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 + 7 F7.3 ship `substrate` + `hardscape` + `plant` + `livestock` + `equipment`. Future stages add tank under the same oneOf. Manifest schemaVersion 3 (Stage 11 F11.2) adds the optional `behavior` block on `LivestockEntry`; v2 manifests load unchanged because every behavior subfield is optional + additive (`resolveBehavior()` falls back to per-group presets when the block is absent). Stage 11 F11.3 extends the same v3 schema additively with `behavior.territory` / `nipping` / `fear` on livestock and `coverScore` on hardscape — no manifest version bump. Stage 11 F11.4 extends the same v3 schema additively with `behavior.feeding` / `curiosity` on livestock — no manifest version bump. Stage 11 F11.5 extends the same v3 schema additively with `flow` (filter / pump outflow + intake + flowRate) and `airRateMl` (air-stone bubble volumetric rate) on equipment — no manifest version bump. Stage 11 F11.7 extends the same v3 schema additively with `photoperiodHours` on equipment (lighting only) — no manifest version bump.",
+  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 + 7 F7.3 ship `substrate` + `hardscape` + `plant` + `livestock` + `equipment`. Future stages add tank under the same oneOf. Manifest schemaVersion 3 (Stage 11 F11.2) adds the optional `behavior` block on `LivestockEntry`; v2 manifests load unchanged because every behavior subfield is optional + additive (`resolveBehavior()` falls back to per-group presets when the block is absent). Stage 11 F11.3 extends the same v3 schema additively with `behavior.territory` / `nipping` / `fear` on livestock and `coverScore` on hardscape — no manifest version bump. Stage 11 F11.4 extends the same v3 schema additively with `behavior.feeding` / `curiosity` on livestock — no manifest version bump. Stage 11 F11.5 extends the same v3 schema additively with `flow` (filter / pump outflow + intake + flowRate) and `airRateMl` (air-stone bubble volumetric rate) on equipment — no manifest version bump. Stage 11 F11.7 extends the same v3 schema additively with `photoperiodHours` on equipment (lighting only) — no manifest version bump. The 3D-fidelity Bucket 2 pass extends the same v3 schema additively with the optional `textures` block (albedo / normal / roughness PNG refs) on substrate + hardscape + plant — no manifest version bump; livestock is deliberately excluded (per-species textures fight the per-archetype InstancedMesh batching).",
   "oneOf": [
     { "$ref": "#/$defs/SubstrateEntry" },
     { "$ref": "#/$defs/HardscapeEntry" },
@@ -29,6 +29,30 @@
         "x": { "type": "number" },
         "y": { "type": "number" },
         "z": { "type": "number" }
+      }
+    },
+    "TextureRef": {
+      "type": "string",
+      "pattern": "^[a-z0-9._/-]+\\.png$",
+      "description": "Relative PNG file name under the catalog texture root (served by the host at assets/catalog-textures/; the 3D renderer resolves baseUrl + ref). Family file-name convention: <family>.{albedo,normal,roughness}.png."
+    },
+    "CatalogTextureRefs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional photorealistic texture maps (3D-fidelity Bucket 2, 3D renderer only). The 2D renderer ignores the block; the 3D renderer samples the maps triplanar in world space. Absent = the procedural-only pre-Bucket-2 look. Additive — catalog manifest schemaVersion stays at 3.",
+      "properties": {
+        "albedo": {
+          "$ref": "#/$defs/TextureRef",
+          "description": "Base-colour map ref, relative to the catalog texture root."
+        },
+        "normal": {
+          "$ref": "#/$defs/TextureRef",
+          "description": "Tangent-space normal map ref."
+        },
+        "roughness": {
+          "$ref": "#/$defs/TextureRef",
+          "description": "Roughness map ref (grayscale, 0 = mirror, 1 = matte)."
+        }
       }
     },
     "CatalogEntryBase": {
@@ -59,7 +83,8 @@
         "kind": { "const": "substrate" },
         "material": { "enum": ["soil", "sand", "gravel"] },
         "color": { "$ref": "#/$defs/HexColor" },
-        "grainSize": { "type": "number", "exclusiveMinimum": 0 }
+        "grainSize": { "type": "number", "exclusiveMinimum": 0 },
+        "textures": { "$ref": "#/$defs/CatalogTextureRefs" }
       }
     },
     "HardscapeEntry": {
@@ -99,7 +124,8 @@
           "minimum": 0,
           "maximum": 1,
           "description": "Stage 11 F11.3 FearSystem refuge value. When absent, the loader fills it from `category` (wood → 0.6, rock → 0.4, other → 0). JSON Schema's `default` is metadata only — the fill happens in the loader, not in the validator."
-        }
+        },
+        "textures": { "$ref": "#/$defs/CatalogTextureRefs" }
       }
     },
     "PlantEntry": {
@@ -167,7 +193,8 @@
           "type": "number",
           "exclusiveMinimum": 0,
           "description": "Suggested scatter density (instances per 100 cm²) when the planting tool's carpet brush drops this plant. Only meaningful for carpet-zone species."
-        }
+        },
+        "textures": { "$ref": "#/$defs/CatalogTextureRefs" }
       }
     },
     "LivestockEntry": {

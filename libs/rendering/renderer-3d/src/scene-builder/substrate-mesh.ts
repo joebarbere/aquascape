@@ -21,6 +21,12 @@ import type { CatalogRef, Scene, SubstrateRegion } from '@aquascape/domain/scene
 import { Group, Mesh, MeshStandardMaterial, Shape, ExtrudeGeometry } from 'three';
 
 import { applyCaustics, CAUSTIC_MATERIALS_KEY } from './caustics';
+import {
+  applyCatalogTextures,
+  resolveTextureSet,
+  TEX_TILE_SUBSTRATE_MM,
+  type CatalogTextureResolver,
+} from './catalog-texture';
 import { applySubstrateGrain } from './substrate-grain';
 
 /** Catalog-miss / catalog-omitted fallback colour. */
@@ -45,8 +51,17 @@ const GLASS_INSET_MM = 0.5;
 /**
  * Build a group of substrate meshes, one mesh per region. Empty regions
  * (zero width or no profile) are skipped silently.
+ *
+ * `resolveTexture` (Bucket 2) is the host renderer's catalog-texture
+ * resolver. When present AND the region's catalog entry carries `textures`
+ * refs, the material is patched to triplanar-sample them; otherwise the
+ * material is exactly the pre-Bucket-2 procedural one.
  */
-export function buildSubstrateMeshes(scene: Scene, catalog: Catalog | undefined): Group {
+export function buildSubstrateMeshes(
+  scene: Scene,
+  catalog: Catalog | undefined,
+  resolveTexture?: CatalogTextureResolver,
+): Group {
   const group = new Group();
   group.name = 'aquascape:substrate';
   const tankW = scene.tank.width;
@@ -61,9 +76,21 @@ export function buildSubstrateMeshes(scene: Scene, catalog: Catalog | undefined)
     const mesh = buildRegionMesh(region, tankW, tankD, catalog);
     if (mesh !== null) {
       // Caustics first, then grain chains on top (grain lifts the dark soil
-      // out of a flat black void + reads as granular).
+      // out of a flat black void + reads as granular), then the catalog
+      // texture patch chains last (it feeds the lighting pipeline at
+      // earlier GLSL anchors, so chain order ≠ visual order — see
+      // `catalog-texture.ts`).
       applyCaustics(mesh.material as MeshStandardMaterial, scene.tank.height);
       applySubstrateGrain(mesh.material as MeshStandardMaterial);
+      const texSet = resolveTextureSet(
+        resolveSubstrateEntry(region.material, catalog)?.textures,
+        resolveTexture,
+      );
+      if (texSet !== null) {
+        applyCatalogTextures(mesh.material as MeshStandardMaterial, texSet, {
+          tileMm: TEX_TILE_SUBSTRATE_MM,
+        });
+      }
       causticMaterials.push(mesh.material as MeshStandardMaterial);
       group.add(mesh);
     }
@@ -138,8 +165,16 @@ function buildRegionMesh(
 }
 
 function resolveSubstrateColor(ref: CatalogRef, catalog: Catalog | undefined): string {
-  if (catalog === undefined) return FALLBACK_COLOR;
+  const entry = resolveSubstrateEntry(ref, catalog);
+  return entry?.color ?? FALLBACK_COLOR;
+}
+
+function resolveSubstrateEntry(
+  ref: CatalogRef,
+  catalog: Catalog | undefined,
+): SubstrateEntry | null {
+  if (catalog === undefined) return null;
   const entry = catalog.get({ catalog: ref.catalog, id: ref.id });
-  if (entry === null || entry.kind !== 'substrate') return FALLBACK_COLOR;
-  return (entry as SubstrateEntry).color;
+  if (entry === null || entry.kind !== 'substrate') return null;
+  return entry as SubstrateEntry;
 }

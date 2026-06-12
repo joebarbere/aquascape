@@ -12,5 +12,12 @@
   "photoperiodHours": 10,
   "description": "Premium WRGB LED with per-channel programmable colour mixing via the Chihiros app and a Bluetooth remote. High-PAR output suitable for the most demanding red stem plants; usually run at 60-80% intensity to avoid burning carpet species at the surface.",
   "tags": ["light", "led", "wrgb", "high-par", "bluetooth", "60cm", "premium"],
-  "defaultSettings": { "photoperiodHours": 8, "intensityPct": 70, "redPct": 80, "greenPct": 70, "bluePct": 80, "whitePct": 80 }
+  "defaultSettings": {
+    "photoperiodHours": 8,
+    "intensityPct": 70,
+    "redPct": 80,
+    "greenPct": 70,
+    "bluePct": 80,
+    "whitePct": 80
+  }
 }
