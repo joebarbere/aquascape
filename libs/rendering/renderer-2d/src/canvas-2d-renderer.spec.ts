@@ -698,24 +698,23 @@ describe('Canvas2DRenderer.render — water tint', () => {
     expect(alphas.length).toBe(0);
   });
 
-  // After the "centered card" change to drawBackground, BOTH the background
-  // and the water tint paint at the same world-mm tank rect (0, 0, 360, 220).
-  // The tint is distinguishable by its save/globalAlpha/fillRect/restore
-  // wrap. These helpers find the tint specifically.
+  // After the "centered card" change to drawBackground, the background
+  // paints the full world-mm tank rect (0, 0, 360, 220) and the water tint
+  // paints the SAME rect capped at the tank's EFFECTIVE water level —
+  // (0, 0, 360, 195) for the 220 mm fixture tank (220 −
+  // DEFAULT_WATER_GAP_BELOW_RIM_MM = 195). The tint is further
+  // distinguishable by its save/globalAlpha/fillRect/restore wrap.
   const TANK_RECT_ARGS = JSON.stringify([0, 0, 360, 220]);
+  const TINT_RECT_ARGS = JSON.stringify([0, 0, 360, 195]);
   const isTankRectFillRect = (o: { method: string; args: unknown[] }): boolean =>
     o.method === 'fillRect' && JSON.stringify(o.args) === TANK_RECT_ARGS;
-  /**
-   * Locate the WATER-TINT fillRect — the second tank-rect fillRect, which
-   * lives inside a save/restore wrap with globalAlpha set. Background paints
-   * the first such fillRect under the default alpha.
-   */
-  const findTintFillRectIdx = (ops: Array<{ method: string; args: unknown[] }>): number => {
-    const matches = ops.map((o, i) => (isTankRectFillRect(o) ? i : -1)).filter((i) => i >= 0);
-    return matches.length >= 2 ? (matches[1] as number) : -1;
-  };
+  const isTintRectFillRect = (o: { method: string; args: unknown[] }): boolean =>
+    o.method === 'fillRect' && JSON.stringify(o.args) === TINT_RECT_ARGS;
+  /** Locate the WATER-TINT fillRect (the waterline-capped rect). */
+  const findTintFillRectIdx = (ops: Array<{ method: string; args: unknown[] }>): number =>
+    ops.findIndex(isTintRectFillRect);
 
-  it('paints a tinted fillRect inside the tank in world-mm', () => {
+  it('paints a tinted fillRect from the floor up to the effective water level', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
@@ -725,11 +724,27 @@ describe('Canvas2DRenderer.render — water tint', () => {
         background: { kind: 'none' },
       }), upright);
     const ops = canvas.context.ops;
-    // Two tank-rect fillRects total now: [0] background, [1] water tint.
-    const tankFills = ops.filter(isTankRectFillRect);
-    expect(tankFills.length).toBe(2);
+    // One full-rect background fill + one waterline-capped tint fill.
+    expect(ops.filter(isTankRectFillRect).length).toBe(1);
+    expect(ops.filter(isTintRectFillRect).length).toBe(1);
     const tintIdx = findTintFillRectIdx(ops);
     expect(tintIdx).toBeGreaterThanOrEqual(0);
+  });
+
+  it('caps the tint at an authored tank.waterLevelMm', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithStyle({
+      frame: 'rimless',
+      waterTint: '#88ccff',
+      background: { kind: 'none' },
+    });
+    r.render({ ...scene, tank: { ...scene.tank, waterLevelMm: 120 } }, upright);
+    const tint = canvas.context.ops.find(
+      (o) => o.method === 'fillRect' && JSON.stringify(o.args) === JSON.stringify([0, 0, 360, 120]),
+    );
+    expect(tint).toBeDefined();
   });
 
   it('wraps the tint in save/restore with globalAlpha set', () => {

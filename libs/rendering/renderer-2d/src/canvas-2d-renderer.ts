@@ -47,7 +47,9 @@ import {
 } from '@aquascape/domain/geometry';
 import type { Transform, Vec2 } from '@aquascape/domain/geometry';
 import { plantScale, scatterInPolygon } from '@aquascape/domain/growth-sim';
+import { effectiveWaterLevelMm } from '@aquascape/domain/scene-model';
 import type {
+  Tank,
   CatalogRef,
   HardscapeObject,
   LayerId,
@@ -330,7 +332,7 @@ export class Canvas2DRenderer implements SceneRenderer {
     // the tint visibly shades the substrate fill. Drawn under the same
     // world transform as the tank outline.
     this.drawSubstrate(ctx, scene, catalog);
-    this.drawWaterTint(ctx, tankCorner0, tankCornerW, scene.tank.style);
+    this.drawWaterTint(ctx, tankCorner0, tankCornerW, scene.tank);
     this.drawFrame(ctx, tankCorner0, tankCornerW, scene.tank.style);
 
     // F3.3 — paint hardscape silhouettes back-to-front (layers low→high,
@@ -418,16 +420,21 @@ export class Canvas2DRenderer implements SceneRenderer {
 
   /**
    * Paint the water tint as a semi-transparent fill inside the projected
-   * tank rectangle. Runs in world-mm (the world transform is already set).
+   * tank rectangle, from the floor UP TO the tank's effective water level
+   * (`effectiveWaterLevelMm` — the authored `tank.waterLevelMm` or the
+   * default fill) so the 2D front elevation shows the same fill line the
+   * 3D water surface sits at. Runs in world-mm (the world transform is
+   * already set; world y = document y, floor at the rect's min-y edge).
    * Uses `globalAlpha = WATER_TINT_ALPHA` regardless of any alpha in the
    * user-supplied hex so the tint stays visually sensible.
    */
-  private drawWaterTint(ctx: CanvasRenderingContext2D, a: Vec2, b: Vec2, style: TankStyle): void {
+  private drawWaterTint(ctx: CanvasRenderingContext2D, a: Vec2, b: Vec2, tank: Tank): void {
+    const style = tank.style;
     if (style.waterTint === undefined) return;
     const x0 = Math.min(a.x, b.x);
     const y0 = Math.min(a.y, b.y);
     const w = Math.abs(b.x - a.x);
-    const h = Math.abs(b.y - a.y);
+    const h = Math.min(Math.abs(b.y - a.y), effectiveWaterLevelMm(tank));
     ctx.save();
     ctx.globalAlpha = WATER_TINT_ALPHA;
     ctx.fillStyle = style.waterTint;

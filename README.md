@@ -38,7 +38,7 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 - 📸 **Composite onto a real tank photo** — design against the actual shelf the tank will live on
 - 🤖 **Local + hosted AI render** behind one interface — coming in Stage 9
 - 🧊 **3D renderer** that consumes the same document — shipped in Stage 10 (read-only); animated water + plants + fish land in Stage 11
-- 💾 **Lossless `.aqua` document format** with a locked v1 schema + migration chain
+- 💾 **Lossless `.aqua` document format** with a locked schema (now v3) + pure migration chain
 - 🆓 **Truly open-source**, MIT-licensed, no telemetry, no cloud lock-in
 
 ---
@@ -52,6 +52,7 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 - Aspect-ratio guardrail flags unusual ratios
 - **Frame styles:** rimless / black-rimmed / braced
 - **Water tint** picker + presets
+- **Adjustable water fill line** — set the level in **mm or US gallons** (or leave it on Auto: 25 mm below the rim); the 2D tint band, the 3D water surface, and the fish/bubble simulation all follow it
 - **Tank background:** solid colour or gradient (image backgrounds are planned)
 
 ### 🏞 Substrate sculpting

@@ -63,6 +63,7 @@
 import type { Catalog } from '@aquascape/domain/catalog';
 import type { Vec2 } from '@aquascape/domain/geometry';
 import { SIM_DT, type LivestockWorld } from '@aquascape/domain/livestock-ecs';
+import { effectiveWaterLevelMm } from '@aquascape/domain/scene-model';
 import type { Scene } from '@aquascape/domain/scene-model';
 import {
   buildLivestockMeshes,
@@ -1045,13 +1046,13 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    * tick's `updateTime()` writes per-frame state.
    */
   private ensureWaterMeshForTank(scene: Scene): void {
-    // The tag includes the authored waterTint: the animated surface bakes
-    // the tint into its `uBaseColor` uniform at build time (it took over
-    // the retired tank-mesh static water plane's job), so a tint edit must
-    // dispose + rebuild exactly like a tank resize.
+    // The tag includes the authored waterTint (baked into `uBaseColor` at
+    // build time) AND the effective water level (the plane's Y) — an edit
+    // to either must dispose + rebuild exactly like a tank resize.
     const tag =
       `${scene.tank.width}x${scene.tank.height}x${scene.tank.depth}` +
-      `:${scene.tank.style.waterTint ?? 'default'}`;
+      `:${scene.tank.style.waterTint ?? 'default'}` +
+      `:${effectiveWaterLevelMm(scene.tank)}`;
     if (this.waterMesh !== null && this.waterMeshTag === tag) return;
     if (this.waterMesh !== null) {
       this.waterMesh.dispose();

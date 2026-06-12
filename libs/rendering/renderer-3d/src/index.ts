@@ -15,11 +15,10 @@
 // a host (web canvas, headless export pipeline) can drop it in.
 
 export { Three3DRenderer, type Orbital3DControls } from './three-3d-renderer';
-// The single waterline source of truth: the visible water surface sits this
-// many mm below the tank rim. The host subtracts it from `tank.height` when
-// building the ECS tankAabb so the simulation's "top of water" matches what
-// the renderer paints — see the constant's JSDoc.
-export { WATER_OFFSET_BELOW_RIM_MM } from './scene-builder/water-mesh';
+// NOTE: the waterline's single source of truth is
+// `effectiveWaterLevelMm(tank)` from `@aquascape/domain/scene-model` —
+// authored `tank.waterLevelMm` or the default fill. This lib consumes it;
+// it no longer exports a waterline constant of its own.
 // Bucket-0 render-target capability gate (3D-fidelity follow-ups). Pure,
 // GL-free detection of whether render-target / multi-pass effects (SSAO,
 // screen-space refraction) are safe — software-WebGL contexts (SwiftShader

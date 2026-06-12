@@ -86,11 +86,7 @@
 
     <!-- Step 2 — Size picker for a brand ─────────────────────────────────── -->
     @if (view() === 'sizes' && activeBrand() !== null && activeBrand() !== 'Custom') {
-      <section
-        class="size-picker"
-        aria-labelledby="size-picker-heading"
-        data-testid="size-picker"
-      >
+      <section class="size-picker" aria-labelledby="size-picker-heading" data-testid="size-picker">
         <div class="size-picker__top">
           <button
             type="button"
@@ -173,11 +169,7 @@
 
     <!-- Step 2 — Custom branch ───────────────────────────────────────────── -->
     @if (view() === 'sizes' && activeBrand() === 'Custom') {
-      <section
-        class="custom-wrap"
-        aria-labelledby="custom-heading"
-        data-testid="custom-wrap"
-      >
+      <section class="custom-wrap" aria-labelledby="custom-heading" data-testid="custom-wrap">
         <div class="size-picker__top">
           <button
             type="button"
@@ -298,6 +290,9 @@
         </form>
       </section>
     }
+
+    <!-- Water fill (authored vs. default water level) ─────────────────────── -->
+    <aquascape-water-fill></aquascape-water-fill>
 
     <!-- Styling subpanel (F1.2 Phase D) ───────────────────────────────────── -->
     <aquascape-tank-styling></aquascape-tank-styling>

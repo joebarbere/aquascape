@@ -18,7 +18,7 @@
 //   - The 1000-tick byte-identity replay still holds with behaviour
 //     systems running (Velocity is now non-zero — this is the real gate).
 
-import { WATER_OFFSET_BELOW_RIM_MM } from '@aquascape/rendering/renderer-3d';
+import { DEFAULT_WATER_GAP_BELOW_RIM_MM } from '@aquascape/domain/scene-model';
 import { TestBed } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
@@ -553,7 +553,7 @@ describe('LivestockSimulationService — F11.2 tank AABB plumbing', () => {
       maxX: 1200,
       minY: 0,
       // Sim top = waterline (rim − WATER_OFFSET_BELOW_RIM_MM), not the rim.
-      maxY: 500 - WATER_OFFSET_BELOW_RIM_MM,
+      maxY: 500 - DEFAULT_WATER_GAP_BELOW_RIM_MM,
       minZ: 0,
       maxZ: 400,
     });
@@ -581,7 +581,7 @@ describe('LivestockSimulationService — F11.2 tank AABB plumbing', () => {
       minX: 0,
       maxX: 400,
       minY: 0,
-      maxY: 200 - WATER_OFFSET_BELOW_RIM_MM,
+      maxY: 200 - DEFAULT_WATER_GAP_BELOW_RIM_MM,
       minZ: 0,
       maxZ: 200,
     });

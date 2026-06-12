@@ -1,6 +1,7 @@
 import { Color, Mesh, PlaneGeometry, ShaderMaterial } from 'three';
 import type { Scene } from '@aquascape/domain/scene-model';
-import { buildWaterMesh, WATER_OFFSET_BELOW_RIM_MM } from './water-mesh';
+import { DEFAULT_WATER_GAP_BELOW_RIM_MM } from '@aquascape/domain/scene-model';
+import { buildWaterMesh } from './water-mesh';
 
 function sceneOf(tankW = 600, tankH = 360, tankD = 300): Scene {
   return {
@@ -40,7 +41,7 @@ describe('buildWaterMesh — geometry + placement', () => {
   it('positions the plane centred over the tank and 5 mm below the interior rim', () => {
     const { mesh } = buildWaterMesh(sceneOf(600, 360, 300));
     expect(mesh.position.x).toBeCloseTo(300, 5);
-    expect(mesh.position.y).toBeCloseTo(360 - WATER_OFFSET_BELOW_RIM_MM, 5);
+    expect(mesh.position.y).toBeCloseTo(360 - DEFAULT_WATER_GAP_BELOW_RIM_MM, 5);
     expect(mesh.position.z).toBeCloseTo(150, 5);
   });
 
@@ -206,6 +207,28 @@ describe('buildWaterMesh — dispose', () => {
     handle.dispose();
     expect(geoSpy).toHaveBeenCalledTimes(1);
     expect(matSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('buildWaterMesh — adjustable fill line', () => {
+  it('positions the plane at the authored tank.waterLevelMm', () => {
+    const scene = sceneOf();
+    const filled: Scene = {
+      ...scene,
+      tank: { ...scene.tank, waterLevelMm: 180 },
+    };
+    const { mesh } = buildWaterMesh(filled);
+    expect(mesh.position.y).toBeCloseTo(180, 5);
+  });
+
+  it('clamps a stale authored level above the rim to the tank height', () => {
+    const scene = sceneOf(600, 360, 300);
+    const overfull: Scene = {
+      ...scene,
+      tank: { ...scene.tank, waterLevelMm: 9999 },
+    };
+    const { mesh } = buildWaterMesh(overfull);
+    expect(mesh.position.y).toBeCloseTo(360, 5);
   });
 });
 

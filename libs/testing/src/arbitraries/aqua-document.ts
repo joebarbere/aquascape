@@ -184,6 +184,12 @@ const arbTank = (): fc.Arbitrary<Tank> =>
       height: arbMm(100, 1000),
       depth: arbMm(100, 1000),
       glassThickness: arbMm(3, 19),
+      // v3: optional authored water level. Present-or-absent toggled by
+      // `requiredKeys` (same pattern as Layer.zone) so the round-trip
+      // property exercises both branches. Bounded to [1, 100] so it never
+      // exceeds the minimum generated height — the [1, height] range is
+      // advisory in the schema, but generated documents stay semantically sane.
+      waterLevelMm: arbMm(1, 100),
       presetRef: arbCatalogRef(),
       style: arbTankStyle(),
     },

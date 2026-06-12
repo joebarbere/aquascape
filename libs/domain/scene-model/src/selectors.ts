@@ -14,6 +14,7 @@ import type {
   ObjectId,
   Scene,
   SceneObject,
+  Tank,
   Uuid,
 } from './types';
 
@@ -122,4 +123,35 @@ export function selectEquipmentById(scene: Scene, id: Uuid): EquipmentEntry | nu
     if (entry.id === id) return entry;
   }
   return null;
+}
+
+// ─── Water level ──────────────────────────────────────────────────────────
+
+/**
+ * Default air gap between the interior rim and the water surface when the
+ * document doesn't author `tank.waterLevelMm`. 25 mm reads as a realistic
+ * fill (a 5 mm gap read as "filled to the brim"); the 3D renderer and the
+ * livestock simulation both consume the EFFECTIVE level via
+ * `effectiveWaterLevelMm`, never this constant directly.
+ */
+export const DEFAULT_WATER_GAP_BELOW_RIM_MM = 25;
+
+/**
+ * The tank's effective water-surface height above the interior floor (mm).
+ * Single source of truth for "where is the waterline":
+ *
+ *  - authored `tank.waterLevelMm` when present (clamped into
+ *    `[1, tank.height]` so a stale value can't float above the rim after
+ *    a tank shrink — `SetTankDimensions` doesn't rewrite it);
+ *  - else the default fill `tank.height − DEFAULT_WATER_GAP_BELOW_RIM_MM`
+ *    (floored at 1 for degenerate tiny tanks).
+ *
+ * Consumers: the 3D renderer's water plane, the livestock sim's
+ * `tankAabb.maxY` (depth bands / kinematic clamp / bubble despawn / food
+ * floats), and the tank-setup UI's display default.
+ */
+export function effectiveWaterLevelMm(tank: Tank): number {
+  const fallback = Math.max(1, tank.height - DEFAULT_WATER_GAP_BELOW_RIM_MM);
+  if (tank.waterLevelMm === undefined) return fallback;
+  return Math.min(tank.height, Math.max(1, tank.waterLevelMm));
 }

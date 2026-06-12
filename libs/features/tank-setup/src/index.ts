@@ -7,14 +7,21 @@ export { TANK_PRESET_CATALOG, TANK_PRESET_VERSION, tankPresets } from './lib/tan
 export type { TankFrame, TankPreset } from './lib/tank-presets';
 export {
   DISPLAY_UNIT_STORAGE_KEY,
+  LITRES_PER_US_GALLON,
+  WATER_FILL_UNIT_STORAGE_KEY,
   cmToMm,
   formatForDisplay,
+  formatWaterFill,
+  gallonsToMmLevel,
   inchesToMm,
+  mmLevelToGallons,
   mmToCm,
   mmToInches,
   parseToMm,
+  parseWaterFillToMm,
 } from './lib/units';
-export type { DisplayUnit } from './lib/units';
+export type { DisplayUnit, WaterFillUnit } from './lib/units';
+export { MIN_WATER_LEVEL_MM, WaterFillComponent } from './lib/water-fill.component';
 export {
   TankStylingComponent,
   FRAME_OPTIONS,
