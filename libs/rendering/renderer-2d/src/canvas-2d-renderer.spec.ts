@@ -552,10 +552,13 @@ describe('Canvas2DRenderer.render — background', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(sceneWithStyle({
+    r.render(
+      sceneWithStyle({
         frame: 'rimless',
         background: { kind: 'color', color: '#0b0d0e' },
-      }), upright);
+      }),
+      upright,
+    );
     const ops = canvas.context.ops;
     const fillRectIdx = indexOfOp(ops, 'fillRect');
     expect(fillRectIdx).toBeGreaterThanOrEqual(0);
@@ -568,7 +571,8 @@ describe('Canvas2DRenderer.render — background', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(sceneWithStyle({
+    r.render(
+      sceneWithStyle({
         frame: 'rimless',
         background: {
           kind: 'image',
@@ -578,7 +582,9 @@ describe('Canvas2DRenderer.render — background', () => {
             mimeType: 'image/png',
           },
         },
-      }), upright);
+      }),
+      upright,
+    );
     const ops = canvas.context.ops;
     const fillRectIdx = indexOfOp(ops, 'fillRect');
     expect(fillRectIdx).toBeGreaterThanOrEqual(0);
@@ -592,7 +598,8 @@ describe('Canvas2DRenderer.render — background', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(sceneWithStyle({
+    r.render(
+      sceneWithStyle({
         frame: 'rimless',
         background: {
           kind: 'gradient',
@@ -602,7 +609,9 @@ describe('Canvas2DRenderer.render — background', () => {
             { at: 1, color: '#334455' },
           ],
         },
-      }), upright);
+      }),
+      upright,
+    );
     const ops = canvas.context.ops;
     const gradIdx = indexOfOp(ops, 'createLinearGradient');
     expect(gradIdx).toBeGreaterThanOrEqual(0);
@@ -625,7 +634,8 @@ describe('Canvas2DRenderer.render — background', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(sceneWithStyle({
+    r.render(
+      sceneWithStyle({
         frame: 'rimless',
         background: {
           kind: 'gradient',
@@ -635,7 +645,9 @@ describe('Canvas2DRenderer.render — background', () => {
             { at: 1, color: '#ffffff' },
           ],
         },
-      }), upright);
+      }),
+      upright,
+    );
     const ops = canvas.context.ops;
     const gradIdx = indexOfOp(ops, 'createLinearGradient');
     // Drawn under the world transform (world +y up; renderer's negative
@@ -655,7 +667,8 @@ describe('Canvas2DRenderer.render — background', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(sceneWithStyle({
+    r.render(
+      sceneWithStyle({
         frame: 'rimless',
         background: {
           kind: 'gradient',
@@ -666,7 +679,9 @@ describe('Canvas2DRenderer.render — background', () => {
             { at: 1, color: '#ffffff' },
           ],
         },
-      }), upright);
+      }),
+      upright,
+    );
     const stops = canvas.context.ops.filter((o) => o.method === 'addColorStop');
     expect(stops.length).toBe(3);
     expect(stops.map((s) => s.args)).toEqual([
@@ -718,11 +733,14 @@ describe('Canvas2DRenderer.render — water tint', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(sceneWithStyle({
+    r.render(
+      sceneWithStyle({
         frame: 'rimless',
         waterTint: '#88ccff',
         background: { kind: 'none' },
-      }), upright);
+      }),
+      upright,
+    );
     const ops = canvas.context.ops;
     // One full-rect background fill + one waterline-capped tint fill.
     expect(ops.filter(isTankRectFillRect).length).toBe(1);
@@ -751,11 +769,14 @@ describe('Canvas2DRenderer.render — water tint', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(sceneWithStyle({
+    r.render(
+      sceneWithStyle({
         frame: 'rimless',
         waterTint: '#88ccff',
         background: { kind: 'none' },
-      }), upright);
+      }),
+      upright,
+    );
     const ops = canvas.context.ops;
     const tintIdx = findTintFillRectIdx(ops);
     expect(tintIdx).toBeGreaterThanOrEqual(0);
@@ -780,11 +801,14 @@ describe('Canvas2DRenderer.render — water tint', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(sceneWithStyle({
+    r.render(
+      sceneWithStyle({
         frame: 'rimless',
         waterTint: '#88ccff80',
         background: { kind: 'none' },
-      }), upright);
+      }),
+      upright,
+    );
     const ops = canvas.context.ops;
     const tintIdx = findTintFillRectIdx(ops);
     const fillStyles = ops.slice(0, tintIdx).filter((o) => o.method === 'set:fillStyle');
@@ -852,11 +876,14 @@ describe('Canvas2DRenderer.render — frame overlay', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(sceneWithStyle({
+    r.render(
+      sceneWithStyle({
         frame: 'framed',
         frameColor: '#8b4513', // wood
         background: { kind: 'none' },
-      }), upright);
+      }),
+      upright,
+    );
     const ops = canvas.context.ops;
     const rimIdx = ops.findIndex(
       (o) => o.method === 'fillRect' && JSON.stringify(o.args) === JSON.stringify([0, 0, 360, 8]),
@@ -1068,10 +1095,14 @@ describe('Canvas2DRenderer.render (substrate)', () => {
       { catalog: 'core', id: 'a', color: '#111111' },
       { catalog: 'core', id: 'b', color: '#222222' },
     ]);
-    r.render(sceneWithRegion([
+    r.render(
+      sceneWithRegion([
         { id: 'r-1', itemId: 'a' },
         { id: 'r-2', itemId: 'b' },
-      ]), upright, { catalog });
+      ]),
+      upright,
+      { catalog },
+    );
     const styles = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
     const idxA = styles.indexOf('#111111');
     const idxB = styles.indexOf('#222222');
@@ -1083,7 +1114,8 @@ describe('Canvas2DRenderer.render (substrate)', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(sceneWithRegion([
+    r.render(
+      sceneWithRegion([
         {
           id: 'r-wide',
           fromX: 0,
@@ -1093,7 +1125,9 @@ describe('Canvas2DRenderer.render (substrate)', () => {
             { x: 1, y: 40 },
           ],
         },
-      ]), upright);
+      ]),
+      upright,
+    );
     const clips = only(canvas.context.ops, ['clip']);
     expect(clips.length).toBeGreaterThanOrEqual(1);
     const fillRects = only(canvas.context.ops, ['fillRect']);
@@ -1110,7 +1144,8 @@ describe('Canvas2DRenderer.render (substrate)', () => {
     canvas.context.ops.length = 0;
     canvas.context.gradients.length = 0;
     // Now render with a narrow substrate region.
-    r.render(sceneWithRegion([
+    r.render(
+      sceneWithRegion([
         {
           id: 'r-narrow',
           fromX: 0,
@@ -1120,7 +1155,9 @@ describe('Canvas2DRenderer.render (substrate)', () => {
             { x: 1, y: 10 },
           ],
         },
-      ]), upright);
+      ]),
+      upright,
+    );
     // The silhouette `fill` IS emitted; substrate-grain `fillRect`s are NOT.
     expect(only(canvas.context.ops, ['fill']).length).toBeGreaterThanOrEqual(1);
     expect(only(canvas.context.ops, ['fillRect']).length).toBe(baselineFillRects);
@@ -1143,13 +1180,16 @@ describe('Canvas2DRenderer.render (substrate)', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(sceneWithRegion([
+    r.render(
+      sceneWithRegion([
         {
           id: 'r-degenerate',
           fromX: 0.5,
           toX: 0.5,
         },
-      ]), upright);
+      ]),
+      upright,
+    );
     // No substrate fills emitted for a zero-width region.
     expect(only(canvas.context.ops, ['fill']).length).toBe(0);
   });
@@ -1245,7 +1285,9 @@ describe('Canvas2DRenderer.hitTest', () => {
   // zoom = 1 (1 mm per CSS pixel).
   it('returns null when no surface is attached', () => {
     const r = new Canvas2DRenderer();
-    expect(r.hitTest({ x: 0, y: 0 }, sceneWithObject(), upright, { catalog: fakeCatalog })).toBeNull();
+    expect(
+      r.hitTest({ x: 0, y: 0 }, sceneWithObject(), upright, { catalog: fakeCatalog }),
+    ).toBeNull();
   });
 
   it('hits an object at the canvas centre when transform.position is at viewport.center', () => {
@@ -1253,7 +1295,9 @@ describe('Canvas2DRenderer.hitTest', () => {
     const r = new Canvas2DRenderer();
     r.attach(surface);
     // Canvas centre is (400, 300) in CSS pixels.
-    const result = r.hitTest({ x: 400, y: 300 }, sceneWithObject(), upright, { catalog: fakeCatalog });
+    const result = r.hitTest({ x: 400, y: 300 }, sceneWithObject(), upright, {
+      catalog: fakeCatalog,
+    });
     expect(result).not.toBeNull();
     expect(result?.objectId).toBe('obj-1');
     expect(result?.layerId).toBe('layer-1');
@@ -1265,7 +1309,9 @@ describe('Canvas2DRenderer.hitTest', () => {
     r.attach(surface);
     // 200 pixels right of centre → 200 mm right of viewport.center = (380, 110),
     // far outside the 100×100 silhouette around (180, 110).
-    expect(r.hitTest({ x: 600, y: 300 }, sceneWithObject(), upright, { catalog: fakeCatalog })).toBeNull();
+    expect(
+      r.hitTest({ x: 600, y: 300 }, sceneWithObject(), upright, { catalog: fakeCatalog }),
+    ).toBeNull();
   });
 
   it('falls back to AABB hit-test when no catalog is supplied', () => {
@@ -1470,7 +1516,9 @@ describe('Canvas2DRenderer.render (hardscape)', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(sceneWithHardscape([{ id: 'a', refId: 'rock.missing' }]), upright, { catalog: fakeCatalog });
+    r.render(sceneWithHardscape([{ id: 'a', refId: 'rock.missing' }]), upright, {
+      catalog: fakeCatalog,
+    });
     const fillStyles = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
     expect(fillStyles).not.toContain('#444444');
   });
@@ -1479,10 +1527,14 @@ describe('Canvas2DRenderer.render (hardscape)', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(sceneWithHardscape([
+    r.render(
+      sceneWithHardscape([
         { id: 'a', refId: 'rock.tri' },
         { id: 'b', refId: 'wood.tri' },
-      ]), upright, { catalog: fakeCatalog });
+      ]),
+      upright,
+      { catalog: fakeCatalog },
+    );
     const fillStyles = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
     const idxA = fillStyles.indexOf('#444444');
     const idxB = fillStyles.indexOf('#7a4422');
@@ -1500,7 +1552,10 @@ describe('Canvas2DRenderer.render (hardscape)', () => {
 
     canvas.context.ops.length = 0;
     canvas.context.gradients.length = 0;
-    r.render(sceneWithHardscape([{ id: 'a' }]), upright, { catalog: fakeCatalog, selection: ['a'] as never });
+    r.render(sceneWithHardscape([{ id: 'a' }]), upright, {
+      catalog: fakeCatalog,
+      selection: ['a'] as never,
+    });
     const selStrokes = only(canvas.context.ops, ['set:strokeStyle']).map((o) => o.args[0]);
     expect(selStrokes).toContain('#3a8eff');
   });
@@ -1688,9 +1743,10 @@ describe('Canvas2DRenderer.hitTest (handles)', () => {
     const { surface } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    const result = r.hitTest({ x: 450, y: 250 }, sceneWithObject(), upright, { catalog: fakeCatalog, selection: [
-      'obj-1' as never,
-    ] });
+    const result = r.hitTest({ x: 450, y: 250 }, sceneWithObject(), upright, {
+      catalog: fakeCatalog,
+      selection: ['obj-1' as never],
+    });
     expect(result?.handle).toBe('scaleNE');
   });
 
@@ -1698,9 +1754,10 @@ describe('Canvas2DRenderer.hitTest (handles)', () => {
     const { surface } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    const result = r.hitTest({ x: 350, y: 350 }, sceneWithObject(), upright, { catalog: fakeCatalog, selection: [
-      'obj-1' as never,
-    ] });
+    const result = r.hitTest({ x: 350, y: 350 }, sceneWithObject(), upright, {
+      catalog: fakeCatalog,
+      selection: ['obj-1' as never],
+    });
     expect(result?.handle).toBe('scaleSW');
   });
 
@@ -1709,12 +1766,16 @@ describe('Canvas2DRenderer.hitTest (handles)', () => {
     const r = new Canvas2DRenderer();
     r.attach(surface);
     expect(
-      r.hitTest({ x: 350, y: 250 }, sceneWithObject(), upright, { catalog: fakeCatalog, selection: ['obj-1' as never] })
-        ?.handle,
+      r.hitTest({ x: 350, y: 250 }, sceneWithObject(), upright, {
+        catalog: fakeCatalog,
+        selection: ['obj-1' as never],
+      })?.handle,
     ).toBe('scaleNW');
     expect(
-      r.hitTest({ x: 450, y: 350 }, sceneWithObject(), upright, { catalog: fakeCatalog, selection: ['obj-1' as never] })
-        ?.handle,
+      r.hitTest({ x: 450, y: 350 }, sceneWithObject(), upright, {
+        catalog: fakeCatalog,
+        selection: ['obj-1' as never],
+      })?.handle,
     ).toBe('scaleSE');
   });
 
@@ -1724,9 +1785,10 @@ describe('Canvas2DRenderer.hitTest (handles)', () => {
     r.attach(surface);
     // Rotate dot at local (0, halfH + stalk) = (0, 50 + 18) = (0, 68).
     // World (180, 178). CSS y = 300 - 68 = 232.
-    const result = r.hitTest({ x: 400, y: 232 }, sceneWithObject(), upright, { catalog: fakeCatalog, selection: [
-      'obj-1' as never,
-    ] });
+    const result = r.hitTest({ x: 400, y: 232 }, sceneWithObject(), upright, {
+      catalog: fakeCatalog,
+      selection: ['obj-1' as never],
+    });
     expect(result?.handle).toBe('rotate');
   });
 
@@ -1734,7 +1796,10 @@ describe('Canvas2DRenderer.hitTest (handles)', () => {
     const { surface } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    const result = r.hitTest({ x: 450, y: 250 }, sceneWithObject(), upright, { catalog: fakeCatalog, selection: [] });
+    const result = r.hitTest({ x: 450, y: 250 }, sceneWithObject(), upright, {
+      catalog: fakeCatalog,
+      selection: [],
+    });
     expect(result?.objectId).toBe('obj-1');
     expect(result?.handle).toBeUndefined();
   });
@@ -1743,9 +1808,10 @@ describe('Canvas2DRenderer.hitTest (handles)', () => {
     const { surface } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    const result = r.hitTest({ x: 450, y: 250 }, sceneWithObject(), upright, { catalog: fakeCatalog, selection: [
-      'unrelated' as never,
-    ] });
+    const result = r.hitTest({ x: 450, y: 250 }, sceneWithObject(), upright, {
+      catalog: fakeCatalog,
+      selection: ['unrelated' as never],
+    });
     expect(result?.handle).toBeUndefined();
     expect(result?.objectId).toBe('obj-1');
   });
@@ -1755,7 +1821,10 @@ describe('Canvas2DRenderer.hitTest (handles)', () => {
     const r = new Canvas2DRenderer();
     r.attach(surface);
     expect(
-      r.hitTest({ x: 200, y: 300 }, sceneWithObject(), upright, { catalog: fakeCatalog, selection: ['obj-1' as never] }),
+      r.hitTest({ x: 200, y: 300 }, sceneWithObject(), upright, {
+        catalog: fakeCatalog,
+        selection: ['obj-1' as never],
+      }),
     ).toBeNull();
   });
 
@@ -1767,7 +1836,10 @@ describe('Canvas2DRenderer.hitTest (handles)', () => {
     // world (180 - 50, 110 + 50) = (130, 160). CSS = (350, 250).
     const scene = sceneWithObject();
     scene.layers[0]!.objects[0]!.transform.rotation = { x: 0, y: 0, z: Math.PI / 2 };
-    const result = r.hitTest({ x: 350, y: 250 }, scene, upright, { catalog: fakeCatalog, selection: ['obj-1' as never] });
+    const result = r.hitTest({ x: 350, y: 250 }, scene, upright, {
+      catalog: fakeCatalog,
+      selection: ['obj-1' as never],
+    });
     expect(result?.handle).toBe('scaleNE');
   });
 
@@ -1778,7 +1850,10 @@ describe('Canvas2DRenderer.hitTest (handles)', () => {
     const scene = sceneWithObject();
     scene.layers[0]!.objects[0]!.transform.scale = { x: 0, y: 0, z: 0 };
     expect(
-      r.hitTest({ x: 400, y: 300 }, scene, upright, { catalog: fakeCatalog, selection: ['obj-1' as never] }),
+      r.hitTest({ x: 400, y: 300 }, scene, upright, {
+        catalog: fakeCatalog,
+        selection: ['obj-1' as never],
+      }),
     ).toBeNull();
   });
 
@@ -1786,9 +1861,9 @@ describe('Canvas2DRenderer.hitTest (handles)', () => {
     const { surface } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    const result = r.hitTest({ x: 450, y: 250 }, sceneWithObject(), upright, { selection: [
-      'obj-1' as never,
-    ] });
+    const result = r.hitTest({ x: 450, y: 250 }, sceneWithObject(), upright, {
+      selection: ['obj-1' as never],
+    });
     expect(result?.handle).toBe('scaleNE');
   });
 });
@@ -1919,12 +1994,20 @@ describe('Canvas2DRenderer.render (plants)', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(sceneWithPlant({ ageWeeks: 0 }), upright, { catalog: fakeCatalog, selection: [], previewAgeWeeks: 0 });
+    r.render(sceneWithPlant({ ageWeeks: 0 }), upright, {
+      catalog: fakeCatalog,
+      selection: [],
+      previewAgeWeeks: 0,
+    });
     const scalesAtZero = canvas.context.ops
       .filter((op) => op.method === 'scale')
       .map((op) => Math.abs(op.args[0] as number));
     canvas.context.ops.length = 0;
-    r.render(sceneWithPlant({ ageWeeks: 0 }), upright, { catalog: fakeCatalog, selection: [], previewAgeWeeks: 24 });
+    r.render(sceneWithPlant({ ageWeeks: 0 }), upright, {
+      catalog: fakeCatalog,
+      selection: [],
+      previewAgeWeeks: 24,
+    });
     const scalesAtMature = canvas.context.ops
       .filter((op) => op.method === 'scale')
       .map((op) => Math.abs(op.args[0] as number));
@@ -1959,9 +2042,9 @@ describe('Canvas2DRenderer.render (plants)', () => {
         c.method === 'translate' &&
         Math.abs(b.args[0] as number) > 1 &&
         Math.abs(b.args[0] as number) < 200 && // per-instance scale (not world transform)
-        (b.args[1] as number) > 0 &&            // sy positive (growth up)
-        (c.args[0] as number) === 0 &&          // x anchor offset is 0
-        (c.args[1] as number) === 1             // y anchor offset is 1 (base)
+        (b.args[1] as number) > 0 && // sy positive (growth up)
+        (c.args[0] as number) === 0 && // x anchor offset is 0
+        (c.args[1] as number) === 1 // y anchor offset is 1 (base)
       ) {
         baseAnchorOps++;
       }
@@ -1984,7 +2067,10 @@ describe('Canvas2DRenderer.render (plants)', () => {
     const plantScales = canvas.context.ops
       .filter((op) => op.method === 'scale')
       .map((op) => [op.args[0] as number, op.args[1] as number])
-      .filter(([sx, sy]) => Math.abs(sx) > 1 && Math.abs(sx) < 200 && Math.abs(sy) > 1 && Math.abs(sy) < 200);
+      .filter(
+        ([sx, sy]) =>
+          Math.abs(sx) > 1 && Math.abs(sx) < 200 && Math.abs(sy) > 1 && Math.abs(sy) < 200,
+      );
     expect(plantScales.length).toBeGreaterThan(0);
     expect(plantScales.every(([, sy]) => sy > 0)).toBe(true);
   });
@@ -2321,7 +2407,9 @@ describe('Canvas2DRenderer.hitTest (plants)', () => {
     const { surface } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    const result = r.hitTest({ x: 400, y: 300 }, sceneWithPlant(), upright, { catalog: fakeCatalog });
+    const result = r.hitTest({ x: 400, y: 300 }, sceneWithPlant(), upright, {
+      catalog: fakeCatalog,
+    });
     expect(result?.objectId).toBe('p-1');
   });
 
@@ -2331,7 +2419,9 @@ describe('Canvas2DRenderer.hitTest (plants)', () => {
     r.attach(surface);
     // At week 0 the plant is ~30% of mature; a click 45 mm from centre is
     // outside the shrunk silhouette but inside the mature one.
-    const result = r.hitTest({ x: 445, y: 300 }, sceneWithPlant({ ageWeeks: 0 }), upright, { catalog: fakeCatalog });
+    const result = r.hitTest({ x: 445, y: 300 }, sceneWithPlant({ ageWeeks: 0 }), upright, {
+      catalog: fakeCatalog,
+    });
     expect(result).toBeNull();
   });
 
@@ -2341,7 +2431,10 @@ describe('Canvas2DRenderer.hitTest (plants)', () => {
     r.attach(surface);
     const scene = sceneWithPlant({ ageWeeks: 0 });
     // Same click as above, now previewing at maturity — should hit.
-    const result = r.hitTest({ x: 445, y: 300 }, scene, upright, { catalog: fakeCatalog, previewAgeWeeks: 24 });
+    const result = r.hitTest({ x: 445, y: 300 }, scene, upright, {
+      catalog: fakeCatalog,
+      previewAgeWeeks: 24,
+    });
     expect(result?.objectId).toBe('p-1');
   });
 
@@ -2413,9 +2506,10 @@ describe('Canvas2DRenderer.hitTest (plants)', () => {
     // Mature plant centered at (180, 110); silhouette extends ±50mm
     // (naturalSize 100 × growthScale ~0.99 ≈ 99 mm). Top-right corner at
     // world ≈ (229, 159); CSS (449, 251).
-    const result = r.hitTest({ x: 449, y: 251 }, sceneWithPlant(), upright, { catalog: fakeCatalog, selection: [
-      'p-1' as never,
-    ] });
+    const result = r.hitTest({ x: 449, y: 251 }, sceneWithPlant(), upright, {
+      catalog: fakeCatalog,
+      selection: ['p-1' as never],
+    });
     expect(result?.handle).toBe('scaleNE');
   });
 
@@ -2435,7 +2529,10 @@ describe('Canvas2DRenderer.hitTest (plants)', () => {
         seed: 1,
       },
     });
-    const result = r.hitTest({ x: 420, y: 290 }, scene, upright, { catalog: fakeCatalog, selection: ['p-1' as never] });
+    const result = r.hitTest({ x: 420, y: 290 }, scene, upright, {
+      catalog: fakeCatalog,
+      selection: ['p-1' as never],
+    });
     expect(result?.objectId).toBe('p-1');
     expect(result?.handle).toBeUndefined();
   });
@@ -2530,9 +2627,7 @@ describe('Canvas2DRenderer.render (composition overlays — F5.3)', () => {
       (o) => o.method === 'set:strokeStyle' && o.args[0] === GOLDEN_STROKE,
     );
     expect(goldenStyleIdx).toBeGreaterThan(-1);
-    const restoreIdx = ops.findIndex(
-      (o, i) => i > goldenStyleIdx && o.method === 'restore',
-    );
+    const restoreIdx = ops.findIndex((o, i) => i > goldenStyleIdx && o.method === 'restore');
     expect(restoreIdx).toBeGreaterThan(goldenStyleIdx);
     const block = ops.slice(goldenStyleIdx, restoreIdx);
 
@@ -2570,9 +2665,7 @@ describe('Canvas2DRenderer.render (composition overlays — F5.3)', () => {
     const thirdsStyleIdx = ops.findIndex(
       (o) => o.method === 'set:strokeStyle' && o.args[0] === THIRDS_STROKE,
     );
-    const restoreIdx = ops.findIndex(
-      (o, i) => i > thirdsStyleIdx && o.method === 'restore',
-    );
+    const restoreIdx = ops.findIndex((o, i) => i > thirdsStyleIdx && o.method === 'restore');
     const block = ops.slice(thirdsStyleIdx, restoreIdx);
 
     const moves = block.filter((o) => o.method === 'moveTo').map((o) => o.args);
@@ -2605,9 +2698,7 @@ describe('Canvas2DRenderer.render (composition overlays — F5.3)', () => {
     const focalStyleIdx = ops.findIndex(
       (o) => o.method === 'set:fillStyle' && o.args[0] === FOCAL_FILL,
     );
-    const restoreIdx = ops.findIndex(
-      (o, i) => i > focalStyleIdx && o.method === 'restore',
-    );
+    const restoreIdx = ops.findIndex((o, i) => i > focalStyleIdx && o.method === 'restore');
     const block = ops.slice(focalStyleIdx, restoreIdx);
 
     const arcs = block.filter((o) => o.method === 'arc');
@@ -2617,9 +2708,9 @@ describe('Canvas2DRenderer.render (composition overlays — F5.3)', () => {
     // radius is 4 CSS px × (1 mm / px) = 4 mm.
     const centres = arcs.map((o) => ({ x: o.args[0] as number, y: o.args[1] as number }));
     for (const pt of focalPts) {
-      expect(
-        centres.some((c) => Math.abs(c.x - pt.x) < 1e-6 && Math.abs(c.y - pt.y) < 1e-6),
-      ).toBe(true);
+      expect(centres.some((c) => Math.abs(c.x - pt.x) < 1e-6 && Math.abs(c.y - pt.y) < 1e-6)).toBe(
+        true,
+      );
     }
     for (const arc of arcs) {
       expect(arc.args[2]).toBeCloseTo(4, 6); // radius in mm at zoom = 1
@@ -2663,12 +2754,8 @@ describe('Canvas2DRenderer.render (composition overlays — F5.3)', () => {
     // The overlay paint wraps in save / … / restore. The renderer sets
     // lineWidth BEFORE strokeStyle, so the block window must extend back to
     // the matching `save()` to capture that op.
-    const saveIdx = ops.findLastIndex(
-      (o, i) => i < goldenStyleIdx && o.method === 'save',
-    );
-    const restoreIdx = ops.findIndex(
-      (o, i) => i > goldenStyleIdx && o.method === 'restore',
-    );
+    const saveIdx = ops.findLastIndex((o, i) => i < goldenStyleIdx && o.method === 'save');
+    const restoreIdx = ops.findIndex((o, i) => i > goldenStyleIdx && o.method === 'restore');
     const block = ops.slice(saveIdx, restoreIdx);
 
     // lineWidth = 1 CSS px × (1 mm / 2 px) = 0.5 mm at zoom = 2.
@@ -2692,7 +2779,10 @@ describe('Canvas2DRenderer.render (composition overlays — F5.3)', () => {
         (o) => o.method === 'set:strokeStyle' && o.args[0] === GOLDEN_STROKE,
       );
       const end = ops.findIndex((o, i) => i > idx && o.method === 'restore');
-      return ops.slice(idx, end).filter((o) => o.method === 'moveTo').map((o) => o.args);
+      return ops
+        .slice(idx, end)
+        .filter((o) => o.method === 'moveTo')
+        .map((o) => o.args);
     }
     expect(overlayMoves(a)).toEqual(overlayMoves(b));
   });
@@ -2755,7 +2845,11 @@ describe('Canvas2DRenderer.render (composition overlays — F5.3)', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(scene, upright, { catalog, selection: ['a' as never], overlayOptions: { goldenRatio: true, thirds: true, focalPoints: true } });
+    r.render(scene, upright, {
+      catalog,
+      selection: ['a' as never],
+      overlayOptions: { goldenRatio: true, thirds: true, focalPoints: true },
+    });
     const ops = canvas.context.ops;
 
     // Last strokeStyle change in the entire op stream MUST NOT be an
@@ -2768,15 +2862,9 @@ describe('Canvas2DRenderer.render (composition overlays — F5.3)', () => {
     // And: the overlay's `set:strokeStyle` ops appear earlier than the
     // final handle paint ops (any strokeRect for a corner-handle square).
     const lastOverlayStyleIdx = Math.max(
-      ops.findLastIndex(
-        (o) => o.method === 'set:strokeStyle' && o.args[0] === GOLDEN_STROKE,
-      ),
-      ops.findLastIndex(
-        (o) => o.method === 'set:strokeStyle' && o.args[0] === THIRDS_STROKE,
-      ),
-      ops.findLastIndex(
-        (o) => o.method === 'set:fillStyle' && o.args[0] === FOCAL_FILL,
-      ),
+      ops.findLastIndex((o) => o.method === 'set:strokeStyle' && o.args[0] === GOLDEN_STROKE),
+      ops.findLastIndex((o) => o.method === 'set:strokeStyle' && o.args[0] === THIRDS_STROKE),
+      ops.findLastIndex((o) => o.method === 'set:fillStyle' && o.args[0] === FOCAL_FILL),
     );
     const lastStrokeRectIdx = ops.findLastIndex((o) => o.method === 'strokeRect');
     expect(lastStrokeRectIdx).toBeGreaterThan(lastOverlayStyleIdx);
@@ -2792,11 +2880,13 @@ describe('Canvas2DRenderer.render (composition overlays — F5.3)', () => {
       ...makeMinimalScene(TANK_W, TANK_H, TANK_H),
       tank: { ...makeMinimalScene(TANK_W, TANK_H, TANK_H).tank, width: 0, height: 0 },
     };
-    r.render(scene, upright, { overlayOptions: {
-      goldenRatio: true,
-      thirds: true,
-      focalPoints: true,
-    } });
+    r.render(scene, upright, {
+      overlayOptions: {
+        goldenRatio: true,
+        thirds: true,
+        focalPoints: true,
+      },
+    });
     const ops = canvas.context.ops;
     expect(strokeStyles(ops)).not.toContain(GOLDEN_STROKE);
     expect(strokeStyles(ops)).not.toContain(THIRDS_STROKE);
@@ -2826,9 +2916,7 @@ describe('Canvas2DRenderer.render (wall background — Stage 5.x)', () => {
   });
 
   function renderWith(
-    wall:
-      | { enabled: boolean; color: string; widthMm: number; heightMm: number }
-      | undefined,
+    wall: { enabled: boolean; color: string; widthMm: number; heightMm: number } | undefined,
   ): { ops: RecordedOp[] } {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
@@ -2952,9 +3040,7 @@ describe('Canvas2DRenderer.render (wall background — Stage 5.x)', () => {
     });
     // Find the set:fillStyle for the wall color and the following save +
     // restore pair around it. Verify the fillRect sits between them.
-    const styleIdx = ops.findIndex(
-      (o) => o.method === 'set:fillStyle' && o.args[0] === WALL_COLOR,
-    );
+    const styleIdx = ops.findIndex((o) => o.method === 'set:fillStyle' && o.args[0] === WALL_COLOR);
     expect(styleIdx).toBeGreaterThan(-1);
     // Walk back to the nearest save.
     let saveIdx = -1;
@@ -2986,9 +3072,7 @@ describe('Canvas2DRenderer.render (wall background — Stage 5.x)', () => {
       widthMm: 1000,
       heightMm: 500,
     });
-    const fills = ops
-      .filter((o) => o.method === 'set:fillStyle')
-      .map((o) => o.args[0]);
+    const fills = ops.filter((o) => o.method === 'set:fillStyle').map((o) => o.args[0]);
     expect(fills).toContain(customColor);
   });
 });
@@ -3011,9 +3095,7 @@ describe('Canvas2DRenderer.render (snap guides — F5.4)', () => {
     uninstallFakeWindow();
   });
 
-  function render(
-    guides: { xs: number[]; ys: number[] } | undefined,
-  ): { ops: RecordedOp[] } {
+  function render(guides: { xs: number[]; ys: number[] } | undefined): { ops: RecordedOp[] } {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
@@ -3037,9 +3119,7 @@ describe('Canvas2DRenderer.render (snap guides — F5.4)', () => {
 
   it('paints one vertical line per xs entry across the full tank height', () => {
     const { ops } = render({ xs: [180, 240], ys: [] });
-    const idx = ops.findIndex(
-      (o) => o.method === 'set:strokeStyle' && o.args[0] === SNAP_STROKE,
-    );
+    const idx = ops.findIndex((o) => o.method === 'set:strokeStyle' && o.args[0] === SNAP_STROKE);
     expect(idx).toBeGreaterThan(-1);
     const restoreIdx = ops.findIndex((o, i) => i > idx && o.method === 'restore');
     const block = ops.slice(idx, restoreIdx);
@@ -3057,9 +3137,7 @@ describe('Canvas2DRenderer.render (snap guides — F5.4)', () => {
 
   it('paints one horizontal line per ys entry across the full tank width', () => {
     const { ops } = render({ xs: [], ys: [110, 55] });
-    const idx = ops.findIndex(
-      (o) => o.method === 'set:strokeStyle' && o.args[0] === SNAP_STROKE,
-    );
+    const idx = ops.findIndex((o) => o.method === 'set:strokeStyle' && o.args[0] === SNAP_STROKE);
     const restoreIdx = ops.findIndex((o, i) => i > idx && o.method === 'restore');
     const block = ops.slice(idx, restoreIdx);
     const moves = block.filter((o) => o.method === 'moveTo').map((o) => o.args);
@@ -3076,9 +3154,7 @@ describe('Canvas2DRenderer.render (snap guides — F5.4)', () => {
 
   it('paints xs + ys mixed in a single stroke pass (one stroke call)', () => {
     const { ops } = render({ xs: [100], ys: [50] });
-    const idx = ops.findIndex(
-      (o) => o.method === 'set:strokeStyle' && o.args[0] === SNAP_STROKE,
-    );
+    const idx = ops.findIndex((o) => o.method === 'set:strokeStyle' && o.args[0] === SNAP_STROKE);
     const restoreIdx = ops.findIndex((o, i) => i > idx && o.method === 'restore');
     const block = ops.slice(idx, restoreIdx);
     expect(block.filter((o) => o.method === 'stroke')).toHaveLength(1);
@@ -3086,9 +3162,7 @@ describe('Canvas2DRenderer.render (snap guides — F5.4)', () => {
 
   it('uses solid lines (no setLineDash dash pattern leaks)', () => {
     const { ops } = render({ xs: [100], ys: [] });
-    const idx = ops.findIndex(
-      (o) => o.method === 'set:strokeStyle' && o.args[0] === SNAP_STROKE,
-    );
+    const idx = ops.findIndex((o) => o.method === 'set:strokeStyle' && o.args[0] === SNAP_STROKE);
     const restoreIdx = ops.findIndex((o, i) => i > idx && o.method === 'restore');
     const block = ops.slice(idx, restoreIdx);
     const lastDash = block
@@ -3106,7 +3180,10 @@ describe('Canvas2DRenderer.render (snap guides — F5.4)', () => {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(makeMinimalScene(TANK_W, TANK_H, TANK_H), upright, { overlayOptions: { goldenRatio: true, thirds: false, focalPoints: false }, snapGuides: { xs: [180], ys: [] } });
+    r.render(makeMinimalScene(TANK_W, TANK_H, TANK_H), upright, {
+      overlayOptions: { goldenRatio: true, thirds: false, focalPoints: false },
+      snapGuides: { xs: [180], ys: [] },
+    });
     const ops = canvas.context.ops;
     const overlayIdx = ops.findIndex(
       (o) => o.method === 'set:strokeStyle' && o.args[0] === 'rgba(255, 215, 0, 0.45)',
@@ -3177,13 +3254,17 @@ describe('Canvas2DRenderer.render (backdrop image — F6.3)', () => {
     uninstallFakeWindow();
   });
 
-  function renderWith(
-    backdrop: { image: CanvasImageSource; opacity: number } | undefined,
-  ): { ops: RecordedOp[]; backingW: number; backingH: number } {
+  function renderWith(backdrop: { image: CanvasImageSource; opacity: number } | undefined): {
+    ops: RecordedOp[];
+    backingW: number;
+    backingH: number;
+  } {
     const { surface, canvas } = makeSurface(800, 600, 1);
     const r = new Canvas2DRenderer();
     r.attach(surface);
-    r.render(makeMinimalScene(BACKDROP_TANK_W, BACKDROP_TANK_H, BACKDROP_TANK_H), upright, { backdropImage: backdrop });
+    r.render(makeMinimalScene(BACKDROP_TANK_W, BACKDROP_TANK_H, BACKDROP_TANK_H), upright, {
+      backdropImage: backdrop,
+    });
     return { ops: canvas.context.ops, backingW: 800, backingH: 600 };
   }
 
@@ -3202,7 +3283,9 @@ describe('Canvas2DRenderer.render (backdrop image — F6.3)', () => {
       renderWith({ image: fakeImage, opacity: -0.5 }).ops.find((o) => o.method === 'drawImage'),
     ).toBeUndefined();
     expect(
-      renderWith({ image: fakeImage, opacity: Number.NaN }).ops.find((o) => o.method === 'drawImage'),
+      renderWith({ image: fakeImage, opacity: Number.NaN }).ops.find(
+        (o) => o.method === 'drawImage',
+      ),
     ).toBeUndefined();
   });
 
@@ -3268,5 +3351,329 @@ describe('Canvas2DRenderer.render (backdrop image — F6.3)', () => {
     expect(restoreIdx).toBeGreaterThan(drawIdx);
     const drawImages = ops.filter((o) => o.method === 'drawImage');
     expect(drawImages).toHaveLength(1);
+  });
+});
+
+// ─── Decor (classic ornaments) — silhouette paint + hit-test + handles ───
+//
+// Decor paints + hit-tests with the EXACT hardscape silhouette convention:
+// `DecorEntry` shares the naturalSize / color / normalised-[-1,1]-silhouette
+// fields, so these specs mirror the hardscape paint + hit-test suites.
+
+describe('Canvas2DRenderer.render (decor)', () => {
+  let fakeWindow: FakeWindow;
+  beforeEach(() => {
+    fakeWindow = installFakeWindow();
+  });
+  afterEach(() => {
+    uninstallFakeWindow();
+    void fakeWindow;
+  });
+
+  const chestEntry = {
+    catalog: 'core',
+    id: 'decor.treasure-chest',
+    version: 1,
+    name: 'Treasure chest',
+    kind: 'decor' as const,
+    category: 'wreck' as const,
+    naturalSize: { width: 120, height: 90, depth: 80 },
+    color: '#8a6d3b',
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 1, y: 1 },
+      { x: -1, y: 1 },
+    ],
+    model: 'decor/treasure-chest.glb',
+  };
+  const moaiEntry = {
+    ...chestEntry,
+    id: 'decor.moai',
+    category: 'structure' as const,
+    color: '#9aa0a6',
+    model: 'decor/moai.glb',
+  };
+  const fakeCatalog = {
+    entries: [chestEntry, moaiEntry] as never,
+    get({ catalog, id }: { catalog: string; id: string }) {
+      if (catalog === 'core' && id === 'decor.treasure-chest') return chestEntry;
+      if (catalog === 'core' && id === 'decor.moai') return moaiEntry;
+      return null;
+    },
+    byKind() {
+      return [] as never;
+    },
+  } as never;
+
+  function sceneWithDecor(items: Array<{ id: string; refId?: string }>) {
+    const base = makeMinimalScene(600, 360, 360);
+    return {
+      ...base,
+      layers: [
+        {
+          id: 'layer-1' as never,
+          name: 'L',
+          opacity: 1,
+          visible: true,
+          locked: false,
+          objects: items.map((o) => ({
+            kind: 'decor' as const,
+            id: o.id as never,
+            ref: { catalog: 'core', id: o.refId ?? 'decor.treasure-chest', version: 1 },
+            transform: {
+              position: { x: 180, y: 110, z: 0 },
+              rotation: { x: 0, y: 0, z: 0 },
+              scale: { x: 1, y: 1, z: 1 },
+              flipX: false,
+              flipY: false,
+            },
+          })),
+        },
+      ],
+    };
+  }
+
+  it('paints a filled silhouette per decor object with the catalog color', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(sceneWithDecor([{ id: 'a' }]), upright, { catalog: fakeCatalog });
+    const fillStyles = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
+    expect(fillStyles).toContain('#8a6d3b');
+  });
+
+  it('skips a decor object whose catalog entry is missing (same missing-ref treatment as hardscape)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(sceneWithDecor([{ id: 'a', refId: 'decor.missing' }]), upright, {
+      catalog: fakeCatalog,
+    });
+    const fillStyles = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
+    expect(fillStyles).not.toContain('#8a6d3b');
+  });
+
+  it('paints decor in object order (back-to-front) within the hardscape pass', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(
+      sceneWithDecor([
+        { id: 'a', refId: 'decor.treasure-chest' },
+        { id: 'b', refId: 'decor.moai' },
+      ]),
+      upright,
+      { catalog: fakeCatalog },
+    );
+    const fillStyles = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
+    const idxA = fillStyles.indexOf('#8a6d3b');
+    const idxB = fillStyles.indexOf('#9aa0a6');
+    expect(idxA).toBeGreaterThan(0);
+    expect(idxB).toBeGreaterThan(idxA);
+  });
+
+  it('uses the standard (non-wood) outline stroke for decor', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(sceneWithDecor([{ id: 'a' }]), upright, { catalog: fakeCatalog });
+    const strokes = only(canvas.context.ops, ['set:strokeStyle']).map((o) => o.args[0]);
+    expect(strokes).toContain('#222');
+    expect(strokes).not.toContain('#2a1a0e');
+  });
+
+  it('scales the silhouette by naturalSize × 0.5 × transform.scale (hardscape pipeline)', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithDecor([{ id: 'a' }]);
+    scene.layers[0]!.objects[0]!.transform.scale = { x: 2, y: 1, z: 1 };
+    r.render(scene, upright, { catalog: fakeCatalog });
+    // naturalSize 120×90 → halfW 60 × scale 2 = 120; halfH 45 × 1 = 45.
+    const scales = only(canvas.context.ops, ['scale']);
+    const objectScale = scales.find((o) => o.args[0] === 120 && o.args[1] === 45);
+    expect(objectScale).toBeDefined();
+  });
+
+  it('paints selection handles for a selected decor object', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    r.render(sceneWithDecor([{ id: 'a' }]), upright, {
+      catalog: fakeCatalog,
+      selection: ['a'] as never,
+    });
+    const strokes = only(canvas.context.ops, ['set:strokeStyle']).map((o) => o.args[0]);
+    expect(strokes).toContain('#3a8eff');
+  });
+
+  it('honours layer opacity + skips invisible layers', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithDecor([{ id: 'a' }]);
+    scene.layers[0]!.opacity = 0.4;
+    r.render(scene, upright, { catalog: fakeCatalog });
+    const alphas = only(canvas.context.ops, ['set:globalAlpha']).map((o) => o.args[0]);
+    expect(alphas).toContain(0.4);
+
+    canvas.context.ops.length = 0;
+    const hidden = sceneWithDecor([{ id: 'a' }]);
+    hidden.layers[0]!.visible = false;
+    r.render(hidden, upright, { catalog: fakeCatalog });
+    const fillStyles = only(canvas.context.ops, ['set:fillStyle']).map((o) => o.args[0]);
+    expect(fillStyles).not.toContain('#8a6d3b');
+  });
+
+  it('renders are idempotent in the decor path', () => {
+    const { surface, canvas } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithDecor([{ id: 'a' }]);
+    r.render(scene, upright, { catalog: fakeCatalog });
+    const first = JSON.stringify(canvas.context.ops);
+    canvas.context.ops.length = 0;
+    r.render(scene, upright, { catalog: fakeCatalog });
+    expect(JSON.stringify(canvas.context.ops)).toBe(first);
+  });
+});
+
+describe('Canvas2DRenderer.hitTest (decor)', () => {
+  let fakeWindow: FakeWindow;
+  beforeEach(() => {
+    fakeWindow = installFakeWindow();
+  });
+  afterEach(() => {
+    uninstallFakeWindow();
+    void fakeWindow;
+  });
+
+  const squareDecorEntry = {
+    catalog: 'core',
+    id: 'decor.castle',
+    version: 1,
+    name: 'Castle',
+    kind: 'decor' as const,
+    category: 'structure' as const,
+    naturalSize: { width: 100, height: 100, depth: 100 },
+    color: '#888888',
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 1, y: 1 },
+      { x: -1, y: 1 },
+    ],
+    model: 'decor/castle.glb',
+  };
+  const fakeCatalog = {
+    entries: [squareDecorEntry] as never,
+    get({ catalog, id }: { catalog: string; id: string }) {
+      if (catalog === 'core' && id === 'decor.castle') return squareDecorEntry;
+      return null;
+    },
+    byKind() {
+      return [] as never;
+    },
+  } as never;
+
+  function sceneWithDecorObject(transformPosition = { x: 180, y: 110, z: 0 }) {
+    const base = makeMinimalScene(600, 360, 360);
+    return {
+      ...base,
+      layers: [
+        {
+          id: 'layer-1' as never,
+          name: 'L',
+          opacity: 1,
+          visible: true,
+          locked: false,
+          objects: [
+            {
+              kind: 'decor' as const,
+              id: 'decor-1' as never,
+              ref: { catalog: 'core', id: 'decor.castle', version: 1 },
+              transform: {
+                position: transformPosition,
+                rotation: { x: 0, y: 0, z: 0 },
+                scale: { x: 1, y: 1, z: 1 },
+                flipX: false,
+                flipY: false,
+              },
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  it('hits a decor object at the canvas centre (silhouette hit, same as hardscape)', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const result = r.hitTest({ x: 400, y: 300 }, sceneWithDecorObject(), upright, {
+      catalog: fakeCatalog,
+    });
+    expect(result).not.toBeNull();
+    expect(result?.objectId).toBe('decor-1');
+    expect(result?.layerId).toBe('layer-1');
+  });
+
+  it('misses when the click is outside the silhouette', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    expect(
+      r.hitTest({ x: 600, y: 300 }, sceneWithDecorObject(), upright, { catalog: fakeCatalog }),
+    ).toBeNull();
+  });
+
+  it('falls back to AABB hit-test when no catalog is supplied (mirrors hardscape)', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    expect(r.hitTest({ x: 400, y: 300 }, sceneWithDecorObject(), upright)).not.toBeNull();
+  });
+
+  it('honours rotation + flips when transforming the click point', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithDecorObject();
+    scene.layers[0]!.objects[0]!.transform.rotation = { x: 0, y: 0, z: Math.PI / 4 };
+    scene.layers[0]!.objects[0]!.transform.flipX = true;
+    expect(r.hitTest({ x: 400, y: 300 }, scene, upright, { catalog: fakeCatalog })).not.toBeNull();
+  });
+
+  it('returns handle hits for a selected decor object (handle beats body)', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    // halfW = halfH = 50 → NE corner handle at world (230, 160), which is
+    // canvas (450, 250) under the upright viewport (y-flip).
+    const result = r.hitTest({ x: 450, y: 250 }, sceneWithDecorObject(), upright, {
+      catalog: fakeCatalog,
+      selection: ['decor-1'] as never,
+    });
+    expect(result?.handle).toBe('scaleNE');
+  });
+
+  it('returns body (no handle) when the decor object is not selected', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const result = r.hitTest({ x: 400, y: 300 }, sceneWithDecorObject(), upright, {
+      catalog: fakeCatalog,
+    });
+    expect(result?.handle).toBeUndefined();
+  });
+
+  it('returns null when transform.scale collapses the silhouette to zero area', () => {
+    const { surface } = makeSurface(800, 600, 1);
+    const r = new Canvas2DRenderer();
+    r.attach(surface);
+    const scene = sceneWithDecorObject();
+    scene.layers[0]!.objects[0]!.transform.scale = { x: 0, y: 0, z: 0 };
+    expect(r.hitTest({ x: 400, y: 300 }, scene, upright, { catalog: fakeCatalog })).toBeNull();
   });
 });

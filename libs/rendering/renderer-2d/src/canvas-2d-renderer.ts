@@ -32,6 +32,7 @@
 
 import type {
   Catalog,
+  DecorEntry,
   HardscapeEntry,
   PlantEntry,
   SubstrateEntry,
@@ -51,6 +52,7 @@ import { effectiveWaterLevelMm } from '@aquascape/domain/scene-model';
 import type {
   Tank,
   CatalogRef,
+  DecorObject,
   HardscapeObject,
   LayerId,
   ObjectId,
@@ -598,7 +600,7 @@ export class Canvas2DRenderer implements SceneRenderer {
       if (!layer.visible) continue;
       for (let oi = layer.objects.length - 1; oi >= 0; oi--) {
         const obj = layer.objects[oi]!;
-        if (obj.kind === 'hardscape') {
+        if (obj.kind === 'hardscape' || obj.kind === 'decor') {
           if (objectContainsWorldPoint(obj, world, catalog)) {
             return { objectId: obj.id, layerId: layer.id };
           }
@@ -789,18 +791,35 @@ export class Canvas2DRenderer implements SceneRenderer {
       if (!layer.visible) continue;
       const layerAlpha = clampOpacity(layer.opacity);
       for (const obj of layer.objects) {
-        if (obj.kind !== 'hardscape') continue;
-        const entry = resolveHardscapeEntry(obj.ref, catalog);
-        if (entry === null) continue; // No silhouette to draw — silently skip.
-        this.paintHardscape(ctx, obj as HardscapeObject, entry, oneCssPxInMm, layerAlpha);
+        // Decor paints in the SAME pass with the SAME silhouette pipeline
+        // as hardscape — `DecorEntry` shares the naturalSize + color +
+        // normalised-[-1,1]-silhouette convention. Within-layer object
+        // order (back-to-front) is preserved by handling both kinds in
+        // one walk.
+        if (obj.kind === 'hardscape') {
+          const entry = resolveHardscapeEntry(obj.ref, catalog);
+          if (entry === null) continue; // No silhouette to draw — silently skip.
+          this.paintHardscape(ctx, obj, entry, oneCssPxInMm, layerAlpha);
+        } else if (obj.kind === 'decor') {
+          const entry = resolveDecorEntry(obj.ref, catalog);
+          if (entry === null) continue; // Same missing-ref treatment as hardscape.
+          this.paintHardscape(ctx, obj, entry, oneCssPxInMm, layerAlpha);
+        }
       }
     }
   }
 
+  /**
+   * Paint one silhouette-convention object (hardscape OR decor): translate
+   * / rotate / scale by `transform × naturalSize × 0.5`, path the
+   * normalised silhouette, fill with the catalog colour, stroke a thin
+   * outline. Decor uses the rock outline colour; only hardscape wood gets
+   * the darker wood stroke.
+   */
   private paintHardscape(
     ctx: CanvasRenderingContext2D,
-    obj: HardscapeObject,
-    entry: HardscapeEntry,
+    obj: HardscapeObject | DecorObject,
+    entry: HardscapeEntry | DecorEntry,
     oneCssPxInMm: number,
     layerAlpha: number,
   ): void {
@@ -833,7 +852,8 @@ export class Canvas2DRenderer implements SceneRenderer {
     const meanScale = (Math.abs(sx) + Math.abs(sy)) * 0.5;
     if (meanScale > 0) {
       ctx.lineWidth = oneCssPxInMm / meanScale;
-      ctx.strokeStyle = entry.category === 'wood' ? '#2a1a0e' : '#222';
+      ctx.strokeStyle =
+        entry.kind === 'hardscape' && entry.category === 'wood' ? '#2a1a0e' : '#222';
       ctx.stroke();
     }
     ctx.restore();
@@ -1238,11 +1258,7 @@ export class Canvas2DRenderer implements SceneRenderer {
     // is therefore always positive, and the `translate(0, 1)` below moves
     // the silhouette's base (y = −1 in normalised silhouette coords) to
     // the world position. Growth then only extends the silhouette upward.
-    const sy =
-      obj.transform.scale.y *
-      entry.naturalSize.height *
-      0.5 *
-      growthScale;
+    const sy = obj.transform.scale.y * entry.naturalSize.height * 0.5 * growthScale;
     if (sx === 0 || sy === 0) {
       ctx.restore();
       return;
@@ -1285,7 +1301,8 @@ export class Canvas2DRenderer implements SceneRenderer {
     // so Mirror twice on the same axis restores the original arrangement.
     const baseSeed = scatter.seed ?? sceneSeed;
     const seed =
-      ((baseSeed ^ (obj.transform.flipX ? SCATTER_FLIP_X_SEED_MIX : 0)) ^
+      (baseSeed ^
+        (obj.transform.flipX ? SCATTER_FLIP_X_SEED_MIX : 0) ^
         (obj.transform.flipY ? SCATTER_FLIP_Y_SEED_MIX : 0)) >>>
       0;
     // Honor `transform.flipX/flipY` on the brush polygon BEFORE scattering.
@@ -1294,11 +1311,7 @@ export class Canvas2DRenderer implements SceneRenderer {
     // contain instances. Symmetric polygons (e.g. the auto-created
     // 16-sided regular circle) are invariant under this flip; the seed
     // XOR above is what makes the visible re-scatter happen there.
-    const polygon = mirrorPolygon(
-      scatter.polygon,
-      obj.transform.flipX,
-      obj.transform.flipY,
-    );
+    const polygon = mirrorPolygon(scatter.polygon, obj.transform.flipX, obj.transform.flipY);
     const points = scatterInPolygon(polygon, scatter.density, seed);
     if (points.length === 0) return;
 
@@ -1484,15 +1497,19 @@ function objectContainsWorldPoint(
   worldPoint: Vec2,
   catalog: Catalog | undefined,
 ): boolean {
-  if (obj.kind !== 'hardscape') return false;
-  const hardscape = obj as HardscapeObject;
-  const entry = resolveHardscapeEntry(hardscape.ref, catalog);
+  // Hardscape AND decor share the silhouette hit-test convention; decor
+  // entries carry the same naturalSize + normalised silhouette fields.
+  if (obj.kind !== 'hardscape' && obj.kind !== 'decor') return false;
+  const entry: HardscapeEntry | DecorEntry | null =
+    obj.kind === 'hardscape'
+      ? resolveHardscapeEntry(obj.ref, catalog)
+      : resolveDecorEntry(obj.ref, catalog);
 
   // Translate to object-relative.
-  const dx = worldPoint.x - hardscape.transform.position.x;
-  const dy = worldPoint.y - hardscape.transform.position.y;
+  const dx = worldPoint.x - obj.transform.position.x;
+  const dy = worldPoint.y - obj.transform.position.y;
   // Inverse-rotate by transform.rotation.z (rotate by -theta).
-  const theta = hardscape.transform.rotation.z;
+  const theta = obj.transform.rotation.z;
   const cos = Math.cos(theta);
   const sin = Math.sin(theta);
   const rx = dx * cos + dy * sin;
@@ -1501,8 +1518,8 @@ function objectContainsWorldPoint(
   // Compute half-extents in world mm, signed by flip.
   const naturalW = entry?.naturalSize.width ?? HARDSCAPE_FALLBACK_NATURAL_MM;
   const naturalH = entry?.naturalSize.height ?? HARDSCAPE_FALLBACK_NATURAL_MM;
-  const sxRaw = hardscape.transform.scale.x * (hardscape.transform.flipX ? -1 : 1);
-  const syRaw = hardscape.transform.scale.y * (hardscape.transform.flipY ? -1 : 1);
+  const sxRaw = obj.transform.scale.x * (obj.transform.flipX ? -1 : 1);
+  const syRaw = obj.transform.scale.y * (obj.transform.flipY ? -1 : 1);
   const halfW = naturalW * 0.5 * sxRaw;
   const halfH = naturalH * 0.5 * syRaw;
   if (halfW === 0 || halfH === 0) return false;
@@ -1524,6 +1541,13 @@ function resolveHardscapeEntry(
   if (catalog === undefined) return null;
   const entry = catalog.get({ catalog: ref.catalog, id: ref.id });
   if (entry === null || entry.kind !== 'hardscape') return null;
+  return entry;
+}
+
+function resolveDecorEntry(ref: CatalogRef, catalog: Catalog | undefined): DecorEntry | null {
+  if (catalog === undefined) return null;
+  const entry = catalog.get({ catalog: ref.catalog, id: ref.id });
+  if (entry === null || entry.kind !== 'decor') return null;
   return entry;
 }
 
@@ -1578,7 +1602,7 @@ function plantContainsWorldPoint(
  * Resolve the local-frame half-extents (in world mm) for the selection-handle
  * geometry of an object. Returns `null` when the object can't show handles —
  * either because we can't resolve its catalog entry, or because it's a kind
- * that doesn't use bbox handles (scatter plants, decor sprites, etc.).
+ * that doesn't use bbox handles (scatter plants).
  *
  * Plants honour `previewAgeWeeks` so the bbox follows the painted growth
  * state; hardscape is unaffected.
@@ -1588,8 +1612,13 @@ function resolveSelectableExtents(
   catalog: Catalog | undefined,
   previewAgeWeeks: number | undefined,
 ): { halfW: number; halfH: number } | null {
-  if (obj.kind === 'hardscape') {
-    const entry = resolveHardscapeEntry(obj.ref, catalog);
+  if (obj.kind === 'hardscape' || obj.kind === 'decor') {
+    // Decor mirrors the hardscape handle geometry exactly — same
+    // naturalSize-driven bbox, same fallback footprint without a catalog.
+    const entry =
+      obj.kind === 'hardscape'
+        ? resolveHardscapeEntry(obj.ref, catalog)
+        : resolveDecorEntry(obj.ref, catalog);
     const naturalW = entry?.naturalSize.width ?? HARDSCAPE_FALLBACK_NATURAL_MM;
     const naturalH = entry?.naturalSize.height ?? HARDSCAPE_FALLBACK_NATURAL_MM;
     const halfW = obj.transform.scale.x * naturalW * 0.5;

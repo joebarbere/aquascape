@@ -1,7 +1,16 @@
 import type { RenderSurface, Viewport } from '@aquascape/rendering/renderer-api';
-import type { Catalog, CatalogEntry, CatalogKind } from '@aquascape/domain/catalog';
-import type { HardscapeObject, Layer, Scene } from '@aquascape/domain/scene-model';
-import { DataTexture, EquirectangularReflectionMapping } from 'three';
+import type { Catalog, CatalogEntry, CatalogKind, DecorEntry } from '@aquascape/domain/catalog';
+import type { DecorObject, HardscapeObject, Layer, Scene } from '@aquascape/domain/scene-model';
+import {
+  BoxGeometry,
+  DataTexture,
+  EquirectangularReflectionMapping,
+  Group,
+  Mesh,
+  MeshPhysicalMaterial,
+  type Object3D,
+} from 'three';
+import type { ModelLoadFn } from './model-cache';
 import { type RendererFactory, type RendererLike, Three3DRenderer } from './three-3d-renderer';
 import { DEFAULT_WATER_GAP_BELOW_RIM_MM } from '@aquascape/domain/scene-model';
 
@@ -1475,6 +1484,180 @@ describe('Three3DRenderer — fish-eye camera mode', () => {
     expect(camera.fov).toBe(50);
     expect(controls.enabled).toBe(true);
     r.dispose();
+    raf.uninstall();
+  });
+});
+
+// ─── Decor models (GLB ornaments) ────────────────────────────────────────
+
+describe('Three3DRenderer — decor wiring', () => {
+  const chestEntry: DecorEntry = {
+    catalog: 'core',
+    id: 'decor.treasure-chest',
+    version: 1,
+    name: 'Treasure chest',
+    kind: 'decor',
+    category: 'wreck',
+    naturalSize: { width: 120, height: 90, depth: 80 },
+    color: '#8a6d3b',
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 1, y: 1 },
+      { x: -1, y: 1 },
+    ],
+    model: 'decor/treasure-chest.glb',
+  };
+
+  function decorScene(): Scene {
+    const obj: DecorObject = {
+      id: 'd1' as DecorObject['id'],
+      kind: 'decor',
+      ref: { catalog: 'core', id: 'decor.treasure-chest', version: 1 },
+      transform: {
+        position: { x: 200, y: 0, z: 100 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        flipX: false,
+        flipY: false,
+      },
+    };
+    const base = sceneOf();
+    return { ...base, layers: [{ ...base.layers[0]!, objects: [obj] }] };
+  }
+
+  function makeFakeLoader(): {
+    load: ModelLoadFn;
+    calls: string[];
+    resolve: () => Mesh;
+  } {
+    const calls: string[] = [];
+    let onLoad: ((gltf: { scene: Object3D }) => void) | null = null;
+    return {
+      calls,
+      load: (url, loadCb) => {
+        calls.push(url);
+        onLoad = loadCb;
+      },
+      resolve: () => {
+        const mesh = new Mesh(new BoxGeometry(10, 10, 10), new MeshPhysicalMaterial());
+        const scene = new Group();
+        scene.add(mesh);
+        onLoad?.({ scene });
+        return mesh;
+      },
+    };
+  }
+
+  function findNamed(
+    root: { traverse(cb: (n: Object3D) => void): void },
+    name: string,
+  ): Object3D | null {
+    let found: Object3D | null = null;
+    root.traverse((node) => {
+      if (node.name === name) found = node;
+    });
+    return found;
+  }
+
+  it('renders decor as the extruded fallback and attempts NO load when catalogModelBaseUrl is absent', () => {
+    const raf = stubRaf();
+    const loader = makeFakeLoader();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()), { loadModel: loader.load });
+    r.attach(makeSurface());
+    r.render(decorScene(), viewport, { catalog: makeCatalog([chestEntry]) });
+    const rAny = r as unknown as { currentContent: Object3D };
+    const decorGroup = findNamed(rAny.currentContent, 'aquascape:decor');
+    expect(decorGroup).not.toBeNull();
+    expect((decorGroup as Object3D).children.length).toBe(1);
+    expect(loader.calls.length).toBe(0); // opt-in contract: no network
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('with catalogModelBaseUrl the GLB loads through the cache and attaches into the LIVE tree without a rebuild', () => {
+    const raf = stubRaf();
+    const loader = makeFakeLoader();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()), { loadModel: loader.load });
+    r.attach(makeSurface());
+    r.render(decorScene(), viewport, {
+      catalog: makeCatalog([chestEntry]),
+      catalogModelBaseUrl: 'assets/catalog-models/',
+    });
+    expect(loader.calls).toEqual(['assets/catalog-models/decor/treasure-chest.glb']);
+    const rAny = r as unknown as {
+      currentContent: Object3D;
+      decorCausticMaterials: unknown[];
+    };
+    expect(findNamed(rAny.currentContent, 'aquascape:decor-model')).toBeNull();
+    const causticCountBefore = rAny.decorCausticMaterials.length;
+
+    loader.resolve(); // async load lands AFTER render() — attach-in-place
+    expect(findNamed(rAny.currentContent, 'aquascape:decor-model')).not.toBeNull();
+    // The live caustic array picked up the model's patched material so the
+    // RAF tick animates it without waiting for the next render().
+    expect(rAny.decorCausticMaterials.length).toBe(causticCountBefore + 1);
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('the model cache is renderer-lifetime: a re-render does NOT reload the URL', () => {
+    const raf = stubRaf();
+    const loader = makeFakeLoader();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()), { loadModel: loader.load });
+    r.attach(makeSurface());
+    const options = {
+      catalog: makeCatalog([chestEntry]),
+      catalogModelBaseUrl: 'assets/catalog-models/',
+    };
+    r.render(decorScene(), viewport, options);
+    loader.resolve();
+    r.render(decorScene(), viewport, options);
+    expect(loader.calls.length).toBe(1); // one load, clones per rebuild
+    const rAny = r as unknown as { currentContent: Object3D };
+    expect(findNamed(rAny.currentContent, 'aquascape:decor-model')).not.toBeNull();
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('dispose() releases the model cache — source geometry + materials are disposed', () => {
+    const raf = stubRaf();
+    const loader = makeFakeLoader();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()), { loadModel: loader.load });
+    r.attach(makeSurface());
+    r.render(decorScene(), viewport, {
+      catalog: makeCatalog([chestEntry]),
+      catalogModelBaseUrl: 'assets/catalog-models/',
+    });
+    const sourceMesh = loader.resolve();
+    const geoDispose = jest.spyOn(sourceMesh.geometry, 'dispose');
+    const matDispose = jest.spyOn(sourceMesh.material as MeshPhysicalMaterial, 'dispose');
+    r.dispose();
+    expect(geoDispose).toHaveBeenCalled();
+    expect(matDispose).toHaveBeenCalled();
+    const rAny = r as unknown as { modelCache: unknown; decorCausticMaterials: unknown[] };
+    expect(rAny.modelCache).toBeNull();
+    expect(rAny.decorCausticMaterials.length).toBe(0);
+    raf.uninstall();
+  });
+
+  it('dispose discipline holds across repeated decor render/dispose cycles', () => {
+    const raf = stubRaf();
+    for (let i = 0; i < 25; i++) {
+      const stub = new StubRenderer();
+      const loader = makeFakeLoader();
+      const r = new Three3DRenderer(makeFactory(stub), { loadModel: loader.load });
+      r.attach(makeSurface());
+      const options = {
+        catalog: makeCatalog([chestEntry]),
+        catalogModelBaseUrl: 'assets/catalog-models/',
+      };
+      r.render(decorScene(), viewport, options);
+      loader.resolve();
+      r.render(decorScene(), viewport, options); // rebuild path with a loaded model
+      r.dispose();
+      expect(stub.disposed).toBe(1);
+    }
     raf.uninstall();
   });
 });
