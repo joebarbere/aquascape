@@ -6,8 +6,16 @@
 
 - **Drag state machine** on the canvas: `move` / `scale` / `rotate` / `marquee` / null. Intermediate `pointermove` updates LOCAL state only — the renderer is handed a `previewScene` with the dragged object's transform replaced via `applyMoveDrag` / `applyScaleDrag` / `applyRotateDrag`. **One command per gesture** fires on `pointerup` (`MoveObject` for translate, `ReshapeObject` for scale + rotate). Esc cancels with no dispatch.
 - **Scale model** (v1): uniform centre-anchored, `new = original × (cursor dist from centre) / (start dist from centre)`, with `MIN_SCALE_RATIO = 0.01` floor. Standard "opposite-corner-stays-fixed" model is a future improvement.
-- **Marquee selection criterion** is **centre-in-rect** (Sketch-style). Figma's partial-overlap variant is a future option.
+- **Marquee selection criterion** is **centre-in-rect** (Sketch-style). Figma's partial-overlap variant is a future option. Hardscape AND decor objects participate; plants are excluded (their visual centre is the scatter patch, not the transform origin).
 - **Implicit carpet brush:** plants with catalog `defaultDensity > 0` produce a 16-sided regular polygon scatter patch (`SCATTER_PATCH_RADIUS_MM = 60`) centred on the cursor, seeded from `scene.seed`. Freehand brush UI is deferred.
+
+## Decorations panel (`libs/features/decorations-tool/`)
+
+- **`<aquascape-decorations-tool>` sits in the left rail right after the hardscape tool** (decorations are scape furniture; planting + livestock follow). The panel mirrors `hardscape-tool` exactly: collapsible header (`aquascape.ui.collapsed.decorations-tool`), category radio chips (All / Wreck / Ruin / Bones / Structure over `DecorEntry.category`), paginated 2-column SVG-silhouette tile grid (page size 8), pointer-drag tiles that are real `<button>`s with `aria-label="Drag <name> onto the canvas"`.
+- **Drop path mirrors hardscape:** `DecorDragService.dropped$` → `onDecorDropped` in `app.component.ts` → screen→world conversion + `clampToTank` + mid-depth `z = tank.depth / 2` → one `AddObject` command with a `DecorObject` (`kind: 'decor'`, `ref`, transform — NO `category` field; the catalog row owns categorisation) + `replaceSelection` of the new id. The shared `paletteDragGhost` computed covers the decor drag too.
+- **`catalogModelBaseUrl: 'assets/catalog-models/'`** is forwarded on 3D renders only (same opt-in + trailing-slash convention as `catalogTextureBaseUrl`); the constant lives next to `CATALOG_TEXTURE_BASE_URL` in `app.component.ts`. Omitted ⇒ the 3D renderer falls back to the extruded-silhouette placeholder for decor.
+- **Decor objects are fish refuges + collision input.** `LivestockSimulationService.collectHardscape` walks `kind === 'decor'` alongside `kind === 'hardscape'` (single document-order pass — load-bearing for determinism) and registers them with `HARDSCAPE_CATEGORY.OTHER` + the `DecorEntry`'s loader-defaulted `coverScore` (structure→0.6, wreck→0.5, bones→0.4, ruin→0.3; missing catalog row → 0). `collectHardscapeSpheres` includes decor in the SDF bake (bounding-sphere-of-`naturalSize`). The hardscape part of the `spawnKey` fingerprint therefore covers decor automatically — add/move/remove re-fires registration + re-spawn.
+- **apps/web's `jest.config.ts` must mirror renderer-3d's ESM-addon stubs.** `Three3DRenderer` imports `three/examples/jsm/loaders/GLTFLoader` (decor models) which is ESM-only — like OrbitControls + the postprocessing addons before it, jest maps it to `renderer-3d/src/__mocks__/gltf-loader-stub.ts`. A new addon import in the renderer WILL break every apps/web suite until the mapping is added here too.
 
 ## Reactive plumbing
 
@@ -39,7 +47,7 @@
 
 ## Storage key namespaces
 
-- `aquascape.ui.collapsed.<panel>` (per-panel accordion — `tank-setup`, `substrate-tool`, `hardscape-tool`, `planting-tool`, `livestock-equipment`, `equipment-tool`, `layers-panel`, `composition-overlays`, `snap-settings`, `wall-background`, `backdrop`).
+- `aquascape.ui.collapsed.<panel>` (per-panel accordion — `tank-setup`, `substrate-tool`, `hardscape-tool`, `decorations-tool`, `planting-tool`, `livestock-equipment`, `equipment-tool`, `layers-panel`, `composition-overlays`, `snap-settings`, `wall-background`, `backdrop`).
 - `aquascape.ui.shell.{sidebarWidth, railWidth, sidebarCollapsed, railCollapsed}` (layout).
 - `aquascape.ui.overlays.{goldenRatio, thirds, focalPoints}` (F5.3 composition overlays — each flag persisted independently, defaults false).
 - `aquascape.ui.wall.{enabled, color, widthMm, heightMm}` (Stage 5.x wall background — defaults off / `#2a2d35` / 1200 × 600 mm).

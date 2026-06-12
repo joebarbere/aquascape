@@ -18,9 +18,9 @@
 //      Every drag is committed on `pointerup` as a single command, so the
 //      undo stack sees one entry per gesture (intermediate pointer-move
 //      ticks are LOCAL preview state — they never dispatch).
-//   5. Receive hardscape drops from the palette via HardscapeDragService:
-//      convert screen → world coords, mint a new ObjectId, dispatch
-//      AddObject. The first hardscape drop also creates a default
+//   5. Receive hardscape / plant / decor drops from the palettes via their
+//      drag services: convert screen → world coords, mint a new ObjectId,
+//      dispatch AddObject. The first drop also creates a default
 //      "Hardscape" layer if no layer exists yet.
 //   6. On destroy, dispose the renderer and disconnect the observer.
 //
@@ -53,7 +53,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { combineLatest } from 'rxjs';
 
 import { coreCatalog } from '@aquascape/domain/catalog';
-import type { HardscapeEntry, PlantEntry } from '@aquascape/domain/catalog';
+import type { DecorEntry, HardscapeEntry, PlantEntry } from '@aquascape/domain/catalog';
 import type { Transform } from '@aquascape/domain/geometry';
 import {
   addLayer,
@@ -63,6 +63,7 @@ import {
   identityTransform,
   moveObject,
   reshapeObject,
+  type DecorObject,
   type HardscapeObject,
   type LayerId,
   type Layer,
@@ -106,6 +107,7 @@ import {
   toleranceCssPxToMm,
   wheelDeltaToZoomFactor,
 } from '@aquascape/features/editor-shell';
+import { DecorDragService, DecorationsToolComponent } from '@aquascape/features/decorations-tool';
 import { HardscapeDragService, HardscapeToolComponent } from '@aquascape/features/hardscape-tool';
 import { LayersPanelComponent } from '@aquascape/features/layers-panel';
 import {
@@ -199,6 +201,7 @@ type DragState =
     CommonModule,
     CompositionOverlaysComponent,
     DayNightControlComponent,
+    DecorationsToolComponent,
     EditorShellComponent,
     EquipmentToolComponent,
     HardscapeToolComponent,
@@ -330,6 +333,7 @@ type DragState =
             <aquascape-tank-setup></aquascape-tank-setup>
             <aquascape-substrate-tool></aquascape-substrate-tool>
             <aquascape-hardscape-tool></aquascape-hardscape-tool>
+            <aquascape-decorations-tool></aquascape-decorations-tool>
             <aquascape-planting-tool></aquascape-planting-tool>
             <aquascape-livestock-tool></aquascape-livestock-tool>
             <aquascape-equipment-tool></aquascape-equipment-tool>
@@ -673,6 +677,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly store = inject(Store);
   private readonly dragService = inject(HardscapeDragService);
   private readonly plantDragService = inject(PlantDragService);
+  private readonly decorDragService = inject(DecorDragService);
   private readonly previewTime = inject(PreviewTimeService);
   private readonly overlayOptions = inject(OverlayOptionsService);
   private readonly wallBackground = inject(WallBackgroundService);
@@ -786,14 +791,16 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   /**
    * Drag-ghost label + viewport coords for the cursor follower shown while a
    * palette tile is being dragged toward the canvas. Computed from whichever
-   * drag service is currently active (hardscape OR plant). Returns null when
-   * idle so the template hides the overlay.
+   * drag service is currently active (hardscape, plant OR decor). Returns
+   * null when idle so the template hides the overlay.
    */
   readonly paletteDragGhost = computed<{ x: number; y: number; label: string } | null>(() => {
     const hard = this.dragService.active();
     if (hard !== null) return { x: hard.clientX, y: hard.clientY, label: hard.entry.name };
     const plant = this.plantDragService.active();
     if (plant !== null) return { x: plant.clientX, y: plant.clientY, label: plant.entry.name };
+    const decor = this.decorDragService.active();
+    if (decor !== null) return { x: decor.clientX, y: decor.clientY, label: decor.entry.name };
     return null;
   });
 
@@ -887,6 +894,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       this.plantDragService.dropped$
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe((evt) => this.onPlantDropped(evt.entry, evt.clientX, evt.clientY));
+
+      this.decorDragService.dropped$
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((evt) => this.onDecorDropped(evt.entry, evt.clientX, evt.clientY));
     });
   }
 
@@ -1682,7 +1693,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     for (const layer of scene.layers) {
       if (!layer.visible) continue;
       for (const obj of layer.objects) {
-        if (obj.kind !== 'hardscape') continue;
+        // Hardscape + decor participate in marquee selection (both are
+        // free-standing scape furniture); plants stay excluded (their
+        // visual centre is the scatter patch, not the transform origin).
+        if (obj.kind !== 'hardscape' && obj.kind !== 'decor') continue;
         // bbox-centre-in-marquee — the standard Sketch-style criterion.
         // Centre is the object's position (pre-rotation; centring doesn't
         // change with rotation around the object's own origin).
@@ -1735,6 +1749,51 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       id: newObjectId(),
       ref: { catalog: entry.catalog, id: entry.id, version: entry.version },
       category: entry.category,
+      transform: {
+        ...identityTransform(),
+        position: { x: world.x, y: world.y, z },
+      },
+    };
+    this.store.dispatch(SceneActions.dispatchCommand({ command: addObject(layerId, newObject) }));
+    this.store.dispatch(SelectionActions.replaceSelection({ ids: [newObject.id] }));
+  }
+
+  /**
+   * Decor drop — same screen→world plumbing as hardscape (decorations are
+   * scape furniture: clamp-to-tank, substrate-relative mid-depth z, one
+   * AddObject command + select-the-new-object). `DecorObject` carries no
+   * `category` field — the catalog row owns categorisation; the scene
+   * object is just a `CatalogRef` + transform.
+   */
+  private onDecorDropped(entry: DecorEntry, clientX: number, clientY: number): void {
+    const scene = this.currentScene;
+    const viewport = this.currentViewport;
+    if (scene === null || viewport === null) return;
+    const canvas = this.canvas2d;
+    const rect = canvas.getBoundingClientRect();
+    if (
+      clientX < rect.left ||
+      clientX > rect.right ||
+      clientY < rect.top ||
+      clientY > rect.bottom
+    ) {
+      return;
+    }
+    const cssX = clientX - rect.left;
+    const cssY = clientY - rect.top;
+    const world = clampToTank(
+      canvasCssToWorld({ x: cssX, y: cssY }, viewport, {
+        width: rect.width,
+        height: rect.height,
+      }),
+      scene.tank,
+    );
+    const z = scene.tank.depth / 2;
+    const layerId = this.ensureLayerExists(scene);
+    const newObject: DecorObject = {
+      kind: 'decor',
+      id: newObjectId(),
+      ref: { catalog: entry.catalog, id: entry.id, version: entry.version },
       transform: {
         ...identityTransform(),
         position: { x: world.x, y: world.y, z },
@@ -1903,6 +1962,12 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       // static-asset copy of `libs/domain/catalog/assets/textures` — see
       // the asset glob in apps/web/project.json.
       ...(is3d ? { catalogTextureBaseUrl: CATALOG_TEXTURE_BASE_URL } : {}),
+      // Decorations — catalog model pack base URL, 3D-only (same opt-in
+      // contract as catalogTextureBaseUrl above). The pack is the static-
+      // asset copy of `libs/domain/catalog/assets/models` — see the asset
+      // glob in apps/web/project.json. Omitted ⇒ the 3D renderer falls
+      // back to the extruded-silhouette placeholder for decor objects.
+      ...(is3d ? { catalogModelBaseUrl: CATALOG_MODEL_BASE_URL } : {}),
       // Fish-eye view — camera mode for the 3D renderer. 'fish-eye' parks
       // the camera at a live fish's eye; plain '3d' stays on OrbitControls.
       // Omitted on 2D renders (no camera in 2D).
@@ -2143,6 +2208,16 @@ const EPSILON_MM = 0.01;
  * 3D renderer concatenates `baseUrl + ref` verbatim.
  */
 const CATALOG_TEXTURE_BASE_URL = 'assets/catalog-textures/';
+
+/**
+ * Decorations — where the dev server / production build serves the catalog
+ * model pack (the asset glob in `apps/web/project.json` copies
+ * `libs/domain/catalog/assets/models` here). Same conventions as
+ * CATALOG_TEXTURE_BASE_URL: relative (no leading slash) so it resolves
+ * under any deploy base href; trailing slash because the 3D renderer
+ * concatenates `baseUrl + ref` verbatim.
+ */
+const CATALOG_MODEL_BASE_URL = 'assets/catalog-models/';
 
 /**
  * Default radius (mm) for the implicit carpet brush that fires when the user

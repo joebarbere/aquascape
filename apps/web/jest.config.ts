@@ -43,6 +43,9 @@ moduleNameMapper['^three/examples/jsm/controls/OrbitControls$'] =
 moduleNameMapper[
   '^three/examples/jsm/postprocessing/(EffectComposer|RenderPass|UnrealBloomPass|OutputPass)$'
 ] = '<rootDir>/../../libs/rendering/renderer-3d/src/__mocks__/postprocessing-stub.ts';
+// Decorations — GLTFLoader (decor model loading) is ESM-only too; same dance.
+moduleNameMapper['^three/examples/jsm/loaders/GLTFLoader$'] =
+  '<rootDir>/../../libs/rendering/renderer-3d/src/__mocks__/gltf-loader-stub.ts';
 
 const config: Config = {
   displayName: 'web',

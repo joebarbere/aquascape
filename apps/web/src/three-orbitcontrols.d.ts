@@ -31,3 +31,10 @@ declare module 'three/examples/jsm/postprocessing/UnrealBloomPass' {
 declare module 'three/examples/jsm/postprocessing/OutputPass' {
   export * from 'three/examples/jsm/postprocessing/OutputPass.js';
 }
+
+// Decorations — same shim for GLTFLoader (decor model loading in
+// renderer-3d's ModelCache). Mapped to its `.js` file in
+// `tsconfig.app.json`.
+declare module 'three/examples/jsm/loaders/GLTFLoader' {
+  export * from 'three/examples/jsm/loaders/GLTFLoader.js';
+}

@@ -1029,6 +1029,153 @@ describe('AppComponent — 2D / 3D view mode', () => {
   });
 });
 
+// ─── Decorations — palette drop → AddObject(DecorObject) dispatch ─────────
+
+import { coreCatalog } from '@aquascape/domain/catalog';
+import { DecorDragService } from '@aquascape/features/decorations-tool';
+import type { AddObjectCommand } from '@aquascape/domain/scene-model';
+
+describe('AppComponent — decorations drop', () => {
+  function stubCanvasRect(fixture: ReturnType<typeof TestBed.createComponent<AppComponent>>) {
+    const canvas = fixture.nativeElement.querySelector(
+      'canvas[aria-label="Aquascape design canvas (2D)"]',
+    ) as HTMLCanvasElement;
+    canvas.getBoundingClientRect = (): DOMRect =>
+      ({
+        left: 0,
+        top: 0,
+        right: 800,
+        bottom: 600,
+        width: 800,
+        height: 600,
+        x: 0,
+        y: 0,
+      }) as DOMRect;
+    return canvas;
+  }
+
+  it('renders the decorations panel in the left rail right after the hardscape tool', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const body = fixture.nativeElement.querySelector('#app-sidebar-body') as HTMLElement;
+    const order = Array.from(body.children).map((el) => el.tagName.toLowerCase());
+    const hardscapeIdx = order.indexOf('aquascape-hardscape-tool');
+    const decorIdx = order.indexOf('aquascape-decorations-tool');
+    expect(hardscapeIdx).toBeGreaterThanOrEqual(0);
+    expect(decorIdx).toBe(hardscapeIdx + 1);
+  });
+
+  it('drop inside the canvas dispatches AddObject with a DecorObject + selects it', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    stubCanvasRect(fixture);
+    // Re-render so currentViewport reflects the stubbed 800×600 rect.
+    const store = TestBed.inject(MockStore);
+    store.overrideSelector(selectScene, defaultScene());
+    store.refreshState();
+
+    const entry = coreCatalog.byKind('decor')[0]!;
+    const spy = dispatchSpy();
+    const drag = TestBed.inject(DecorDragService);
+    drag.start(entry, 100, 100);
+    drag.drop(400, 300); // canvas centre
+
+    const dispatched = spy.mock.calls.map((c) => c[0]);
+    const addAction = dispatched.find(
+      (a): a is ReturnType<typeof SceneActions.dispatchCommand> =>
+        (a as ReturnType<typeof SceneActions.dispatchCommand>).type ===
+          '[Scene] Dispatch Command' &&
+        (a as ReturnType<typeof SceneActions.dispatchCommand>).command.kind === 'AddObject',
+    );
+    expect(addAction).toBeDefined();
+    const command = addAction!.command as AddObjectCommand;
+    expect(command.object.kind).toBe('decor');
+    expect(command.object.ref).toEqual({ catalog: 'core', id: entry.id, version: entry.version });
+    // Drop point maps to a clamped in-tank world position; z sits mid-depth.
+    const scene = defaultScene();
+    expect(command.object.transform.position.z).toBe(scene.tank.depth / 2);
+    expect(command.object.transform.position.x).toBeGreaterThanOrEqual(0);
+    expect(command.object.transform.position.x).toBeLessThanOrEqual(scene.tank.width);
+    // The new object is selected, mirroring the hardscape drop.
+    expect(dispatched).toContainEqual(
+      SelectionActions.replaceSelection({ ids: [command.object.id] }),
+    );
+    // First drop on an empty document also creates the default layer.
+    const addLayer = dispatched.find(
+      (a) =>
+        (a as ReturnType<typeof SceneActions.dispatchCommand>).type ===
+          '[Scene] Dispatch Command' &&
+        (a as ReturnType<typeof SceneActions.dispatchCommand>).command.kind === 'AddLayer',
+    );
+    expect(addLayer).toBeDefined();
+  });
+
+  it('drop outside the canvas bounds dispatches nothing', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    stubCanvasRect(fixture);
+
+    const entry = coreCatalog.byKind('decor')[0]!;
+    const spy = dispatchSpy();
+    const drag = TestBed.inject(DecorDragService);
+    drag.start(entry, 100, 100);
+    drag.drop(2000, 2000); // far outside the stubbed 800×600 rect
+
+    const dispatched = spy.mock.calls.map((c) => c[0]);
+    expect(
+      dispatched.some(
+        (a) =>
+          (a as ReturnType<typeof SceneActions.dispatchCommand>).type ===
+          '[Scene] Dispatch Command',
+      ),
+    ).toBe(false);
+  });
+
+  it('an active decor drag drives the palette drag ghost overlay', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const entry = coreCatalog.byKind('decor')[0]!;
+    const drag = TestBed.inject(DecorDragService);
+    drag.start(entry, 123, 456);
+    fixture.detectChanges();
+    const ghost = fixture.nativeElement.querySelector('.palette-drag-ghost') as HTMLElement;
+    expect(ghost).not.toBeNull();
+    expect(ghost.textContent?.trim()).toBe(entry.name);
+    drag.cancel();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.palette-drag-ghost')).toBeNull();
+  });
+
+  it('passes catalogModelBaseUrl on 3D renders only (omitted in 2D)', () => {
+    const renderer = new MockSceneRenderer();
+    const renderer3d = new MockSceneRenderer();
+    configure(renderer, defaultScene(), renderer3d);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const firstCall = renderer.render.mock.calls[0]!;
+    expect(firstCall[2]?.catalogModelBaseUrl).toBeUndefined();
+
+    const vm = TestBed.inject(ViewModeService);
+    vm.setMode('3d');
+    fixture.detectChanges();
+
+    const lastCall = renderer3d.render.mock.calls.at(-1)!;
+    expect(lastCall[2]?.catalogModelBaseUrl).toBe('assets/catalog-models/');
+    // Same trailing-slash convention as the texture pack base URL.
+    expect(lastCall[2]?.catalogTextureBaseUrl).toBe('assets/catalog-textures/');
+  });
+});
+
 // ── Stage 11 F11.6 Wave 4 — behavior debug chord ────────────────────────
 
 describe('AppComponent — behavior debug chord', () => {

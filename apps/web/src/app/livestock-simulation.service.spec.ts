@@ -35,13 +35,16 @@ import {
   HARDSCAPE_CATEGORY,
   Hardscape,
   NO_BEHAVIOR_HANDLE,
+  Position,
   Velocity,
 } from '@aquascape/domain/livestock-ecs';
 import type {
+  DecorObject,
   HardscapeObject,
   Layer,
   LivestockEntry,
   Scene,
+  SceneObject,
 } from '@aquascape/domain/scene-model';
 import { asLayerId, asObjectId, identityTransform } from '@aquascape/domain/scene-model';
 import { LivestockPulseActions, defaultScene, selectScene } from '@aquascape/state';
@@ -758,8 +761,58 @@ function hardscapeObj(
   };
 }
 
+/** Mint a DecorEntry catalog row — minimal fields to satisfy the type. */
+function decorEntry(
+  id: string,
+  opts: {
+    category?: 'wreck' | 'ruin' | 'bones' | 'structure';
+    coverScore?: number;
+    name?: string;
+    naturalSize?: { width: number; height: number; depth: number };
+  } = {},
+): CatalogEntry {
+  const base: CatalogEntry = {
+    catalog: 'core',
+    id,
+    version: 1,
+    name: opts.name ?? id,
+    kind: 'decor',
+    category: opts.category ?? 'wreck',
+    naturalSize: opts.naturalSize ?? { width: 150, height: 120, depth: 110 },
+    color: '#7a5230',
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 1, y: 1 },
+      { x: -1, y: 1 },
+    ],
+    model: 'treasure-chest.glb',
+  } as CatalogEntry;
+  // Only set coverScore when explicitly requested — same convention as
+  // `hardscapeEntry` above (loader-defaulted in production; tests that
+  // want the defensive-fallback path leave it absent).
+  if (opts.coverScore !== undefined) {
+    return { ...base, coverScore: opts.coverScore } as CatalogEntry;
+  }
+  return base;
+}
+
+/** Build a decor SceneObject at a position with a given catalog ref id. */
+function decorObj(
+  objId: string,
+  refId: string,
+  pos: { x: number; y: number; z: number },
+): DecorObject {
+  return {
+    kind: 'decor',
+    id: asObjectId(objId),
+    ref: { catalog: 'core', id: refId, version: 1 },
+    transform: { ...identityTransform(), position: pos },
+  };
+}
+
 /** Wrap one or more SceneObjects into a single visible Layer. */
-function layerWith(id: string, objects: HardscapeObject[]): Layer {
+function layerWith(id: string, objects: SceneObject[]): Layer {
   return {
     id: asLayerId(id),
     name: 'Hardscape',
@@ -770,10 +823,11 @@ function layerWith(id: string, objects: HardscapeObject[]): Layer {
   };
 }
 
-/** Compose a scene with both livestock + hardscape, on top of `defaultScene`. */
+/** Compose a scene with livestock + scape furniture (hardscape and/or decor),
+ *  on top of `defaultScene`. */
 function sceneWithHardscape(
   livestock: LivestockEntry[],
-  hardscape: HardscapeObject[],
+  hardscape: SceneObject[],
   seed = 42,
 ): Scene {
   const base = defaultScene();
@@ -812,7 +866,10 @@ describe('LivestockSimulationService — F11.3 hardscape registration', () => {
     expect(world.getHardscapeCount()).toBe(3);
   });
 
-  it('skips non-hardscape SceneObjects (plants, decor) — only `kind === hardscape` makes the list', () => {
+  it('skips plant SceneObjects but registers decor — hardscape + decor make the list', () => {
+    // Decorations contract: `kind === 'decor'` objects register as refuges
+    // (category OTHER); plants stay runtime-computed by FearSystem from
+    // scatter density and never register.
     const livestock = [entry('e1', 'livestock.fish.neon-tetra', 2)];
     const hard = [hardscapeObj('h1', 'hardscape.rock.seiryu', { x: 100, y: 0, z: 100 })];
     const { service, store } = setup();
@@ -820,10 +877,11 @@ describe('LivestockSimulationService — F11.3 hardscape registration', () => {
       makeCatalog([
         livestockEntry('livestock.fish.neon-tetra'),
         hardscapeEntry('hardscape.rock.seiryu', { category: 'rock', coverScore: 0.4 }),
+        decorEntry('decor.treasure-chest', { category: 'wreck', coverScore: 0.5 }),
       ]),
     );
-    // The scene's layer has one hardscape + one decor + one plant. Only the
-    // hardscape should make it to the world.
+    // The scene's layer has one hardscape + one decor + one plant. The
+    // hardscape AND the decor make it to the world; the plant does not.
     const base = defaultScene();
     const scene: Scene = {
       ...base,
@@ -838,12 +896,7 @@ describe('LivestockSimulationService — F11.3 hardscape registration', () => {
           locked: false,
           objects: [
             ...hard,
-            {
-              kind: 'decor',
-              id: asObjectId('d1'),
-              ref: { catalog: 'core', id: 'decor.fish.boraras', version: 1 },
-              transform: identityTransform(),
-            },
+            decorObj('d1', 'decor.treasure-chest', { x: 400, y: 0, z: 200 }),
             {
               kind: 'plant',
               id: asObjectId('p1'),
@@ -857,7 +910,7 @@ describe('LivestockSimulationService — F11.3 hardscape registration', () => {
     };
     store.overrideSelector(selectScene, scene);
     store.refreshState();
-    expect(service.getWorld()!.getHardscapeCount()).toBe(1);
+    expect(service.getWorld()!.getHardscapeCount()).toBe(2);
   });
 
   it('reads the loaded catalog coverScore verbatim (no re-defaulting on a populated row)', () => {
@@ -960,6 +1013,162 @@ describe('LivestockSimulationService — F11.3 hardscape registration', () => {
     store.overrideSelector(selectScene, sceneWithHardscape(livestock, [initial[0]!], 7));
     store.refreshState();
     expect(service.getWorld()!.getHardscapeCount()).toBe(1);
+  });
+});
+
+// ─── Decorations — decor objects as refuges + SDF input ─────────────────────
+//
+// The decorations-tool feature places `kind: 'decor'` SceneObjects (classic
+// ornaments — treasure chest, castle…). They register on the world exactly
+// like hardscape (category OTHER, the DecorEntry's loader-defaulted
+// coverScore) so FearSystem sees them as refuges and the SDF bake deflects
+// fish around them, and the spawnKey fingerprint re-fires the rebuild on any
+// decor mutation.
+
+describe('LivestockSimulationService — decor registration (Decorations feature)', () => {
+  it('registers a decor object with category OTHER and the catalog coverScore', () => {
+    const livestock = [entry('e1', 'livestock.fish.neon-tetra', 2)];
+    const { service, store } = setup();
+    service.setCatalog(
+      makeCatalog([
+        livestockEntry('livestock.fish.neon-tetra'),
+        decorEntry('decor.castle', { category: 'structure', coverScore: 0.6 }),
+      ]),
+    );
+    store.overrideSelector(
+      selectScene,
+      sceneWithHardscape(livestock, [decorObj('d1', 'decor.castle', { x: 250, y: 0, z: 150 })], 7),
+    );
+    store.refreshState();
+    const world = service.getWorld()!;
+    expect(world.getHardscapeCount()).toBe(1);
+    const eids = defineQuery([Hardscape])(world.ecs);
+    expect(eids.length).toBe(1);
+    const eid = eids[0]!;
+    expect(Hardscape.coverScore[eid]).toBeCloseTo(0.6, 5);
+    expect(Hardscape.category[eid]).toBe(HARDSCAPE_CATEGORY.OTHER);
+  });
+
+  it('falls back to the decor-category default coverScore when the loaded row omits it', () => {
+    // Mirrors the catalog loader's defaulting (wreck → 0.5). The production
+    // catalog is always loader-defaulted; this covers fixtures that bypass
+    // the loader — same defensive policy as the hardscape path.
+    const livestock = [entry('e1', 'livestock.fish.neon-tetra', 1)];
+    const { service, store } = setup();
+    service.setCatalog(
+      makeCatalog([
+        livestockEntry('livestock.fish.neon-tetra'),
+        decorEntry('decor.sunken-galleon', { category: 'wreck' }), // no coverScore
+      ]),
+    );
+    store.overrideSelector(
+      selectScene,
+      sceneWithHardscape(
+        livestock,
+        [decorObj('d1', 'decor.sunken-galleon', { x: 250, y: 0, z: 150 })],
+        7,
+      ),
+    );
+    store.refreshState();
+    const world = service.getWorld()!;
+    const eids = defineQuery([Hardscape])(world.ecs);
+    expect(eids.length).toBe(1);
+    expect(Hardscape.coverScore[eids[0]!]).toBeCloseTo(0.5, 5);
+  });
+
+  it('registers decor with coverScore 0 when the catalog row is missing entirely', () => {
+    const livestock = [entry('e1', 'livestock.fish.neon-tetra', 1)];
+    const { service, store } = setup();
+    // Catalog deliberately omits the decor row.
+    service.setCatalog(makeCatalog([livestockEntry('livestock.fish.neon-tetra')]));
+    store.overrideSelector(
+      selectScene,
+      sceneWithHardscape(livestock, [decorObj('d1', 'decor.unknown', { x: 100, y: 0, z: 100 })], 7),
+    );
+    store.refreshState();
+    const world = service.getWorld()!;
+    const eids = defineQuery([Hardscape])(world.ecs);
+    expect(eids.length).toBe(1);
+    expect(Hardscape.coverScore[eids[0]!]).toBe(0);
+    expect(Hardscape.category[eids[0]!]).toBe(HARDSCAPE_CATEGORY.OTHER);
+  });
+
+  it('adding a decor object changes the spawnKey — re-registration fires', () => {
+    const livestock = [entry('e1', 'livestock.fish.neon-tetra', 2)];
+    const initial = [hardscapeObj('h1', 'hardscape.rock.a', { x: 100, y: 0, z: 100 })];
+    const { service, store } = setup();
+    service.setCatalog(
+      makeCatalog([
+        livestockEntry('livestock.fish.neon-tetra'),
+        hardscapeEntry('hardscape.rock.a', { category: 'rock', coverScore: 0.4 }),
+        decorEntry('decor.moai', { category: 'ruin', coverScore: 0.3 }),
+      ]),
+    );
+    store.overrideSelector(selectScene, sceneWithHardscape(livestock, initial, 7));
+    store.refreshState();
+    expect(service.getWorld()!.getHardscapeCount()).toBe(1);
+    // Drop a moai next to the rock; the spawnKey fingerprint (which
+    // includes the decor's position + coverScore + category) must change
+    // so the world re-registers + re-spawns.
+    const grown: SceneObject[] = [...initial, decorObj('d1', 'decor.moai', { x: 300, y: 0, z: 200 })];
+    store.overrideSelector(selectScene, sceneWithHardscape(livestock, grown, 7));
+    store.refreshState();
+    expect(service.getWorld()!.getHardscapeCount()).toBe(2);
+  });
+
+  it('moving a decor object changes the spawnKey — positions re-register', () => {
+    const livestock = [entry('e1', 'livestock.fish.neon-tetra', 1)];
+    const { service, store } = setup();
+    service.setCatalog(
+      makeCatalog([
+        livestockEntry('livestock.fish.neon-tetra'),
+        decorEntry('decor.moai', { category: 'ruin', coverScore: 0.3 }),
+      ]),
+    );
+    store.overrideSelector(
+      selectScene,
+      sceneWithHardscape(livestock, [decorObj('d1', 'decor.moai', { x: 100, y: 0, z: 100 })], 7),
+    );
+    store.refreshState();
+    const world = service.getWorld()!;
+    const before = defineQuery([Hardscape])(world.ecs);
+    expect(before.length).toBe(1);
+    expect(Position.x[before[0]!]).toBeCloseTo(100, 3);
+    // Move the moai 200 mm to the right (a MoveObject command upstream).
+    store.overrideSelector(
+      selectScene,
+      sceneWithHardscape(livestock, [decorObj('d1', 'decor.moai', { x: 300, y: 0, z: 100 })], 7),
+    );
+    store.refreshState();
+    const after = defineQuery([Hardscape])(service.getWorld()!.ecs);
+    expect(after.length).toBe(1);
+    expect(Position.x[after[0]!]).toBeCloseTo(300, 3);
+    // The count is unchanged but the registration was rebuilt — the world
+    // re-spawned, so the fish slab is fresh (entityCount still 1).
+    expect(service.getWorld()!.snapshot(0).entityCount).toBe(1);
+  });
+
+  it('decor contributes to the hardscape SDF bake (world gains an SDF with decor only)', () => {
+    const livestock = [entry('e1', 'livestock.fish.neon-tetra', 1)];
+    const { service, store } = setup();
+    service.setCatalog(
+      makeCatalog([
+        livestockEntry('livestock.fish.neon-tetra'),
+        decorEntry('decor.castle', {
+          category: 'structure',
+          coverScore: 0.6,
+          naturalSize: { width: 180, height: 300, depth: 150 },
+        }),
+      ]),
+    );
+    store.overrideSelector(
+      selectScene,
+      sceneWithHardscape(livestock, [decorObj('d1', 'decor.castle', { x: 250, y: 0, z: 150 })], 7),
+    );
+    store.refreshState();
+    // A decor-only scene must still produce a baked SDF (CollisionSystem
+    // deflects fish off the castle).
+    expect(service.getWorld()!.getHardscapeSdf()).not.toBeNull();
   });
 });
 

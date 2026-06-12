@@ -129,7 +129,7 @@ jobs:
       # regression. Features are added as their bodies land — Stage 0
       # ships zero, F1.1 added `features-tank-setup`.
       - name: Run coverage gate
-        run: pnpm exec nx run-many -t test --projects='tag:scope:domain,tag:scope:rendering,tag:scope:platform-web,tag:scope:platform-electron,tag:scope:state,features-tank-setup,features-editor-shell,features-substrate-tool,features-hardscape-tool,features-planting-tool,features-layers-panel,features-livestock-equipment,features-export' --configuration=ci --parallel=3
+        run: pnpm exec nx run-many -t test --projects='tag:scope:domain,tag:scope:rendering,tag:scope:platform-web,tag:scope:platform-electron,tag:scope:state,features-tank-setup,features-editor-shell,features-substrate-tool,features-hardscape-tool,features-decorations-tool,features-planting-tool,features-layers-panel,features-livestock-equipment,features-export' --configuration=ci --parallel=3
 
       - name: Upload coverage artifacts
         if: always()
