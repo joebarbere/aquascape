@@ -1,6 +1,6 @@
 import { Color, Mesh, PlaneGeometry, ShaderMaterial } from 'three';
 import type { Scene } from '@aquascape/domain/scene-model';
-import { buildWaterMesh } from './water-mesh';
+import { buildWaterMesh, WATER_OFFSET_BELOW_RIM_MM } from './water-mesh';
 
 function sceneOf(tankW = 600, tankH = 360, tankD = 300): Scene {
   return {
@@ -40,7 +40,7 @@ describe('buildWaterMesh — geometry + placement', () => {
   it('positions the plane centred over the tank and 5 mm below the interior rim', () => {
     const { mesh } = buildWaterMesh(sceneOf(600, 360, 300));
     expect(mesh.position.x).toBeCloseTo(300, 5);
-    expect(mesh.position.y).toBeCloseTo(360 - 5, 5);
+    expect(mesh.position.y).toBeCloseTo(360 - WATER_OFFSET_BELOW_RIM_MM, 5);
     expect(mesh.position.z).toBeCloseTo(150, 5);
   });
 

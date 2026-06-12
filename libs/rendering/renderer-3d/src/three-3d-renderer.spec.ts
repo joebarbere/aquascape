@@ -7,6 +7,7 @@ import {
   type RendererLike,
   Three3DRenderer,
 } from './three-3d-renderer';
+import { WATER_OFFSET_BELOW_RIM_MM } from './scene-builder/water-mesh';
 
 // ─── Test stubs ───────────────────────────────────────────────────────────
 
@@ -792,8 +793,8 @@ describe('Three3DRenderer — water surface wiring', () => {
     const firstHandle = rAny.waterMesh;
     r.render(sceneOf(1200, 500, 400), viewport);
     expect(rAny.waterMesh).not.toBe(firstHandle);
-    // New plane sits 5 mm below the new rim.
-    expect(rAny.waterMesh!.mesh.position.y).toBeCloseTo(500 - 5, 5);
+    // New plane sits WATER_OFFSET_BELOW_RIM_MM below the new rim.
+    expect(rAny.waterMesh!.mesh.position.y).toBeCloseTo(500 - WATER_OFFSET_BELOW_RIM_MM, 5);
     r.dispose();
     raf.uninstall();
   });

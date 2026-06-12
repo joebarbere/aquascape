@@ -56,11 +56,21 @@ import {
 
 /**
  * Vertical offset (mm) BELOW the tank's interior rim where the water plane
- * sits. 5 mm matches the plan's spec — small enough to read as "full
- * tank", large enough to leave room for the ≤ 2 mm wave amplitude without
- * the silhouette touching the rim.
+ * sits. Originally 5 mm (the F11.7 plan's "reads as a full tank" spec) —
+ * raised to 25 mm because a near-rim waterline genuinely reads as "filled
+ * to the brim", and a visible air gap is what real aquascapes (and their
+ * photos) have. Still leaves the ≤ 2 mm wave amplitude far clear of the rim.
+ *
+ * **EXPORTED as the single waterline source of truth.** The host's
+ * `LivestockSimulationService` subtracts this from `tank.height` when it
+ * builds the ECS `tankAabb.maxY`, so everything the sim keys off the tank
+ * top — depth-band fractions, the kinematic clamp, bubble despawn
+ * (`maxY − BUBBLE_WATERLINE_INSET_MM`), surface food sprites — tracks the
+ * VISIBLE water surface rather than the glass rim. Change it here and the
+ * whole stack follows; hard-coding a second copy anywhere reintroduces
+ * fish/bubbles/food floating in the air gap.
  */
-const WATER_OFFSET_BELOW_RIM_MM = 5;
+export const WATER_OFFSET_BELOW_RIM_MM = 25;
 
 /**
  * Default base water colour (linear components — matches the value the
@@ -196,7 +206,8 @@ export interface WaterMeshHandle {
  * Build the animated water surface for the given scene.
  *
  * Geometry: a tessellated `PlaneGeometry(tank.width, tank.depth)` rotated
- * to lie horizontal at `y = tank.height - 5` mm. The plane is centred on
+ * to lie horizontal at `y = tank.height - WATER_OFFSET_BELOW_RIM_MM`. The
+ * plane is centred on
  * `(tank.width / 2, tank.depth / 2)` so it fills the tank's interior
  * footprint.
  *
@@ -243,9 +254,10 @@ export function buildWaterMesh(scene: Scene): WaterMeshHandle {
   // Plane geometry is authored in the XY plane by default; rotate -π/2
   // about X to lay it flat in the XZ plane (Y up).
   mesh.rotation.x = -Math.PI / 2;
-  // Position the plane's centre at (tank.width/2, height-5, tank.depth/2)
-  // — 5 mm below the interior rim. The substrate's bottom sits at y=0,
-  // so this is "just below the rim" for any reasonable tank height.
+  // Position the plane's centre at (tank.width / 2,
+  // height - WATER_OFFSET_BELOW_RIM_MM, tank.depth / 2) — a visible air
+  // gap below the rim. The substrate's bottom sits at y = 0, so this is
+  // a realistic fill level for any reasonable tank height.
   mesh.position.set(tank.width / 2, tank.height - WATER_OFFSET_BELOW_RIM_MM, tank.depth / 2);
   // Render AFTER opaque content (substrate / hardscape / plants) so
   // depth-sort within the transparent bucket lands the water on top.

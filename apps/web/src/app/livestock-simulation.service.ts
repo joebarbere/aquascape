@@ -82,6 +82,7 @@ import type {
   LivestockEntry as CatalogLivestockEntry,
 } from '@aquascape/domain/catalog';
 import { archetypeForSpecies, type FishArchetypeId } from '@aquascape/domain/fish-anatomy';
+import { WATER_OFFSET_BELOW_RIM_MM } from '@aquascape/rendering/renderer-3d';
 import {
   bakeFlowField,
   bakeHardscapeSdf,
@@ -1107,7 +1108,13 @@ function tankAabbFromScene(scene: Scene): TankAabb {
     minX: 0,
     maxX: scene.tank.width,
     minY: 0,
-    maxY: scene.tank.height,
+    // The sim's "top" is the WATERLINE, not the glass rim — the renderer
+    // paints the water surface WATER_OFFSET_BELOW_RIM_MM below the rim,
+    // and everything the world keys off maxY (depth-band fractions, the
+    // kinematic clamp, bubble despawn, surface food sprites) must track
+    // the visible surface or fish/bubbles/food float in the air gap.
+    // Guarded for degenerate tiny tanks.
+    maxY: Math.max(1, scene.tank.height - WATER_OFFSET_BELOW_RIM_MM),
     minZ: 0,
     maxZ: scene.tank.depth,
   };
