@@ -17,6 +17,7 @@ flowchart TD
     subgraph manifests ["src/data/(kind)/*.json — one file per entry"]
         S[substrate ×6]
         H[hardscape ×19]
+        D[decor ×10]
         P[plant ×28]
         L[livestock ×24]
         E[equipment ×12]
@@ -28,13 +29,14 @@ flowchart TD
     CC --> R2D[renderer-2d] & R3D[renderer-3d] & STK[stocking rules] & SIM[livestock simulation] & UI[palette browsers]
 ```
 
-`CatalogEntry` is a discriminated union over the five kinds. What each kind
+`CatalogEntry` is a discriminated union over the six kinds. What each kind
 carries (beyond id/name/description/tags):
 
 | Kind | Notable fields |
 | --- | --- |
 | `substrate` | colour, grain params, `textures?` |
 | `hardscape` | category (rock/wood/other), normalized silhouette, natural size, `coverScore?` (refuge value — loader defaults wood 0.6 / rock 0.4), `textures?` |
+| `decor` | category (wreck/ruin/bones/structure), normalized silhouette + colour (2D), natural size, `coverScore?` (loader defaults structure 0.6 / wreck 0.5 / bones 0.4 / ruin 0.3), required `model` (.glb ref — the GLB carries its own PBR materials, so no `textures?`) |
 | `plant` | zone (foreground/midground/background), silhouette, growth params (`weeksToMature`, `sizeAtZero`), carpet density, `textures?` |
 | `livestock` | group, size, water params (`temperatureRange`, `pHRange`), `bioloadClass`, temperament, `schoolingMin`, `predator?`, `behavior?` (schooling / depth / animation / territory / nipping / fear overrides) |
 | `equipment` | category (filter/heater/light/CO2), settings, `flow?` (outflow/intake for the flow field), `airRateMl?` (bubble source), `photoperiodHours?` |
@@ -80,3 +82,16 @@ triplanar in world space, opt-in via `RenderOptions.catalogTextureBaseUrl`;
 the 2D renderer ignores them. Livestock is deliberately excluded (instanced
 rendering + the WebGL attribute budget — see
 [`docs/caveats/livestock-ecs.md`](../caveats/livestock-ecs.md)).
+
+## Decor models
+
+Each `decor` entry's required `model` ref points to a glTF binary under
+`libs/domain/catalog/assets/models/` (served at `assets/catalog-models/`),
+baked deterministically offline by `tools/generate-decor-models.mjs`
+(`pnpm generate:models`). The GLBs carry geometry, vertex colours, and
+`MeshPhysicalMaterial` PBR parameters via KHR extensions (clearcoat,
+transmission + IOR, iridescence, emissive strength) — no embedded images.
+Authoring contract: millimetre units, Y-up, origin bottom-centre, front
+faces +Z, bounding box exactly the entry's `naturalSize`. The 3D renderer
+loads them opt-in via `RenderOptions.catalogModelBaseUrl`; the 2D renderer
+paints the entry's silhouette instead.

@@ -70,6 +70,14 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 - Paginated palette browsers with filter chips
 - Pointer drag-and-drop onto the canvas
 
+### 🏴‍☠️ Decorations
+
+- **10 classic ornament showcase pieces** — sunken treasure chest, galleon wreck, giant skull, antique diver helmet, ship anchor, Greek column ruins, moai head, castle tower, toppled amphora, pirate cannon
+- Each is a real 3D model: a deterministic, procedurally-baked **glTF binary (GLB)** with modern PBR materials — clearcoat brass, transmissive gems, iridescent pearls, emissive accents, vertex-colour weathering — lit, shadowed, and caustic-lit like everything else in the tank (`pnpm generate:models` rebakes them byte-identically)
+- Dedicated **Decorations palette** with wreck / ruin / bones / structure filter chips and drag-to-place
+- Decorations are real cover: frightened fish shelter in the wreck, and the flow/collision field steers swimmers around them
+- 2D paints them as silhouettes (the editing surface); the GLB models load in the 3D view
+
 ### 🎯 Precision editing
 
 - **Click-drag** to move; **drag corner handles** to scale; **drag the rotate dot** to rotate
@@ -199,6 +207,7 @@ Everything above is shipped. Remaining work, roughly in priority order:
 - [ ] **Image tank backgrounds** — solid + gradient ship today.
 - [ ] **Per-species fish textures** — deferred; fights per-archetype instancing and the WebGL 16-attribute budget.
 - [ ] **Code signing** — Apple Developer ID + Windows EV certificate for production installers.
+- [ ] **Decor in export summaries** — `features/export` summary grouping covers plants + hardscape only; decoration objects don't appear in exported text summaries yet.
 - [ ] **Empty placeholders to fill** — `libs/ui/` (shared presentational components), `apps/desktop-e2e/` (Playwright-Electron).
 
 The full stage-by-stage record of what shipped when lives in [`docs/history.md`](docs/history.md).
@@ -238,7 +247,7 @@ apps/
   desktop/         Electron main + preload — the desktop app
 libs/
   domain/          Framework-free pure logic
-    catalog/       Substrates, hardscape, plants, livestock, equipment data
+    catalog/       Substrates, hardscape, decor, plants, livestock, equipment data
     document/      `.aqua` schema, validator, migrations, marshal
     fish-anatomy/  Seven procedural fish archetype geometry generators
     fluid-sim/     FlowField + HardscapeSdf + bubble bakes

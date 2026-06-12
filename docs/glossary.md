@@ -26,6 +26,7 @@
 | **Detritivore** | A bottom-dweller that eats detritus (shrimp, snails). One of the six feeding categories in the simulation. |
 | **Dutch style** | A dense, plant-focused aquascaping style with terraced "streets" of contrasting species. One of the built-in templates. |
 | **Fin-nipper** | A species (e.g. tiger barb) prone to biting tankmates' long fins. Flagged by the stocking rules; simulated in 3D. |
+| **Decor** | Manufactured ornaments (treasure chest, sunken galleon, skull, …) as opposed to natural hardscape. `DecorEntry` in the catalog (with a required `.glb` model ref), `DecorObject` (`kind: 'decor'`) in the scene; paints as a silhouette in 2D and loads its baked GLB model in 3D. |
 | **Hardscape** | The non-living structure of a scape: rocks and wood. |
 | **Iwagumi** | A minimalist Japanese style built around an odd-numbered rock arrangement, typically with a single carpet species. A built-in template, and the worked `example.aqua.json`. |
 | **Photoperiod** | The daily duration a tank light runs. Catalog lights can carry `photoperiodHours`; the day-night cycle's "equipment" mode reads it. |
