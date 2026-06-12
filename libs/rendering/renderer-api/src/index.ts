@@ -307,6 +307,27 @@ export interface RenderOptions {
    */
   readonly catalogTextureBaseUrl?: string;
   /**
+   * Decorations — base URL the 3D renderer prepends to each decor catalog
+   * entry's `model` ref (a required glTF-binary `.glb` file name on
+   * `DecorEntry`) to load the authored showcase model. The web host serves
+   * the catalog model pack at `assets/catalog-models/` and forwards that
+   * path here on 3D renders only.
+   *
+   * The 2D renderer ignores this field (decor paints as a silhouette
+   * polygon in 2D, same convention as hardscape). **Omitted ⇒ the 3D
+   * renderer falls back to the extruded-silhouette placeholder** for every
+   * decor object — no network fetch, headless-test-safe; the same fallback
+   * covers an individual model that 404s or fails to parse.
+   *
+   * Model assets are deterministic, procedurally-baked GLBs (geometry +
+   * vertex colours + `MeshPhysicalMaterial` PBR parameters via KHR
+   * extensions — clearcoat / transmission / ior / iridescence / emissive
+   * strength; no embedded images), authored in millimetres, Y-up, origin
+   * at bottom-centre, front facing +Z, bounding box exactly the entry's
+   * `naturalSize`.
+   */
+  readonly catalogModelBaseUrl?: string;
+  /**
    * Fish-eye view — 3D camera mode. `'orbit'` (default when omitted) is
    * the standard OrbitControls camera. `'fish-eye'` parks the camera at a
    * live fish's eye (the first entity in the livestock world's snapshot),
