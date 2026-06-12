@@ -18,6 +18,22 @@ describe('documentToScene', () => {
     expect(scene.seed).toBe(EXAMPLE.meta.seed);
   });
 
+  it('carries tank.waterLevelMm onto the scene when present (v3)', () => {
+    expect(EXAMPLE.tank.waterLevelMm).toBe(190); // fixture authors an override
+    const { scene } = documentToScene(EXAMPLE);
+    expect(scene.tank.waterLevelMm).toBe(190);
+  });
+
+  it('leaves tank.waterLevelMm absent on the scene when the doc omits it (no defaulting)', () => {
+    const noLevel = structuredClone(EXAMPLE);
+    delete noLevel.tank.waterLevelMm;
+    const { scene } = documentToScene(noLevel);
+    // Absent must stay ABSENT — the default fill is derived at render time
+    // via scene-model's effectiveWaterLevelMm; the marshal must never
+    // materialise it into the scene (or, on save, into the document).
+    expect('waterLevelMm' in scene.tank).toBe(false);
+  });
+
   it('puts livestock on the scene (F7.1 promotion)', () => {
     const { scene } = documentToScene(EXAMPLE);
     expect(scene.livestock).toEqual(EXAMPLE.livestock);
@@ -111,6 +127,18 @@ describe('sceneToDocument', () => {
     expect('equipment' in saved).toBe(false);
     expect('renderHistory' in saved).toBe(false);
     expect('extensions' in saved).toBe(false);
+  });
+
+  it('round-trips tank.waterLevelMm: present stays present, absent stays absent', () => {
+    // Present → present (the canonical example authors 190).
+    const { scene, envelope } = documentToScene(EXAMPLE);
+    expect(sceneToDocument(scene, envelope).tank.waterLevelMm).toBe(190);
+
+    // Absent → absent: strip the field from the scene tank and assert the
+    // saved doc does NOT materialise the render-time default.
+    const { waterLevelMm: _stripped, ...tankNoLevel } = scene.tank;
+    const saved = sceneToDocument({ ...scene, tank: tankNoLevel }, envelope);
+    expect('waterLevelMm' in saved.tank).toBe(false);
   });
 
   it('saves livestock from the scene, not the envelope (F7.1 asymmetry)', () => {

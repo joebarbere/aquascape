@@ -41,14 +41,116 @@ var require_ucs2length = __commonJS({
   }
 });
 
-// node_modules/.cache/aquascape-validators/7Sramo/entry.cjs
+// node_modules/.cache/aquascape-validators/tcIIjS/entry.cjs
 module.exports = validate20;
 module.exports.default = validate20;
-var schema32 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "material", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "substrate" }, "material": { "enum": ["soil", "sand", "gravel"] }, "color": { "$ref": "#/$defs/HexColor" }, "grainSize": { "type": "number", "exclusiveMinimum": 0 } } };
+var schema32 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "material", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "substrate" }, "material": { "enum": ["soil", "sand", "gravel"] }, "color": { "$ref": "#/$defs/HexColor" }, "grainSize": { "type": "number", "exclusiveMinimum": 0 }, "textures": { "$ref": "#/$defs/CatalogTextureRefs" } } };
 var func1 = require_ucs2length().default;
 var func5 = Object.prototype.hasOwnProperty;
 var pattern4 = new RegExp("^[a-z][a-z0-9.-]{0,63}$", "u");
 var pattern5 = new RegExp("^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$", "u");
+var pattern6 = new RegExp("^[a-z0-9._/-]+\\.png$", "u");
+function validate22(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+  let vErrors = null;
+  let errors = 0;
+  const evaluated0 = validate22.evaluated;
+  if (evaluated0.dynamicProps) {
+    evaluated0.props = void 0;
+  }
+  if (evaluated0.dynamicItems) {
+    evaluated0.items = void 0;
+  }
+  if (data && typeof data == "object" && !Array.isArray(data)) {
+    for (const key0 in data) {
+      if (!(key0 === "albedo" || key0 === "normal" || key0 === "roughness")) {
+        const err0 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
+        if (vErrors === null) {
+          vErrors = [err0];
+        } else {
+          vErrors.push(err0);
+        }
+        errors++;
+      }
+    }
+    if (data.albedo !== void 0) {
+      let data0 = data.albedo;
+      if (typeof data0 === "string") {
+        if (!pattern6.test(data0)) {
+          const err1 = { instancePath: instancePath + "/albedo", schemaPath: "#/$defs/TextureRef/pattern", keyword: "pattern", params: { pattern: "^[a-z0-9._/-]+\\.png$" }, message: 'must match pattern "^[a-z0-9._/-]+\\.png$"' };
+          if (vErrors === null) {
+            vErrors = [err1];
+          } else {
+            vErrors.push(err1);
+          }
+          errors++;
+        }
+      } else {
+        const err2 = { instancePath: instancePath + "/albedo", schemaPath: "#/$defs/TextureRef/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+        if (vErrors === null) {
+          vErrors = [err2];
+        } else {
+          vErrors.push(err2);
+        }
+        errors++;
+      }
+    }
+    if (data.normal !== void 0) {
+      let data1 = data.normal;
+      if (typeof data1 === "string") {
+        if (!pattern6.test(data1)) {
+          const err3 = { instancePath: instancePath + "/normal", schemaPath: "#/$defs/TextureRef/pattern", keyword: "pattern", params: { pattern: "^[a-z0-9._/-]+\\.png$" }, message: 'must match pattern "^[a-z0-9._/-]+\\.png$"' };
+          if (vErrors === null) {
+            vErrors = [err3];
+          } else {
+            vErrors.push(err3);
+          }
+          errors++;
+        }
+      } else {
+        const err4 = { instancePath: instancePath + "/normal", schemaPath: "#/$defs/TextureRef/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+        if (vErrors === null) {
+          vErrors = [err4];
+        } else {
+          vErrors.push(err4);
+        }
+        errors++;
+      }
+    }
+    if (data.roughness !== void 0) {
+      let data2 = data.roughness;
+      if (typeof data2 === "string") {
+        if (!pattern6.test(data2)) {
+          const err5 = { instancePath: instancePath + "/roughness", schemaPath: "#/$defs/TextureRef/pattern", keyword: "pattern", params: { pattern: "^[a-z0-9._/-]+\\.png$" }, message: 'must match pattern "^[a-z0-9._/-]+\\.png$"' };
+          if (vErrors === null) {
+            vErrors = [err5];
+          } else {
+            vErrors.push(err5);
+          }
+          errors++;
+        }
+      } else {
+        const err6 = { instancePath: instancePath + "/roughness", schemaPath: "#/$defs/TextureRef/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+        if (vErrors === null) {
+          vErrors = [err6];
+        } else {
+          vErrors.push(err6);
+        }
+        errors++;
+      }
+    }
+  } else {
+    const err7 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+    if (vErrors === null) {
+      vErrors = [err7];
+    } else {
+      vErrors.push(err7);
+    }
+    errors++;
+  }
+  validate22.errors = vErrors;
+  return errors === 0;
+}
+validate22.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
 function validate21(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -378,6 +480,12 @@ function validate21(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
+    if (data.textures !== void 0) {
+      if (!validate22(data.textures, { instancePath: instancePath + "/textures", parentData: data, parentDataProperty: "textures", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate22.errors : vErrors.concat(validate22.errors);
+        errors = vErrors.length;
+      }
+    }
   } else {
     const err30 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
     if (vErrors === null) {
@@ -391,11 +499,11 @@ function validate21(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate21.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema35 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "category", "naturalSize", "color", "silhouette"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "hardscape" }, "category": { "enum": ["rock", "wood", "other"] }, "subcategory": { "type": "string", "minLength": 1 }, "naturalSize": { "type": "object", "required": ["width", "height", "depth"], "additionalProperties": false, "properties": { "width": { "type": "number", "exclusiveMinimum": 0 }, "height": { "type": "number", "exclusiveMinimum": 0 }, "depth": { "type": "number", "exclusiveMinimum": 0 } } }, "color": { "$ref": "#/$defs/HexColor" }, "silhouette": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/Vec2" }, "description": "Convex-ish closed polygon outline in normalized [-1, 1] space. The renderer scales each point by (naturalSize \xD7 transform.scale \xD7 0.5) so the silhouette spans the natural footprint at scale 1." }, "coverScore": { "type": "number", "minimum": 0, "maximum": 1, "description": "Stage 11 F11.3 FearSystem refuge value. When absent, the loader fills it from `category` (wood \u2192 0.6, rock \u2192 0.4, other \u2192 0). JSON Schema's `default` is metadata only \u2014 the fill happens in the loader, not in the validator." } } };
-function validate23(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+var schema39 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "category", "naturalSize", "color", "silhouette"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "hardscape" }, "category": { "enum": ["rock", "wood", "other"] }, "subcategory": { "type": "string", "minLength": 1 }, "naturalSize": { "type": "object", "required": ["width", "height", "depth"], "additionalProperties": false, "properties": { "width": { "type": "number", "exclusiveMinimum": 0 }, "height": { "type": "number", "exclusiveMinimum": 0 }, "depth": { "type": "number", "exclusiveMinimum": 0 } } }, "color": { "$ref": "#/$defs/HexColor" }, "silhouette": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/Vec2" }, "description": "Convex-ish closed polygon outline in normalized [-1, 1] space. The renderer scales each point by (naturalSize \xD7 transform.scale \xD7 0.5) so the silhouette spans the natural footprint at scale 1." }, "coverScore": { "type": "number", "minimum": 0, "maximum": 1, "description": "Stage 11 F11.3 FearSystem refuge value. When absent, the loader fills it from `category` (wood \u2192 0.6, rock \u2192 0.4, other \u2192 0). JSON Schema's `default` is metadata only \u2014 the fill happens in the loader, not in the validator." }, "textures": { "$ref": "#/$defs/CatalogTextureRefs" } } };
+function validate25(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate23.evaluated;
+  const evaluated0 = validate25.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -662,7 +770,7 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
       errors++;
     }
     for (const key0 in data) {
-      if (!func5.call(schema35.properties, key0)) {
+      if (!func5.call(schema39.properties, key0)) {
         const err25 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err25];
@@ -686,7 +794,7 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.category !== void 0) {
       let data9 = data.category;
       if (!(data9 === "rock" || data9 === "wood" || data9 === "other")) {
-        const err27 = { instancePath: instancePath + "/category", schemaPath: "#/properties/category/enum", keyword: "enum", params: { allowedValues: schema35.properties.category.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/category", schemaPath: "#/properties/category/enum", keyword: "enum", params: { allowedValues: schema39.properties.category.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -976,6 +1084,12 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
+    if (data.textures !== void 0) {
+      if (!validate22(data.textures, { instancePath: instancePath + "/textures", parentData: data, parentDataProperty: "textures", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate22.errors : vErrors.concat(validate22.errors);
+        errors = vErrors.length;
+      }
+    }
   } else {
     const err54 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
     if (vErrors === null) {
@@ -985,15 +1099,15 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
     }
     errors++;
   }
-  validate23.errors = vErrors;
+  validate25.errors = vErrors;
   return errors === 0;
 }
-validate23.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema39 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "zone", "lighting", "co2", "difficulty", "color", "naturalSize", "silhouette", "growth"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "plant" }, "zone": { "enum": ["foreground", "midground", "background"] }, "lighting": { "enum": ["low", "medium", "high"] }, "co2": { "enum": ["none", "low", "high"] }, "difficulty": { "enum": ["easy", "moderate", "advanced"] }, "color": { "$ref": "#/$defs/HexColor" }, "naturalSize": { "type": "object", "required": ["width", "height", "depth"], "additionalProperties": false, "properties": { "width": { "type": "number", "exclusiveMinimum": 0 }, "height": { "type": "number", "exclusiveMinimum": 0 }, "depth": { "type": "number", "exclusiveMinimum": 0 } } }, "silhouette": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/Vec2" } }, "growth": { "type": "object", "required": ["weeksToMature", "sizeAtZero"], "additionalProperties": false, "properties": { "weeksToMature": { "type": "number", "exclusiveMinimum": 0, "description": "Wall-clock weeks from a fresh trim to mature size for an average specimen at vigor = 1." }, "sizeAtZero": { "type": "number", "minimum": 0, "maximum": 1, "description": "Scale (relative to mature) at week 0. Carpet plants typically start as plugs at ~0.3; rosettes at ~0.5." } } }, "defaultDensity": { "type": "number", "exclusiveMinimum": 0, "description": "Suggested scatter density (instances per 100 cm\xB2) when the planting tool's carpet brush drops this plant. Only meaningful for carpet-zone species." } } };
-function validate25(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate25.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema43 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "zone", "lighting", "co2", "difficulty", "color", "naturalSize", "silhouette", "growth"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "plant" }, "zone": { "enum": ["foreground", "midground", "background"] }, "lighting": { "enum": ["low", "medium", "high"] }, "co2": { "enum": ["none", "low", "high"] }, "difficulty": { "enum": ["easy", "moderate", "advanced"] }, "color": { "$ref": "#/$defs/HexColor" }, "naturalSize": { "type": "object", "required": ["width", "height", "depth"], "additionalProperties": false, "properties": { "width": { "type": "number", "exclusiveMinimum": 0 }, "height": { "type": "number", "exclusiveMinimum": 0 }, "depth": { "type": "number", "exclusiveMinimum": 0 } } }, "silhouette": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/Vec2" } }, "growth": { "type": "object", "required": ["weeksToMature", "sizeAtZero"], "additionalProperties": false, "properties": { "weeksToMature": { "type": "number", "exclusiveMinimum": 0, "description": "Wall-clock weeks from a fresh trim to mature size for an average specimen at vigor = 1." }, "sizeAtZero": { "type": "number", "minimum": 0, "maximum": 1, "description": "Scale (relative to mature) at week 0. Carpet plants typically start as plugs at ~0.3; rosettes at ~0.5." } } }, "defaultDensity": { "type": "number", "exclusiveMinimum": 0, "description": "Suggested scatter density (instances per 100 cm\xB2) when the planting tool's carpet brush drops this plant. Only meaningful for carpet-zone species." }, "textures": { "$ref": "#/$defs/CatalogTextureRefs" } } };
+function validate28(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate25.evaluated;
+  const evaluated0 = validate28.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -1296,7 +1410,7 @@ function validate25(data, { instancePath = "", parentData, parentDataProperty, r
       errors++;
     }
     for (const key0 in data) {
-      if (!func5.call(schema39.properties, key0)) {
+      if (!func5.call(schema43.properties, key0)) {
         const err29 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err29];
@@ -1320,7 +1434,7 @@ function validate25(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.zone !== void 0) {
       let data9 = data.zone;
       if (!(data9 === "foreground" || data9 === "midground" || data9 === "background")) {
-        const err31 = { instancePath: instancePath + "/zone", schemaPath: "#/properties/zone/enum", keyword: "enum", params: { allowedValues: schema39.properties.zone.enum }, message: "must be equal to one of the allowed values" };
+        const err31 = { instancePath: instancePath + "/zone", schemaPath: "#/properties/zone/enum", keyword: "enum", params: { allowedValues: schema43.properties.zone.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err31];
         } else {
@@ -1332,7 +1446,7 @@ function validate25(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.lighting !== void 0) {
       let data10 = data.lighting;
       if (!(data10 === "low" || data10 === "medium" || data10 === "high")) {
-        const err32 = { instancePath: instancePath + "/lighting", schemaPath: "#/properties/lighting/enum", keyword: "enum", params: { allowedValues: schema39.properties.lighting.enum }, message: "must be equal to one of the allowed values" };
+        const err32 = { instancePath: instancePath + "/lighting", schemaPath: "#/properties/lighting/enum", keyword: "enum", params: { allowedValues: schema43.properties.lighting.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err32];
         } else {
@@ -1344,7 +1458,7 @@ function validate25(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.co2 !== void 0) {
       let data11 = data.co2;
       if (!(data11 === "none" || data11 === "low" || data11 === "high")) {
-        const err33 = { instancePath: instancePath + "/co2", schemaPath: "#/properties/co2/enum", keyword: "enum", params: { allowedValues: schema39.properties.co2.enum }, message: "must be equal to one of the allowed values" };
+        const err33 = { instancePath: instancePath + "/co2", schemaPath: "#/properties/co2/enum", keyword: "enum", params: { allowedValues: schema43.properties.co2.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err33];
         } else {
@@ -1356,7 +1470,7 @@ function validate25(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.difficulty !== void 0) {
       let data12 = data.difficulty;
       if (!(data12 === "easy" || data12 === "moderate" || data12 === "advanced")) {
-        const err34 = { instancePath: instancePath + "/difficulty", schemaPath: "#/properties/difficulty/enum", keyword: "enum", params: { allowedValues: schema39.properties.difficulty.enum }, message: "must be equal to one of the allowed values" };
+        const err34 = { instancePath: instancePath + "/difficulty", schemaPath: "#/properties/difficulty/enum", keyword: "enum", params: { allowedValues: schema43.properties.difficulty.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err34];
         } else {
@@ -1710,6 +1824,12 @@ function validate25(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
+    if (data.textures !== void 0) {
+      if (!validate22(data.textures, { instancePath: instancePath + "/textures", parentData: data, parentDataProperty: "textures", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate22.errors : vErrors.concat(validate22.errors);
+        errors = vErrors.length;
+      }
+    }
   } else {
     const err67 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
     if (vErrors === null) {
@@ -1719,15 +1839,15 @@ function validate25(data, { instancePath = "", parentData, parentDataProperty, r
     }
     errors++;
   }
-  validate25.errors = vErrors;
+  validate28.errors = vErrors;
   return errors === 0;
 }
-validate25.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema43 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "group", "adultSize", "temperament", "temperatureRange", "pHRange", "schoolingMin", "bioloadClass", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "livestock" }, "group": { "enum": ["fish", "shrimp", "snail"] }, "adultSize": { "type": "number", "exclusiveMinimum": 0, "description": "Typical adult body length in millimetres." }, "temperament": { "enum": ["peaceful", "semi-aggressive", "aggressive"] }, "temperatureRange": { "type": "object", "required": ["minC", "maxC"], "additionalProperties": false, "properties": { "minC": { "type": "number", "minimum": 0, "maximum": 40 }, "maxC": { "type": "number", "minimum": 0, "maximum": 40 } }, "description": "Water temperature tolerance window in Celsius. Manifest authors must ensure minC < maxC; JSON Schema cannot enforce cross-field comparisons declaratively." }, "pHRange": { "type": "object", "required": ["min", "max"], "additionalProperties": false, "properties": { "min": { "type": "number", "minimum": 4, "maximum": 9.5 }, "max": { "type": "number", "minimum": 4, "maximum": 9.5 } }, "description": "Water pH tolerance window. Manifest authors must ensure min < max; JSON Schema cannot enforce cross-field comparisons declaratively." }, "schoolingMin": { "type": "integer", "minimum": 1, "description": "Minimum recommended group size. 1 = solitary / non-schooling." }, "bioloadClass": { "enum": ["low", "medium", "high"] }, "color": { "$ref": "#/$defs/HexColor" }, "predator": { "type": "boolean", "description": "Stage 11 fidelity pass \u2014 when true, this species spawns as a roaming PREDATOR in the 3D simulation: nearby prey fish accumulate fear-risk and flee to cover (livestock-ecs FearSystem). Additive + optional; no manifest version bump." }, "compatibilityFlags": { "type": "object", "additionalProperties": false, "properties": { "plantedOK": { "type": "boolean" }, "finNipper": { "type": "boolean" }, "brackish": { "type": "boolean" } }, "description": "Pre-baked answers for the Stage 7 F7.2 compatibility rule engine." }, "behavior": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.2 per-species overrides for the schooling + vertical-stratification + animation params. Every subfield is optional; absent fields fall back to the per-group preset via `resolveBehavior()` in `@aquascape/domain/livestock-behaviors`. Manifests authored before schemaVersion 3 lack this block entirely and load unchanged.", "properties": { "schooling": { "type": "object", "additionalProperties": false, "description": "Couzin 2002 three-zone + Reynolds 1987 weighted steering. Distances in millimetres; speeds in mm/sec.", "properties": { "ZOR": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of repulsion radius (mm). Below this, neighbours push us away." }, "ZOO": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of orientation radius (mm). Between ZOR and ZOO, headings align." }, "ZOA": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of attraction radius (mm). Between ZOO and ZOA, steer toward centroid." }, "blindAngle": { "type": "number", "minimum": 0, "maximum": 3.141592653589793, "description": "Blind cone behind the fish (radians, total angle subtended). Range [0, \u03C0]." }, "vPref": { "type": "number", "exclusiveMinimum": 0, "description": "Preferred cruise speed (mm/sec)." }, "vMax": { "type": "number", "exclusiveMinimum": 0, "description": "Hard cap on instantaneous speed (mm/sec)." }, "turnMax": { "type": "number", "exclusiveMinimum": 0, "description": "Maximum heading change (rad/sec)." }, "wSep": { "type": "number", "minimum": 0, "description": "Reynolds separation weight." }, "wAli": { "type": "number", "minimum": 0, "description": "Reynolds alignment weight." }, "wCoh": { "type": "number", "minimum": 0, "description": "Reynolds cohesion weight." }, "noise": { "type": "number", "minimum": 0, "description": "Per-tick noise magnitude as a fraction of vPref. Typical 0..0.2." } } }, "depth": { "type": "object", "additionalProperties": false, "description": "Vertical-stratification spring centred on a preferred fraction of tank height.", "properties": { "preferredY": { "type": "number", "minimum": 0, "maximum": 1, "description": "Preferred Y as a fraction of tank height (0 = substrate, 1 = waterline)." }, "bandWidth": { "type": "number", "minimum": 0, "maximum": 1, "description": "Band half-width as a fraction of tank height. Inside this, only noise applies." }, "returnForce": { "type": "number", "minimum": 0, "description": "Restoring force magnitude when outside the band (mm/sec\xB2 equivalent)." } } }, "animation": { "type": "object", "additionalProperties": false, "description": "Carangiform tail-beat parameters consumed by the renderer-3d vertex shader.", "properties": { "tailBeatFreq": { "type": "number", "exclusiveMinimum": 0, "description": "Tail-beat frequency (Hz)." }, "ampHead": { "type": "number", "minimum": 0, "maximum": 1, "description": "Amplitude at the head end (fraction of body length)." }, "ampTail": { "type": "number", "minimum": 0, "maximum": 1, "description": "Amplitude at the tail tip (fraction of body length)." }, "envelopeExp": { "type": "number", "exclusiveMinimum": 0, "description": "Spine envelope exponent in `amp(s) = ampHead + (ampTail\u2212ampHead) * pow(s, env)`." } } }, "territory": { "oneOf": [{ "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 territoriality params (Brown 1964 + Adams 2001). All subfields optional \u2014 only declared keys override the per-species heuristic; absent keys fall back to the heuristic's defaults.", "properties": { "coreRadius": { "type": "number", "exclusiveMinimum": 0, "description": "Inner defense radius (mm). Non-conspecifics inside this get chased." }, "displayRadius": { "type": "number", "exclusiveMinimum": 0, "description": "Outer display radius (mm). Owner posts but does not chase between core and display." }, "aggression": { "type": "number", "exclusiveMinimum": 0, "description": "Chase-force magnitude (mm/sec\xB2 equivalent). Higher = more aggressive pursuit." }, "fatigueRate": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second decay rate of accumulated fatigue. Scales chase force downward over sustained defense." } } }, { "type": "null", "description": "Explicit `null` opts OUT of the per-species heuristic \u2014 e.g. a peaceful dwarf cichlid that should NOT inherit the cichlid territory default." }] }, "nipping": { "oneOf": [{ "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 fin-nipping params (Keenleyside 1955 + Magurran 1990). All subfields optional.", "properties": { "groupThreshold": { "type": "integer", "minimum": 1, "description": "Minimum conspecific count visible nearby to suppress nipping. Below this, the fish nips." }, "finFraction": { "type": "number", "minimum": 0, "maximum": 1, "description": "Minimum fraction of body length the target's longest fin must reach to be a candidate." }, "rate": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second Poisson rate at which an eligible nip attempt fires when conditions hold." } } }, { "type": "null", "description": "Explicit `null` opts OUT of the per-species nipping heuristic." }] }, "fear": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 anti-predator / fear params (Lima & Dill 1990). No `| null` \u2014 every fish carries fear; manifest authors can only tune values.", "properties": { "riskBaseline": { "type": "number", "minimum": 0, "description": "Baseline anxiety added to every tick's risk integration. Higher = always-jumpy species." }, "threshold": { "type": "number", "exclusiveMinimum": 0, "description": "Risk level above which the FORAGE \u2192 REFUGE mode flip fires." }, "coverPreference": { "enum": ["plants", "caves", "wood", "any"], "description": "Which hardscape coverScore source the species prefers when seeking a refuge. `'any'` = no preference (nearest cover wins)." }, "emergenceDelay": { "type": "number", "minimum": 0, "description": "Seconds to wait in REFUGE mode after risk drops below threshold before flipping back to FORAGE." } } }, "feeding": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.4 feeding params. `category` drives FeedingSystem target selection (surface flake vs. midwater pellet vs. substrate wafer, plus algae-grazer / plant-eater / detritivore passive uptake). No `| null` \u2014 every fish has hunger; absent fields fall back to per-species defaults via `resolveBehavior()`.", "properties": { "hungerRatePerSec": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second hunger accrual. Higher = species reads as visibly hungry faster between feedings." }, "threshold": { "type": "number", "exclusiveMinimum": 0, "description": "Hunger level above which the fish actively seeks food. Typically in [0, 2]; can exceed 1 for species that tolerate longer fasts before showing it." }, "category": { "enum": ["surface", "midwater", "substrate", "algae-grazer", "plant-eater", "detritivore"], "description": "Feeding-strategy bucket consumed by FeedingSystem target selection." } } }, "curiosity": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.4 curiosity / glass-surfing params. Drives the chance + duration of the glass-surf investigation behavior. No `| null` \u2014 `ratePerSec = 0` is the documented way to disable glass-surfing entirely for a species.", "properties": { "boldness": { "type": "number", "minimum": 0, "maximum": 1, "description": "How likely a curious bout is to fire when an opportunity presents itself. 0 = always shy, 1 = always investigates." }, "ratePerSec": { "type": "number", "minimum": 0, "description": "Per-second Poisson rate at which a curiosity bout fires. 0 disables glass-surfing entirely for the species." }, "dwellSec": { "type": "number", "exclusiveMinimum": 0, "description": "Seconds the fish lingers at the investigated target before returning to FORAGE." } } } } } } };
-function validate27(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate28.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema47 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "group", "adultSize", "temperament", "temperatureRange", "pHRange", "schoolingMin", "bioloadClass", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "livestock" }, "group": { "enum": ["fish", "shrimp", "snail"] }, "adultSize": { "type": "number", "exclusiveMinimum": 0, "description": "Typical adult body length in millimetres." }, "temperament": { "enum": ["peaceful", "semi-aggressive", "aggressive"] }, "temperatureRange": { "type": "object", "required": ["minC", "maxC"], "additionalProperties": false, "properties": { "minC": { "type": "number", "minimum": 0, "maximum": 40 }, "maxC": { "type": "number", "minimum": 0, "maximum": 40 } }, "description": "Water temperature tolerance window in Celsius. Manifest authors must ensure minC < maxC; JSON Schema cannot enforce cross-field comparisons declaratively." }, "pHRange": { "type": "object", "required": ["min", "max"], "additionalProperties": false, "properties": { "min": { "type": "number", "minimum": 4, "maximum": 9.5 }, "max": { "type": "number", "minimum": 4, "maximum": 9.5 } }, "description": "Water pH tolerance window. Manifest authors must ensure min < max; JSON Schema cannot enforce cross-field comparisons declaratively." }, "schoolingMin": { "type": "integer", "minimum": 1, "description": "Minimum recommended group size. 1 = solitary / non-schooling." }, "bioloadClass": { "enum": ["low", "medium", "high"] }, "color": { "$ref": "#/$defs/HexColor" }, "predator": { "type": "boolean", "description": "Stage 11 fidelity pass \u2014 when true, this species spawns as a roaming PREDATOR in the 3D simulation: nearby prey fish accumulate fear-risk and flee to cover (livestock-ecs FearSystem). Additive + optional; no manifest version bump." }, "compatibilityFlags": { "type": "object", "additionalProperties": false, "properties": { "plantedOK": { "type": "boolean" }, "finNipper": { "type": "boolean" }, "brackish": { "type": "boolean" } }, "description": "Pre-baked answers for the Stage 7 F7.2 compatibility rule engine." }, "behavior": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.2 per-species overrides for the schooling + vertical-stratification + animation params. Every subfield is optional; absent fields fall back to the per-group preset via `resolveBehavior()` in `@aquascape/domain/livestock-behaviors`. Manifests authored before schemaVersion 3 lack this block entirely and load unchanged.", "properties": { "schooling": { "type": "object", "additionalProperties": false, "description": "Couzin 2002 three-zone + Reynolds 1987 weighted steering. Distances in millimetres; speeds in mm/sec.", "properties": { "ZOR": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of repulsion radius (mm). Below this, neighbours push us away." }, "ZOO": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of orientation radius (mm). Between ZOR and ZOO, headings align." }, "ZOA": { "type": "number", "exclusiveMinimum": 0, "description": "Zone of attraction radius (mm). Between ZOO and ZOA, steer toward centroid." }, "blindAngle": { "type": "number", "minimum": 0, "maximum": 3.141592653589793, "description": "Blind cone behind the fish (radians, total angle subtended). Range [0, \u03C0]." }, "vPref": { "type": "number", "exclusiveMinimum": 0, "description": "Preferred cruise speed (mm/sec)." }, "vMax": { "type": "number", "exclusiveMinimum": 0, "description": "Hard cap on instantaneous speed (mm/sec)." }, "turnMax": { "type": "number", "exclusiveMinimum": 0, "description": "Maximum heading change (rad/sec)." }, "wSep": { "type": "number", "minimum": 0, "description": "Reynolds separation weight." }, "wAli": { "type": "number", "minimum": 0, "description": "Reynolds alignment weight." }, "wCoh": { "type": "number", "minimum": 0, "description": "Reynolds cohesion weight." }, "noise": { "type": "number", "minimum": 0, "description": "Per-tick noise magnitude as a fraction of vPref. Typical 0..0.2." } } }, "depth": { "type": "object", "additionalProperties": false, "description": "Vertical-stratification spring centred on a preferred fraction of tank height.", "properties": { "preferredY": { "type": "number", "minimum": 0, "maximum": 1, "description": "Preferred Y as a fraction of tank height (0 = substrate, 1 = waterline)." }, "bandWidth": { "type": "number", "minimum": 0, "maximum": 1, "description": "Band half-width as a fraction of tank height. Inside this, only noise applies." }, "returnForce": { "type": "number", "minimum": 0, "description": "Restoring force magnitude when outside the band (mm/sec\xB2 equivalent)." } } }, "animation": { "type": "object", "additionalProperties": false, "description": "Carangiform tail-beat parameters consumed by the renderer-3d vertex shader.", "properties": { "tailBeatFreq": { "type": "number", "exclusiveMinimum": 0, "description": "Tail-beat frequency (Hz)." }, "ampHead": { "type": "number", "minimum": 0, "maximum": 1, "description": "Amplitude at the head end (fraction of body length)." }, "ampTail": { "type": "number", "minimum": 0, "maximum": 1, "description": "Amplitude at the tail tip (fraction of body length)." }, "envelopeExp": { "type": "number", "exclusiveMinimum": 0, "description": "Spine envelope exponent in `amp(s) = ampHead + (ampTail\u2212ampHead) * pow(s, env)`." } } }, "territory": { "oneOf": [{ "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 territoriality params (Brown 1964 + Adams 2001). All subfields optional \u2014 only declared keys override the per-species heuristic; absent keys fall back to the heuristic's defaults.", "properties": { "coreRadius": { "type": "number", "exclusiveMinimum": 0, "description": "Inner defense radius (mm). Non-conspecifics inside this get chased." }, "displayRadius": { "type": "number", "exclusiveMinimum": 0, "description": "Outer display radius (mm). Owner posts but does not chase between core and display." }, "aggression": { "type": "number", "exclusiveMinimum": 0, "description": "Chase-force magnitude (mm/sec\xB2 equivalent). Higher = more aggressive pursuit." }, "fatigueRate": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second decay rate of accumulated fatigue. Scales chase force downward over sustained defense." } } }, { "type": "null", "description": "Explicit `null` opts OUT of the per-species heuristic \u2014 e.g. a peaceful dwarf cichlid that should NOT inherit the cichlid territory default." }] }, "nipping": { "oneOf": [{ "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 fin-nipping params (Keenleyside 1955 + Magurran 1990). All subfields optional.", "properties": { "groupThreshold": { "type": "integer", "minimum": 1, "description": "Minimum conspecific count visible nearby to suppress nipping. Below this, the fish nips." }, "finFraction": { "type": "number", "minimum": 0, "maximum": 1, "description": "Minimum fraction of body length the target's longest fin must reach to be a candidate." }, "rate": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second Poisson rate at which an eligible nip attempt fires when conditions hold." } } }, { "type": "null", "description": "Explicit `null` opts OUT of the per-species nipping heuristic." }] }, "fear": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.3 anti-predator / fear params (Lima & Dill 1990). No `| null` \u2014 every fish carries fear; manifest authors can only tune values.", "properties": { "riskBaseline": { "type": "number", "minimum": 0, "description": "Baseline anxiety added to every tick's risk integration. Higher = always-jumpy species." }, "threshold": { "type": "number", "exclusiveMinimum": 0, "description": "Risk level above which the FORAGE \u2192 REFUGE mode flip fires." }, "coverPreference": { "enum": ["plants", "caves", "wood", "any"], "description": "Which hardscape coverScore source the species prefers when seeking a refuge. `'any'` = no preference (nearest cover wins)." }, "emergenceDelay": { "type": "number", "minimum": 0, "description": "Seconds to wait in REFUGE mode after risk drops below threshold before flipping back to FORAGE." } } }, "feeding": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.4 feeding params. `category` drives FeedingSystem target selection (surface flake vs. midwater pellet vs. substrate wafer, plus algae-grazer / plant-eater / detritivore passive uptake). No `| null` \u2014 every fish has hunger; absent fields fall back to per-species defaults via `resolveBehavior()`.", "properties": { "hungerRatePerSec": { "type": "number", "exclusiveMinimum": 0, "description": "Per-second hunger accrual. Higher = species reads as visibly hungry faster between feedings." }, "threshold": { "type": "number", "exclusiveMinimum": 0, "description": "Hunger level above which the fish actively seeks food. Typically in [0, 2]; can exceed 1 for species that tolerate longer fasts before showing it." }, "category": { "enum": ["surface", "midwater", "substrate", "algae-grazer", "plant-eater", "detritivore"], "description": "Feeding-strategy bucket consumed by FeedingSystem target selection." } } }, "curiosity": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.4 curiosity / glass-surfing params. Drives the chance + duration of the glass-surf investigation behavior. No `| null` \u2014 `ratePerSec = 0` is the documented way to disable glass-surfing entirely for a species.", "properties": { "boldness": { "type": "number", "minimum": 0, "maximum": 1, "description": "How likely a curious bout is to fire when an opportunity presents itself. 0 = always shy, 1 = always investigates." }, "ratePerSec": { "type": "number", "minimum": 0, "description": "Per-second Poisson rate at which a curiosity bout fires. 0 disables glass-surfing entirely for the species." }, "dwellSec": { "type": "number", "exclusiveMinimum": 0, "description": "Seconds the fish lingers at the investigated target before returning to FORAGE." } } } } } } };
+function validate31(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate27.evaluated;
+  const evaluated0 = validate31.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -2030,7 +2150,7 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
       errors++;
     }
     for (const key0 in data) {
-      if (!func5.call(schema43.properties, key0)) {
+      if (!func5.call(schema47.properties, key0)) {
         const err29 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err29];
@@ -2054,7 +2174,7 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.group !== void 0) {
       let data9 = data.group;
       if (!(data9 === "fish" || data9 === "shrimp" || data9 === "snail")) {
-        const err31 = { instancePath: instancePath + "/group", schemaPath: "#/properties/group/enum", keyword: "enum", params: { allowedValues: schema43.properties.group.enum }, message: "must be equal to one of the allowed values" };
+        const err31 = { instancePath: instancePath + "/group", schemaPath: "#/properties/group/enum", keyword: "enum", params: { allowedValues: schema47.properties.group.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err31];
         } else {
@@ -2088,7 +2208,7 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.temperament !== void 0) {
       let data11 = data.temperament;
       if (!(data11 === "peaceful" || data11 === "semi-aggressive" || data11 === "aggressive")) {
-        const err34 = { instancePath: instancePath + "/temperament", schemaPath: "#/properties/temperament/enum", keyword: "enum", params: { allowedValues: schema43.properties.temperament.enum }, message: "must be equal to one of the allowed values" };
+        const err34 = { instancePath: instancePath + "/temperament", schemaPath: "#/properties/temperament/enum", keyword: "enum", params: { allowedValues: schema47.properties.temperament.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err34];
         } else {
@@ -2331,7 +2451,7 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.bioloadClass !== void 0) {
       let data19 = data.bioloadClass;
       if (!(data19 === "low" || data19 === "medium" || data19 === "high")) {
-        const err57 = { instancePath: instancePath + "/bioloadClass", schemaPath: "#/properties/bioloadClass/enum", keyword: "enum", params: { allowedValues: schema43.properties.bioloadClass.enum }, message: "must be equal to one of the allowed values" };
+        const err57 = { instancePath: instancePath + "/bioloadClass", schemaPath: "#/properties/bioloadClass/enum", keyword: "enum", params: { allowedValues: schema47.properties.bioloadClass.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err57];
         } else {
@@ -2448,7 +2568,7 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
           let data27 = data26.schooling;
           if (data27 && typeof data27 == "object" && !Array.isArray(data27)) {
             for (const key5 in data27) {
-              if (!func5.call(schema43.properties.behavior.properties.schooling.properties, key5)) {
+              if (!func5.call(schema47.properties.behavior.properties.schooling.properties, key5)) {
                 const err67 = { instancePath: instancePath + "/behavior/schooling", schemaPath: "#/properties/behavior/properties/schooling/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key5 }, message: "must NOT have additional properties" };
                 if (vErrors === null) {
                   vErrors = [err67];
@@ -3324,7 +3444,7 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
             if (data57.coverPreference !== void 0) {
               let data60 = data57.coverPreference;
               if (!(data60 === "plants" || data60 === "caves" || data60 === "wood" || data60 === "any")) {
-                const err142 = { instancePath: instancePath + "/behavior/fear/coverPreference", schemaPath: "#/properties/behavior/properties/fear/properties/coverPreference/enum", keyword: "enum", params: { allowedValues: schema43.properties.behavior.properties.fear.properties.coverPreference.enum }, message: "must be equal to one of the allowed values" };
+                const err142 = { instancePath: instancePath + "/behavior/fear/coverPreference", schemaPath: "#/properties/behavior/properties/fear/properties/coverPreference/enum", keyword: "enum", params: { allowedValues: schema47.properties.behavior.properties.fear.properties.coverPreference.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
                   vErrors = [err142];
                 } else {
@@ -3426,7 +3546,7 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
             if (data62.category !== void 0) {
               let data65 = data62.category;
               if (!(data65 === "surface" || data65 === "midwater" || data65 === "substrate" || data65 === "algae-grazer" || data65 === "plant-eater" || data65 === "detritivore")) {
-                const err151 = { instancePath: instancePath + "/behavior/feeding/category", schemaPath: "#/properties/behavior/properties/feeding/properties/category/enum", keyword: "enum", params: { allowedValues: schema43.properties.behavior.properties.feeding.properties.category.enum }, message: "must be equal to one of the allowed values" };
+                const err151 = { instancePath: instancePath + "/behavior/feeding/category", schemaPath: "#/properties/behavior/properties/feeding/properties/category/enum", keyword: "enum", params: { allowedValues: schema47.properties.behavior.properties.feeding.properties.category.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
                   vErrors = [err151];
                 } else {
@@ -3563,15 +3683,15 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
     }
     errors++;
   }
-  validate27.errors = vErrors;
+  validate31.errors = vErrors;
   return errors === 0;
 }
-validate27.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema46 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "category", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "equipment" }, "category": { "enum": ["filter", "heater", "light", "co2"] }, "subcategory": { "type": "string", "minLength": 1 }, "wattage": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published power draw in watts." }, "flowRateLph": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published flow rate (litres per hour). Filter-specific; ignored for other categories." }, "coverageLitres": { "type": "object", "additionalProperties": false, "properties": { "min": { "type": "integer", "exclusiveMinimum": 0 }, "max": { "type": "integer", "exclusiveMinimum": 0 } }, "description": "Recommended tank-size window. Either bound is optional; both are positive integers when present." }, "defaultSettings": { "type": "object", "additionalProperties": { "anyOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }] }, "description": "Seed settings the future settings UI populates on first attach. F7.3 v1 is display-only; shape mirrors the document-side EquipmentEntry.settings Record." }, "color": { "$ref": "#/$defs/HexColor" }, "flow": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.5 flow contribution for filter / pump equipment. Drives the FlowFieldSystem source/sink bake. Every subfield is optional + additive \u2014 older manifests without `flow` keep loading unchanged.", "properties": { "outflowPos": { "$ref": "#/$defs/Vec3", "description": "World-space position where water exits the equipment (mm). Right-handed, +x right, +y up, +z back." }, "outflowVec": { "$ref": "#/$defs/Vec3", "description": "Direction vector of the outflow jet (unit-ish). Default (0, 0, 1) \u2014 points toward back of tank." }, "intakePos": { "$ref": "#/$defs/Vec3", "description": "World-space position where water enters the equipment intake (mm). Optional \u2014 when absent, the intake is co-located with `outflowPos`." }, "flowRate": { "type": "number", "minimum": 0, "description": "Volumetric flow rate (L/hr). Drives source/sink strength. Default 200." } } }, "airRateMl": { "type": "number", "minimum": 0, "description": "Stage 11 F11.5 air-stone air volumetric rate (mL/min). Drives BubbleParticleSystem spawn rate. When absent, the equipment is not an air-stone (or produces no visible bubbles)." }, "photoperiodHours": { "type": "number", "minimum": 0, "maximum": 24, "description": "Stage 11 F11.7 optional daily photoperiod for lighting equipment (hours per day, 0\u201324). Drives the day-night cycle's 'equipment' mode. Only meaningful when category === 'light'; absent = service default 10h on / 14h off." } } };
-function validate29(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate31.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema50 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "category", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "equipment" }, "category": { "enum": ["filter", "heater", "light", "co2"] }, "subcategory": { "type": "string", "minLength": 1 }, "wattage": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published power draw in watts." }, "flowRateLph": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published flow rate (litres per hour). Filter-specific; ignored for other categories." }, "coverageLitres": { "type": "object", "additionalProperties": false, "properties": { "min": { "type": "integer", "exclusiveMinimum": 0 }, "max": { "type": "integer", "exclusiveMinimum": 0 } }, "description": "Recommended tank-size window. Either bound is optional; both are positive integers when present." }, "defaultSettings": { "type": "object", "additionalProperties": { "anyOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }] }, "description": "Seed settings the future settings UI populates on first attach. F7.3 v1 is display-only; shape mirrors the document-side EquipmentEntry.settings Record." }, "color": { "$ref": "#/$defs/HexColor" }, "flow": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.5 flow contribution for filter / pump equipment. Drives the FlowFieldSystem source/sink bake. Every subfield is optional + additive \u2014 older manifests without `flow` keep loading unchanged.", "properties": { "outflowPos": { "$ref": "#/$defs/Vec3", "description": "World-space position where water exits the equipment (mm). Right-handed, +x right, +y up, +z back." }, "outflowVec": { "$ref": "#/$defs/Vec3", "description": "Direction vector of the outflow jet (unit-ish). Default (0, 0, 1) \u2014 points toward back of tank." }, "intakePos": { "$ref": "#/$defs/Vec3", "description": "World-space position where water enters the equipment intake (mm). Optional \u2014 when absent, the intake is co-located with `outflowPos`." }, "flowRate": { "type": "number", "minimum": 0, "description": "Volumetric flow rate (L/hr). Drives source/sink strength. Default 200." } } }, "airRateMl": { "type": "number", "minimum": 0, "description": "Stage 11 F11.5 air-stone air volumetric rate (mL/min). Drives BubbleParticleSystem spawn rate. When absent, the equipment is not an air-stone (or produces no visible bubbles)." }, "photoperiodHours": { "type": "number", "minimum": 0, "maximum": 24, "description": "Stage 11 F11.7 optional daily photoperiod for lighting equipment (hours per day, 0\u201324). Drives the day-night cycle's 'equipment' mode. Only meaningful when category === 'light'; absent = service default 10h on / 14h off." } } };
+function validate33(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate29.evaluated;
+  const evaluated0 = validate33.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -3820,7 +3940,7 @@ function validate29(data, { instancePath = "", parentData, parentDataProperty, r
       errors++;
     }
     for (const key0 in data) {
-      if (!func5.call(schema46.properties, key0)) {
+      if (!func5.call(schema50.properties, key0)) {
         const err23 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err23];
@@ -3844,7 +3964,7 @@ function validate29(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.category !== void 0) {
       let data9 = data.category;
       if (!(data9 === "filter" || data9 === "heater" || data9 === "light" || data9 === "co2")) {
-        const err25 = { instancePath: instancePath + "/category", schemaPath: "#/properties/category/enum", keyword: "enum", params: { allowedValues: schema46.properties.category.enum }, message: "must be equal to one of the allowed values" };
+        const err25 = { instancePath: instancePath + "/category", schemaPath: "#/properties/category/enum", keyword: "enum", params: { allowedValues: schema50.properties.category.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err25];
         } else {
@@ -4452,10 +4572,10 @@ function validate29(data, { instancePath = "", parentData, parentDataProperty, r
     }
     errors++;
   }
-  validate29.errors = vErrors;
+  validate33.errors = vErrors;
   return errors === 0;
 }
-validate29.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+validate33.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
 function validate20(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
@@ -4482,8 +4602,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
     var props0 = true;
   }
   const _errs2 = errors;
-  if (!validate23(data, { instancePath, parentData, parentDataProperty, rootData, dynamicAnchors })) {
-    vErrors = vErrors === null ? validate23.errors : vErrors.concat(validate23.errors);
+  if (!validate25(data, { instancePath, parentData, parentDataProperty, rootData, dynamicAnchors })) {
+    vErrors = vErrors === null ? validate25.errors : vErrors.concat(validate25.errors);
     errors = vErrors.length;
   }
   var _valid0 = _errs2 === errors;
@@ -4499,8 +4619,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
       }
     }
     const _errs3 = errors;
-    if (!validate25(data, { instancePath, parentData, parentDataProperty, rootData, dynamicAnchors })) {
-      vErrors = vErrors === null ? validate25.errors : vErrors.concat(validate25.errors);
+    if (!validate28(data, { instancePath, parentData, parentDataProperty, rootData, dynamicAnchors })) {
+      vErrors = vErrors === null ? validate28.errors : vErrors.concat(validate28.errors);
       errors = vErrors.length;
     }
     var _valid0 = _errs3 === errors;
@@ -4516,8 +4636,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         }
       }
       const _errs4 = errors;
-      if (!validate27(data, { instancePath, parentData, parentDataProperty, rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate27.errors : vErrors.concat(validate27.errors);
+      if (!validate31(data, { instancePath, parentData, parentDataProperty, rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate31.errors : vErrors.concat(validate31.errors);
         errors = vErrors.length;
       }
       var _valid0 = _errs4 === errors;
@@ -4533,8 +4653,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         const _errs5 = errors;
-        if (!validate29(data, { instancePath, parentData, parentDataProperty, rootData, dynamicAnchors })) {
-          vErrors = vErrors === null ? validate29.errors : vErrors.concat(validate29.errors);
+        if (!validate33(data, { instancePath, parentData, parentDataProperty, rootData, dynamicAnchors })) {
+          vErrors = vErrors === null ? validate33.errors : vErrors.concat(validate33.errors);
           errors = vErrors.length;
         }
         var _valid0 = _errs5 === errors;

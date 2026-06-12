@@ -1,6 +1,6 @@
 {
   "format": "aquascape",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "meta": {
     "id": "8f3b2c1a-4d5e-4a6b-9c8d-0e1f2a3b4c5d",
     "title": "Sprouting Harmony (example)",
@@ -18,6 +18,7 @@
     "height": 220,
     "depth": 220,
     "glassThickness": 5,
+    "waterLevelMm": 190,
     "presetRef": { "catalog": "core", "id": "tank.ada-mini-m", "version": 1 },
     "style": {
       "frame": "rimless",

@@ -8,5 +8,10 @@
   "color": "#d9c896",
   "grainSize": 1,
   "description": "Inert pale silica sand, common in Iwagumi designs. No effect on water chemistry.",
-  "tags": ["iwagumi", "inert", "sand"]
+  "tags": ["iwagumi", "inert", "sand"],
+  "textures": {
+    "albedo": "sand-fine.albedo.png",
+    "normal": "sand-fine.normal.png",
+    "roughness": "sand-fine.roughness.png"
+  }
 }

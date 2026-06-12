@@ -1,5 +1,5 @@
 /**
- * .aqua document format — TypeScript schema (v2)
+ * .aqua document format — TypeScript schema (v3)
  *
  * This is the canonical, framework-free definition of an Aquascape layout
  * document. It lives in `libs/domain/document` and is the single source of
@@ -13,6 +13,11 @@
  *      Additive + optional; the v1 → v2 migration is a no-op identity that
  *      only bumps `schemaVersion`. v1 documents in the wild keep loading
  *      transparently and round-trip into v2 with no `zone` invented.
+ * v3 — added optional `Tank.waterLevelMm` (water-surface height above the
+ *      interior floor, canonical integer mm). Additive + optional; the
+ *      v2 → v3 migration is a no-op identity that only bumps `schemaVersion`
+ *      and MUST NOT invent a water level — absent means "default fill",
+ *      derived at render time, and absent stays absent through a round-trip.
  *
  * DESIGN RULES
  * ------------
@@ -97,7 +102,7 @@ export interface CatalogRef {
 // Document root
 // ─────────────────────────────────────────────────────────────────────────
 
-export const CURRENT_SCHEMA_VERSION = 2 as const;
+export const CURRENT_SCHEMA_VERSION = 3 as const;
 
 export interface AquaDocument {
   /** Magic discriminator; always "aquascape". */
@@ -160,6 +165,21 @@ export interface Tank {
   depth: Millimetres; // z
   /** Glass thickness, used for rendering and (later) volume precision. */
   glassThickness?: Millimetres;
+  /**
+   * Water-surface height above the tank's interior floor, in canonical
+   * integer millimetres. Added in schema v3 (additive + optional).
+   *
+   * Absent ⇒ the default fill is derived at render/consume time (scene-model's
+   * `effectiveWaterLevelMm`, i.e. `height − DEFAULT_WATER_GAP_BELOW_RIM_MM`).
+   * Writers MUST NOT materialise that default into the document — absent
+   * stays absent through a round-trip so documents stay minimal.
+   *
+   * Advisory range `[1, height]`. The upper bound is a cross-field comparison
+   * that JSON Schema cannot express, so the schema only enforces
+   * `integer ≥ 1` — same policy as other advisory semantics (e.g. gradient
+   * stop ordering). Consumers clamp via `effectiveWaterLevelMm`.
+   */
+  waterLevelMm?: Millimetres;
   /** Optional reference to a known preset, e.g. "core:ada-mini-m". */
   presetRef?: CatalogRef;
   style: TankStyle;

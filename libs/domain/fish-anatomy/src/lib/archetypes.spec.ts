@@ -25,6 +25,7 @@ import {
   buildHatchetWedgeGeometry,
   buildCrawlerGeometry,
 } from './archetypes';
+import { FIN_TYPE } from './fin-type';
 
 interface ArchetypeCase {
   name: string;
@@ -127,6 +128,7 @@ describe.each(CASES)('archetype $name', (c) => {
     expect(g.normals.length).toBe(g.positions.length);
     expect(g.uvs.length).toBe((g.positions.length / 3) * 2);
     expect(g.spineUv.length).toBe(g.uvs.length);
+    expect(g.finType.length).toBe(g.positions.length / 3);
     expect(g.indices.length).toBeGreaterThan(0);
     expect(g.indices.length % 3).toBe(0);
   });
@@ -178,8 +180,38 @@ describe.each(CASES)('archetype $name', (c) => {
     expect(Array.from(a.normals)).toEqual(Array.from(b.normals));
     expect(Array.from(a.uvs)).toEqual(Array.from(b.uvs));
     expect(Array.from(a.spineUv)).toEqual(Array.from(b.spineUv));
+    expect(Array.from(a.finType)).toEqual(Array.from(b.finType));
     expect(Array.from(a.indices)).toEqual(Array.from(b.indices));
     expect(a.groups).toEqual(b.groups);
+  });
+
+  it('tags every body vertex with FIN_TYPE.BODY (0)', () => {
+    const g = c.build();
+    const [bStart, bCount] = g.groups.body;
+    const seen = new Set<number>();
+    for (let i = bStart; i < bStart + bCount; i++) seen.add(g.indices[i]!);
+    for (const v of seen) {
+      expect(g.finType[v]).toBe(FIN_TYPE.BODY);
+    }
+  });
+
+  it('tags each fin group vertex with the matching FIN_TYPE code', () => {
+    const g = c.build();
+    const finGroups: ReadonlyArray<[keyof typeof g.groups, number]> = [
+      ['caudal', FIN_TYPE.CAUDAL],
+      ['dorsal', FIN_TYPE.DORSAL],
+      ['anal', FIN_TYPE.ANAL],
+      ['pectoral', FIN_TYPE.PECTORAL],
+    ];
+    for (const [groupName, expectedCode] of finGroups) {
+      const [start, count] = g.groups[groupName];
+      const seen = new Set<number>();
+      for (let i = start; i < start + count; i++) seen.add(g.indices[i]!);
+      expect(seen.size).toBeGreaterThan(0);
+      for (const v of seen) {
+        expect(g.finType[v]).toBe(expectedCode);
+      }
+    }
   });
 
   it('every body vertex has a unit-length normal (|n| ≈ 1)', () => {
@@ -259,8 +291,17 @@ describe('buildCrawlerGeometry', () => {
     expect(g.normals.length).toBe(g.positions.length);
     expect(g.uvs.length).toBe((g.positions.length / 3) * 2);
     expect(g.spineUv.length).toBe(g.uvs.length);
+    expect(g.finType.length).toBe(g.positions.length / 3);
     expect(g.indices.length).toBeGreaterThan(0);
     expect(g.indices.length % 3).toBe(0);
+  });
+
+  it('tags every vertex (body + antennae) with FIN_TYPE.BODY — crawlers have no fins', () => {
+    const g = buildCrawlerGeometry();
+    expect(g.finType.length).toBe(g.positions.length / 3);
+    for (let v = 0; v < g.finType.length; v++) {
+      expect(g.finType[v]).toBe(FIN_TYPE.BODY);
+    }
   });
 
   it('has body group populated and all four fin groups empty', () => {
@@ -281,6 +322,7 @@ describe('buildCrawlerGeometry', () => {
     expect(Array.from(a.normals)).toEqual(Array.from(b.normals));
     expect(Array.from(a.uvs)).toEqual(Array.from(b.uvs));
     expect(Array.from(a.spineUv)).toEqual(Array.from(b.spineUv));
+    expect(Array.from(a.finType)).toEqual(Array.from(b.finType));
     expect(Array.from(a.indices)).toEqual(Array.from(b.indices));
     expect(a.groups).toEqual(b.groups);
   });

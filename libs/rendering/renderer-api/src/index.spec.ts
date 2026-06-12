@@ -168,6 +168,18 @@ describe('@aquascape/rendering/renderer-api', () => {
       expect(options.selection).toHaveLength(2);
     });
 
+    it('catalogTextureBaseUrl slot is an optional string (Bucket 2 opt-in)', () => {
+      // The 3D renderer prepends this to each entry's `textures` refs;
+      // omitted ⇒ the procedural-only pre-Bucket-2 render. The 2D
+      // renderer ignores it.
+      const options: RenderOptions = {
+        catalogTextureBaseUrl: 'assets/catalog-textures/',
+      };
+      expect(options.catalogTextureBaseUrl).toBe('assets/catalog-textures/');
+      const optsWithout: RenderOptions = {};
+      expect(optsWithout.catalogTextureBaseUrl).toBeUndefined();
+    });
+
     it('dayNightLookup slot is optional and structural (no domain import)', () => {
       // F11.7 Wave 3 — the four-field shape is inlined in renderer-api so
       // the rendering libs stay free of `apps/web` / `domain/day-night-

@@ -16,17 +16,29 @@ substrate grain, cross-plane plant volume, hardscape stone texture, and
 + the Playwright visual-validation loop (CLAUDE.md → "Visual validation with
 Playwright").
 
-**Not yet done** — three buckets, in priority order below:
+**Also shipped (this plan's SwiftShader-safe slice):** the **Bucket-0
+capability gate** (`render-target-support.ts` + `Three3DRenderer.
+getRenderTargetEffectsSupported()` — future SSAO/refraction passes MUST gate on
+it) and **all of Bucket 3**: per-fin fish animation (the `FIN_TYPE` vertex code
+rides `spineUv.y` — the livestock program sits exactly at the WebGL
+16-attribute budget; a 17th attribute fails linking on ANGLE/SwiftShader and
+no fish render — see `docs/caveats/livestock-ecs.md`), scenic gradient
+backdrop (`scene-builder/backdrop.ts`, day-night-tinted in place),
+flow-coupled sway **frequency** (`FLOW_FREQ_COUPLING`), and water-surface
+caustics (`uCausticStrength` on the water handle, day-night-faded). All
+headlessly validated; demo regenerated.
+
+**Bucket 2 (catalog-driven textures) also shipped** — see its section below.
+
+**Not yet done** — one bucket:
 
 1. **Render-target / multi-pass effects** (SSAO, screen-space water refraction)
    — BLOCKED on validation, not on code. SSAO was wired + then backed out
    because it renders a **blank canvas under SwiftShader** (the headless path
    the visual loop + CI e2e both use). These need a **real-GPU validation loop**
-   first.
-2. **Catalog-driven textures** (albedo / normal / roughness maps) — the honest
-   long-term material fix; large (schema + asset pipeline + loader + renderer).
-3. **Smaller polish** — per-fin fish animation, scenic backdrop, flow-coupled
-   sway *frequency*, water-surface caustics.
+   first — the capability gate is in place, but the *validation-loop choice*
+   (local GPU dev vs GPU CI runner vs manual checklist, below) is still an
+   open decision for the maintainer.
 
 ---
 
@@ -49,12 +61,12 @@ Single-pass effects (bloom, OutputPass) are fine; SSAO + refraction are not. So
   browser, eyeball these effects" checklist for renderer-3d PRs. Lowest effort,
   no automation.
 
-**Also add a capability gate** regardless: the renderer should detect when the
-GL context can't support the render-target passes (e.g. SwiftShader / no float
-depth texture) and **self-disable** SSAO/refraction, falling back to the
-plain `RenderPass` path — so the 3D view never blanks on software rendering.
-Seam: `Three3DRenderer.setupComposer` (gate on `renderer.capabilities` /
-`renderer.extensions.get('WEBGL_depth_texture')`).
+**✅ Capability gate: SHIPPED.** `src/render-target-support.ts` exposes
+`detectRenderTargetEffectsSupport(gl)` (software-renderer string match via
+`WEBGL_debug_renderer_info` + depth-texture availability; defensive — anything
+unprovable → `false`). `Three3DRenderer.setupComposer` probes it and exposes
+`getRenderTargetEffectsSupported()`. **The validation-loop choice above is
+still open** — pick one before starting Bucket 1.
 
 ---
 
@@ -93,50 +105,60 @@ branch — recover from git history). Tasks:
 
 ---
 
-## Bucket 2: catalog-driven textures (large)
+## Bucket 2: catalog-driven textures — ✅ SHIPPED
 
-The procedural passes (substrate grain, stone texture, fish sheen) buy most of
-the realism cheaply; catalog textures are the honest long-term fix for
-photoreal albedo/normal detail. Coordinate with the **catalog-engineer** +
-**renderer-engineer**.
+Landed as a deterministic, fully-offline texture pack (no licensed assets, no
+network) + a world-space triplanar renderer patch:
 
-- **Schema** (`libs/domain/catalog/`): additive optional `textures?: { albedo?,
-  normal?, roughness? }` (asset refs) on substrate / hardscape / plant /
-  livestock entries. Additive → no schemaVersion bump; regenerate
-  `validator.generated.cjs` (`pnpm precompile:validators`).
-- **Asset pipeline** (`tools/`): bundle the texture assets into the catalog
-  build output; keep them content-addressed + deterministic.
-- **Loader** (`libs/domain/catalog/`): expose decoded texture refs; the host
-  loads them with `THREE.TextureLoader` (platform-aware — web vs Electron file
-  access).
-- **Renderer**: apply `map` / `normalMap` / `roughnessMap` to the
-  substrate / hardscape / plant materials (replacing or modulating the
-  procedural passes), and a per-archetype texture for fish (needs UVs that the
-  procedural fish geometry already generates).
-- Triplanar mapping for hardscape (no good UVs on the noise-displaced rock).
+- **✅ Schema** — additive `textures?: { albedo?, normal?, roughness? }`
+  (`CatalogTextureRefs`) on substrate / hardscape / plant entries;
+  schemaVersion stays 3; validator regenerated; all 53 eligible manifests
+  mapped to 9 shared texture families. **Livestock deliberately excluded** —
+  per-species textures fight the per-archetype InstancedMesh batching and the
+  16-attribute shader budget; revisit with a texture array if demand surfaces.
+- **✅ Asset pipeline** — `tools/generate-textures.mjs` (`pnpm
+  generate:textures`): seeded splitmix32 fBm/Worley baker producing 27
+  seamlessly-tiling 256² PNGs (~1.7 MB committed), byte-identical across
+  runs; semantic family names instead of content-addressing (committed files
+  are the source of truth — same policy as the generated validators).
+  Served at `assets/catalog-textures/` via an apps/web asset glob (Electron
+  loads the web dist, so both apps are covered).
+- **✅ Renderer** — `RenderOptions.catalogTextureBaseUrl` (opt-in; absent ⇒
+  byte-identical pre-Bucket-2 shaders), a renderer-lifetime `TextureCache`
+  (neutral-placeholder → in-place image upgrade, no recompile, 404-safe),
+  and a **triplanar world-space** `onBeforeCompile` patch
+  (`scene-builder/catalog-texture.ts`) for substrate + hardscape + plants —
+  albedo/roughness MODULATE the authored catalog colours; normals are
+  swizzled-UDN (plants skip them). Triplanar everywhere, not just hardscape —
+  ExtrudeGeometry UVs are useless on side walls for all three kinds.
+- See `docs/caveats/renderer-3d.md` → "Catalog-driven textures" +
+  `docs/caveats/catalog.md` for the full contracts.
 
 ---
 
-## Bucket 3: smaller polish (no render targets — SwiftShader-safe)
+## Bucket 3: smaller polish (no render targets — SwiftShader-safe) — ✅ SHIPPED
 
-These are validatable on the existing headless loop.
+All four items landed (headlessly validated; 7/7 Playwright e2e green; demo
+regenerated):
 
-- **Per-fin fish animation** — `fish-anatomy` geometry generators tag fin
-  vertices (a per-vertex `finType` attribute); the livestock vertex shader adds
-  a low-amplitude secondary oscillation to dorsal/anal/pectoral fins (the
-  carangiform shader only flexes the caudal today). Subtle on small fish; nice
-  up close.
-- **Scenic backdrop** — the flat pale-blue background reads as a void behind the
-  glass. A subtle gradient or blurred room backdrop seats the tank in a space
-  (`scene.background` is already mutated by the day-night ramp — extend it to a
-  gradient texture / equirect).
-- **Flow-coupled sway FREQUENCY** — today only sway *amplitude* couples to the
-  flow field (`plant-mesh.ts` `flowAmpAt`). Also scale the oscillation
-  frequency by local flow so outflow plants wave *faster*, not just *wider*.
-  Needs the baked frequency to become a uniform/attribute (currently a GLSL
-  literal).
-- **Water-surface caustics** — caustics currently land on substrate + hardscape;
-  add them to the animated water surface itself for the bright rim shimmer.
+- **✅ Per-fin fish animation** — `fish-anatomy` tags every vertex with a
+  `FIN_TYPE` code (`FishGeometryDescriptor.finType`); the livestock vertex
+  shader's `// FIN FLUTTER` block oscillates dorsal/anal (lateral Z) +
+  pectoral (Y/Z row) fins at 2.3× the tail-beat, gated by the per-instance
+  carangiform amp so crawlers stay still. **Load-bearing lesson:** the code
+  is PACKED into `spineUv.y` — the program sits exactly at ANGLE/SwiftShader's
+  `MAX_VERTEX_ATTRIBS = 16` (declared attributes count), and a 17th attribute
+  failed linking with "Too many attributes" → zero fish rendered, invisible
+  to unit tests. See `docs/caveats/livestock-ecs.md` → "Per-fin animation".
+- **✅ Scenic backdrop** — `scene-builder/backdrop.ts` builds an equirect
+  gradient `DataTexture` for `scene.background`; the day-night ramp tints its
+  pixel data in place (per render, only on tint change).
+- **✅ Flow-coupled sway FREQUENCY** — `swayFreq = base · mix(1, flowAmp,
+  FLOW_FREQ_COUPLING = 0.5)` reusing the existing flow factor; no-field
+  behaviour is bit-identical to before.
+- **✅ Water-surface caustics** — `aqWaterCaustic` in the water fragment
+  shader (world-anchored, alpha-capped) + `setCausticStrength` on the handle,
+  faded by the day-night directional level like the floor caustics.
 
 ---
 

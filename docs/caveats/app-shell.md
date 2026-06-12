@@ -29,6 +29,14 @@
 - **Breakpoint defaults are one-time-only.** Tablet-default rail-collapse only fires when no preference is persisted. Any explicit preference (`true` OR `false`) wins forever. `recomputeBreakpoint` re-clamps current widths against new bounds but **never overwrites the persisted preference**.
 - **Resize separators** are `role="separator"` + `aria-orientation="vertical"` + `aria-valuenow/min/max`. Arrow-Left/Right (±16 px), Home/End jump to bounds. **Arrow direction on the right rail is inverted** so both handles "feel" the same (toward-canvas always shrinks).
 
+## Water-fill control (tank-setup panel)
+
+- `WaterFillComponent` (`libs/features/tank-setup/`) authors `Tank.waterLevelMm` via `dispatchCommand(setWaterLevel(mm | null))` — same generic Command pipeline as the dimension inputs; no dedicated NgRx action exists or is needed.
+- **The input shows the EFFECTIVE level** (`effectiveWaterLevelMm(tank)`), so an untouched document displays its default fill (`height − 25 mm`), badged "Auto"; an authored level badges "Custom" and enables the Auto button (which dispatches `setWaterLevel(null)`).
+- **US gallons are display-only.** Canonical storage is always integer mm of water-surface height; `gal = width × depth × levelMm / 1e6 L ÷ LITRES_PER_US_GALLON (3.78541)`, helpers in `units.ts` (`mmLevelToGallons` / `gallonsToMmLevel` / `formatWaterFill` / `parseWaterFillToMm`). Gal displays to 1 decimal; mm rounds to integer.
+- **The UI clamps to `[1, tank.height]` before dispatch** — the domain command REJECTS out-of-range rather than clamping. Commit fires on blur/Enter; committing the unchanged authored value is a guarded no-op so undo history stays clean.
+- Unit choice persists under `tank-setup.water-fill-unit` (StorageService, best-effort, default mm).
+
 ## Storage key namespaces
 
 - `aquascape.ui.collapsed.<panel>` (per-panel accordion — `tank-setup`, `substrate-tool`, `hardscape-tool`, `planting-tool`, `livestock-equipment`, `equipment-tool`, `layers-panel`, `composition-overlays`, `snap-settings`, `wall-background`, `backdrop`).

@@ -1,4 +1,4 @@
-import { Mesh, MeshStandardMaterial } from 'three';
+import { Mesh, MeshStandardMaterial, Texture, type WebGLProgramParametersWithUniforms } from 'three';
 import type { Catalog, CatalogEntry, CatalogKind, SubstrateEntry } from '@aquascape/domain/catalog';
 import type { Scene, SubstrateRegion } from '@aquascape/domain/scene-model';
 import { buildSubstrateMeshes } from './substrate-mesh';
@@ -115,5 +115,70 @@ describe('substrate-mesh builder', () => {
     expect(Array.isArray(mats)).toBe(true);
     expect(mats.length).toBe(1);
     expect(mats[0]!.userData['causticUniforms']).toBeDefined();
+  });
+  describe('catalog textures (Bucket 2)', () => {
+    /** Shader stub with the anchors the texture patch injects at. */
+    function shaderStub(): WebGLProgramParametersWithUniforms {
+      return {
+        uniforms: {},
+        vertexShader: [
+          '#include <common>',
+          '#include <beginnormal_vertex>',
+          '#include <begin_vertex>',
+        ].join('\n'),
+        fragmentShader: [
+          '#include <common>',
+          '#include <color_fragment>',
+          '#include <roughnessmap_fragment>',
+          '#include <normal_fragment_begin>',
+          '#include <dithering_fragment>',
+        ].join('\n'),
+      } as unknown as WebGLProgramParametersWithUniforms;
+    }
+
+    function texturedSoil(): SubstrateEntry {
+      return {
+        ...aquaSoil(),
+        textures: {
+          albedo: 'soil-dark.albedo.png',
+          normal: 'soil-dark.normal.png',
+          roughness: 'soil-dark.roughness.png',
+        },
+      };
+    }
+
+    it('patches the material when the entry has refs AND a resolver is supplied', () => {
+      const catalog = makeCatalog([texturedSoil()]);
+      const resolver = jest.fn(() => new Texture());
+      const group = buildSubstrateMeshes(makeScene([region()]), catalog, resolver);
+      const mat = (group.children[0] as Mesh).material as MeshStandardMaterial;
+      const shader = shaderStub();
+      mat.onBeforeCompile!(shader, undefined as never);
+      expect(shader.fragmentShader).toContain('uAqTexAlbedo');
+      // Caustics + grain still chained (the load-bearing chain rule).
+      expect(shader.fragmentShader).toContain('aqCaustic');
+      expect(shader.fragmentShader).toContain('aqGrainNoise');
+      expect(resolver).toHaveBeenCalledWith('soil-dark.albedo.png', 'albedo');
+    });
+
+    it('leaves the material un-patched without a resolver (opt-in contract)', () => {
+      const catalog = makeCatalog([texturedSoil()]);
+      const group = buildSubstrateMeshes(makeScene([region()]), catalog);
+      const mat = (group.children[0] as Mesh).material as MeshStandardMaterial;
+      const shader = shaderStub();
+      mat.onBeforeCompile!(shader, undefined as never);
+      expect(shader.fragmentShader).not.toContain('uAqTexAlbedo');
+    });
+
+    it('leaves the material un-patched when the entry has no refs', () => {
+      const catalog = makeCatalog([aquaSoil()]);
+      const resolver = jest.fn(() => new Texture());
+      const group = buildSubstrateMeshes(makeScene([region()]), catalog, resolver);
+      const mat = (group.children[0] as Mesh).material as MeshStandardMaterial;
+      const shader = shaderStub();
+      mat.onBeforeCompile!(shader, undefined as never);
+      expect(shader.fragmentShader).not.toContain('uAqTexAlbedo');
+      expect(resolver).not.toHaveBeenCalled();
+    });
   });
 });

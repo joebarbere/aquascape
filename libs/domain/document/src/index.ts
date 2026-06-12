@@ -1,10 +1,10 @@
 // Public API for @aquascape/domain/document.
 //
-// Owns the .aqua v1 schema, (de)serialization, validation, the Migration chain,
-// and marshaling between the on-disk `AquaDocument` and the in-memory `Scene`.
-// Plan §2.7 / Stage 1 F1.3.
+// Owns the .aqua schema (see CURRENT_SCHEMA_VERSION), (de)serialization,
+// validation, the Migration chain, and marshaling between the on-disk
+// `AquaDocument` and the in-memory `Scene`. Plan §2.7 / Stage 1 F1.3.
 
-// ─── Canonical types (schema v1) ──────────────────────────────────────────
+// ─── Canonical types (current schema) ─────────────────────────────────────
 export type {
   AquaDocument,
   AssetRef,

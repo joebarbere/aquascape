@@ -4,9 +4,10 @@
  * Migrations are pure, total, single-step (`from` → `from + 1`) transforms.
  * The loader walks the chain in order until the document's `schemaVersion`
  * matches the reader's `CURRENT_SCHEMA_VERSION`. v1 is the baseline; v2 adds
- * the optional `Layer.zone` field — additive + optional, so the migration is
- * an identity that only bumps the version number. v1 documents in the wild
- * keep loading transparently.
+ * the optional `Layer.zone` field and v3 adds the optional `Tank.waterLevelMm`
+ * field — both additive + optional, so each migration is an identity that
+ * only bumps the version number. Prior-version documents in the wild keep
+ * loading transparently.
  *
  * Re-exports the `Migration` interface from `./aqua-document` so callers have
  * one import for the whole document module.
@@ -21,19 +22,29 @@ export type { Migration };
  * The canonical migration list a reader applies on load.
  *
  * Ordered by `from` ascending; `runMigrations` enforces ordering. New steps
- * are PREPENDED so the historical chain reads top-down (v1 → v2 → v3 → …).
+ * are APPENDED so the historical chain reads top-down (v1 → v2 → v3 → …).
  *
  * - v1 → v2: adds optional `Layer.zone`. No-op identity migration — every v1
  *   document is structurally a valid v2 document; the field is additive and
  *   optional. The migration MUST NOT invent zone values (a v1 layer's zone
  *   stays undefined post-migration; assigning a guessed zone would be a
  *   data transformation we have no authority to make on the user's behalf).
+ * - v2 → v3: adds optional `Tank.waterLevelMm`. No-op identity migration —
+ *   every v2 document is structurally a valid v3 document. The migration
+ *   MUST NOT invent a water level: absent means "default fill", derived at
+ *   render time by scene-model's `effectiveWaterLevelMm`, and absent stays
+ *   absent through migration + round-trip.
  */
 export const AQUA_MIGRATIONS: readonly Migration[] = Object.freeze([
   {
     from: 1,
     to: 2,
     migrate: (doc) => ({ ...(doc as AquaDocument), schemaVersion: 2 }),
+  },
+  {
+    from: 2,
+    to: 3,
+    migrate: (doc) => ({ ...(doc as AquaDocument), schemaVersion: 3 }),
   },
 ]);
 

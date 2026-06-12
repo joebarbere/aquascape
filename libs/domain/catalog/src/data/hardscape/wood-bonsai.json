@@ -29,5 +29,10 @@
     { "x": -0.65, "y": 0.05 },
     { "x": -0.4, "y": -0.15 },
     { "x": -0.3, "y": -0.5 }
-  ]
+  ],
+  "textures": {
+    "albedo": "wood-bark.albedo.png",
+    "normal": "wood-bark.normal.png",
+    "roughness": "wood-bark.roughness.png"
+  }
 }

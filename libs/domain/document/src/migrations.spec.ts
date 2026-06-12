@@ -105,10 +105,12 @@ describe('runMigrations', () => {
     });
   });
 
-  it('exports a frozen migration list with the v1 → v2 no-op step', () => {
-    expect(AQUA_MIGRATIONS).toHaveLength(1);
+  it('exports a frozen migration list with the v1 → v2 and v2 → v3 no-op steps', () => {
+    expect(AQUA_MIGRATIONS).toHaveLength(2);
     expect(AQUA_MIGRATIONS[0]?.from).toBe(1);
     expect(AQUA_MIGRATIONS[0]?.to).toBe(2);
+    expect(AQUA_MIGRATIONS[1]?.from).toBe(2);
+    expect(AQUA_MIGRATIONS[1]?.to).toBe(3);
     expect(Object.isFrozen(AQUA_MIGRATIONS)).toBe(true);
   });
 
@@ -130,6 +132,25 @@ describe('runMigrations', () => {
     }
     // Every other field is preserved unchanged.
     expect({ ...v2, schemaVersion: 1 }).toEqual(v1);
+  });
+
+  it('v2 → v3 step is an identity that only bumps schemaVersion (additive Tank.waterLevelMm)', () => {
+    const v2 = {
+      format: 'aquascape',
+      schemaVersion: 2,
+      meta: { id: 'x', title: 't', createdAt: 'c', updatedAt: 'u', appVersion: '1.0.0', seed: 1 },
+      tank: { width: 600, height: 360, depth: 360, style: { frame: 'rimless', background: { kind: 'none' } } },
+      substrate: { regions: [] },
+      layers: [{ id: 'l1', name: 'L1', opacity: 1, visible: true, locked: false, objects: [], zone: 'midground' }],
+    };
+    const step = AQUA_MIGRATIONS[1]!;
+    const v3 = step.migrate(v2) as typeof v2;
+    expect(v3.schemaVersion).toBe(3);
+    // The tank must NOT gain a waterLevelMm — absent means "default fill",
+    // derived at render time; the migration has no authority to invent it.
+    expect('waterLevelMm' in v3.tank).toBe(false);
+    // Every other field is preserved unchanged (incl. the v2 layer zone).
+    expect({ ...v3, schemaVersion: 2 }).toEqual(v2);
   });
 
   it('treats null and non-object inputs as version 0', () => {

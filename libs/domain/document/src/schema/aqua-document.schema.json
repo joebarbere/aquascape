@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://aquascape.dev/schemas/aqua-document-v2.json",
+  "$id": "https://aquascape.dev/schemas/aqua-document-v3.json",
   "title": "AquaDocument",
-  "description": "Aquascape layout document, schema version 2. All linear units are millimetres. v2 adds optional Layer.zone (foreground/midground/background); v1 docs migrate forward without transformation.",
+  "description": "Aquascape layout document, schema version 3. All linear units are millimetres. v2 adds optional Layer.zone (foreground/midground/background); v3 adds optional Tank.waterLevelMm (water-surface height above the interior floor, integer mm; absent = default fill derived at render time; the [1, height] upper bound is advisory — cross-field comparison is not expressible here). Prior-version docs migrate forward without transformation.",
   "type": "object",
   "required": ["format", "schemaVersion", "meta", "tank", "substrate", "layers"],
   "additionalProperties": false,
@@ -129,6 +129,7 @@
         "height": { "type": "number", "exclusiveMinimum": 0 },
         "depth": { "type": "number", "exclusiveMinimum": 0 },
         "glassThickness": { "type": "number", "minimum": 0 },
+        "waterLevelMm": { "type": "integer", "minimum": 1 },
         "presetRef": { "$ref": "#/$defs/CatalogRef" },
         "style": { "$ref": "#/$defs/TankStyle" }
       }

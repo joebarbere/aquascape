@@ -21,5 +21,10 @@
     { "x": -0.3, "y": 0.85 },
     { "x": -0.75, "y": 0.5 },
     { "x": -0.95, "y": -0.1 }
-  ]
+  ],
+  "textures": {
+    "albedo": "stone-gray.albedo.png",
+    "normal": "stone-gray.normal.png",
+    "roughness": "stone-gray.roughness.png"
+  }
 }

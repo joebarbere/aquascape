@@ -1047,6 +1047,133 @@ describe('buildLivestockMeshes', () => {
     });
   });
 
+  describe('fin flutter (Bucket 3 fidelity — per-fin animation)', () => {
+    it('decodes the fin code from spineUv.y — NOT a dedicated attribute (16-attr budget)', () => {
+      // The program sits exactly at ANGLE/SwiftShader's MAX_VERTEX_ATTRIBS
+      // = 16 (three's prefix declares position + normal + uv + the 4-slot
+      // instanceMatrix = 7; our 9 custom attributes make 16, and DECLARED
+      // attributes count on that translator). A 17th `finType` attribute
+      // failed linking with "Too many attributes" and NO fish rendered —
+      // headlessly observed, not theoretical. The code rides spineUv.y.
+      expect(LIVESTOCK_VERTEX_SHADER).not.toMatch(/attribute\s+float\s+finType\s*;/);
+      expect(LIVESTOCK_VERTEX_SHADER).toMatch(/float\s+finCode\s*=\s*spineUv\.y\s*;/);
+    });
+
+    it('contains a delimited FIN FLUTTER block after the carangiform block', () => {
+      // Both markers must be present, and the flutter block must come
+      // AFTER the carangiform displacement (it perturbs `displaced`).
+      expect(LIVESTOCK_VERTEX_SHADER).toMatch(/\/\/ ── FIN FLUTTER/);
+      expect(LIVESTOCK_VERTEX_SHADER).toMatch(/\/\/ ── \/FIN FLUTTER/);
+      const carangiformEnd = LIVESTOCK_VERTEX_SHADER.indexOf('/CARANGIFORM');
+      const flutterStart = LIVESTOCK_VERTEX_SHADER.indexOf('── FIN FLUTTER');
+      expect(carangiformEnd).toBeGreaterThan(-1);
+      expect(flutterStart).toBeGreaterThan(carangiformEnd);
+    });
+
+    it('runs the flutter at ~2.3× the tail-beat frequency with the instance phase', () => {
+      // Key formula line — a rewrite that drops the higher-frequency
+      // flutter or the per-instance phase trips this regression.
+      expect(LIVESTOCK_VERTEX_SHADER).toMatch(
+        /2\.0\s*\*\s*PI\s*\*\s*uTime\s*\*\s*\(\s*2\.3\s*\*\s*instanceTailBeatFreq\s*\)\s*\+\s*instancePhase/,
+      );
+    });
+
+    it('gates the flutter amplitude by the per-instance carangiform amp (crawlers stay still)', () => {
+      // gate = instanceAmpTail / 0.12 (nominal tail amp). The renderer
+      // zeroes instanceAmpTail for crawler instances each sync, so the
+      // gate also zeroes the flutter for them.
+      expect(LIVESTOCK_VERTEX_SHADER).toMatch(/instanceAmpTail\s*\/\s*0\.12/);
+    });
+
+    it('flutters dorsal + anal laterally with distinct phase offsets, pectorals as a Y/Z row', () => {
+      // Branchless per-fin lanes.
+      expect(LIVESTOCK_VERTEX_SHADER).toMatch(/float\(\s*finCode\s*==\s*2\.0\s*\)/);
+      expect(LIVESTOCK_VERTEX_SHADER).toMatch(/float\(\s*finCode\s*==\s*3\.0\s*\)/);
+      expect(LIVESTOCK_VERTEX_SHADER).toMatch(/float\(\s*finCode\s*==\s*4\.0\s*\)/);
+      // Dorsal/anal lateral oscillation at 0.02 BL with the anal offset.
+      expect(LIVESTOCK_VERTEX_SHADER).toMatch(
+        /displaced\.z\s*\+=\s*flutterGate\s*\*\s*0\.02\s*\*\s*\(\s*finDorsal\s*\*\s*sin\(\s*flutterPhase\s*\)\s*\+\s*finAnal\s*\*\s*sin\(\s*flutterPhase\s*\+\s*2\.1\s*\)\s*\)/,
+      );
+      // Pectoral rowing — Y-dominant with a small Z mix.
+      expect(LIVESTOCK_VERTEX_SHADER).toMatch(
+        /displaced\.y\s*\+=\s*flutterGate\s*\*\s*0\.018\s*\*\s*pectoralRow/,
+      );
+      expect(LIVESTOCK_VERTEX_SHADER).toMatch(
+        /displaced\.z\s*\+=\s*flutterGate\s*\*\s*0\.008\s*\*\s*pectoralRow/,
+      );
+    });
+
+    it('leaves the caudal carangiform-driven — no finCode == 1.0 lane in the flutter block', () => {
+      expect(LIVESTOCK_VERTEX_SHADER).not.toMatch(/finCode\s*==\s*1\.0/);
+    });
+
+    it('packs each archetype descriptor finType into spineUv.y (descriptor untouched)', () => {
+      const bundle = buildLivestockMeshes();
+      try {
+        const pairs: ReadonlyArray<
+          [number, () => { positions: Float32Array; finType: Float32Array; spineUv: Float32Array }]
+        > = [
+          [FISH_ARCHETYPE.SLIM_TETRA, buildSlimTetraGeometry],
+          [FISH_ARCHETYPE.DEEP_BODIED, buildDeepBodiedGeometry],
+          [FISH_ARCHETYPE.BARB, buildBarbGeometry],
+          [FISH_ARCHETYPE.CORY_CYLINDER, buildCoryCylinderGeometry],
+          [FISH_ARCHETYPE.EEL, buildEelGeometry],
+          [FISH_ARCHETYPE.HATCHET_WEDGE, buildHatchetWedgeGeometry],
+          [FISH_ARCHETYPE.CRAWLER, buildCrawlerGeometry],
+        ];
+        for (const [archetypeId, builder] of pairs) {
+          const mesh = meshForArchetype(bundle, archetypeId);
+          const geo = mesh.geometry as BufferGeometry;
+          const descriptor = builder();
+          // No dedicated attribute — see the 16-attribute budget note above.
+          expect(geo.getAttribute('finType')).toBeUndefined();
+          const spineAttr = geo.getAttribute('spineUv');
+          expect(spineAttr.itemSize).toBe(2);
+          // Per-vertex, not per-instance: count matches the vertex count.
+          expect(spineAttr.count).toBe(descriptor.positions.length / 3);
+          expect(
+            (spineAttr as InstancedBufferAttribute).isInstancedBufferAttribute,
+          ).toBeUndefined();
+          const packed = spineAttr.array as Float32Array;
+          for (let i = 0; i < descriptor.finType.length; i++) {
+            // .x preserved from the descriptor, .y = the FIN_TYPE code.
+            expect(packed[i * 2]).toBe(descriptor.spineUv[i * 2]);
+            expect(packed[i * 2 + 1]).toBe(descriptor.finType[i]);
+          }
+          // The shared domain descriptor's own buffer is NOT mutated.
+          for (let i = 0; i < descriptor.spineUv.length / 2; i++) {
+            expect(descriptor.spineUv[i * 2 + 1]).toBe(0);
+          }
+        }
+      } finally {
+        bundle.dispose();
+      }
+    });
+
+    it('crawler packed spineUv.y is all zeros (no fins → no flutter lanes)', () => {
+      const bundle = buildLivestockMeshes();
+      try {
+        const crawler = meshForArchetype(bundle, FISH_ARCHETYPE.CRAWLER);
+        const arr = (crawler.geometry as BufferGeometry).getAttribute('spineUv')
+          .array as Float32Array;
+        for (let i = 0; i < arr.length / 2; i++) {
+          expect(arr[i * 2 + 1]).toBe(0);
+        }
+      } finally {
+        bundle.dispose();
+      }
+    });
+
+    it('regression: total declared shader attributes stay within the 16-slot budget', () => {
+      // three's prefix contributes position + normal + uv + instanceMatrix
+      // (mat4 = 4 slots) = 7 slots even when unused — ANGLE/SwiftShader
+      // counts DECLARED attributes. Our custom declarations must therefore
+      // never exceed 9 slots total (all are scalar/vec ≤ vec4 = 1 slot each).
+      const declared = LIVESTOCK_VERTEX_SHADER.match(/^\s*attribute\s+\w+\s+\w+\s*;/gm) ?? [];
+      expect(declared.length).toBeLessThanOrEqual(9);
+    });
+  });
+
   describe('crawler archetype (F11.6 Wave 2)', () => {
     let bundle: LivestockMeshBundle;
     afterEach(() => bundle.dispose());

@@ -256,6 +256,124 @@ describe('loadCatalog — hardscape coverScore default-fill (F11.3)', () => {
   });
 });
 
+describe('loadCatalog — textures pass-through (3D-fidelity Bucket 2)', () => {
+  // The loader is validate-then-freeze: `textures` has NO loader-side
+  // defaulting (unlike hardscape coverScore). An absent block stays absent
+  // (= the procedural-only pre-Bucket-2 look) and a declared block must
+  // round-trip byte-identical so the 3D renderer resolves baseUrl + ref.
+  const textures = {
+    albedo: 'stone-gray.albedo.png',
+    normal: 'stone-gray.normal.png',
+    roughness: 'stone-gray.roughness.png',
+  };
+
+  const substrateWithTextures = {
+    catalog: 'core',
+    id: 'substrate.textured',
+    version: 1,
+    name: 'Textured soil',
+    kind: 'substrate' as const,
+    material: 'soil' as const,
+    color: '#3b2a1f',
+    textures: { albedo: 'soil-dark.albedo.png', normal: 'soil-dark.normal.png' },
+  };
+
+  const hardscapeWithTextures = {
+    catalog: 'core',
+    id: 'rock.textured',
+    version: 1,
+    name: 'Textured rock',
+    kind: 'hardscape' as const,
+    category: 'rock' as const,
+    naturalSize: { width: 100, height: 80, depth: 60 },
+    color: '#5a5b56',
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 0, y: 1 },
+    ],
+    textures,
+  };
+
+  const plantWithTextures = {
+    catalog: 'core',
+    id: 'plant.textured',
+    version: 1,
+    name: 'Textured plant',
+    kind: 'plant' as const,
+    zone: 'midground' as const,
+    lighting: 'low' as const,
+    co2: 'none' as const,
+    difficulty: 'easy' as const,
+    color: '#2e7d32',
+    naturalSize: { width: 50, height: 50, depth: 50 },
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 0, y: 1 },
+    ],
+    growth: { weeksToMature: 6, sizeAtZero: 0.5 },
+    textures: { albedo: 'leaf-broad.albedo.png' },
+  };
+
+  it('round-trips a partial textures block on a substrate entry', () => {
+    const result = loadCatalog([substrateWithTextures]);
+    expect(result.errors).toEqual([]);
+    const entry = result.catalog.get({ catalog: 'core', id: substrateWithTextures.id });
+    expect(entry?.kind).toBe('substrate');
+    if (entry?.kind !== 'substrate') return;
+    expect(entry.textures).toEqual(substrateWithTextures.textures);
+  });
+
+  it('round-trips a full textures block on a hardscape entry (coexists with coverScore fill)', () => {
+    const result = loadCatalog([hardscapeWithTextures]);
+    expect(result.errors).toEqual([]);
+    const entry = result.catalog.get({ catalog: 'core', id: hardscapeWithTextures.id });
+    if (entry?.kind !== 'hardscape') return;
+    expect(entry.textures).toEqual(textures);
+    expect(entry.coverScore).toBe(0.4); // loader default still fills alongside
+  });
+
+  it('round-trips a textures block on a plant entry', () => {
+    const result = loadCatalog([plantWithTextures]);
+    expect(result.errors).toEqual([]);
+    const entry = result.catalog.get({ catalog: 'core', id: plantWithTextures.id });
+    if (entry?.kind !== 'plant') return;
+    expect(entry.textures).toEqual({ albedo: 'leaf-broad.albedo.png' });
+  });
+
+  it('leaves textures undefined when the manifest omits it (no loader defaulting)', () => {
+    const { textures: _drop, ...noTextures } = substrateWithTextures;
+    const result = loadCatalog([noTextures]);
+    expect(result.errors).toEqual([]);
+    const entry = result.catalog.get({ catalog: 'core', id: noTextures.id });
+    if (entry?.kind !== 'substrate') return;
+    expect(entry.textures).toBeUndefined();
+  });
+
+  it('rejects a manifest whose texture ref violates the ^[a-z0-9._/-]+\\.png$ pattern', () => {
+    const broken = {
+      ...hardscapeWithTextures,
+      id: 'rock.broken-textures',
+      textures: { albedo: 'Stone-Gray.albedo.JPG' },
+    };
+    const result = loadCatalog([broken]);
+    expect(result.errors.length).toBe(1);
+    expect(result.catalog.entries.length).toBe(0);
+  });
+
+  it('rejects a typo inside the textures block (additionalProperties: false)', () => {
+    const broken = {
+      ...plantWithTextures,
+      id: 'plant.broken-textures',
+      textures: { albdeo: 'leaf-broad.albedo.png' }, // typo
+    };
+    const result = loadCatalog([broken]);
+    expect(result.errors.length).toBe(1);
+    expect(result.catalog.entries.length).toBe(0);
+  });
+});
+
 describe('loadCatalog — F11.5 equipment flow / airRateMl forward-compat', () => {
   // Same v3 manifest schema — flow + airRateMl were added additively under
   // the existing equipment branch. A manifest without them must keep
@@ -403,17 +521,21 @@ describe('loadCatalog — F11.6 per-species manifest smoke (each new fish loads 
     'livestock.fish.common-pleco',
   ];
 
-  it.each(F11_6_FISH_IDS)('the %s manifest is reachable through coreCatalog without warnings', (id) => {
-    // Re-export of coreCatalog is in core-catalog.ts; importing here would
-    // double-load and risk cycles. Lazy require via a dynamic import keeps the
-    // top-level loader spec isolated to the in-test fixtures above while still
-    // letting us assert on the production load result.
-    const { coreCatalog, CORE_CATALOG_RESULT } = require('./core-catalog') as typeof import('./core-catalog');
-    expect(CORE_CATALOG_RESULT.errors).toEqual([]);
-    const entry = coreCatalog.get({ catalog: 'core', id });
-    expect(entry).not.toBeNull();
-    expect(entry?.kind).toBe('livestock');
-  });
+  it.each(F11_6_FISH_IDS)(
+    'the %s manifest is reachable through coreCatalog without warnings',
+    (id) => {
+      // Re-export of coreCatalog is in core-catalog.ts; importing here would
+      // double-load and risk cycles. Lazy require via a dynamic import keeps the
+      // top-level loader spec isolated to the in-test fixtures above while still
+      // letting us assert on the production load result.
+      const { coreCatalog, CORE_CATALOG_RESULT } =
+        require('./core-catalog') as typeof import('./core-catalog');
+      expect(CORE_CATALOG_RESULT.errors).toEqual([]);
+      const entry = coreCatalog.get({ catalog: 'core', id });
+      expect(entry).not.toBeNull();
+      expect(entry?.kind).toBe('livestock');
+    },
+  );
 });
 
 describe('emptyCatalog', () => {

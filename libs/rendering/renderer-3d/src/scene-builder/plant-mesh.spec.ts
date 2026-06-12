@@ -1,4 +1,7 @@
-import { Group, InstancedMesh, Mesh, MeshStandardMaterial, type Shader } from 'three';
+import { Group, InstancedMesh, Mesh, MeshStandardMaterial, type Shader,
+  Texture,
+  type WebGLProgramParametersWithUniforms,
+} from 'three';
 import type {
   Catalog,
   CatalogEntry,
@@ -7,6 +10,7 @@ import type {
 } from '@aquascape/domain/catalog';
 import type { Layer, PlantObject, Scene } from '@aquascape/domain/scene-model';
 import {
+  FLOW_FREQ_COUPLING,
   PLANT_SWAY_MATERIALS_KEY,
   buildPlantMeshes,
   createPlantSwayMaterial,
@@ -330,10 +334,12 @@ describe('plant-mesh sway — vertex displacement', () => {
     expect(() => updatePlantSwayTime(empty, 1)).not.toThrow();
   });
 
-  it('shader frequency is the documented 1.2 Hz (constant for v1)', () => {
-    // F11.7's flow-coupling is deferred; we hard-bake 2π × 1.2 ≈ 7.5398
-    // into the shader. If this constant ever changes, sway behaviour
-    // changes for everyone — flag the test so the bump is intentional.
+  it('shader base frequency is the documented 1.2 Hz (2π × 1.2 baked into the source)', () => {
+    // 2π × 1.2 ≈ 7.5398 is hard-baked into the shader as the BASE (still-
+    // water) frequency; the flow factor scales it through the coupling mix
+    // (see the flow-coupled sway describe block). If this constant ever
+    // changes, sway behaviour changes for everyone — flag the test so the
+    // bump is intentional.
     const mat = createPlantSwayMaterial('#2e7d32', {
       silhouetteHeight: 100,
       plantBaseY: 0,
@@ -341,7 +347,8 @@ describe('plant-mesh sway — vertex displacement', () => {
       phase: 0,
     });
     const shader = compileMaterialShader(mat);
-    expect(shader.vertexShader).toMatch(/uTime\s*\*\s*7\.539822/);
+    expect(shader.vertexShader).toMatch(/swayFreq\s*=\s*7\.539822/);
+    expect(shader.vertexShader).toMatch(/uTime\s*\*\s*swayFreq/);
   });
 
   it('scatter InstancedMesh uses per-instance attributes for phase + plantBaseY', () => {
@@ -563,5 +570,96 @@ describe('plant-mesh flow-coupled sway (fidelity pass)', () => {
     // The instanced shader reads the per-instance attribute.
     const shader = compileMaterialShader(patch.material as MeshStandardMaterial);
     expect(shader.vertexShader).toContain('attribute float aFlowAmp');
+  });
+
+  it('couples the oscillation FREQUENCY to the flow factor through FLOW_FREQ_COUPLING', () => {
+    // Fidelity follow-up (Bucket 3): outflow plants wave faster, not just
+    // wider. The shader scales the baked base frequency by
+    // mix(1.0, flowFactor, FLOW_FREQ_COUPLING) — same factor, no new
+    // attribute / uniform.
+    expect(FLOW_FREQ_COUPLING).toBe(0.5);
+    const mat = createPlantSwayMaterial('#2e7d32', {
+      silhouetteHeight: 100,
+      plantBaseY: 0,
+      tankHeight: 360,
+      phase: 0,
+    });
+    const shader = compileMaterialShader(mat);
+    expect(shader.vertexShader).toMatch(
+      /swayFreq\s*=\s*7\.539822\s*\*\s*mix\(\s*1\.0\s*,\s*uFlowAmp\s*,\s*0\.5000\s*\)/,
+    );
+    expect(shader.vertexShader).toMatch(/sin\(\s*uTime\s*\*\s*swayFreq\s*\+/);
+  });
+
+  it('instanced path couples frequency to the per-instance aFlowAmp attribute', () => {
+    const mat = createPlantSwayMaterial('#2e7d32', {
+      silhouetteHeight: 100,
+      plantBaseY: 0,
+      tankHeight: 360,
+      phase: 0,
+      instanced: true,
+    });
+    const shader = compileMaterialShader(mat);
+    expect(shader.vertexShader).toMatch(
+      /swayFreq\s*=\s*7\.539822\s*\*\s*mix\(\s*1\.0\s*,\s*aFlowAmp\s*,\s*0\.5000\s*\)/,
+    );
+  });
+
+  it('no flow field ⇒ flow factor is exactly 1.0 ⇒ frequency identical to pre-fidelity', () => {
+    // With no flow field, `flowAmpAt` returns 1 → uFlowAmp = 1.0 →
+    // mix(1.0, 1.0, 0.5) = 1.0 → swayFreq = the baked 2π × 1.2 constant.
+    // Source-level assertion: the uniform default is 1 AND the only
+    // frequency modulation routes through that uniform.
+    const catalog = makeCatalog([carpetEntry()]);
+    const group = buildPlantMeshes(sceneWithPlants([plant()]), catalog, undefined);
+    const mat = (group.children[0] as Mesh).material as MeshStandardMaterial;
+    const shader = compileMaterialShader(mat);
+    expect(shader.uniforms['uFlowAmp']!.value).toBe(1);
+    // The frequency expression's only non-constant input is uFlowAmp.
+    expect(shader.vertexShader).toMatch(
+      /swayFreq\s*=\s*7\.539822\s*\*\s*mix\(\s*1\.0\s*,\s*uFlowAmp\s*,\s*0\.5000\s*\)/,
+    );
+  });
+});
+
+describe('plant catalog textures (Bucket 2)', () => {
+  function texturedEntry(): PlantEntry {
+    return { ...carpetEntry(), textures: { albedo: 'leaf-fine.albedo.png', normal: 'leaf-fine.normal.png' } };
+  }
+  function stub(): WebGLProgramParametersWithUniforms {
+    return {
+      uniforms: {},
+      vertexShader: ['#include <common>', '#include <beginnormal_vertex>', '#include <begin_vertex>'].join('\n'),
+      fragmentShader: [
+        '#include <common>',
+        '#include <color_fragment>',
+        '#include <roughnessmap_fragment>',
+        '#include <normal_fragment_begin>',
+        '#include <dithering_fragment>',
+      ].join('\n'),
+    } as unknown as WebGLProgramParametersWithUniforms;
+  }
+
+  it('patches the single-specimen sway material; sway survives; normal map SKIPPED for plants', () => {
+    const catalog = makeCatalog([texturedEntry()]);
+    const resolver = jest.fn(() => new Texture());
+    const group = buildPlantMeshes(sceneWithPlants([plant()]), catalog, undefined, undefined, resolver);
+    const mat = (group.children[0] as Mesh).material as MeshStandardMaterial;
+    const shader = stub();
+    mat.onBeforeCompile!(shader, undefined as never);
+    expect(shader.fragmentShader).toContain('uAqTexAlbedo');
+    // Plants pass normalStrength 0 — no normal perturbation GLSL.
+    expect(shader.fragmentShader).not.toContain('aqWorldN');
+    // The sway patch is still chained (uTime uniform wired).
+    expect(shader.uniforms['uTime']).toBeDefined();
+  });
+
+  it('does not patch without a resolver (opt-in contract)', () => {
+    const catalog = makeCatalog([texturedEntry()]);
+    const group = buildPlantMeshes(sceneWithPlants([plant()]), catalog, undefined);
+    const mat = (group.children[0] as Mesh).material as MeshStandardMaterial;
+    const shader = stub();
+    mat.onBeforeCompile!(shader, undefined as never);
+    expect(shader.fragmentShader).not.toContain('uAqTexAlbedo');
   });
 });

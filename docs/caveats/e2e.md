@@ -85,6 +85,6 @@ node tools/demo/record-demo.mjs        # terminal 2
 ## Anti-patterns to refuse
 
 - **Pixel-perfect snapshot tests.** Flaky for what they catch. Variance/diff floors above are the pattern.
-- **Tests that wait > 30s.** Long timeouts mask real failures. If a 3D canvas takes longer than 5s to reach steady-state, something's wrong — don't paper over it.
+- **Tests that wait > 30s.** Long timeouts mask real failures. If a 3D canvas takes longer than 5s to reach steady-state, something's wrong — don't paper over it. (Distinct from a BUDGET correction: the day-night spec carries `test.slow()` because its setup + two scrubbed element-screenshots sit at the 30s ceiling under a parallel local software-WebGL run — the assertions and floors are unchanged.)
 - **`test.retry(N)` for behaviour-system specs.** Determinism is load-bearing in `livestock-ecs`; retry hides real flakes. Use it only for genuinely-flaky infrastructure (network, page navigation timing).
 - **Reaching past the debug hook into Angular internals.** If the test needs state the hook doesn't expose, extend the hook (with a typed read-only getter) rather than introspecting the component tree.

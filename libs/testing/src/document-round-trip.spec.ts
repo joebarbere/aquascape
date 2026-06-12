@@ -77,6 +77,26 @@ describe('document-round-trip', () => {
     );
   });
 
+  it('property: a v2 document migrates to v3 without inventing tank.waterLevelMm', () => {
+    fc.assert(
+      fc.property(arbAquaDocument(), (doc) => {
+        // Rewind an arbitrary current-version doc to a structurally-valid v2
+        // doc: strip the v3-only field and stamp the old version.
+        const { waterLevelMm: _stripped, ...tankNoLevel } = doc.tank;
+        const v2Doc = { ...doc, schemaVersion: 2, tank: tankNoLevel };
+        const loaded = loadAquaDocument(serializeAquaDocument(v2Doc as AquaDocument));
+        expect(loaded.ok).toBe(true);
+        if (!loaded.ok) return;
+        expect(loaded.document.schemaVersion).toBe(3);
+        // Absent stays absent — the v2 → v3 step is a version-stamp
+        // pass-through and must NOT materialise the render-time default fill.
+        expect('waterLevelMm' in loaded.document.tank).toBe(false);
+        expect({ ...loaded.document, schemaVersion: 2 }).toEqual(v2Doc);
+      }),
+      { numRuns: 50 },
+    );
+  });
+
   it('property: JSON.parse(JSON.stringify(doc)) is lossless (the format invariant)', () => {
     fc.assert(
       fc.property(arbAquaDocument(), (doc) => {

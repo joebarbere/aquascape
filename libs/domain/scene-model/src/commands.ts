@@ -376,6 +376,35 @@ export interface SetTankStyleCommand {
 }
 
 /**
+ * Set (or clear) the tank's authored water level — Stage 11 fidelity
+ * follow-up. `waterLevelMm` is the water-surface height above the interior
+ * floor in canonical integer mm; `null` clears the field back to the
+ * default fill (`effectiveWaterLevelMm` then derives
+ * `height − DEFAULT_WATER_GAP_BELOW_RIM_MM`).
+ *
+ * APPLY SEMANTICS
+ *  - `null` → delete `tank.waterLevelMm`.
+ *  - number → must be a finite value in `[1, tank.height]`; rounded to the
+ *    canonical integer mm. Out-of-range / non-finite is REJECTED (the UI
+ *    clamps before dispatch; the domain guard protects other callers).
+ *  - Like `SetTankDimensions`, this is a structural global op — NOT
+ *    blocked by `layer.locked` (it owns no layer content).
+ *
+ * INVERT SEMANTICS
+ * `invertCommand(scene, cmd)` returns a fresh `SetWaterLevelCommand` whose
+ * `waterLevelMm` is the pre-apply value (`null` when the field was unset),
+ * with the would-be-applied value carried in `inverse` so
+ * inverse-of-inverse round-trips structurally.
+ */
+export interface SetWaterLevelCommand {
+  kind: 'SetWaterLevel';
+  /** New authored level (mm above the floor), or `null` to clear. */
+  waterLevelMm: number | null;
+  /** Pre-apply value captured for inversion (`null` = field was unset). */
+  inverse?: { previousWaterLevelMm: number | null };
+}
+
+/**
  * Set `groupId` on a list of objects in a single command. Stage 4 F4.3.
  *
  * Why one batch command instead of a Composite of N single-object commands?
@@ -447,6 +476,7 @@ export type Command =
   | SetObjectGroupIdCommand
   | SetTankDimensionsCommand
   | SetTankStyleCommand
+  | SetWaterLevelCommand
   | SubstrateCommand
   | LivestockCommand
   | EquipmentCommand
@@ -993,6 +1023,27 @@ export function applyCommand(scene: Scene, command: Command): CommandResult {
       return ok({ ...scene, tank: nextTank });
     }
 
+    case 'SetWaterLevel': {
+      if (command.waterLevelMm === null) {
+        // Clear back to the default fill. Drop the field entirely (the
+        // document stays minimal; `effectiveWaterLevelMm` derives).
+        const { waterLevelMm: _cleared, ...rest } = scene.tank;
+        void _cleared;
+        return ok({ ...scene, tank: rest });
+      }
+      if (!Number.isFinite(command.waterLevelMm)) {
+        return rejected('invalid', 'SetWaterLevel: waterLevelMm must be finite');
+      }
+      const rounded = Math.round(command.waterLevelMm);
+      if (rounded < 1 || rounded > scene.tank.height) {
+        return rejected(
+          'invalid',
+          `SetWaterLevel: waterLevelMm must be in [1, ${scene.tank.height}] (got ${rounded})`,
+        );
+      }
+      return ok({ ...scene, tank: { ...scene.tank, waterLevelMm: rounded } });
+    }
+
     case 'AddSubstrateRegion':
     case 'RemoveSubstrateRegion':
     case 'SetSubstrateRegionMaterial':
@@ -1267,6 +1318,15 @@ export function invertCommand(scene: Scene, command: Command): Command {
       };
     }
 
+    case 'SetWaterLevel': {
+      // Pre-apply value (null = unset) becomes the inverse's payload.
+      return {
+        kind: 'SetWaterLevel',
+        waterLevelMm: scene.tank.waterLevelMm ?? null,
+        inverse: { previousWaterLevelMm: command.waterLevelMm },
+      };
+    }
+
     case 'AddSubstrateRegion':
     case 'RemoveSubstrateRegion':
     case 'SetSubstrateRegionMaterial':
@@ -1447,6 +1507,17 @@ export const setTankDimensions = (dimensions: {
 export const setTankStyle = (style: TankStyle): SetTankStyleCommand => ({
   kind: 'SetTankStyle',
   style,
+});
+
+/**
+ * Build a {@link SetWaterLevelCommand}. `waterLevelMm` is the new authored
+ * water-surface height above the floor (mm), or `null` to clear back to
+ * the default fill. The `inverse` envelope is omitted; {@link invertCommand}
+ * populates it when undo is built.
+ */
+export const setWaterLevel = (waterLevelMm: number | null): SetWaterLevelCommand => ({
+  kind: 'SetWaterLevel',
+  waterLevelMm,
 });
 
 export const composite = (children: Command[]): CompositeCommand => ({

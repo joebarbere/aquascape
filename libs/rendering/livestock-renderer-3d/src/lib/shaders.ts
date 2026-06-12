@@ -55,7 +55,13 @@ precision highp float;
 #define PI 3.141592653589793
 
 // Custom vertex attribute (per-vertex; standard 'position', 'normal',
-// 'uv' are supplied by three's shader prefix).
+// 'uv' are supplied by three's shader prefix). spineUv.x is the nose→tail
+// spine coordinate; spineUv.y carries the fish-anatomy FIN_TYPE code
+// (0=body, 1=caudal, 2=dorsal, 3=anal, 4=pectoral), packed renderer-side
+// by build-livestock-meshes. It RIDES this spare channel instead of being
+// its own attribute because the program sits exactly at ANGLE/SwiftShader's
+// MAX_VERTEX_ATTRIBS = 16 budget — a 17th declared attribute fails linking
+// ("Too many attributes") and no fish render.
 attribute vec2 spineUv;
 
 // Per-instance attributes (one value per InstancedMesh instance).
@@ -102,6 +108,39 @@ void main() {
   float phase = 2.0 * PI * (uTime * instanceTailBeatFreq - s) + instancePhase;
   vec3 displaced = position + vec3(0.0, 0.0, amp * sin(phase));
   // ── /CARANGIFORM ────────────────────────────────────────────────────
+
+  // ── FIN FLUTTER ─────────────────────────────────────────────────────
+  // Secondary per-fin oscillation layered over the carangiform wave
+  // (Bucket 3 fidelity — per-fin fish animation). The caudal (finType 1)
+  // is deliberately left to the spine wave alone: it already gets the
+  // largest carangiform displacement at s ≈ 1.
+  //
+  //   flutterAmp(fin) = FLUTTER_AMP_BL · (instanceAmpTail / 0.12)
+  //   φf              = 2π · uTime · (2.3 · instanceTailBeatFreq)
+  //                     + instancePhase + finTypeOffset
+  //   dorsal/anal:  displaced.z += 0.02  · gate · sin(φf [+ offset])
+  //   pectoral:     displaced.y += 0.018 · gate · sin(φf + 4.2)   (rowing)
+  //                 displaced.z += 0.008 · gate · sin(φf + 4.2)
+  //
+  // Amplitudes are in body-length units (body spans x ∈ [0, 1]); the
+  // gate scales them by the per-instance carangiform amplitude relative
+  // to the nominal 0.12 BL tail amp, so amp-zeroed instances (crawler —
+  // the renderer zeroes its instanceAmpTail every sync) don't flutter.
+  // Branchless: float(==) selects exactly one fin lane per vertex.
+  float flutterGate = instanceAmpTail / 0.12;
+  float flutterPhase = 2.0 * PI * uTime * (2.3 * instanceTailBeatFreq) + instancePhase;
+  float finCode = spineUv.y;
+  float finDorsal = float(finCode == 2.0);
+  float finAnal = float(finCode == 3.0);
+  float finPectoral = float(finCode == 4.0);
+  // Dorsal + anal flutter laterally (local Z), out of lockstep via a
+  // per-fin-type phase offset.
+  displaced.z += flutterGate * 0.02 * (finDorsal * sin(flutterPhase) + finAnal * sin(flutterPhase + 2.1));
+  // Pectorals row — mostly vertical (local Y) with a small lateral mix.
+  float pectoralRow = finPectoral * sin(flutterPhase + 4.2);
+  displaced.y += flutterGate * 0.018 * pectoralRow;
+  displaced.z += flutterGate * 0.008 * pectoralRow;
+  // ── /FIN FLUTTER ────────────────────────────────────────────────────
 
   // Per-instance transform: scale → rotate (quat) → translate (pos).
   vec3 scaled = displaced * instanceScale;
@@ -169,7 +208,11 @@ void main() {
   // Subtle high-frequency scale shimmer along the body, modulating the
   // sheen (never the base albedo) so a wrong-orientation read can't wash
   // the fish out — it only ever brightens the already-grazing rim.
-  float scales = 0.5 + 0.5 * sin(vSpineUv.x * 60.0) * sin(vSpineUv.y * 24.0);
+  // vSpineUv.y carries the integer FIN_TYPE code (see vertex shader), so
+  // fract() keeps this term exactly as it was when the channel held a
+  // constant 0 — the cross-band only ever contributes if a future buffer
+  // packs a fractional component alongside the code.
+  float scales = 0.5 + 0.5 * sin(vSpineUv.x * 60.0) * sin(fract(vSpineUv.y) * 24.0);
   rgb += fres * sheen * (0.18 + 0.10 * scales);
   // ── /IRIDESCENT SHEEN ───────────────────────────────────────────────
 

@@ -61,6 +61,79 @@ export function formatForDisplay(mm: number, unit: DisplayUnit): string {
   }
 }
 
+// ── Water-fill conversions (mm ↔ US gallons) ───────────────────────────
+//
+// The water-fill control displays the fill LEVEL either as a height (mm)
+// or as the contained VOLUME in US gallons. Gallons are display-only —
+// canonical storage is always integer mm of water-surface height. The
+// conversion depends on the tank footprint:
+//
+//   litres  = width(mm) × depth(mm) × level(mm) / 1e6
+//   gallons = litres / 3.78541
+//
+// e.g. a 600 × 300 mm footprint holds 0.18 L per mm of depth.
+
+/** Litres per US gallon (exact definition: 3.785411784, truncated per spec). */
+export const LITRES_PER_US_GALLON = 3.78541;
+
+/** The unit the water-fill control is currently displaying. */
+export type WaterFillUnit = 'mm' | 'gal';
+
+/** Storage key for the user's chosen water-fill display unit. */
+export const WATER_FILL_UNIT_STORAGE_KEY = 'tank-setup.water-fill-unit';
+
+/**
+ * Water level (mm above the interior floor) → contained volume in US
+ * gallons for a tank with the given interior footprint. Lossy: returns a
+ * real number (display rounds to 1 decimal).
+ */
+export function mmLevelToGallons(levelMm: number, widthMm: number, depthMm: number): number {
+  return (widthMm * depthMm * levelMm) / 1e6 / LITRES_PER_US_GALLON;
+}
+
+/**
+ * US gallons → integer water level in mm for a tank with the given interior
+ * footprint. Same integer-rounding contract as {@link cmToMm}. Returns
+ * `null` for a non-finite gallon value or a degenerate (≤ 0) footprint.
+ */
+export function gallonsToMmLevel(gallons: number, widthMm: number, depthMm: number): number | null {
+  const footprint = widthMm * depthMm;
+  if (!Number.isFinite(gallons) || !Number.isFinite(footprint) || footprint <= 0) return null;
+  return Math.round((gallons * LITRES_PER_US_GALLON * 1e6) / footprint);
+}
+
+/**
+ * Format an integer-mm water level for display in the given water-fill
+ * unit (mm: integer string, gal: 1 decimal).
+ */
+export function formatWaterFill(
+  levelMm: number,
+  unit: WaterFillUnit,
+  widthMm: number,
+  depthMm: number,
+): string {
+  return unit === 'mm'
+    ? `${Math.round(levelMm)}`
+    : mmLevelToGallons(levelMm, widthMm, depthMm).toFixed(1);
+}
+
+/**
+ * Parse a user-entered water-fill string in the given unit back into
+ * integer millimetres of level. Returns `null` when the input is not a
+ * finite number (or, for gallons, when the footprint is degenerate).
+ */
+export function parseWaterFillToMm(
+  value: string,
+  unit: WaterFillUnit,
+  widthMm: number,
+  depthMm: number,
+): number | null {
+  if (value.trim().length === 0) return null;
+  const raw = Number(value);
+  if (!Number.isFinite(raw)) return null;
+  return unit === 'mm' ? Math.round(raw) : gallonsToMmLevel(raw, widthMm, depthMm);
+}
+
 /**
  * Parse a user-entered numeric string in the given display unit back into
  * integer millimetres. Returns `null` if the input is not a finite number.

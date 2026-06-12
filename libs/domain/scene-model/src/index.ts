@@ -50,6 +50,8 @@ export {
   selectLivestockById,
   selectEquipment,
   selectEquipmentById,
+  effectiveWaterLevelMm,
+  DEFAULT_WATER_GAP_BELOW_RIM_MM,
 } from './selectors';
 
 // ─── Commands ─────────────────────────────────────────────────────────────
@@ -75,6 +77,7 @@ export type {
   SetObjectGroupIdCommand,
   SetTankDimensionsCommand,
   SetTankStyleCommand,
+  SetWaterLevelCommand,
   CompositeCommand,
 } from './commands';
 
@@ -100,6 +103,7 @@ export {
   setTankDimensions,
   SET_TANK_DIMENSIONS_MAX_MM,
   setTankStyle,
+  setWaterLevel,
   composite,
   identityTransform,
 } from './commands';

@@ -39,6 +39,12 @@ import type {
 import { ExtrudeGeometry, Group, Mesh, MeshStandardMaterial, Shape } from 'three';
 
 import { applyCaustics, CAUSTIC_MATERIALS_KEY } from './caustics';
+import {
+  applyCatalogTextures,
+  resolveTextureSet,
+  TEX_TILE_HARDSCAPE_MM,
+  type CatalogTextureResolver,
+} from './catalog-texture';
 import { applyHardscapeNoise, seedFromHardscape } from './hardscape-noise';
 import { applyHardscapeTexture } from './hardscape-texture';
 import { computeZonedZ } from './layer-zone-z';
@@ -56,7 +62,11 @@ const ROUGHNESS = 0.85;
  *
  * Invisible layers are skipped.
  */
-export function buildHardscapeMeshes(scene: Scene, catalog: Catalog | undefined): Group {
+export function buildHardscapeMeshes(
+  scene: Scene,
+  catalog: Catalog | undefined,
+  resolveTexture?: CatalogTextureResolver,
+): Group {
   const group = new Group();
   group.name = 'aquascape:hardscape';
   // Caustics dance over rocks + wood too — collect the patched materials.
@@ -70,9 +80,18 @@ export function buildHardscapeMeshes(scene: Scene, catalog: Catalog | undefined)
       const mesh = buildHardscapeMesh(obj, entry, scene, layer);
       if (mesh !== null) {
         // Caustics first, then the procedural stone texture chains on top so
-        // rocks read as textured stone rather than smooth moulded plastic.
+        // rocks read as textured stone rather than smooth moulded plastic,
+        // then (Bucket 2) the catalog triplanar texture patch chains last —
+        // it feeds the lighting pipeline at earlier GLSL anchors, so chain
+        // order ≠ visual order (see `catalog-texture.ts`).
         applyCaustics(mesh.material as MeshStandardMaterial, scene.tank.height);
         applyHardscapeTexture(mesh.material as MeshStandardMaterial);
+        const texSet = resolveTextureSet(entry?.textures, resolveTexture);
+        if (texSet !== null) {
+          applyCatalogTextures(mesh.material as MeshStandardMaterial, texSet, {
+            tileMm: TEX_TILE_HARDSCAPE_MM,
+          });
+        }
         causticMaterials.push(mesh.material as MeshStandardMaterial);
         group.add(mesh);
       }

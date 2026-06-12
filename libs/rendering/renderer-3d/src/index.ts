@@ -15,3 +15,17 @@
 // a host (web canvas, headless export pipeline) can drop it in.
 
 export { Three3DRenderer, type Orbital3DControls } from './three-3d-renderer';
+// NOTE: the waterline's single source of truth is
+// `effectiveWaterLevelMm(tank)` from `@aquascape/domain/scene-model` —
+// authored `tank.waterLevelMm` or the default fill. This lib consumes it;
+// it no longer exports a waterline constant of its own.
+// Bucket-0 render-target capability gate (3D-fidelity follow-ups). Pure,
+// GL-free detection of whether render-target / multi-pass effects (SSAO,
+// screen-space refraction) are safe — software-WebGL contexts (SwiftShader
+// et al.) blank the canvas on multi-pass pipelines. The renderer exposes the
+// probed result via `Three3DRenderer.getRenderTargetEffectsSupported()`.
+export {
+  detectRenderTargetEffectsSupport,
+  SOFTWARE_RENDERER_PATTERN,
+  type RenderTargetGlContextLike,
+} from './render-target-support';

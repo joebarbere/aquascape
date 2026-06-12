@@ -21,5 +21,10 @@
     { "x": -0.35, "y": 0.0 }
   ],
   "growth": { "weeksToMature": 6, "sizeAtZero": 0.35 },
-  "defaultDensity": 8
+  "defaultDensity": 8,
+  "textures": {
+    "albedo": "leaf-fine.albedo.png",
+    "normal": "leaf-fine.normal.png",
+    "roughness": "leaf-fine.roughness.png"
+  }
 }

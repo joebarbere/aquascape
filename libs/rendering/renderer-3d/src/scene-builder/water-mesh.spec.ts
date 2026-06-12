@@ -1,5 +1,6 @@
-import { Mesh, PlaneGeometry, ShaderMaterial } from 'three';
+import { Color, Mesh, PlaneGeometry, ShaderMaterial } from 'three';
 import type { Scene } from '@aquascape/domain/scene-model';
+import { DEFAULT_WATER_GAP_BELOW_RIM_MM } from '@aquascape/domain/scene-model';
 import { buildWaterMesh } from './water-mesh';
 
 function sceneOf(tankW = 600, tankH = 360, tankD = 300): Scene {
@@ -40,7 +41,7 @@ describe('buildWaterMesh — geometry + placement', () => {
   it('positions the plane centred over the tank and 5 mm below the interior rim', () => {
     const { mesh } = buildWaterMesh(sceneOf(600, 360, 300));
     expect(mesh.position.x).toBeCloseTo(300, 5);
-    expect(mesh.position.y).toBeCloseTo(360 - 5, 5);
+    expect(mesh.position.y).toBeCloseTo(360 - DEFAULT_WATER_GAP_BELOW_RIM_MM, 5);
     expect(mesh.position.z).toBeCloseTo(150, 5);
   });
 
@@ -76,6 +77,54 @@ describe('buildWaterMesh — material', () => {
     const mat = mesh.material as ShaderMaterial;
     expect(mat.uniforms['uTime']).toBeDefined();
     expect(mat.uniforms['uTime']!.value).toBe(0);
+  });
+});
+
+describe('buildWaterMesh — surface caustic shimmer (fidelity follow-up)', () => {
+  it('fragment shader contains the procedural caustic function, world-anchored + time-driven', () => {
+    const { mesh } = buildWaterMesh(sceneOf());
+    const src = (mesh.material as ShaderMaterial).fragmentShader;
+    // The layered-sine caustic (same flavour as caustics.ts's aqCaustic).
+    expect(src).toContain('float aqWaterCaustic(vec2 p, float t)');
+    // Sampled in world XZ via the existing varying, driven by uTime.
+    expect(src).toMatch(/aqWaterCaustic\(\s*vWorldPosition\.xz\s*,\s*uTime\s*\)/);
+    // Scaled by the day-night-driven strength uniform.
+    expect(src).toContain('uCausticStrength');
+  });
+
+  it('the caustic ADDED alpha is capped so the surface never turns opaque', () => {
+    const { mesh } = buildWaterMesh(sceneOf());
+    const src = (mesh.material as ShaderMaterial).fragmentShader;
+    // The cap constant exists and the alpha contribution routes through min().
+    expect(src).toContain('WATER_CAUSTIC_ALPHA_CAP');
+    expect(src).toMatch(/min\(\s*caus\s*\*\s*[0-9.]+\s*,\s*WATER_CAUSTIC_ALPHA_CAP\s*\)/);
+    // The base alpha behaviour stays recognisable (0.20 + spec ramp).
+    expect(src).toMatch(/0\.20\s*\+\s*spec\s*\*\s*0\.35/);
+  });
+
+  it('exposes a uCausticStrength uniform defaulting to 1 (noon)', () => {
+    const { mesh } = buildWaterMesh(sceneOf());
+    const mat = mesh.material as ShaderMaterial;
+    expect(mat.uniforms['uCausticStrength']).toBeDefined();
+    expect(mat.uniforms['uCausticStrength']!.value).toBe(1);
+  });
+
+  it('setCausticStrength writes the uniform (clamped at 0)', () => {
+    const handle = buildWaterMesh(sceneOf());
+    const mat = handle.mesh.material as ShaderMaterial;
+    handle.setCausticStrength(0.4);
+    expect(mat.uniforms['uCausticStrength']!.value).toBeCloseTo(0.4, 5);
+    handle.setCausticStrength(-2);
+    expect(mat.uniforms['uCausticStrength']!.value).toBe(0);
+  });
+
+  it('setCausticStrength is a no-op after dispose (render + dispose race)', () => {
+    const handle = buildWaterMesh(sceneOf());
+    const mat = handle.mesh.material as ShaderMaterial;
+    handle.setCausticStrength(0.7);
+    handle.dispose();
+    handle.setCausticStrength(0.1);
+    expect(mat.uniforms['uCausticStrength']!.value).toBeCloseTo(0.7, 5);
   });
 });
 
@@ -160,3 +209,64 @@ describe('buildWaterMesh — dispose', () => {
     expect(matSpy).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('buildWaterMesh — adjustable fill line', () => {
+  it('positions the plane at the authored tank.waterLevelMm', () => {
+    const scene = sceneOf();
+    const filled: Scene = {
+      ...scene,
+      tank: { ...scene.tank, waterLevelMm: 180 },
+    };
+    const { mesh } = buildWaterMesh(filled);
+    expect(mesh.position.y).toBeCloseTo(180, 5);
+  });
+
+  it('clamps a stale authored level above the rim to the tank height', () => {
+    const scene = sceneOf(600, 360, 300);
+    const overfull: Scene = {
+      ...scene,
+      tank: { ...scene.tank, waterLevelMm: 9999 },
+    };
+    const { mesh } = buildWaterMesh(overfull);
+    expect(mesh.position.y).toBeCloseTo(360, 5);
+  });
+});
+
+describe('buildWaterMesh — authored water tint (retired tank-mesh plane)', () => {
+  it('defaults the base colour to the editorial pale blue when no waterTint is set', () => {
+    const { mesh } = buildWaterMesh(sceneOf());
+    const mat = mesh.material as ShaderMaterial;
+    const base = mat.uniforms['uBaseColor']!.value as Color;
+    expect(base.r).toBeCloseTo(0.55, 5);
+    expect(base.g).toBeCloseTo(0.75, 5);
+    expect(base.b).toBeCloseTo(0.92, 5);
+  });
+
+  it('bakes style.waterTint into uBaseColor when authored', () => {
+    const scene = sceneOf();
+    const tinted: Scene = {
+      ...scene,
+      tank: {
+        ...scene.tank,
+        style: { ...scene.tank.style, waterTint: '#f4ede0' },
+      },
+    };
+    const { mesh } = buildWaterMesh(tinted);
+    const mat = mesh.material as ShaderMaterial;
+    const base = mat.uniforms['uBaseColor']!.value as Color;
+    // `Color.set('#hex')` converts sRGB → the linear working space; assert
+    // against the same conversion rather than raw byte fractions.
+    const expected = new Color('#f4ede0');
+    expect(base.r).toBeCloseTo(expected.r, 6);
+    expect(base.g).toBeCloseTo(expected.g, 6);
+    expect(base.b).toBeCloseTo(expected.b, 6);
+  });
+
+  it('the fragment shader samples uBaseColor (no baked colour literal)', () => {
+    const { mesh } = buildWaterMesh(sceneOf());
+    const mat = mesh.material as ShaderMaterial;
+    expect(mat.fragmentShader).toContain('uniform vec3 uBaseColor;');
+    expect(mat.fragmentShader).not.toContain('vec3(0.55, 0.75, 0.92)');
+  });
+});
+

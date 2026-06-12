@@ -77,6 +77,16 @@ export interface Tank {
   depth: Millimetres;
   /** Glass thickness, used for rendering and (later) volume precision. */
   glassThickness?: Millimetres;
+  /**
+   * Water surface height above the interior floor (canonical integer mm).
+   * Absent ⇒ the editorial default fill: `height −
+   * DEFAULT_WATER_GAP_BELOW_RIM_MM` (see `effectiveWaterLevelMm` in
+   * `selectors.ts` — consumers must go through that helper rather than
+   * re-deriving the default). Set via `SetWaterLevelCommand`; the UI lets
+   * users author it in mm or US gallons (gallons are a display-only
+   * conversion over `width × depth × level`).
+   */
+  waterLevelMm?: Millimetres;
   /** Optional reference to a known preset. */
   presetRef?: CatalogRef;
   style: TankStyle;

@@ -36,6 +36,7 @@
  */
 
 import { seededHash01 } from '@aquascape/domain/geometry';
+import { FIN_TYPE } from './fin-type';
 
 /** One station along the spine. */
 export interface BodyControlPoint {
@@ -74,6 +75,8 @@ export interface BodyBuildResult {
   uvs: number[];
   indices: number[];
   spineUv: number[];
+  /** One `FIN_TYPE` code per vertex — the body writes `FIN_TYPE.BODY` (0). */
+  finType: number[];
   /** Vertex count produced by the body alone (caller appends fins after). */
   vertexCount: number;
   /** Index count produced by the body alone (caller appends fin indices). */
@@ -158,6 +161,7 @@ export function buildRevolvedBody(
   const normals: number[] = [];
   const uvs: number[] = [];
   const spineUv: number[] = [];
+  const finType: number[] = [];
   const indices: number[] = [];
 
   // Step 1 — sample the surface.
@@ -228,6 +232,7 @@ export function buildRevolvedBody(
       normals.push(nx, ny, nz);
       uvs.push(s, ir / radialSegments);
       spineUv.push(s, 0);
+      finType.push(FIN_TYPE.BODY);
     }
   }
 
@@ -255,6 +260,7 @@ export function buildRevolvedBody(
     uvs,
     indices,
     spineUv,
+    finType,
     vertexCount: xSegments * radialSegments,
     indexCount: indices.length,
   };

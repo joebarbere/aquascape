@@ -225,6 +225,15 @@ test.describe('livestock 3D rendering', () => {
   });
 
   test('day-night slider scrubs renderer lighting', async ({ page }) => {
+    // This test's setup (template-less 3D entry + panel expand + two
+    // scrubbed screenshots) sits right at the 30s default budget when a
+    // parallel local worker saturates the software-WebGL main thread —
+    // the element screenshot's stability check needs page rAF frames that
+    // arrive slowly under contention. `slow()` triples the budget; this
+    // is a BUDGET correction, not a flake mask (the assertions are
+    // unchanged and the diff floor still trips on a real regression).
+    // CI runs workers: 1 and never came near the ceiling.
+    test.slow();
     // F11.7 Wave 5 — verifies the DayNightControlComponent's phase slider
     // actually re-paints the 3D canvas. Mirrors the air-stone test's
     // strategy: scope to the panel `region` (the `<section aria-

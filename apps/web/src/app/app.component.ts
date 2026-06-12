@@ -1901,6 +1901,12 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       ...(livestockWorld !== null ? { livestockWorld } : {}),
       ...(dayNightLookup !== null ? { dayNightLookup } : {}),
       ...(flowField !== null ? { flowField } : {}),
+      // Bucket 2 — catalog texture pack base URL, 3D-only (the 2D renderer
+      // ignores it; omitting on 2D keeps the options bag minimal, same
+      // pattern as livestockWorld / dayNightLookup above). The pack is the
+      // static-asset copy of `libs/domain/catalog/assets/textures` — see
+      // the asset glob in apps/web/project.json.
+      ...(is3d ? { catalogTextureBaseUrl: CATALOG_TEXTURE_BASE_URL } : {}),
     });
   }
 
@@ -2127,6 +2133,15 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 // ─── Pure helpers ─────────────────────────────────────────────────────────
 
 const EPSILON_MM = 0.01;
+
+/**
+ * Bucket 2 — where the dev server / production build serves the catalog
+ * texture pack (the asset glob in `apps/web/project.json` copies
+ * `libs/domain/catalog/assets/textures` here). Relative (no leading slash)
+ * so it resolves under any deploy base href; trailing slash because the
+ * 3D renderer concatenates `baseUrl + ref` verbatim.
+ */
+const CATALOG_TEXTURE_BASE_URL = 'assets/catalog-textures/';
 
 /**
  * Default radius (mm) for the implicit carpet brush that fires when the user

@@ -1,0 +1,95 @@
+/* Water-fill subcontrol. Mirrors the tank-setup panel's input-wrap pattern:
+   the unit suffix lives INSIDE the input (absolute + pointer-events: none,
+   with right padding reserved so it never overlaps the typed value). */
+:host {
+  display: block;
+}
+.water-fill {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--border, #e0e0e0);
+}
+.water-fill__top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.water-fill__heading {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.water-fill__badge {
+  font-size: 0.78rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--surface-hover, #f0f0f0);
+  color: var(--text-muted, #555);
+}
+.water-fill__badge--custom {
+  background: var(--accent-soft, #dbeafe);
+  color: var(--accent-text, #1d4ed8);
+}
+.water-fill__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.water-fill__label {
+  min-width: 4.5rem;
+}
+.water-fill__input-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.water-fill__input-wrap input {
+  width: 7rem;
+  padding: 0.3rem 2.5rem 0.3rem 0.5rem;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 4px;
+  font: inherit;
+}
+.water-fill__unit {
+  position: absolute;
+  right: 0.5rem;
+  pointer-events: none;
+  color: var(--text-muted, #777);
+  font-size: 0.85rem;
+}
+.water-fill__units {
+  display: inline-flex;
+  gap: 2px;
+}
+.water-fill__units button,
+.water-fill__auto {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 4px;
+  background: var(--surface, #fff);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.water-fill__units button.is-active {
+  background: var(--accent-soft, #dbeafe);
+  border-color: var(--accent, #2563eb);
+}
+.water-fill__units button:focus-visible,
+.water-fill__auto:focus-visible,
+.water-fill__input-wrap input:focus-visible {
+  outline: 2px solid var(--accent, #2563eb);
+  outline-offset: 1px;
+}
+.water-fill__auto[disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+.water-fill__help {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted, #666);
+}

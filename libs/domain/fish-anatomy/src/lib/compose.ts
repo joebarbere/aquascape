@@ -101,6 +101,7 @@ export function composeFish(spec: ArchetypeSpec): FishGeometryDescriptor {
     uvs: body.uvs,
     indices: body.indices,
     spineUv: body.spineUv,
+    finType: body.finType,
   };
 
   // Caudal — attach at the tail of the body, two tips above/below the spine.
@@ -165,6 +166,7 @@ export function composeFish(spec: ArchetypeSpec): FishGeometryDescriptor {
     uvs: new Float32Array(ctx.uvs),
     indices: new Uint16Array(ctx.indices),
     spineUv: new Float32Array(ctx.spineUv),
+    finType: new Float32Array(ctx.finType),
     groups: {
       body: [bodyIndexStart, bodyIndexCount],
       caudal: [caudal.indexStart, caudal.indexCount],

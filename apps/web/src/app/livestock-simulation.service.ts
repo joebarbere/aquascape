@@ -82,6 +82,7 @@ import type {
   LivestockEntry as CatalogLivestockEntry,
 } from '@aquascape/domain/catalog';
 import { archetypeForSpecies, type FishArchetypeId } from '@aquascape/domain/fish-anatomy';
+
 import {
   bakeFlowField,
   bakeHardscapeSdf,
@@ -106,6 +107,7 @@ import {
   type LivestockWorld,
   type TankAabb,
 } from '@aquascape/domain/livestock-ecs';
+import { effectiveWaterLevelMm } from '@aquascape/domain/scene-model';
 import type {
   EquipmentEntry,
   HardscapeObject,
@@ -1107,7 +1109,13 @@ function tankAabbFromScene(scene: Scene): TankAabb {
     minX: 0,
     maxX: scene.tank.width,
     minY: 0,
-    maxY: scene.tank.height,
+    // The sim's "top" is the WATERLINE, not the glass rim — the renderer
+    // paints the water surface at `effectiveWaterLevelMm` (authored
+    // `tank.waterLevelMm` or the default fill), and everything the world
+    // keys off maxY (depth-band fractions, the kinematic clamp, bubble
+    // despawn, surface food sprites) must track the visible surface or
+    // fish/bubbles/food float in the air gap.
+    maxY: effectiveWaterLevelMm(scene.tank),
     minZ: 0,
     maxZ: scene.tank.depth,
   };

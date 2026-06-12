@@ -8,5 +8,10 @@
   "color": "#1f1f24",
   "grainSize": 5,
   "description": "Inert rounded black gravel. Pairs well with bright fish; planted tanks need root tabs.",
-  "tags": ["inert", "gravel", "low-tech"]
+  "tags": ["inert", "gravel", "low-tech"],
+  "textures": {
+    "albedo": "gravel-mixed.albedo.png",
+    "normal": "gravel-mixed.normal.png",
+    "roughness": "gravel-mixed.roughness.png"
+  }
 }

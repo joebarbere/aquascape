@@ -47,6 +47,7 @@ import { Store } from '@ngrx/store';
 import { TANK_PRESET_CATALOG, TANK_PRESET_VERSION, tankPresets } from './tank-presets';
 import type { TankBrand, TankPreset } from './tank-presets';
 import { TankStylingComponent } from './tank-styling.component';
+import { WaterFillComponent } from './water-fill.component';
 import { DISPLAY_UNIT_STORAGE_KEY, formatForDisplay, parseToMm } from './units';
 import type { DisplayUnit } from './units';
 
@@ -146,7 +147,7 @@ export const MAX_SILHOUETTE_PX = 56;
   selector: 'aquascape-tank-setup',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, ReactiveFormsModule, TankStylingComponent],
+  imports: [CommonModule, ReactiveFormsModule, TankStylingComponent, WaterFillComponent],
   templateUrl: './tank-setup.component.html',
   styleUrls: ['./tank-setup.component.css'],
 })

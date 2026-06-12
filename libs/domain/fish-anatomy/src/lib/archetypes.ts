@@ -479,6 +479,7 @@ function pushAntenna(
     uvs: number[];
     indices: number[];
     spineUv: number[];
+    finType: number[];
   },
   rootZ: number,
 ): void {
@@ -503,26 +504,33 @@ function pushAntenna(
   const ny = 1;
   const nz = 0;
 
+  // Antennae are body geometry as far as the fin-flutter shader is
+  // concerned — `FIN_TYPE.BODY` (0) keeps them riding the carangiform
+  // wave only (which the renderer zeroes for crawlers anyway).
   // root-lower
   ctx.positions.push(rx, ry - ANTENNA_HALF_THICKNESS, rz);
   ctx.normals.push(nx, ny, nz);
   ctx.uvs.push(0, 0);
   ctx.spineUv.push(rx, 0);
+  ctx.finType.push(0);
   // root-upper
   ctx.positions.push(rx, ry + ANTENNA_HALF_THICKNESS, rz);
   ctx.normals.push(nx, ny, nz);
   ctx.uvs.push(0, 1);
   ctx.spineUv.push(rx, 0);
+  ctx.finType.push(0);
   // tip-lower
   ctx.positions.push(tx, ty - ANTENNA_HALF_THICKNESS, tz);
   ctx.normals.push(nx, ny, nz);
   ctx.uvs.push(1, 0);
   ctx.spineUv.push(tx, 0);
+  ctx.finType.push(0);
   // tip-upper
   ctx.positions.push(tx, ty + ANTENNA_HALF_THICKNESS, tz);
   ctx.normals.push(nx, ny, nz);
   ctx.uvs.push(1, 1);
   ctx.spineUv.push(tx, 0);
+  ctx.finType.push(0);
 
   // Two triangles: (root-lower, tip-lower, root-upper),
   // (root-upper, tip-lower, tip-upper).
@@ -554,6 +562,7 @@ export function buildCrawlerGeometry(): FishGeometryDescriptor {
     uvs: body.uvs,
     indices: body.indices,
     spineUv: body.spineUv,
+    finType: body.finType,
   };
 
   const bodyIndexCount = body.indexCount;
@@ -572,6 +581,8 @@ export function buildCrawlerGeometry(): FishGeometryDescriptor {
     uvs: new Float32Array(ctx.uvs),
     indices: new Uint16Array(ctx.indices),
     spineUv: new Float32Array(ctx.spineUv),
+    // Crawler has no fins, so the whole buffer is FIN_TYPE.BODY (0).
+    finType: new Float32Array(ctx.finType),
     groups: {
       // Body is one contiguous index range starting at 0.
       body: [0, bodyIndexCount],

@@ -1,0 +1,69 @@
+<section class="water-fill" aria-labelledby="water-fill-heading" data-testid="water-fill">
+  <div class="water-fill__top">
+    <h3 id="water-fill-heading" class="water-fill__heading">Water fill</h3>
+    <span
+      class="water-fill__badge"
+      [class.water-fill__badge--custom]="isAuthored()"
+      data-testid="water-fill-status"
+      aria-live="polite"
+    >
+      {{ isAuthored() ? 'Custom' : 'Auto' }}
+    </span>
+  </div>
+
+  <div class="water-fill__row">
+    <label for="water-fill-level" class="water-fill__label">Fill level</label>
+    <div class="water-fill__input-wrap">
+      <input
+        id="water-fill-level"
+        data-testid="water-fill-input"
+        type="number"
+        inputmode="decimal"
+        [attr.min]="minDisplay()"
+        [attr.max]="maxDisplay()"
+        [attr.step]="unit() === 'mm' ? '1' : '0.1'"
+        [value]="displayValue()"
+        (blur)="commit($any($event.target))"
+        (keydown.enter)="onEnter($event)"
+        aria-describedby="water-fill-help"
+      />
+      <span class="water-fill__unit" aria-hidden="true">{{ unit() }}</span>
+    </div>
+
+    <div role="group" aria-label="Water fill unit" class="water-fill__units">
+      <button
+        type="button"
+        data-testid="water-unit-mm"
+        [attr.aria-pressed]="unit() === 'mm'"
+        [class.is-active]="unit() === 'mm'"
+        (click)="setUnit('mm')"
+      >
+        mm
+      </button>
+      <button
+        type="button"
+        data-testid="water-unit-gal"
+        [attr.aria-pressed]="unit() === 'gal'"
+        [class.is-active]="unit() === 'gal'"
+        (click)="setUnit('gal')"
+      >
+        gal
+      </button>
+    </div>
+
+    <button
+      type="button"
+      class="water-fill__auto"
+      data-testid="water-fill-auto"
+      [disabled]="!isAuthored()"
+      (click)="setAuto()"
+      aria-label="Reset water fill to the automatic default level"
+    >
+      Auto
+    </button>
+  </div>
+
+  <p id="water-fill-help" class="water-fill__help">
+    Range: {{ minDisplay() }} – {{ maxDisplay() }} {{ unit() }}. Auto fills to 25 mm below the rim.
+  </p>
+</section>
