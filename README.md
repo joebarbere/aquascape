@@ -9,7 +9,7 @@
 [![main CI](https://github.com/joebarbere/aquascape/actions/workflows/main.yml/badge.svg)](https://github.com/joebarbere/aquascape/actions/workflows/main.yml)
 [![PR CI](https://github.com/joebarbere/aquascape/actions/workflows/pr.yml/badge.svg)](https://github.com/joebarbere/aquascape/actions/workflows/pr.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
-[![Status: Stages 0–7 + 10 + 11 complete](https://img.shields.io/badge/status-stages%200--7%20%2B%2010%20%2B%2011-brightgreen.svg)](#status--roadmap)
+[![Status: active development](https://img.shields.io/badge/status-active%20development-brightgreen.svg)](#todo--whats-next)
 [![Platform: Web + Electron](https://img.shields.io/badge/platform-web%20%2B%20electron-informational.svg)](#platforms)
 
 <br />
@@ -35,9 +35,9 @@ Aquascape is a design tool for planted-aquarium hobbyists. Pick a tank, sculpt t
 The hobbyist tools that exist today either focus on layout (Scape It, Aquasketcher) or on stocking calculators (MyAquariumBuilder / AqAdvisor). Aquascape combines both into a single document and adds capabilities none of them ship:
 
 - 🌱 **Deterministic plant-growth simulation** — scrub a time slider to preview weeks 0–52 of growth
+- 🐟 **A living 3D preview** — schooling, feeding, territorial fish simulated in real time over the same document you edit in 2D
 - 📸 **Composite onto a real tank photo** — design against the actual shelf the tank will live on
-- 🤖 **Local + hosted AI render** behind one interface — coming in Stage 9
-- 🧊 **3D renderer** that consumes the same document — shipped in Stage 10 (read-only); animated water + plants + fish land in Stage 11
+- 🤖 **Local + hosted AI render** behind one interface — planned, see [TODO](#todo--whats-next)
 - 💾 **Lossless `.aqua` document format** with a locked schema (now v3) + pure migration chain
 - 🆓 **Truly open-source**, MIT-licensed, no telemetry, no cloud lock-in
 
@@ -45,7 +45,7 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 
 ## Features
 
-### 🐠 Design your tank
+### 🐠 Tank setup
 
 - **36 tank presets** spanning ADA Cube Garden (Mini-S → 150-P), UNS (5N → 120U), Waterbox (Clear Mini 10/16/30 + Cube 20), and US standard sizes (5 gal cube → 90 gal)
 - Custom dimensions (mm / cm / inches — storage is integer mm; toggle is display-only)
@@ -78,9 +78,15 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 - **Snap-to-everything** — grid / guides / objects, with magenta alignment lines while dragging
 - **Drag readouts** — `X, Y mm` for move, `% × %` for scale, `°` for rotate
 - **Composition overlays** — golden ratio + rule of thirds + focal-point markers (view-only)
-- **Time slider** — scrub weeks 0–52 to preview plant growth (deterministic)
+- **Layers panel** — visibility / lock toggles, inline rename, opacity, reorder, per-layer depth zone
 
-### 🐟 Livestock & equipment planning (Stage 7)
+### 🌱 Growth simulation
+
+- **Time slider** — scrub weeks 0–52 to preview plant growth
+- Deterministic: the document-level `seed` means the same scene grows the same way on every machine, every time
+- Carpet plants scatter-place with seeded jitter; growth scales every plant along a logistic curve toward its catalog maturity
+
+### 🐟 Livestock & equipment planning
 
 - **24 livestock species** — 20 fish (neon + cardinal + ember tetras, harlequin rasbora, cherry + tiger barb, marbled hatchetfish, dwarf + pearl gourami, angelfish, discus, German blue ram, apistogramma cacatuoides, betta, kuhli loach, pygmy + bronze cory, otocinclus, bristlenose + common pleco) + 2 shrimp (cherry, crystal red) + 2 snails (nerite, ramshorn)
 - **12 equipment entries** — Eheim Pro 4+ / Fluval 207 / AquaClear 50 / sponge filters, Fluval E300 / Eheim Jager 200 / Cobalt Neo-Therm 100 heaters, Twinstar 600S / Chihiros WRGB II Pro 60 / Fluval Plant 3.0 lights, Co2Art SE + ADA Pollen Glass CO2
@@ -88,9 +94,44 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 - **Inline note editing** on each equipment row
 - All edits flow through the undo/redo Command pipeline
 
+### 🧊 3D view
+
+- **One-click toggle** between 2D and 3D in the editor toolbar — segmented `2D | 3D` control, or `Cmd/Ctrl+Shift+3`
+- Three.js / WebGL renderer reads the **same** `.aqua` document — every change you make in 2D shows up immediately in 3D
+- **Orbit camera** — drag to rotate around the tank, wheel to zoom, two-finger drag to pan
+- Physically-based glass with transmission + refraction, ACES filmic tone mapping, image-based lighting, soft shadows, bloom
+- **Procedural underwater caustics** on substrate, hardscape, and the water surface — faded by the day-night cycle
+- **Catalog-driven PBR textures** — substrate / hardscape / plant materials sample 9 deterministic, seamlessly-tiling texture families (triplanar, world-space)
+- **Animated water surface** (vertex-shader sine bands) at the adjustable fill line
+- **Day-night cycle** — scrub a phase slider (manual / real-time / equipment photoperiod modes); lighting, background tint, and plant emissive follow a midnight / dawn / noon / dusk ramp
+- **Plant sway** — height-weighted, flow-coupled (plants near a filter outflow wave wider *and* faster), deterministic per instance
+- The time slider works in 3D too — scrub plant growth over weeks
+- **Read-only by design** — editing happens in 2D; flip to 3D to visualise
+
+### 🐠 Living tank simulation
+
+Every livestock entry in the document becomes visible, behaving fish in the 3D view — deterministically spawned from the document's `seed`, simulated at a fixed 30 Hz by a bitECS entity-component system:
+
+- **Seven procedural fish archetypes** (slim-tetra, deep-bodied, barb, cory-cylinder, eel, hatchet-wedge, crawler) with carangiform tail-beat + per-fin flutter shaders, per-instance colour, and an iridescent sheen
+- **Schooling** — Couzin three-zone model (repulsion / orientation / attraction with a blind cone); tetras shoal, loners wander
+- **Vertical stratification** — hatchetfish hug the surface, tetras roam mid-water, cories scoot along the substrate; shrimp + snails crawl
+- **Territoriality** — cichlids claim and defend hardscape caves (owner-wins chases with fatigue)
+- **Fin-nipping** — tiger barbs harass long-finned, slow-swimming tankmates (suppressed when their own school is large enough — just like real ones)
+- **Fear & startle waves** — frightened fish dart to cover, and panic ripples through a school; a predator (the angelfish) keeps prey on edge
+- **Feeding** — a "Feed tank" button drops food sprites; surface / midwater / substrate feeders find food at their band, otos graze algae off rocks (it regrows), detritivores wander the floor
+- **Flow & physics** — filter equipment bakes a divergence-free flow field that drags fish; a hardscape signed-distance-field deflects them off rocks; air stones stream wobbling bubble columns
+- **Deterministic & budgeted** — same seed ⇒ same simulation, byte-identical over a 1000-tick replay; the full system steps in 3.43 ms p95 at 200 fish (4 ms budget)
+- A dev-only **behaviour debug overlay** (Ctrl/Cmd+Shift+D) shows each fish's mode, territory anchor, and refuge
+
+### 📦 Templates
+
+- Four built-in starter templates — **Iwagumi** / **Dutch** / **Jungle** / **Beginner**
+- Save your own as a personal template (capped at 32 entries)
+- "New from template" mints a fresh untitled scene from the chosen layout
+
 ### 💾 Save, share, export
 
-- Lossless `.aqua` v1 document format (ZIP container with embedded assets, falls back to bare JSON)
+- Lossless `.aqua` document format (ZIP container with embedded assets, falls back to bare JSON) — versioned with a pure migration chain, so old files always open
 - Crash-recovery autosave debounced every 3 s
 - Recent-files menu
 - **Image export** — PNG / JPEG at 1080p / 2K / 4K
@@ -105,28 +146,6 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 - **Photo backdrop** — composite your design onto a photo of the real tank's location
 - **Wall background** — a configurable surface behind the tank for room-context visualisation
 - **Geometric-A brand mark** rendered at every dock / favicon / install size
-
-### 🧊 3D view (read-only)
-
-- **One-click toggle** between 2D and 3D in the editor toolbar — segmented `2D | 3D` control, or `Cmd/Ctrl+Shift+3` keyboard shortcut
-- Three.js / WebGL renderer reads the **same** `.aqua` document — every change you make in 2D shows up immediately in 3D
-- **Orbit camera controls** — drag to rotate around the tank, wheel to zoom, two-finger drag to pan
-- Glass tank with frame styling (rimless / framed / braced), substrate extruded from your profile, hardscape + plants rendered as 3D silhouettes with vigour-scaled growth
-- Ambient + directional lighting; the time slider works in 3D too (scrub plant growth over weeks)
-- **Read-only in Stage 10** — editing happens in 2D; flip to 3D to visualise. The ambient-scene polish (animated water surface, dynamic lighting / day-night cycle, swaying plants) plus fish behaviours all land in Stage 11 — see [`plans/stage-11-animated-livestock.md`](./plans/stage-11-animated-livestock.md)
-- **F11.1 shipped:** each livestock entry in the document becomes N visible fish in the 3D view, deterministically spawned from `scene.seed`. Six procedural archetypes (slim-tetra / deep-bodied / barb / cory-cylinder / eel / hatchet-wedge) wiggle in place via a carangiform tail-beat vertex shader; species → archetype mapping reads the catalog group.
-- **F11.2 shipped:** the fish now swim — Couzin three-zone schooling (ZOR / ZOO / ZOA with blind cone), Reynolds 1987 weighted separation / alignment / cohesion forces, vertical-band stratification (hatchetfish hug the surface, tetras roam mid-water, cories scoot along the substrate), turn-rate-clamped steering integrator. Catalog manifest `schemaVersion: 3` adds an optional `LivestockEntry.behavior` block so manifest authors can override per-species params one field at a time on top of the per-group presets.
-- **F11.3 shipped:** territoriality + nipping + fear. Cichlids defend caves (bourgeois owner-wins chase with fatigue decay), tiger barbs nip long-finned slow-swimming victims (suppressed once their conspecific group hits threshold), startled fish flip into REFUGE mode and dart to the nearest hardscape with `coverScore > 0`. Hardscape gains an optional `coverScore` (loader defaults from category — wood 0.6 / rock 0.4); livestock behaviour gains optional `territory` / `nipping` / required `fear` params. Priority arbitration: Fear → Nip → Territory → Schooling, mode-gated via `BehaviorMode`.
-- **F11.4 shipped:** feeding + grazing + curiosity/glass-surfing. Otocinclus graze algae off rocks (algae score decays under rasping + regrows ~17 min to full), hatchetfish + tetras + cories find food sprites at the right Y-band for their feeding category, shrimp + snails detrivore-wander the substrate; bold species curiously dart at the front pane on a Poisson trigger. A "Feed tank" button in the Livestock tool drops 3–6 food sprites just below the waterline (transient — sprites auto-despawn after 30s). Food sprites render as camera-facing billboards via a 7th InstancedMesh in the livestock renderer.
-- **F11.5 shipped:** flow field + hardscape SDF collision + bubble columns. A new `libs/domain/fluid-sim/` lib bakes a 32³ divergence-free FlowField from filter outflow + intake positions and a 64³ sphere-union HardscapeSdf for collision detection. FlowFieldSystem drags fish slightly toward intakes / away from outflows; CollisionSystem deflects velocity off rocks (tangent-project + repulsion) and separates overlapping fish. Air-stone equipment with `airRateMl > 0` registers as a bubble source — `BUBBLE_SCALE × airRateMl / 60` particles/sec rise from the stone at 150 mm/s, capped at 200 bubbles globally, despawning at the waterline. Catalog gained `EquipmentEntry.flow?` + `airRateMl?`. Bubbles render as an 8th InstancedMesh of small blue-white billboards.
-- **F11.6 shipped:** per-species behaviour presets + perf budget. **24 livestock species** in the catalog now (16 new in this substage: cardinal/ember tetras, harlequin rasbora, cherry/tiger barbs, marbled hatchetfish, dwarf + pearl gourami, angelfish, discus, German blue ram, kuhli loach, bronze cory, otocinclus, bristlenose + common pleco). New 7th procedural archetype — **crawler** — for shrimp + snails (stubby body + antennae, no carangiform wiggle, Y-velocity clamped so they stay on the substrate). A dev-only **behavior debug overlay** (Ctrl/Cmd+Shift+D in dev mode) shows each fish's mode + anchor + refuge — useful for QA and the curious. Perf budget: 3.43 ms p95 ECS step at n=200 fish on Apple Silicon (4 ms target — 14 % headroom).
-- **F11.7 shipped:** ambient polish. An **animated water surface** (single Three.js plane, vertex-shader sine bands clamped to ≤ 2 mm so the silhouette stays inside the glass). A **day-night cycle** with a 4-keypoint lookup ramp (midnight / dawn / noon / dusk) drives the directional intensity, ambient color, background tint, and plant emissive boost — scrubbable via a sidebar slider (manual / real-time / equipment modes). **Plant sway**: per-vertex displacement weighted by height-above-base, with a deterministic per-instance phase offset seeded from the document's `seed` so the same scene wobbles the same way every time you open it. Caustics, flow-coupled sway (amplitude *and* frequency), and per-fin flutter have since shipped in the fidelity passes; screen-space water-surface refraction remains deferred behind a real-GPU validation loop.
-
-### 📦 Templates
-
-- Four built-in starter templates — **Iwagumi** / **Dutch** / **Jungle** / **Beginner**
-- Save your own as a personal template (capped at 32 entries)
-- "New from template" mints a fresh untitled scene from the chosen layout
 
 ---
 
@@ -160,48 +179,50 @@ pnpm exec playwright install chromium        # one-time, ~150 MB — Playwright 
 pnpm exec nx run web-e2e:e2e                 # boots `nx serve web` + runs real-browser specs
 ```
 
----
-
-## Status & Roadmap
-
-The roadmap lives in [`aquascape-development-plan.md`](./aquascape-development-plan.md) §4 (Stages 0–10) and is extended by two planned stages in [`plans/`](./plans/).
-
-| Stage | Theme | Status |
-| --- | --- | --- |
-| 0 | Foundation & walking skeleton | ✅ |
-| 1 | Tank setup & document lifecycle | ✅ |
-| 2 | Substrate tool | ✅ |
-| 3 | Hardscape tool | ✅ |
-| 4 | Layers, planting, growth simulation | ✅ |
-| 5 | Templates, snapping, composition overlays | ✅ |
-| 6 | Image export, layout summary, photo backdrop, PWA install, packaged installers | ✅ |
-| 7 | Livestock & equipment + stocking guidance + setup sheet | ✅ |
-| 8 | Community gallery (browse + remix shared layouts) — see [`plans/stage-8-community-gallery/`](./plans/stage-8-community-gallery/) | 📐 Planned |
-| 9 | AI photorealistic render (local + hosted) — see [`plans/stage-9-ai-render/`](./plans/stage-9-ai-render/) | 📐 Planned |
-| 10 | 3D renderer (Three.js / WebGL — read-only) | ✅ |
-| 11 F11.1 | Animated-livestock foundation — ECS world + six procedural fish archetypes wiggling in place. See [`plans/stage-11-animated-livestock.md`](./plans/stage-11-animated-livestock.md). | ✅ |
-| 11 F11.2 | Schooling + vertical stratification — Couzin three-zone schooling, depth bands, turn-rate-clamped steering; catalog manifest schemaVersion 2 → 3 to host the optional `behavior` block. | ✅ |
-| 11 F11.3 | Territoriality + fin-nipping + hiding/timid — bourgeois owner-wins cave defense with fatigue, group-threshold-suppressed nipping, fear-driven REFUGE mode + nearest-cover refuge. Catalog `HardscapeEntry.coverScore?` + livestock `behavior.{territory,nipping,fear}`. | ✅ |
-| 11 F11.4 | Feeding + grazing + curiosity — hunger drive, six FeedingCategory branches (surface/midwater/substrate/algae-grazer/plant-eater/detritivore), algae score on hardscape (decays under rasping, regrows over sim-time), boldness-gated Poisson glass-surfing, transient food sprites from a "Feed tank" UI button. | ✅ |
-| 11 F11.5 | Flow field + hardscape SDF collision + bubble columns — `libs/domain/fluid-sim/` bakes a divergence-free flow grid from filter equipment; CollisionSystem deflects fish off rocks + separates overlapping pairs; air-stone equipment spawns rising bubble billboards capped at 200 globally. | ✅ |
-| 11 F11.6 | Per-species presets + perf budget — 24 catalog livestock species; crawler archetype for shrimp + snails; dev-only behavior debug overlay (Ctrl/Cmd+Shift+D); perf benchmark gates 4 ms ECS step at n=200 fish (measured 3.43 ms). | ✅ |
-| 11 F11.7 | Ambient polish — animated water surface, day-night cycle with sidebar slider, deterministic plant sway. Catalog `EquipmentEntry.photoperiodHours?`. Caustics + flow-coupled sway + per-fin flutter shipped in the later fidelity passes; refraction still deferred. | ✅ |
-| 12 | Release pipeline — `pnpm release <version>`, electron-builder installers, GitHub Releases. Version scheme + first-release tag are an open decision (tracked inside the plan + a forthcoming ADR-0005); the script ships scheme-agnostic. See [`plans/stage-12-release-pipeline.md`](./plans/stage-12-release-pipeline.md). | 📐 Planned |
+New to the codebase? Start with the **[new-developer guide](docs/guides/new-developer-guide.md)**.
 
 ---
 
-## Architecture (the load-bearing decisions)
+## TODO — what's next
 
-See [`CLAUDE.md`](./CLAUDE.md) for the full set of invariants and the catalog of caveats. Highlights:
+Everything above is shipped. Remaining work, roughly in priority order:
 
-- **One scene model, two renderers.** `domain/scene-model` is framework-free. `renderer-2d` ships now; `renderer-3d` (Three.js, Stage 10) drops in over the same `SceneRenderer` interface and the _same_ canonical 3D coordinates already stored in `.aqua` documents. This is the abstraction the plan's payoff is bet on.
-- **Every mutation is a `Command`** with `apply` / `invert`. Undo/redo, persistence, and future collaboration all build on this single primitive — the UI never mutates the scene directly.
-- **One feature codebase, two apps.** Features depend on `platform-api` (interface) — never a concrete platform. `apps/web` injects `platform-web`; `apps/desktop` injects `platform-electron`. The same Angular feature libs power both shells.
-- **Layering is mechanical.** Nx tags in every `project.json` + `@nx/enforce-module-boundaries` enforce plan §2.2. A `features/*` lib that tries to import `platform-electron` fails `nx lint`.
+- [ ] **Release pipeline** — `pnpm release <version>`, electron-builder installers published to GitHub Releases. The version scheme is an open maintainer decision (ADR-0005 pending). See [`plans/stage-12-release-pipeline.md`](plans/stage-12-release-pipeline.md).
+- [ ] **3D fidelity: real-GPU validation loop** — choose between local GPU dev, a GPU CI runner, or a manual checklist (maintainer decision). Blocks the next item.
+- [ ] **3D fidelity: SSAO + screen-space water refraction** — multi-pass render-target effects that blank under software WebGL; gated behind `getRenderTargetEffectsSupported()` and the validation loop above. See [`plans/3d-fidelity-followups.md`](plans/3d-fidelity-followups.md).
+- [ ] **Community gallery** — browse + remix shared layouts. See [`plans/stage-8-community-gallery/`](plans/stage-8-community-gallery/).
+- [ ] **AI photorealistic render** — local + hosted providers behind one interface; keys live in OS secure storage, never in the document. See [`plans/stage-9-ai-render/`](plans/stage-9-ai-render/).
+- [ ] **Bubble fluid fidelity pass** — `createBubbleSlice` / `stepBubbleSlice` (a Stam 1999 advect/diffuse/project loop) is wired in `domain/fluid-sim` but unused; bubbles currently rise on a simple kinematic path.
+- [ ] **Image tank backgrounds** — solid + gradient ship today.
+- [ ] **Per-species fish textures** — deferred; fights per-archetype instancing and the WebGL 16-attribute budget.
+- [ ] **Code signing** — Apple Developer ID + Windows EV certificate for production installers.
+- [ ] **Empty placeholders to fill** — `libs/ui/` (shared presentational components), `apps/desktop-e2e/` (Playwright-Electron).
 
-### The `.aqua` document format
+The full stage-by-stage record of what shipped when lives in [`docs/history.md`](docs/history.md).
 
-The v1 format lives in [`libs/domain/document/`](./libs/domain/document/): canonical TypeScript types in [`src/aqua-document.ts`](./libs/domain/document/src/aqua-document.ts) and the JSON Schema mirror in [`src/schema/aqua-document.schema.json`](./libs/domain/document/src/schema/aqua-document.schema.json). The worked Iwagumi example at the repo root in [`example.aqua.json`](./example.aqua.json) is the canonical fixture for round-trip tests. The on-disk container is a ZIP (`document.json` + `assets/` + optional `thumbnail.png`); asset-free documents may ship as bare JSON with the `.aqua` extension — readers sniff for ZIP magic and accept both. **v1 is locked**: any future format change requires a `Migration` entry in `AQUA_MIGRATIONS` and a fast-check round-trip test in `libs/testing` that exercises the new step.
+---
+
+## Documentation
+
+**[`docs/README.md`](docs/README.md) is the documentation hub** — organized by role (user, new contributor, feature developer, architect) and by topic, with diagrams throughout.
+
+| You want to… | Read |
+| --- | --- |
+| Understand the big picture | [Architecture overview](docs/architecture/overview.md) (diagrams of every layer + data flow) |
+| Get productive as a new contributor | [New-developer guide](docs/guides/new-developer-guide.md) |
+| Look up a term | [Glossary](docs/glossary.md) |
+| Understand a specific subsystem | [`docs/architecture/`](docs/architecture/) — scene model & commands, document format, rendering, state, platform, catalog, livestock simulation |
+| Know when something shipped | [Development history](docs/history.md) |
+| Avoid a known gotcha while changing an area | [`docs/caveats/`](docs/caveats/) (indexed by area) |
+| Understand a one-time architectural decision | [`docs/decisions/`](docs/decisions/) (ADRs) |
+| Read the original spec | [`aquascape-development-plan.md`](aquascape-development-plan.md) |
+
+### Architecture in four sentences
+
+- **One scene model, two renderers.** `domain/scene-model` is framework-free; `renderer-2d` (canvas) and `renderer-3d` (Three.js) both implement the same `SceneRenderer` interface over the same canonical mm coordinates stored in `.aqua` documents.
+- **Every mutation is a `Command`** with apply/invert — undo/redo, persistence, and future collaboration all build on this single primitive; the UI never mutates the scene directly.
+- **One feature codebase, two apps.** Features depend on the `platform-api` interface, never a concrete platform; `apps/web` injects `platform-web`, `apps/desktop` injects `platform-electron`.
+- **Layering is mechanical.** Nx tags + `@nx/enforce-module-boundaries` make an illegal import fail `nx lint`.
 
 ---
 
@@ -210,100 +231,48 @@ The v1 format lives in [`libs/domain/document/`](./libs/domain/document/): canon
 ```
 apps/
   web/             Angular SPA/PWA — the browser app
+  web-e2e/         Playwright real-browser specs (SwiftShader WebGL in CI)
   desktop/         Electron main + preload — the desktop app
 libs/
   domain/          Framework-free pure logic
     catalog/       Substrates, hardscape, plants, livestock, equipment data
-    document/      `.aqua` v1 schema, validator, migrations, marshal
-    fish-anatomy/  Six procedural fish archetype geometry generators (Stage 11 F11.1)
-    fluid-sim/     FlowField + HardscapeSdf + BubbleStableFluids2D bakes (Stage 11 F11.5)
+    document/      `.aqua` schema, validator, migrations, marshal
+    fish-anatomy/  Seven procedural fish archetype geometry generators
+    fluid-sim/     FlowField + HardscapeSdf + bubble bakes
     geometry/      Vec2/3, transforms, hit-test, snap helpers
     growth-sim/    Deterministic plant-growth math
-    livestock-behaviors/  Schooling/Depth/Animation + Territory/Nipping/Fear + Feeding/Curiosity param types + presets + resolveBehavior (Stage 11 F11.2-F11.4)
-    livestock-ecs/ bitECS world + Perception/Fear/Nip/Territory/Feeding/Curiosity/Schooling/Depth/FlowField/SteeringIntegrator/Collision/Kinematic/Animation systems + ParamStore + bubble particles (Stage 11 F11.1-F11.5)
+    livestock-behaviors/  Behaviour param types + presets + resolveBehavior
+    livestock-ecs/ bitECS world + behaviour/physics/animation systems
     scene-model/   Scene/Layer/Object types + Command pipeline + history
-    stocking/      Stocking-guidance rules engine (F7.2)
+    stocking/      Stocking-guidance rules engine
   rendering/
     renderer-api/  The `SceneRenderer` interface contract
     renderer-2d/   Canvas2D implementation (editing surface)
-    renderer-3d/   Three.js implementation (read-only 3D view, Stage 10)
-    livestock-renderer-3d/  InstancedMesh-per-archetype + carangiform shader (Stage 11 F11.1)
+    renderer-3d/   Three.js implementation (read-only 3D view)
+    livestock-renderer-3d/  InstancedMesh-per-archetype fish renderer
   features/        Angular feature libs (one per tool / panel)
   platform/        platform-api interface + platform-web + platform-electron
   state/           NgRx scene / document / selection slices
-  ui/              Shared presentational components (populated as features need it)
+  ui/              Shared presentational components (placeholder)
   testing/         fast-check arbitraries + the round-trip property suite
-tools/             Workspace tooling (scaffold, icons, packaging, validators)
+tools/             Workspace tooling (scaffold, icons, packaging, validators, demo recorder)
 docs/
+  README.md        Documentation hub — start here
+  architecture/    How each subsystem works (with diagrams)
+  guides/          New-developer onboarding
+  glossary.md      Dictionary of every term
+  history.md       Stage-by-stage development record
   decisions/       Architectural Decision Records (ADRs)
   caveats/         Area-specific load-bearing gotchas (load by topic)
 ```
-
-<details>
-<summary><strong>Detailed implementation notes per lib</strong> (click to expand)</summary>
-
-The libs below all ship today. Empty placeholders: `libs/ui/`, `apps/desktop-e2e/`.
-
-#### Domain (framework-free pure logic)
-
-- `libs/domain/geometry/` — Vec2/3, Transform, AABB, hit-test, golden-ratio + thirds, snap helpers. Adds `sampleCatmullRom(points, samples)` (centripetal Catmull-Rom — interpolates through every control point, no cusps on clustered points) and `seededHash01(seed, ...keys)` (deterministic uint32 → `[0, 1)`, used by the substrate renderer's grain noise).
-- `libs/domain/scene-model/` — `Scene`/`Layer`/`SceneObject` types + plain discriminated-union `Command` records + bounded immutable `History`. Commands: layer CRUD/reorder, object add/remove/move/reshape, composite, `SetTankDimensions` (with object position clamping + restore-on-undo envelope), `SetTankStyle` (whole-style replacement with hex / gradient validation), substrate region CRUD + profile, livestock add/remove/quantity, equipment add/remove/note/settings. All invertible; UI dispatches one command per commit cycle so undo/redo matches user expectations.
-- `libs/domain/document/` — canonical `.aqua` v1 schema (`aqua-document.ts` + `schema/aqua-document.schema.json`), `validateAquaDocument` (AJV 2020 + `ajv-formats`, compiled once at module load), `Migration` chain (`runMigrations` + empty `AQUA_MIGRATIONS` baseline), ZIP container (`packAquaDocument`/`loadAquaDocument` via `fflate` — magic-sniffs `PK\x03\x04` so bare-JSON `.aqua` files also load), and `documentToScene`/`sceneToDocument` marshaling. Livestock + equipment live on `Scene` so commands operate on them; `renderHistory` + `extensions` ride the envelope verbatim so load → edit → save never drops what the editor doesn't model.
-- `libs/domain/catalog/` — content catalog. Type-agnostic `CatalogEntry` discriminated union over `substrate`/`hardscape`/`plant`/`livestock`/`equipment` under a single JSON Schema `oneOf`. `validateCatalogEntry` (AJV), `loadCatalog(entries)` returning `{ catalog, errors, warnings }` (invalid entries surfaced — never silently dropped; duplicate `(catalog, id)` pairs reported as warnings, first one wins), and a bundled `coreCatalog` constant built from per-entry JSON manifests at `src/data/<kind>/*.json`.
-- `libs/domain/growth-sim/` (F4.4) — deterministic plant growth math. `plantScale({weeksToMature, sizeAtZero}, {ageWeeks, vigor}, previewAgeWeeks?)` returns a scale multiplier via a logistic approach to maturity. `scatterInPolygon(polygon, density, seed)` produces a deterministic stratified-grid + Mulberry32 jitter point list; given the same inputs across machines and runs, identical output.
-- `libs/domain/stocking/` (Stage 7 F7.2) — pure rules engine over livestock-equipped scenes. `evaluateStocking(scene, catalog)` returns a deterministic `StockingWarning[]` (`severity: 'info' | 'warning' | 'error'`, `code`, `message`, `explanation`, `relatedEntryIds`). Six independent rules: bioload vs. tank litres (weighted body-cm heuristic, tiers info/warning/error at 1.0 / 1.5 / 2.5 cm-per-L); temperature range intersection; pH range intersection; peaceful + aggressive temperament clash; per-species `quantity < schoolingMin`; fin-nipper present with a long-finned target (currently betta only — `LONG_FINNED_CATALOG_IDS` is the exported allow-list to extend cheaply).
-
-#### Rendering
-
-- `libs/rendering/renderer-api/` + `libs/rendering/renderer-2d/` — `SceneRenderer` interface + `Canvas2DRenderer`. Paint order: **backdrop photo** → **wall background** → tank background → grid → tank outline → **substrate** → water tint → frame overlay → **hardscape silhouettes** → **plants** → **composition overlays** → **snap alignment guides** → **selection handles**. `hitTest` is fully wired with handle-beats-body when a selection is supplied. F5.3 overlays accept an `OverlayOptions` parameter on `render()` only (not `hitTest` — they are non-interactive); the call is a true no-op when omitted or when every flag is false. Idempotent, DPR-aware, listener-clean on dispose.
-- `libs/rendering/renderer-3d/` (Stage 10) — `Three3DRenderer` implements the same `SceneRenderer` interface against Three.js + WebGL. Per-element scene builders (`tank-mesh.ts` for the glass box + frame styling, `substrate-mesh.ts` extruding the profile, `hardscape-mesh.ts` + `plant-mesh.ts` extruding the catalog silhouettes, `lighting.ts` for ambient + directional, `camera.ts` for the framed perspective view). OrbitControls binds to the canvas for orbit / zoom / pan. `hitTest` returns `null` (read-only — no selection or editing in 3D). `Viewport` is 2D-only and the 3D renderer ignores it; OrbitControls is the camera source of truth. Idempotent + leak-safe — the rebuild path disposes prior geometries + materials before swapping. **Fidelity pass:** PR1 — ACES filmic tone mapping + sRGB output, a deterministic PMREM image-based-lighting environment (`environment.ts` — guarded behind a real `WebGLRenderer`), soft `PCFSoftShadowMap` shadows from the key light, and physically-based transmissive glass. PR2 — procedural underwater **caustics** on substrate + hardscape (`caustics.ts`, ticked off the wall clock, faded at night). PR3 — **flow-coupled plant sway** (`RenderOptions.flowField` scales sway amplitude by the local filter current) + an **iridescent fish sheen** (grazing-angle fresnel in the livestock shader). PR4 — **startle-wave propagation** (a fleeing fish scares nearby neighbours so fear ripples through a school; deterministic, replay-safe). Then, **validated headlessly via Playwright** (SwiftShader WebGL): **EffectComposer bloom**, **helical bubble wobble**, and a **predator entity** (a tagged fish — e.g. the angelfish — that prey fear + flee). The demo above is recorded headlessly by [`tools/demo/record-demo.mjs`](tools/demo/record-demo.mjs). **Fidelity follow-ups** (from [`plans/3d-fidelity-followups.md`](./plans/3d-fidelity-followups.md)): a **render-target capability gate** (`render-target-support.ts` — detects software WebGL / missing depth textures so future SSAO / refraction passes self-disable instead of blanking the canvas, the lesson the SSAO attempt taught), a **water-surface caustic shimmer** on the animated water plane (day-night-faded like the floor caustics), a **scenic gradient backdrop** (`backdrop.ts` — an equirect `DataTexture` replacing the flat background colour, tinted in place by the day-night cycle), **flow-coupled sway *frequency*** (outflow plants now wave *faster* as well as wider — `FLOW_FREQ_COUPLING` in `plant-mesh.ts`), and **per-fin fish animation** (a `FIN_TYPE` vertex code from `fish-anatomy` drives a secondary dorsal/anal/pectoral flutter at 2.3× the tail-beat — packed into `spineUv.y` because the livestock shader sits exactly at the WebGL 16-attribute budget; a 17th attribute fails linking on ANGLE/SwiftShader and no fish render). **Catalog-driven textures (Bucket 2)** then landed: every substrate / hardscape / plant entry references one of 9 deterministic, seamlessly-tiling PBR texture families (albedo + normal + roughness, baked offline by [`tools/generate-textures.mjs`](tools/generate-textures.mjs) — `pnpm generate:textures`, no licensed assets), applied **triplanar in world space** via a chained `onBeforeCompile` patch that MODULATES the authored catalog colours (opt-in through `RenderOptions.catalogTextureBaseUrl`; absent ⇒ byte-identical procedural-only shaders; still-loading or missing PNGs degrade to neutral placeholders, never black). Fish textures are deferred (per-archetype instancing + the 16-attribute budget). Still deferred: **SSAO + screen-space refraction** (need a real-GPU validation loop first) — see the renderer-3d + livestock-ecs + catalog caveats.
-
-#### Platform
-
-- `libs/platform/platform-api/` — framework-free interfaces + Angular `InjectionToken` sub-entry (`FileService` / `DialogService` / `StorageService` / `RenderExportService`).
-- `libs/platform/platform-web/` — capability-detected bundles: `FileSystemAccessFileService` (Chromium) → `FallbackFileService` (Safari/Firefox; `<input type=file>` + `<a download>`), `IndexedDbStorageService` → `InMemoryStorageService`, `BrowserDialogService` (`<dialog>`) → `StubDialogService`, `BrowserDownloadRenderExportService` (`<a download>` + Blob URL).
-- `libs/platform/platform-electron/` — service classes wrapping an `ElectronTransport` seam. `createIpcTransport(bridge)` forwards every method to `window.aquascape.ipc.*`; `createInMemoryTransport()` for tests.
-
-#### State (NgRx)
-
-- `libs/state/scene/` — generic `dispatchCommand` → effect → `applyCommandSucceeded({ scene, history })`, `commandRejected({ reason, message })`, undo/redo, metadata-only `setTankPresetRef`, plus `setScene` (resets history; used by Open / New / Recover). Selectors include `selectStockingWarnings` (runs the F7.2 rules engine over the live scene + bundled catalog).
-- `libs/state/document/` — identity + dirty tracking + recent files + autosave-draft surface. Effects own all platform IO (open / save / save-as / new / mark-dirty / autosave-debounced-3s / draft-recovery / discard / recent-files persist) and dispatch `SceneActions.setScene` alongside `DocumentActions.documentOpened` to keep both stores consistent without coupling.
-- `libs/state/selection/` — `{ ids: ObjectId[] }` transient editor state. A side effect observes `SceneActions.setScene` and clears the selection so opening a new document doesn't carry stale ids forward.
-
-#### Apps
-
-- `apps/web/` — Angular 18 standalone shell, `OnPush`, `ResizeObserver`-driven redraw. Runtime `selectPlatform()` binds `platform-api` tokens to `platform-electron` (with the real IPC transport) under Electron, `platform-web` (capability-detected) in the browser. Three-row layout: `aquascape-editor-shell` toolbar + (sidebar | canvas | rail) grid driven by CSS variables `--sidebar-width` / `--rail-width`. Pure layout helpers live in `apps/web/src/app/shell-layout.ts` (100% covered). Below 768 px the side panels become slide-in drawer overlays; between 768–1199 px the right rail default-collapses; ≥ 1200 px is the full layout.
-- `apps/desktop/` — Electron main + sandboxed preload + shared IPC contract. `buildWebPreferences()` is the security-flag source of truth (unit-tested literally, field-by-field). Main-process backends wire native `dialog.show{Open,Save}Dialog`, `fs.promises.{read,write}File`, and a `app.getPath('userData')`-rooted JSON KV store. Every payload is validated main-process side; offending values are never echoed back through error messages.
-
-#### Feature libs
-
-- `libs/features/tank-setup/` — preset picker (36 entries across ADA / UNS / Waterbox / standard sizes) + custom W×H×D form + frame/water-tint/background styling subpanel.
-- `libs/features/substrate-tool/` (F2.2) — side-panel numeric editor for substrate regions (material, fromX/toX/blend, profile-point list with insert-midpoint).
-- `libs/features/hardscape-tool/` (F3.1 + F3.2) — side-panel hardscape browser with category filter, paginated tile grid, pointer-drag onto canvas via `HardscapeDragService`.
-- `libs/features/planting-tool/` (F4.1 + F4.5) — side-panel plant browser mirroring hardscape, zone filter, paginated tiles, carpet drops produce implicit 16-sided scatter patch centred on cursor.
-- `libs/features/layers-panel/` (F4.2) — right-rail panel with visibility/lock toggles, inline rename, opacity slider, reorder buttons, delete.
-- `libs/features/templates/` (F5.1 + F5.2) — four built-in starter templates as fully-validated `AquaDocument`s + `TemplatesService` (personal-templates store capped at 32, persisted under `aquascape.templates.personal`) + `TemplateBrowserComponent` modal.
-- `libs/features/export/` (F6.1 + F6.2 + F7.4) — pure helpers for image export (`renderSceneToImageBytes` → offscreen `Canvas2DRenderer` → PNG/JPEG `Uint8Array` via `canvas.toBlob`) + layout summary (`summarizeScene` + Markdown/JSON formatters; F7.4 adds livestock + equipment + stocking-warnings sections that auto-omit when empty) + `computeVolumeBreakdown` (gross / substrate / water; L + US gal via trapezoid integration).
-- `libs/features/livestock-equipment/` (F7.1 + F7.2 + F7.3) — two sibling components. `LivestockToolComponent`: paginated tile browser + inventory list with +/− quantity controls + inline stocking-warnings section with tap-to-expand explanations + severity-coloured borders + ARIA `alert`/`status` roles. `EquipmentToolComponent`: paginated tile browser + inventory list with inline `<input>` notes (save on blur, empty trims to `null`) + per-row "▾ Settings" expand showing read-only `<dl>`. Both feed through the Command pipeline for undo/redo.
-- `libs/features/editor-shell/` — composition root for the toolbar (New/Open/Save/Save As + Recent + autosave-recovery banner + error banner), the floating selection inspector (Mirror H/V, Duplicate, Z-up/down, Delete + keyboard shortcuts), the time slider (F4.4 — `PreviewTimeService`), the composition-overlay accordion (F5.3 — `OverlayOptionsService`), the zoom control + viewport service (F5.x — cursor-anchored Cmd/Ctrl+wheel zoom, 10–1000%), the wall-background accordion (F5.x — `WallBackgroundService`), the snap-settings accordion (F5.4 — `SnapOptionsService`), the templates modal (F5.1+F5.2), the export dialog (F6.1+F6.2), and the backdrop accordion (F6.3 — `BackdropService`).
-
-#### Infrastructure
-
-- `tools/` — workspace tooling: `scaffold-libs.cjs`, `validate-example.mjs` + `validate-catalog.mjs` (AJV CLIs), `build-icons.mjs` (`pnpm icons` — rasterizes `apps/web/src/favicon.svg` into every desktop + PWA size via `sharp` + `png-to-ico` + `iconutil`), `restart-desktop.sh` (`pnpm restart:desktop`), `package-desktop.sh` (`pnpm package:desktop` — stages Nx outputs into a flat tree, patches resolver paths, hands off to `electron-builder` for DMG/NSIS/AppImage).
-- `docs/decisions/` — foundational ADRs (Electron tooling, pnpm, Jest coverage, Nx Cloud deferral).
-- `docs/caveats/` — area-specific load-bearing gotchas extracted from `CLAUDE.md` so contributors (and Claude) only load what's relevant. See `docs/caveats/README.md` for the index + load triggers.
-- `plans/` — per-feature implementation plans (one `F<X.Y>` file per feature, grouped by stage).
-- `.claude/` — project sub-agent definitions (`scene-model-engineer`, `renderer-engineer`, `electron-platform-engineer`, etc.) + team playbooks.
-- `.github/workflows/` — PR workflow with three jobs (nx affected lint + test + build; coverage gate across every implemented lib with `--configuration=ci`; document-round-trip job). Main workflow re-runs everything across the Ubuntu / macOS / Windows matrix.
-
-</details>
 
 ---
 
 ## Contributing & docs
 
-- **The spec:** [`aquascape-development-plan.md`](./aquascape-development-plan.md) — Stages 0–10 roadmap, architectural decisions, feature traceability. Stages 11 + 12 are extension plans living under [`plans/`](./plans/).
-- **Working on the codebase:** [`CLAUDE.md`](./CLAUDE.md) carries architecture invariants, the Definition of Done, dev commands, and a table mapping each `docs/caveats/*.md` file to its load trigger so you only pull in the gotchas relevant to your area.
+- **Start here:** the [new-developer guide](docs/guides/new-developer-guide.md) and the [documentation hub](docs/README.md).
+- **The spec:** [`aquascape-development-plan.md`](./aquascape-development-plan.md) — roadmap, architectural decisions, feature traceability, extended by [`plans/`](./plans/).
+- **Working on the codebase:** [`CLAUDE.md`](./CLAUDE.md) carries architecture invariants, the Definition of Done, dev commands, and the caveat-file index.
 - **Architecture decisions:** [`docs/decisions/`](./docs/decisions/) — the foundational ADRs.
 - **Area gotchas:** [`docs/caveats/`](./docs/caveats/) — when a change touches `libs/domain/document/`, load `docs/caveats/document-format.md`; when it touches `libs/rendering/renderer-2d/`, load `docs/caveats/renderer-2d.md`; etc.
 

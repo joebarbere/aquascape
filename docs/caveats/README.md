@@ -1,5 +1,9 @@
 # Load-bearing caveats — index
 
+> Looking for *how things work* rather than gotchas? Start at the
+> [documentation hub](../README.md) and the
+> [architecture pages](../architecture/overview.md).
+
 This directory holds the gotchas that bite future contributors. They were
 once one long section in [`../../CLAUDE.md`](../../CLAUDE.md); they were
 extracted so Claude (and humans) can load only what's relevant to the area
