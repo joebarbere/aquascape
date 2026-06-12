@@ -2,13 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aquascape.dev/schemas/catalog-entry-v3.json",
   "title": "CatalogEntry",
-  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 + 7 F7.3 ship `substrate` + `hardscape` + `plant` + `livestock` + `equipment`. Future stages add tank under the same oneOf. Manifest schemaVersion 3 (Stage 11 F11.2) adds the optional `behavior` block on `LivestockEntry`; v2 manifests load unchanged because every behavior subfield is optional + additive (`resolveBehavior()` falls back to per-group presets when the block is absent). Stage 11 F11.3 extends the same v3 schema additively with `behavior.territory` / `nipping` / `fear` on livestock and `coverScore` on hardscape — no manifest version bump. Stage 11 F11.4 extends the same v3 schema additively with `behavior.feeding` / `curiosity` on livestock — no manifest version bump. Stage 11 F11.5 extends the same v3 schema additively with `flow` (filter / pump outflow + intake + flowRate) and `airRateMl` (air-stone bubble volumetric rate) on equipment — no manifest version bump. Stage 11 F11.7 extends the same v3 schema additively with `photoperiodHours` on equipment (lighting only) — no manifest version bump. The 3D-fidelity Bucket 2 pass extends the same v3 schema additively with the optional `textures` block (albedo / normal / roughness PNG refs) on substrate + hardscape + plant — no manifest version bump; livestock is deliberately excluded (per-species textures fight the per-archetype InstancedMesh batching). The overhead-equipment-lighting pass extends the same v3 schema additively with the optional `light` block (lumens / colorTempK / beamAngleDeg / fixtureLengthMm) on equipment (lighting only) — no manifest version bump.",
+  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 + 7 F7.3 ship `substrate` + `hardscape` + `plant` + `livestock` + `equipment`. Future stages add tank under the same oneOf. Manifest schemaVersion 3 (Stage 11 F11.2) adds the optional `behavior` block on `LivestockEntry`; v2 manifests load unchanged because every behavior subfield is optional + additive (`resolveBehavior()` falls back to per-group presets when the block is absent). Stage 11 F11.3 extends the same v3 schema additively with `behavior.territory` / `nipping` / `fear` on livestock and `coverScore` on hardscape — no manifest version bump. Stage 11 F11.4 extends the same v3 schema additively with `behavior.feeding` / `curiosity` on livestock — no manifest version bump. Stage 11 F11.5 extends the same v3 schema additively with `flow` (filter / pump outflow + intake + flowRate) and `airRateMl` (air-stone bubble volumetric rate) on equipment — no manifest version bump. Stage 11 F11.7 extends the same v3 schema additively with `photoperiodHours` on equipment (lighting only) — no manifest version bump. The 3D-fidelity Bucket 2 pass extends the same v3 schema additively with the optional `textures` block (albedo / normal / roughness PNG refs) on substrate + hardscape + plant — no manifest version bump; livestock is deliberately excluded (per-species textures fight the per-archetype InstancedMesh batching). The overhead-equipment-lighting pass extends the same v3 schema additively with the optional `light` block (lumens / colorTempK / beamAngleDeg / fixtureLengthMm) on equipment (lighting only) — no manifest version bump. The decor pass adds a sixth oneOf branch `DecorEntry` (GLB-modelled classic aquarium ornaments referencing a `.glb` file under the catalog model root) — purely additive, manifest schemaVersion stays at 3; pre-decor readers surface a per-entry validation error for the unknown kind (the loader never silently drops it).",
   "oneOf": [
     { "$ref": "#/$defs/SubstrateEntry" },
     { "$ref": "#/$defs/HardscapeEntry" },
     { "$ref": "#/$defs/PlantEntry" },
     { "$ref": "#/$defs/LivestockEntry" },
-    { "$ref": "#/$defs/EquipmentEntry" }
+    { "$ref": "#/$defs/EquipmentEntry" },
+    { "$ref": "#/$defs/DecorEntry" }
   ],
   "$defs": {
     "HexColor": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" },
@@ -30,6 +31,11 @@
         "y": { "type": "number" },
         "z": { "type": "number" }
       }
+    },
+    "ModelRef": {
+      "type": "string",
+      "pattern": "^[a-z0-9._/-]+\\.glb$",
+      "description": "Relative glTF-binary (GLB) file name under the catalog model root (served by the host at assets/catalog-models/; the 3D renderer resolves baseUrl + ref). The GLB carries its own authored PBR materials."
     },
     "TextureRef": {
       "type": "string",
@@ -533,6 +539,57 @@
               }
             }
           }
+        }
+      }
+    },
+    "DecorEntry": {
+      "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }],
+      "type": "object",
+      "required": ["kind", "category", "naturalSize", "color", "silhouette", "model"],
+      "additionalProperties": false,
+      "properties": {
+        "catalog": true,
+        "id": true,
+        "version": true,
+        "name": true,
+        "description": true,
+        "tags": true,
+        "kind": { "const": "decor" },
+        "category": {
+          "enum": ["wreck", "ruin", "bones", "structure"],
+          "description": "Filter chips in the decorations-tool UI."
+        },
+        "subcategory": { "type": "string", "minLength": 1 },
+        "naturalSize": {
+          "type": "object",
+          "required": ["width", "height", "depth"],
+          "additionalProperties": false,
+          "properties": {
+            "width": { "type": "number", "exclusiveMinimum": 0 },
+            "height": { "type": "number", "exclusiveMinimum": 0 },
+            "depth": { "type": "number", "exclusiveMinimum": 0 }
+          },
+          "description": "World-space bounding box at transform.scale = 1 (mm). The GLB is authored to exactly this box."
+        },
+        "color": {
+          "$ref": "#/$defs/HexColor",
+          "description": "2D silhouette fill. The 3D renderer ignores it — the GLB carries its own authored PBR materials."
+        },
+        "silhouette": {
+          "type": "array",
+          "minItems": 3,
+          "items": { "$ref": "#/$defs/Vec2" },
+          "description": "Closed polygon in normalized [-1, 1] space, ≥ 3 points — same convention as hardscape. Drives the 2D renderer + palette tile SVG."
+        },
+        "coverScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Stage 11 F11.3 FearSystem refuge value. When absent, the loader fills it from `category` (structure → 0.6, wreck → 0.5, bones → 0.4, ruin → 0.3 — decorations have swim-through cavities, unlike flat hardscape 'other' decor). JSON Schema's `default` is metadata only — the fill happens in the loader, not in the validator."
+        },
+        "model": {
+          "$ref": "#/$defs/ModelRef",
+          "description": "REQUIRED glTF-binary model ref relative to the catalog model root (host serves libs/domain/catalog/assets/models/ at assets/catalog-models/; the 3D renderer resolves baseUrl + ref). 2D ignores."
         }
       }
     },

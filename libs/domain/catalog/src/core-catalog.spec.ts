@@ -15,18 +15,20 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     expect(coreCatalog.entries.length).toBe(CORE_CATALOG_MANIFESTS.length);
   });
 
-  it('ships substrate (Stage 2), hardscape (Stage 3), plant (Stage 4), livestock (Stage 7 F7.1), and equipment (Stage 7 F7.3) kinds', () => {
+  it('ships substrate (Stage 2), hardscape (Stage 3), plant (Stage 4), livestock (Stage 7 F7.1), equipment (Stage 7 F7.3), and decor kinds', () => {
     expect(coreCatalog.byKind('substrate').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('hardscape').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('plant').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('livestock').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('equipment').length).toBeGreaterThan(0);
+    expect(coreCatalog.byKind('decor').length).toBeGreaterThan(0);
     expect(
       coreCatalog.byKind('substrate').length +
         coreCatalog.byKind('hardscape').length +
         coreCatalog.byKind('plant').length +
         coreCatalog.byKind('livestock').length +
-        coreCatalog.byKind('equipment').length,
+        coreCatalog.byKind('equipment').length +
+        coreCatalog.byKind('decor').length,
     ).toBe(coreCatalog.entries.length);
   });
 
@@ -343,6 +345,69 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     expect(entry.light?.colorTempK).toBe(7500);
     expect(entry.light?.beamAngleDeg).toBe(130);
     expect(entry.light?.fixtureLengthMm).toBe(110);
+  });
+
+  it('ships exactly the 10 seeded decor ornaments (5 wreck + 3 ruin + 1 bones + 1 structure)', () => {
+    const decor = coreCatalog.byKind('decor');
+    expect(decor.length).toBe(10);
+    const categories = decor.reduce<Record<string, number>>((acc, entry) => {
+      acc[entry.category] = (acc[entry.category] ?? 0) + 1;
+      return acc;
+    }, {});
+    expect(categories).toEqual({ wreck: 5, ruin: 3, bones: 1, structure: 1 });
+  });
+
+  it('every decor entry has a valid silhouette, natural size, color, model ref, and a filled coverScore', () => {
+    for (const entry of coreCatalog.byKind('decor')) {
+      expect(entry.color).toMatch(/^#[0-9a-fA-F]{6}$/);
+      expect(entry.silhouette.length).toBeGreaterThanOrEqual(3);
+      expect(entry.silhouette.length).toBeLessThanOrEqual(16);
+      expect(entry.naturalSize.width).toBeGreaterThan(0);
+      expect(entry.naturalSize.height).toBeGreaterThan(0);
+      expect(entry.naturalSize.depth).toBeGreaterThan(0);
+      expect(entry.model).toMatch(/^[a-z0-9._/-]+\.glb$/);
+      // Loader fills the category default when the manifest omits the field.
+      const coverScore = entry.coverScore ?? Number.NaN;
+      expect(coverScore).toBeGreaterThanOrEqual(0);
+      expect(coverScore).toBeLessThanOrEqual(1);
+      for (const p of entry.silhouette) {
+        expect(p.x).toBeGreaterThanOrEqual(-1);
+        expect(p.x).toBeLessThanOrEqual(1);
+        expect(p.y).toBeGreaterThanOrEqual(-1);
+        expect(p.y).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('the Sunken Treasure Chest decor entry is reachable with the loader-filled wreck coverScore = 0.5', () => {
+    const entry = coreCatalog.get({ catalog: 'core', id: 'decor.treasure-chest' });
+    expect(entry).not.toBeNull();
+    expect(entry?.kind).toBe('decor');
+    if (entry?.kind !== 'decor') return;
+    expect(entry.category).toBe('wreck');
+    expect(entry.model).toBe('treasure-chest.glb');
+    // Manifest omits coverScore — loader fills the wreck default.
+    expect(entry.coverScore).toBe(0.5);
+  });
+
+  it('the Sunken Galleon decor entry keeps its explicit coverScore = 0.7 (swim-through hull)', () => {
+    const entry = coreCatalog.get({ catalog: 'core', id: 'decor.sunken-galleon' });
+    expect(entry).not.toBeNull();
+    if (entry?.kind !== 'decor') return;
+    expect(entry.coverScore).toBe(0.7);
+    expect(entry.model).toBe('sunken-galleon.glb');
+  });
+
+  it('each decor category default lands on its representative entry (structure 0.6 / bones 0.4 / ruin 0.3)', () => {
+    const castle = coreCatalog.get({ catalog: 'core', id: 'decor.castle' });
+    if (castle?.kind === 'decor') expect(castle.coverScore).toBe(0.6);
+    const skull = coreCatalog.get({ catalog: 'core', id: 'decor.skull' });
+    if (skull?.kind === 'decor') expect(skull.coverScore).toBe(0.4);
+    const moai = coreCatalog.get({ catalog: 'core', id: 'decor.moai' });
+    if (moai?.kind === 'decor') expect(moai.coverScore).toBe(0.3);
+    expect(castle?.kind).toBe('decor');
+    expect(skull?.kind).toBe('decor');
+    expect(moai?.kind).toBe('decor');
   });
 
   it('only a small handful of equipment entries declare flow / airRateMl (defaults still exercise the absent-block path)', () => {

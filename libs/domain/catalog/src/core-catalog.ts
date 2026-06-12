@@ -128,6 +128,17 @@ import equipmentCurrentSatellitePlusPro24 from './data/equipment/current-satelli
 // Equipment — CO2
 import equipmentCo2artSePressurised from './data/equipment/co2art-se-pressurised.json';
 import equipmentAdaPollenGlassDiffuser from './data/equipment/ada-pollen-glass-diffuser.json';
+// Decor — 3D-modelled classic ornaments (generic resin-ornament archetypes)
+import decorAmphora from './data/decor/decor-amphora.json';
+import decorAnchor from './data/decor/decor-anchor.json';
+import decorCannon from './data/decor/decor-cannon.json';
+import decorCastle from './data/decor/decor-castle.json';
+import decorDiverHelmet from './data/decor/decor-diver-helmet.json';
+import decorGreekColumn from './data/decor/decor-greek-column.json';
+import decorMoai from './data/decor/decor-moai.json';
+import decorSkull from './data/decor/decor-skull.json';
+import decorSunkenGalleon from './data/decor/decor-sunken-galleon.json';
+import decorTreasureChest from './data/decor/decor-treasure-chest.json';
 import { loadCatalog, type CatalogLoadResult } from './loader';
 
 /** Raw manifest array — exposed so tests + tools can re-load it deliberately. */
@@ -242,6 +253,21 @@ export const CORE_CATALOG_MANIFESTS: readonly unknown[] = [
   // Equipment — CO2
   equipmentCo2artSePressurised,
   equipmentAdaPollenGlassDiffuser,
+  // Decor — 3D-modelled classic ornaments
+  // Wrecks
+  decorTreasureChest,
+  decorSunkenGalleon,
+  decorDiverHelmet,
+  decorAnchor,
+  decorCannon,
+  // Ruins
+  decorGreekColumn,
+  decorMoai,
+  decorAmphora,
+  // Bones
+  decorSkull,
+  // Structures
+  decorCastle,
 ];
 
 /**

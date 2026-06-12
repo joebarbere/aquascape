@@ -1,0 +1,32 @@
+{
+  "catalog": "core",
+  "id": "decor.castle",
+  "version": 1,
+  "name": "Castle Tower",
+  "kind": "decor",
+  "category": "structure",
+  "subcategory": "medieval",
+  "naturalSize": { "width": 220, "height": 330, "depth": 170 },
+  "color": "#8a8d91",
+  "description": "Round keep with battlements and a swim-through arched door. Generic archetype of the classic resin aquarium ornament — no brand; dimensions are the authored model's bounding box, not a manufacturer spec.",
+  "tags": ["decor", "structure", "medieval", "castle"],
+  "silhouette": [
+    { "x": -0.8, "y": -1.0 },
+    { "x": 0.8, "y": -1.0 },
+    { "x": 0.7, "y": 0.5 },
+    { "x": 0.95, "y": 0.55 },
+    { "x": 0.95, "y": 1.0 },
+    { "x": 0.7, "y": 1.0 },
+    { "x": 0.7, "y": 0.75 },
+    { "x": 0.25, "y": 0.75 },
+    { "x": 0.25, "y": 1.0 },
+    { "x": -0.25, "y": 1.0 },
+    { "x": -0.25, "y": 0.75 },
+    { "x": -0.7, "y": 0.75 },
+    { "x": -0.7, "y": 1.0 },
+    { "x": -0.95, "y": 1.0 },
+    { "x": -0.95, "y": 0.55 },
+    { "x": -0.7, "y": 0.5 }
+  ],
+  "model": "castle.glb"
+}

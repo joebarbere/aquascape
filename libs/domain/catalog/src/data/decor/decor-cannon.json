@@ -1,0 +1,29 @@
+{
+  "catalog": "core",
+  "id": "decor.cannon",
+  "version": 1,
+  "name": "Pirate Cannon",
+  "kind": "decor",
+  "category": "wreck",
+  "subcategory": "pirate",
+  "naturalSize": { "width": 210, "height": 130, "depth": 100 },
+  "color": "#33373b",
+  "description": "Naval cannon on a wooden carriage with a cannonball stack. Generic archetype of the classic resin aquarium ornament — no brand; dimensions are the authored model's bounding box, not a manufacturer spec.",
+  "tags": ["decor", "wreck", "pirate", "cannon"],
+  "silhouette": [
+    { "x": -0.95, "y": -0.3 },
+    { "x": -0.4, "y": -0.45 },
+    { "x": -0.35, "y": -1.0 },
+    { "x": 0.3, "y": -1.0 },
+    { "x": 0.45, "y": -0.95 },
+    { "x": 0.75, "y": -1.0 },
+    { "x": 0.95, "y": -0.8 },
+    { "x": 0.6, "y": -0.55 },
+    { "x": 0.35, "y": -0.35 },
+    { "x": 0.95, "y": 0.3 },
+    { "x": 0.9, "y": 0.6 },
+    { "x": -0.6, "y": 0.05 },
+    { "x": -0.95, "y": 0.05 }
+  ],
+  "model": "cannon.glb"
+}

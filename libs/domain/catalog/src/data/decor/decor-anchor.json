@@ -1,0 +1,32 @@
+{
+  "catalog": "core",
+  "id": "decor.anchor",
+  "version": 1,
+  "name": "Ship Anchor",
+  "kind": "decor",
+  "category": "wreck",
+  "subcategory": "nautical",
+  "naturalSize": { "width": 180, "height": 260, "depth": 70 },
+  "color": "#3e4347",
+  "description": "Admiralty-pattern iron anchor leaning against its stock. Generic archetype of the classic resin aquarium ornament — no brand; dimensions are the authored model's bounding box, not a manufacturer spec.",
+  "tags": ["decor", "wreck", "nautical", "anchor"],
+  "silhouette": [
+    { "x": -0.1, "y": 1.0 },
+    { "x": 0.1, "y": 1.0 },
+    { "x": 0.1, "y": 0.6 },
+    { "x": 0.7, "y": 0.6 },
+    { "x": 0.7, "y": 0.4 },
+    { "x": 0.1, "y": 0.4 },
+    { "x": 0.1, "y": -0.45 },
+    { "x": 0.65, "y": -0.7 },
+    { "x": 0.95, "y": -0.4 },
+    { "x": 0.8, "y": -1.0 },
+    { "x": 0.0, "y": -0.78 },
+    { "x": -0.8, "y": -1.0 },
+    { "x": -0.95, "y": -0.4 },
+    { "x": -0.65, "y": -0.7 },
+    { "x": -0.1, "y": -0.45 },
+    { "x": -0.1, "y": 0.4 }
+  ],
+  "model": "anchor.glb"
+}

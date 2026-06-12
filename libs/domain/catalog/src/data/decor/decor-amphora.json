@@ -1,0 +1,28 @@
+{
+  "catalog": "core",
+  "id": "decor.amphora",
+  "version": 1,
+  "name": "Toppled Amphora",
+  "kind": "decor",
+  "category": "ruin",
+  "subcategory": "greco-roman",
+  "naturalSize": { "width": 130, "height": 110, "depth": 230 },
+  "color": "#a3573a",
+  "description": "Clay amphora lying on its side, mouth open as a fish cave — the depth axis is the pot's long axis, so the front-on silhouette is the round belly. Generic archetype of the classic resin aquarium ornament — no brand; dimensions are the authored model's bounding box, not a manufacturer spec.",
+  "tags": ["decor", "ruin", "greco-roman", "cave"],
+  "silhouette": [
+    { "x": 0.0, "y": -1.0 },
+    { "x": 0.5, "y": -0.87 },
+    { "x": 0.87, "y": -0.5 },
+    { "x": 1.0, "y": 0.0 },
+    { "x": 0.87, "y": 0.5 },
+    { "x": 0.5, "y": 0.87 },
+    { "x": 0.0, "y": 1.0 },
+    { "x": -0.5, "y": 0.87 },
+    { "x": -0.87, "y": 0.5 },
+    { "x": -1.0, "y": 0.0 },
+    { "x": -0.87, "y": -0.5 },
+    { "x": -0.5, "y": -0.87 }
+  ],
+  "model": "amphora.glb"
+}

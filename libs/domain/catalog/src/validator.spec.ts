@@ -1340,6 +1340,120 @@ describe('validateCatalogEntry (equipment, Stage 7 F7.3)', () => {
   });
 });
 
+describe('validateCatalogEntry (decor — GLB-modelled ornaments, additive, no schemaVersion bump)', () => {
+  const validDecor = {
+    catalog: 'core',
+    id: 'decor.test',
+    version: 1,
+    name: 'Test ornament',
+    kind: 'decor',
+    category: 'wreck',
+    naturalSize: { width: 150, height: 120, depth: 110 },
+    color: '#7a5230',
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 0, y: 1 },
+    ],
+    model: 'treasure-chest.glb',
+  };
+
+  it('accepts a well-formed decor entry', () => {
+    expect(validateCatalogEntry(validDecor)).toEqual({ ok: true });
+  });
+
+  it('accepts an optional subcategory field', () => {
+    expect(validateCatalogEntry({ ...validDecor, subcategory: 'pirate' })).toEqual({ ok: true });
+  });
+
+  it('accepts every category enum value', () => {
+    for (const category of ['wreck', 'ruin', 'bones', 'structure']) {
+      expect(validateCatalogEntry({ ...validDecor, category }).ok).toBe(true);
+    }
+  });
+
+  it('rejects a decor entry missing the REQUIRED model ref', () => {
+    const { model: _model, ...rest } = validDecor;
+    const result = validateCatalogEntry(rest);
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects an unknown category enum value', () => {
+    expect(validateCatalogEntry({ ...validDecor, category: 'spooky' }).ok).toBe(false);
+  });
+
+  it('rejects a model ref with a non-glb extension', () => {
+    expect(validateCatalogEntry({ ...validDecor, model: 'treasure-chest.gltf' }).ok).toBe(false);
+    expect(validateCatalogEntry({ ...validDecor, model: 'treasure-chest.png' }).ok).toBe(false);
+  });
+
+  it('rejects an uppercase / whitespace / empty model ref (pattern guard)', () => {
+    expect(validateCatalogEntry({ ...validDecor, model: 'Treasure-Chest.glb' }).ok).toBe(false);
+    expect(validateCatalogEntry({ ...validDecor, model: 'treasure chest.glb' }).ok).toBe(false);
+    expect(validateCatalogEntry({ ...validDecor, model: '' }).ok).toBe(false);
+    expect(validateCatalogEntry({ ...validDecor, model: '.glb' }).ok).toBe(false);
+  });
+
+  it('accepts a subdirectory-qualified model ref (pattern allows "/")', () => {
+    expect(validateCatalogEntry({ ...validDecor, model: 'community/treasure-chest.glb' }).ok).toBe(
+      true,
+    );
+  });
+
+  it('rejects a non-string model ref', () => {
+    expect(validateCatalogEntry({ ...validDecor, model: 42 }).ok).toBe(false);
+  });
+
+  it('surfaces the offending path on a bad model ref', () => {
+    const result = validateCatalogEntry({ ...validDecor, model: 'bad.gltf' });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((e) => e.path.includes('model'))).toBe(true);
+  });
+
+  it('rejects a silhouette with fewer than 3 points', () => {
+    expect(
+      validateCatalogEntry({
+        ...validDecor,
+        silhouette: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ],
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects naturalSize with a zero dimension', () => {
+    expect(
+      validateCatalogEntry({
+        ...validDecor,
+        naturalSize: { width: 0, height: 120, depth: 110 },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('accepts coverScore in [0, 1] and rejects out-of-range values', () => {
+    expect(validateCatalogEntry({ ...validDecor, coverScore: 0 }).ok).toBe(true);
+    expect(validateCatalogEntry({ ...validDecor, coverScore: 0.7 }).ok).toBe(true);
+    expect(validateCatalogEntry({ ...validDecor, coverScore: 1 }).ok).toBe(true);
+    expect(validateCatalogEntry({ ...validDecor, coverScore: -0.1 }).ok).toBe(false);
+    expect(validateCatalogEntry({ ...validDecor, coverScore: 1.5 }).ok).toBe(false);
+  });
+
+  it('rejects a textures block on decor (the GLB carries its own authored PBR materials)', () => {
+    expect(
+      validateCatalogEntry({
+        ...validDecor,
+        textures: { albedo: 'stone-gray.albedo.png' },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects extraneous properties (additionalProperties: false)', () => {
+    expect(validateCatalogEntry({ ...validDecor, surprise: true }).ok).toBe(false);
+  });
+});
+
 describe('validateCatalogEntry (textures — 3D-fidelity Bucket 2, additive, no schemaVersion bump)', () => {
   const fullTextures = {
     albedo: 'stone-gray.albedo.png',

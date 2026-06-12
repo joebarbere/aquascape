@@ -31,6 +31,9 @@ const dataRoot = resolve(repoRoot, 'libs/domain/catalog/src/data');
 // May not exist yet (the generator runs separately) — missing-file checks
 // degrade to warnings, never failures.
 const textureRoot = resolve(repoRoot, 'libs/domain/catalog/assets/textures');
+// Decor model root: GLB files baked by a separate tool/agent. May not exist
+// yet — missing-file checks degrade to warnings, never failures.
+const modelRoot = resolve(repoRoot, 'libs/domain/catalog/assets/models');
 
 const schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
 const ajv = new Ajv({ allErrors: true, strict: true });
@@ -90,6 +93,19 @@ for (const file of targets) {
         );
       }
     }
+  }
+  // Decor: warn (don't fail) when a model ref points at a GLB that isn't
+  // (yet) baked under the model root. Skipped entirely when the root doesn't
+  // exist — the model baker may simply not have run. Mirrors the texture-ref
+  // handling above.
+  if (
+    typeof data.model === 'string' &&
+    existsSync(modelRoot) &&
+    !existsSync(resolve(modelRoot, data.model))
+  ) {
+    console.warn(
+      `WARN: ${rel} model -> "${data.model}" not found under ${relative(repoRoot, modelRoot)}`,
+    );
   }
   console.log(`OK: ${rel}`);
 }

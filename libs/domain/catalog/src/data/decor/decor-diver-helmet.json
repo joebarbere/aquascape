@@ -1,0 +1,31 @@
+{
+  "catalog": "core",
+  "id": "decor.diver-helmet",
+  "version": 1,
+  "name": "Antique Diver Helmet",
+  "kind": "decor",
+  "category": "wreck",
+  "subcategory": "salvage",
+  "naturalSize": { "width": 140, "height": 170, "depth": 140 },
+  "color": "#a87f31",
+  "description": "Brass Mark-V-style diving helmet with portholes. Generic archetype of the classic resin aquarium ornament — no brand; dimensions are the authored model's bounding box, not a manufacturer spec.",
+  "tags": ["decor", "wreck", "salvage", "brass"],
+  "silhouette": [
+    { "x": -0.95, "y": -1.0 },
+    { "x": 0.95, "y": -1.0 },
+    { "x": 0.9, "y": -0.75 },
+    { "x": 0.65, "y": -0.7 },
+    { "x": 0.7, "y": -0.4 },
+    { "x": 0.85, "y": 0.0 },
+    { "x": 0.8, "y": 0.45 },
+    { "x": 0.5, "y": 0.85 },
+    { "x": 0.0, "y": 1.0 },
+    { "x": -0.5, "y": 0.85 },
+    { "x": -0.8, "y": 0.45 },
+    { "x": -0.85, "y": 0.0 },
+    { "x": -0.7, "y": -0.4 },
+    { "x": -0.65, "y": -0.7 },
+    { "x": -0.9, "y": -0.75 }
+  ],
+  "model": "diver-helmet.glb"
+}

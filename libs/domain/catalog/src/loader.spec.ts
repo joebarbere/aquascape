@@ -256,6 +256,79 @@ describe('loadCatalog — hardscape coverScore default-fill (F11.3)', () => {
   });
 });
 
+describe('loadCatalog — decor coverScore default-fill', () => {
+  // Same loader-side fill mechanism as hardscape: JSON Schema's `default` is
+  // metadata only, so the loader populates `coverScore` from `category` when
+  // a decor manifest omits it. Decorations rate higher than flat hardscape
+  // 'other' decor (0) because the classic ornaments are authored with
+  // swim-through cavities.
+  const baseDecor = {
+    catalog: 'core',
+    version: 1,
+    name: 'Test ornament',
+    kind: 'decor' as const,
+    naturalSize: { width: 150, height: 120, depth: 110 },
+    color: '#7a5230',
+    silhouette: [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 0, y: 1 },
+    ],
+    model: 'test-ornament.glb',
+  };
+  const structureEntry = {
+    ...baseDecor,
+    id: 'decor.structure-test',
+    category: 'structure' as const,
+  };
+  const wreckEntry = { ...baseDecor, id: 'decor.wreck-test', category: 'wreck' as const };
+  const bonesEntry = { ...baseDecor, id: 'decor.bones-test', category: 'bones' as const };
+  const ruinEntry = { ...baseDecor, id: 'decor.ruin-test', category: 'ruin' as const };
+
+  function getDecor(input: unknown, id: string) {
+    const { catalog } = loadCatalog([input]);
+    const entry = catalog.get({ catalog: 'core', id });
+    expect(entry?.kind).toBe('decor');
+    if (entry?.kind !== 'decor') throw new Error('not decor');
+    return entry;
+  }
+
+  it('fills coverScore = 0.6 for a structure decor with no coverScore', () => {
+    expect(getDecor(structureEntry, structureEntry.id).coverScore).toBe(0.6);
+  });
+
+  it('fills coverScore = 0.5 for a wreck decor with no coverScore', () => {
+    expect(getDecor(wreckEntry, wreckEntry.id).coverScore).toBe(0.5);
+  });
+
+  it('fills coverScore = 0.4 for a bones decor with no coverScore', () => {
+    expect(getDecor(bonesEntry, bonesEntry.id).coverScore).toBe(0.4);
+  });
+
+  it('fills coverScore = 0.3 for a ruin decor with no coverScore', () => {
+    expect(getDecor(ruinEntry, ruinEntry.id).coverScore).toBe(0.3);
+  });
+
+  it('preserves an explicit coverScore on a decor entry (no overwrite)', () => {
+    expect(getDecor({ ...wreckEntry, coverScore: 0.85 }, wreckEntry.id).coverScore).toBe(0.85);
+  });
+
+  it('preserves an explicit coverScore = 0 (not treated as missing)', () => {
+    expect(getDecor({ ...ruinEntry, coverScore: 0 }, ruinEntry.id).coverScore).toBe(0);
+  });
+
+  it('does not mutate the original manifest object', () => {
+    const manifest: { coverScore?: number } & typeof wreckEntry = { ...wreckEntry };
+    expect(manifest.coverScore).toBeUndefined();
+    loadCatalog([manifest]);
+    expect(manifest.coverScore).toBeUndefined();
+  });
+
+  it('round-trips the model ref unchanged (pure pass-through, no defaulting)', () => {
+    expect(getDecor(wreckEntry, wreckEntry.id).model).toBe('test-ornament.glb');
+  });
+});
+
 describe('loadCatalog — textures pass-through (3D-fidelity Bucket 2)', () => {
   // The loader is validate-then-freeze: `textures` has NO loader-side
   // defaulting (unlike hardscape coverScore). An absent block stays absent
