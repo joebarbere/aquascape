@@ -22,7 +22,17 @@ import { workspaceRoot } from '@nx/devkit';
  *   - `projects` — chromium only for now. Firefox / WebKit added later when
  *     CI install time + cross-browser coverage justifies it.
  *   - `use.baseURL` — points at the dev server above.
+ *
+ * `PLAYWRIGHT_CHROMIUM` (optional) — absolute path to a pre-provisioned
+ * chromium binary, for environments where Playwright's CDN is blocked and
+ * `playwright install` can't run (see docs/caveats/e2e.md — the demo
+ * recorder reads the same variable). When set, the chromium project
+ * launches that binary with the SwiftShader software-WebGL flags the 3D
+ * canvas needs headlessly. Unset (CI + normal local dev) ⇒ identical to
+ * the stock Playwright-managed browser behaviour.
  */
+const localChromium = process.env['PLAYWRIGHT_CHROMIUM'];
+
 export default defineConfig({
   ...nxE2EPreset(__filename, { testDir: './src' }),
   use: {
@@ -40,7 +50,22 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(localChromium !== undefined && localChromium !== ''
+          ? {
+              launchOptions: {
+                executablePath: localChromium,
+                args: [
+                  '--use-gl=angle',
+                  '--use-angle=swiftshader',
+                  '--enable-unsafe-swiftshader',
+                  '--ignore-gpu-blocklist',
+                ],
+              },
+            }
+          : {}),
+      },
     },
   ],
 });

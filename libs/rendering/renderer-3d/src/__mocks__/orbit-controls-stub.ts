@@ -19,6 +19,8 @@ import { Vector3, type Camera } from 'three';
 
 export class OrbitControls {
   target = new Vector3();
+  /** Fish-eye follow-cam toggles this; the real OrbitControls has it too. */
+  enabled = true;
   enableDamping = false;
   dampingFactor = 0;
   minDistance = 0;

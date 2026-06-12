@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aquascape.dev/schemas/catalog-entry-v3.json",
   "title": "CatalogEntry",
-  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 + 7 F7.3 ship `substrate` + `hardscape` + `plant` + `livestock` + `equipment`. Future stages add tank under the same oneOf. Manifest schemaVersion 3 (Stage 11 F11.2) adds the optional `behavior` block on `LivestockEntry`; v2 manifests load unchanged because every behavior subfield is optional + additive (`resolveBehavior()` falls back to per-group presets when the block is absent). Stage 11 F11.3 extends the same v3 schema additively with `behavior.territory` / `nipping` / `fear` on livestock and `coverScore` on hardscape — no manifest version bump. Stage 11 F11.4 extends the same v3 schema additively with `behavior.feeding` / `curiosity` on livestock — no manifest version bump. Stage 11 F11.5 extends the same v3 schema additively with `flow` (filter / pump outflow + intake + flowRate) and `airRateMl` (air-stone bubble volumetric rate) on equipment — no manifest version bump. Stage 11 F11.7 extends the same v3 schema additively with `photoperiodHours` on equipment (lighting only) — no manifest version bump. The 3D-fidelity Bucket 2 pass extends the same v3 schema additively with the optional `textures` block (albedo / normal / roughness PNG refs) on substrate + hardscape + plant — no manifest version bump; livestock is deliberately excluded (per-species textures fight the per-archetype InstancedMesh batching).",
+  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 + 7 F7.3 ship `substrate` + `hardscape` + `plant` + `livestock` + `equipment`. Future stages add tank under the same oneOf. Manifest schemaVersion 3 (Stage 11 F11.2) adds the optional `behavior` block on `LivestockEntry`; v2 manifests load unchanged because every behavior subfield is optional + additive (`resolveBehavior()` falls back to per-group presets when the block is absent). Stage 11 F11.3 extends the same v3 schema additively with `behavior.territory` / `nipping` / `fear` on livestock and `coverScore` on hardscape — no manifest version bump. Stage 11 F11.4 extends the same v3 schema additively with `behavior.feeding` / `curiosity` on livestock — no manifest version bump. Stage 11 F11.5 extends the same v3 schema additively with `flow` (filter / pump outflow + intake + flowRate) and `airRateMl` (air-stone bubble volumetric rate) on equipment — no manifest version bump. Stage 11 F11.7 extends the same v3 schema additively with `photoperiodHours` on equipment (lighting only) — no manifest version bump. The 3D-fidelity Bucket 2 pass extends the same v3 schema additively with the optional `textures` block (albedo / normal / roughness PNG refs) on substrate + hardscape + plant — no manifest version bump; livestock is deliberately excluded (per-species textures fight the per-archetype InstancedMesh batching). The overhead-equipment-lighting pass extends the same v3 schema additively with the optional `light` block (lumens / colorTempK / beamAngleDeg / fixtureLengthMm) on equipment (lighting only) — no manifest version bump.",
   "oneOf": [
     { "$ref": "#/$defs/SubstrateEntry" },
     { "$ref": "#/$defs/HardscapeEntry" },
@@ -612,6 +612,35 @@
           "minimum": 0,
           "maximum": 24,
           "description": "Stage 11 F11.7 optional daily photoperiod for lighting equipment (hours per day, 0–24). Drives the day-night cycle's 'equipment' mode. Only meaningful when category === 'light'; absent = service default 10h on / 14h off."
+        },
+        "light": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Light-emission parameters for category 'light' equipment. Drives the 3D renderer's overhead equipment lighting (one SpotLight + fixture mesh per attached light). Every subfield is optional + additive — the renderer supplies defaults; older manifests load unchanged. Only meaningful when category === 'light'; ignored otherwise. Omit unpublished figures rather than fabricating them.",
+          "properties": {
+            "lumens": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Manufacturer-published luminous flux, in lumens. Omitted when the manufacturer publishes PAR only (e.g. ADA, Kessil) rather than fabricated."
+            },
+            "colorTempK": {
+              "type": "number",
+              "minimum": 1000,
+              "maximum": 20000,
+              "description": "Correlated colour temperature, in Kelvin (e.g. 6500). When the manufacturer publishes a range, manifests record the documented mid-point and say so in `description`."
+            },
+            "beamAngleDeg": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 180,
+              "description": "Full beam spread angle, in degrees. LED panels are typically ~120; omitted when not published."
+            },
+            "fixtureLengthMm": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Physical fixture length along the tank's width axis, in mm. Sizes the 3D renderer's fixture mesh."
+            }
+          }
         }
       }
     }

@@ -10,7 +10,7 @@
   "wattage": 75,
   "coverageLitres": { "min": 80, "max": 200 },
   "photoperiodHours": 10,
-  "description": "Premium WRGB LED with per-channel programmable colour mixing via the Chihiros app and a Bluetooth remote. High-PAR output suitable for the most demanding red stem plants; usually run at 60-80% intensity to avoid burning carpet species at the surface.",
+  "description": "Premium WRGB LED with per-channel programmable colour mixing via the Chihiros app and a Bluetooth remote. High-PAR output suitable for the most demanding red stem plants; usually run at 60-80% intensity to avoid burning carpet species at the surface. Chihiros publishes 6,630 lm and a 600 mm housing for this size; light.colorTempK and beamAngleDeg are omitted because the WRGB output is fully colour-mixable and no single CCT or beam figure is published.",
   "tags": ["light", "led", "wrgb", "high-par", "bluetooth", "60cm", "premium"],
   "defaultSettings": {
     "photoperiodHours": 8,
@@ -19,5 +19,6 @@
     "greenPct": 70,
     "bluePct": 80,
     "whitePct": 80
-  }
+  },
+  "light": { "lumens": 6630, "fixtureLengthMm": 600 }
 }

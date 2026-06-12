@@ -9,7 +9,8 @@
   "color": "#f8ecb4",
   "wattage": 32,
   "coverageLitres": { "min": 80, "max": 200 },
-  "description": "Bluetooth-controlled LED with the FluvalSmart app for programmable sunrise/sunset ramping, cloud cover effects, and per-channel intensity. Manufacturer specifies 32W input draw for the 36W-class fixture; the 36W figure is the LED-array rating, not the wall draw.",
+  "description": "Bluetooth-controlled LED with the FluvalSmart app for programmable sunrise/sunset ramping, cloud cover effects, and per-channel intensity. Manufacturer specifies 32W input draw for the 36W-class fixture; the 36W figure is the LED-array rating, not the wall draw. Fluval publishes 2,350 lm, 6500K, and a 120-degree per-LED beam for this size; light.fixtureLengthMm records the 610 mm housing at minimum bracket extension (extendable to 850 mm).",
   "tags": ["light", "led", "bluetooth", "programmable", "planted", "ramping"],
-  "defaultSettings": { "photoperiodHours": 8, "intensityPct": 75 }
+  "defaultSettings": { "photoperiodHours": 8, "intensityPct": 75 },
+  "light": { "lumens": 2350, "colorTempK": 6500, "beamAngleDeg": 120, "fixtureLengthMm": 610 }
 }

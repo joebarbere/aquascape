@@ -2,11 +2,7 @@ import type { RenderSurface, Viewport } from '@aquascape/rendering/renderer-api'
 import type { Catalog, CatalogEntry, CatalogKind } from '@aquascape/domain/catalog';
 import type { HardscapeObject, Layer, Scene } from '@aquascape/domain/scene-model';
 import { DataTexture, EquirectangularReflectionMapping } from 'three';
-import {
-  type RendererFactory,
-  type RendererLike,
-  Three3DRenderer,
-} from './three-3d-renderer';
+import { type RendererFactory, type RendererLike, Three3DRenderer } from './three-3d-renderer';
 import { DEFAULT_WATER_GAP_BELOW_RIM_MM } from '@aquascape/domain/scene-model';
 
 // ─── Test stubs ───────────────────────────────────────────────────────────
@@ -188,9 +184,7 @@ describe('Three3DRenderer — attach / render / dispose', () => {
     const r = new Three3DRenderer(makeFactory(stub));
     r.attach(makeSurface());
     expect(r.hitTest({ x: 10, y: 10 }, sceneOf(), viewport)).toBeNull();
-    expect(
-      r.hitTest({ x: 0, y: 0 }, sceneOf(), viewport, { catalog: makeCatalog([]) }),
-    ).toBeNull();
+    expect(r.hitTest({ x: 0, y: 0 }, sceneOf(), viewport, { catalog: makeCatalog([]) })).toBeNull();
     r.dispose();
     raf.uninstall();
   });
@@ -277,9 +271,7 @@ describe('Three3DRenderer — attach / render / dispose', () => {
     const r = new Three3DRenderer(makeFactory(stub));
     const canvas = {} as unknown as HTMLCanvasElement;
     r.attach({ canvas, devicePixelRatio: 1, width: 800, height: 600 });
-    expect(() =>
-      r.attach({ canvas, devicePixelRatio: 1, width: 0, height: 0 }),
-    ).not.toThrow();
+    expect(() => r.attach({ canvas, devicePixelRatio: 1, width: 0, height: 0 })).not.toThrow();
     r.dispose();
     raf.uninstall();
   });
@@ -335,7 +327,10 @@ describe('Three3DRenderer — dispose discipline', () => {
     // Reach into the private field for the assertion. We do this by
     // construction (a fresh instance) rather than mutating state, so the
     // type-cast is contained.
-    const rAny = r as unknown as { currentContent: { name: string } | null; threeScene: { children: ReadonlyArray<{ name: string }> } };
+    const rAny = r as unknown as {
+      currentContent: { name: string } | null;
+      threeScene: { children: ReadonlyArray<{ name: string }> };
+    };
     expect(rAny.currentContent).not.toBeNull();
     expect(rAny.currentContent!.name).toBe('aquascape:content');
     // Re-render — content node identity must NOT carry over.
@@ -430,7 +425,12 @@ describe('Three3DRenderer — orbit controls', () => {
     r: Three3DRenderer;
     rAny: {
       camera: {
-        position: { x: number; y: number; z: number; distanceTo(p: { x: number; y: number; z: number }): number };
+        position: {
+          x: number;
+          y: number;
+          z: number;
+          distanceTo(p: { x: number; y: number; z: number }): number;
+        };
       } | null;
       controls: { target: { x: number; y: number; z: number } } | null;
     };
@@ -443,7 +443,12 @@ describe('Three3DRenderer — orbit controls', () => {
     r.render(sceneOf(600, 360, 300), viewport);
     const rAny = r as unknown as {
       camera: {
-        position: { x: number; y: number; z: number; distanceTo(p: { x: number; y: number; z: number }): number };
+        position: {
+          x: number;
+          y: number;
+          z: number;
+          distanceTo(p: { x: number; y: number; z: number }): number;
+        };
       } | null;
       controls: { target: { x: number; y: number; z: number } } | null;
     };
@@ -628,7 +633,12 @@ describe('Three3DRenderer — livestock wiring', () => {
     const r = new Three3DRenderer(makeFactory(stub));
     r.attach(makeSurface());
     const world = createLivestockWorld(7);
-    world.spawnFish({ archetype: 0, speciesId: 1, bodyLengthMm: 35, position: { x: 0, y: 0, z: 0 } });
+    world.spawnFish({
+      archetype: 0,
+      speciesId: 1,
+      bodyLengthMm: 35,
+      position: { x: 0, y: 0, z: 0 },
+    });
     r.render(sceneOf(), viewport, { livestockWorld: world });
     const rAny = r as unknown as { livestockBundle: { group: unknown } | null };
     const firstBundle = rAny.livestockBundle;
@@ -644,7 +654,12 @@ describe('Three3DRenderer — livestock wiring', () => {
     const r = new Three3DRenderer(makeFactory(stub));
     r.attach(makeSurface());
     const world = createLivestockWorld(7);
-    world.spawnFish({ archetype: 0, speciesId: 1, bodyLengthMm: 35, position: { x: 0, y: 0, z: 0 } });
+    world.spawnFish({
+      archetype: 0,
+      speciesId: 1,
+      bodyLengthMm: 35,
+      position: { x: 0, y: 0, z: 0 },
+    });
     r.render(sceneOf(), viewport, { livestockWorld: world });
     const rAny = r as unknown as { livestockBundle: { dispose: jest.Mock } | null };
     const bundle = rAny.livestockBundle!;
@@ -683,7 +698,12 @@ describe('Three3DRenderer — livestock wiring', () => {
     const r = new Three3DRenderer(makeFactory(stub));
     r.attach(makeSurface());
     const world = createLivestockWorld(7);
-    world.spawnFish({ archetype: 0, speciesId: 1, bodyLengthMm: 35, position: { x: 0, y: 0, z: 0 } });
+    world.spawnFish({
+      archetype: 0,
+      speciesId: 1,
+      bodyLengthMm: 35,
+      position: { x: 0, y: 0, z: 0 },
+    });
     const stepSpy = jest.spyOn(world, 'step');
     r.render(sceneOf(), viewport, { livestockWorld: world });
 
@@ -726,7 +746,12 @@ describe('Three3DRenderer — livestock wiring', () => {
     const r = new Three3DRenderer(makeFactory(stub));
     r.attach(makeSurface());
     const world = createLivestockWorld(1);
-    world.spawnFish({ archetype: 0, speciesId: 1, bodyLengthMm: 35, position: { x: 0, y: 0, z: 0 } });
+    world.spawnFish({
+      archetype: 0,
+      speciesId: 1,
+      bodyLengthMm: 35,
+      position: { x: 0, y: 0, z: 0 },
+    });
     const stepSpy = jest.spyOn(world, 'step');
     r.render(sceneOf(), viewport, { livestockWorld: world });
 
@@ -805,7 +830,10 @@ describe('Three3DRenderer — water surface wiring', () => {
     const r = new Three3DRenderer(makeFactory(stub));
     r.attach(makeSurface());
     r.render(sceneOf(600, 360, 300), viewport);
-    const rAny = r as unknown as { waterMesh: { dispose: () => void } | null; waterMeshTag: string | null };
+    const rAny = r as unknown as {
+      waterMesh: { dispose: () => void } | null;
+      waterMeshTag: string | null;
+    };
     const handle = rAny.waterMesh!;
     const spy = jest.spyOn(handle, 'dispose');
     r.dispose();
@@ -843,12 +871,8 @@ describe('Three3DRenderer — day-night cycle', () => {
     // colour-management pipeline (exact channel values depend on whether
     // Color management is on and what working-space we're in, so checking
     // "red dominates" is more durable than the channel literals).
-    expect(rAny.currentAmbientLight!.color.r).toBeGreaterThan(
-      rAny.currentAmbientLight!.color.g,
-    );
-    expect(rAny.currentAmbientLight!.color.r).toBeGreaterThan(
-      rAny.currentAmbientLight!.color.b,
-    );
+    expect(rAny.currentAmbientLight!.color.r).toBeGreaterThan(rAny.currentAmbientLight!.color.g);
+    expect(rAny.currentAmbientLight!.color.r).toBeGreaterThan(rAny.currentAmbientLight!.color.b);
     expect(rAny.currentAmbientLight!.color.g).toBeCloseTo(0, 5);
     expect(rAny.currentAmbientLight!.color.b).toBeCloseTo(0, 5);
     expect(rAny.currentDirectionalLight).not.toBeNull();
@@ -978,10 +1002,7 @@ describe('Three3DRenderer — day-night cycle', () => {
     expect(rAny.currentAmbientLight!.color.r).toBeCloseTo(1, 3);
     expect(rAny.currentAmbientLight!.color.g).toBeCloseTo(1, 3);
     expect(rAny.currentAmbientLight!.color.b).toBeCloseTo(1, 3);
-    expect(rAny.currentDirectionalLight!.intensity).toBeCloseTo(
-      rAny.baseDirectionalIntensity,
-      5,
-    );
+    expect(rAny.currentDirectionalLight!.intensity).toBeCloseTo(rAny.baseDirectionalIntensity, 5);
     r.dispose();
     raf.uninstall();
   });
@@ -1105,9 +1126,9 @@ describe('Three3DRenderer — day-night cycle', () => {
         userData: Record<string, unknown>;
       } | null;
     };
-    const mats = rAny.currentPlantGroup!.userData[
-      'aquascape:plantSwayMaterials'
-    ] as Array<{ userData: { swayUniforms: { uPlantEmissiveBoost: { value: number } } } }>;
+    const mats = rAny.currentPlantGroup!.userData['aquascape:plantSwayMaterials'] as Array<{
+      userData: { swayUniforms: { uPlantEmissiveBoost: { value: number } } };
+    }>;
     expect(mats.length).toBeGreaterThan(0);
     for (const m of mats) {
       expect(m.userData.swayUniforms.uPlantEmissiveBoost.value).toBeCloseTo(0.4, 5);
@@ -1161,8 +1182,7 @@ describe('Three3DRenderer — render-target capability gate', () => {
     r.attach(makeSurface());
     // Force the flag on to prove dispose clears it (the stub path never
     // sets it, so flip it directly).
-    (r as unknown as { renderTargetEffectsSupported: boolean }).renderTargetEffectsSupported =
-      true;
+    (r as unknown as { renderTargetEffectsSupported: boolean }).renderTargetEffectsSupported = true;
     r.dispose();
     expect(r.getRenderTargetEffectsSupported()).toBe(false);
     raf.uninstall();
@@ -1239,6 +1259,222 @@ describe('Three3DRenderer — catalog textures (Bucket 2)', () => {
     // Dispose releases the cache.
     renderer.dispose();
     expect(cacheOf()).toBeNull();
+    raf.uninstall();
+  });
+});
+
+// ─── Overhead equipment lights wiring ─────────────────────────────────────
+
+describe('Three3DRenderer — equipment lights wiring', () => {
+  const lightCatalog = makeCatalog([
+    {
+      catalog: 'core',
+      id: 'equipment.light.test',
+      version: 1,
+      name: 'Test LED Bar',
+      kind: 'equipment',
+      category: 'light',
+      color: '#fff2c0',
+      light: { lumens: 1600, colorTempK: 7000 },
+    },
+  ]);
+
+  function lightScene(): Scene {
+    return {
+      ...sceneOf(),
+      equipment: [{ id: 'eq-1', ref: { catalog: 'core', id: 'equipment.light.test', version: 1 } }],
+    };
+  }
+
+  function handleOf(r: Three3DRenderer): { group: { name: string } } | null {
+    return (r as unknown as { equipmentLights: { group: { name: string } } | null })
+      .equipmentLights;
+  }
+
+  it('a scene without light equipment builds no equipment-lights group', () => {
+    const raf = stubRaf();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()));
+    r.attach(makeSurface());
+    r.render(sceneOf(), viewport, { catalog: lightCatalog });
+    expect(handleOf(r)).toBeNull();
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('attached light equipment lands a mirrored equipment-lights group in the scene', () => {
+    const raf = stubRaf();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()));
+    r.attach(makeSurface());
+    r.render(lightScene(), viewport, { catalog: lightCatalog });
+    const handle = handleOf(r);
+    expect(handle).not.toBeNull();
+    expect(handle!.group.name).toBe('aquascape:equipment-lights');
+    const group = handle!.group as unknown as { scale: { x: number }; position: { x: number } };
+    expect(group.scale.x).toBe(-1); // doc → world X-mirror applied
+    expect(group.position.x).toBe(600);
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('the group is cached across renders and rebuilt when the equipment set changes', () => {
+    const raf = stubRaf();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()));
+    r.attach(makeSurface());
+    r.render(lightScene(), viewport, { catalog: lightCatalog });
+    const first = handleOf(r);
+    r.render(lightScene(), viewport, { catalog: lightCatalog });
+    expect(handleOf(r)).toBe(first); // unchanged set → same handle
+    r.render(sceneOf(), viewport, { catalog: lightCatalog });
+    expect(handleOf(r)).toBeNull(); // lights removed → group torn down
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('day-night directional level dims the spots per render', () => {
+    const raf = stubRaf();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()));
+    r.attach(makeSurface());
+    r.render(lightScene(), viewport, { catalog: lightCatalog });
+    const spot = (
+      handleOf(r)!.group as unknown as {
+        children: ReadonlyArray<{ isSpotLight?: boolean; intensity: number }>;
+      }
+    ).children.find((c) => c.isSpotLight === true)!;
+    const noon = spot.intensity;
+    r.render(lightScene(), viewport, {
+      catalog: lightCatalog,
+      dayNightLookup: {
+        ambientColor: '#223344',
+        directionalIntensity: 0.1,
+        backgroundTint: '#223344',
+        emissiveBoost: 0.2,
+      },
+    });
+    expect(spot.intensity).toBeCloseTo(noon * 0.1, 5);
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('dispose releases the equipment-lights group and clears the cache tag', () => {
+    const raf = stubRaf();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()));
+    r.attach(makeSurface());
+    r.render(lightScene(), viewport, { catalog: lightCatalog });
+    expect(handleOf(r)).not.toBeNull();
+    r.dispose();
+    expect(handleOf(r)).toBeNull();
+    const tag = (r as unknown as { equipmentLightsCacheTag: string | null })
+      .equipmentLightsCacheTag;
+    expect(tag).toBeNull();
+    raf.uninstall();
+  });
+});
+
+// ─── Fish-eye camera mode ─────────────────────────────────────────────────
+
+describe('Three3DRenderer — fish-eye camera mode', () => {
+  // Hand-rolled RAF so the test can fire ticks on demand.
+  function manualRaf(): {
+    fire(advanceMs: number): void;
+    uninstall(): void;
+  } {
+    const callbacks: Array<(t: number) => void> = [];
+    const g = globalThis as unknown as {
+      requestAnimationFrame?: (cb: (t: number) => void) => number;
+      cancelAnimationFrame?: (h: number) => void;
+      performance?: { now(): number };
+    };
+    const prevReq = g.requestAnimationFrame;
+    const prevCancel = g.cancelAnimationFrame;
+    const prevPerf = g.performance;
+    let fakeNow = 0;
+    g.performance = { now: () => fakeNow } as Performance;
+    g.requestAnimationFrame = ((cb: (t: number) => void) => {
+      callbacks.push(cb);
+      return callbacks.length;
+    }) as never;
+    g.cancelAnimationFrame = (() => undefined) as never;
+    return {
+      fire(advanceMs: number): void {
+        fakeNow += advanceMs;
+        const next = callbacks.shift();
+        next?.(fakeNow);
+      },
+      uninstall(): void {
+        if (prevReq === undefined) delete g.requestAnimationFrame;
+        else g.requestAnimationFrame = prevReq;
+        if (prevCancel === undefined) delete g.cancelAnimationFrame;
+        else g.cancelAnimationFrame = prevCancel;
+        if (prevPerf === undefined) delete g.performance;
+        else g.performance = prevPerf;
+      },
+    };
+  }
+
+  interface CameraView {
+    camera: { position: { x: number; y: number; z: number }; fov: number };
+    controls: { enabled: boolean };
+  }
+
+  it('fish-eye parks the camera at the (mirrored) fish eye with a wide FOV', () => {
+    const raf = manualRaf();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()));
+    r.attach(makeSurface());
+    const world = createLivestockWorld(7);
+    world.spawnFish({
+      archetype: 0,
+      speciesId: 1,
+      bodyLengthMm: 40,
+      position: { x: 100, y: 150, z: 200 },
+    });
+    r.render(sceneOf(), viewport, { livestockWorld: world, cameraMode: 'fish-eye' });
+    raf.fire(SIM_DT * 1000);
+    const { camera, controls } = r as unknown as CameraView;
+    expect(camera.fov).toBeGreaterThan(80);
+    expect(controls.enabled).toBe(false);
+    // Doc x = ~100 on a 600 mm tank mirrors to world x ≈ 500; the eye
+    // offset is a fraction of the 40 mm body, so a ±45 mm window holds
+    // even after one sim step of drift.
+    expect(Math.abs(camera.position.x - 500)).toBeLessThan(45);
+    expect(Math.abs(camera.position.y - 150)).toBeLessThan(45);
+    expect(Math.abs(camera.position.z - 200)).toBeLessThan(45);
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('returning to orbit restores the FOV, re-enables controls, and reframes', () => {
+    const raf = manualRaf();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()));
+    r.attach(makeSurface());
+    const world = createLivestockWorld(7);
+    world.spawnFish({
+      archetype: 0,
+      speciesId: 1,
+      bodyLengthMm: 40,
+      position: { x: 100, y: 150, z: 200 },
+    });
+    r.render(sceneOf(), viewport, { livestockWorld: world, cameraMode: 'fish-eye' });
+    raf.fire(SIM_DT * 1000);
+    r.render(sceneOf(), viewport, { livestockWorld: world }); // default = orbit
+    raf.fire(SIM_DT * 1000);
+    const { camera, controls } = r as unknown as CameraView;
+    expect(camera.fov).toBe(50);
+    expect(controls.enabled).toBe(true);
+    expect(r.getZoomFraction()).toBeCloseTo(1, 3); // reframed to the default 3/4 view
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('fish-eye without livestock degrades to the orbit camera (controls stay on)', () => {
+    const raf = manualRaf();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()));
+    r.attach(makeSurface());
+    r.render(sceneOf(), viewport, { cameraMode: 'fish-eye' }); // no world
+    raf.fire(SIM_DT * 1000);
+    const { camera, controls } = r as unknown as CameraView;
+    expect(camera.fov).toBe(50);
+    expect(controls.enabled).toBe(true);
+    r.dispose();
     raf.uninstall();
   });
 });

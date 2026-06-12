@@ -1216,6 +1216,96 @@ describe('validateCatalogEntry (equipment, Stage 7 F7.3)', () => {
     });
   });
 
+  // ─── light block (overhead equipment lighting; additive, no schemaVersion bump) ──
+  describe('light (3D overhead equipment lighting)', () => {
+    const validLight = {
+      ...validEquipment,
+      id: 'equipment.light.test',
+      category: 'light',
+    };
+
+    it('accepts an equipment entry with no light block (forward-compat with older manifests)', () => {
+      expect(validateCatalogEntry(validLight).ok).toBe(true);
+    });
+
+    it('accepts an empty light block (every subfield optional — renderer supplies defaults)', () => {
+      expect(validateCatalogEntry({ ...validLight, light: {} }).ok).toBe(true);
+    });
+
+    it('accepts a fully-specified light block', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLight,
+          light: { lumens: 2350, colorTempK: 6500, beamAngleDeg: 120, fixtureLengthMm: 610 },
+        }),
+      ).toEqual({ ok: true });
+    });
+
+    it('accepts a partial light block (lumens-omitted PAR-only vendor shape)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLight,
+          light: { colorTempK: 7500, beamAngleDeg: 130, fixtureLengthMm: 110 },
+        }).ok,
+      ).toBe(true);
+    });
+
+    it('rejects a typo inside the light block (additionalProperties: false)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLight,
+          // typo: should be colorTempK. Must NOT be silently accepted.
+          light: { colourTempK: 6500 },
+        }).ok,
+      ).toBe(false);
+    });
+
+    it('rejects lumens <= 0 (exclusiveMinimum 0)', () => {
+      expect(validateCatalogEntry({ ...validLight, light: { lumens: 0 } }).ok).toBe(false);
+      expect(validateCatalogEntry({ ...validLight, light: { lumens: -100 } }).ok).toBe(false);
+    });
+
+    it('rejects colorTempK below 1000', () => {
+      expect(validateCatalogEntry({ ...validLight, light: { colorTempK: 999 } }).ok).toBe(false);
+    });
+
+    it('rejects colorTempK above 20000', () => {
+      expect(validateCatalogEntry({ ...validLight, light: { colorTempK: 20001 } }).ok).toBe(false);
+    });
+
+    it('accepts colorTempK at both bounds (1000 and 20000)', () => {
+      expect(validateCatalogEntry({ ...validLight, light: { colorTempK: 1000 } }).ok).toBe(true);
+      expect(validateCatalogEntry({ ...validLight, light: { colorTempK: 20000 } }).ok).toBe(true);
+    });
+
+    it('rejects beamAngleDeg <= 0 and > 180', () => {
+      expect(validateCatalogEntry({ ...validLight, light: { beamAngleDeg: 0 } }).ok).toBe(false);
+      expect(validateCatalogEntry({ ...validLight, light: { beamAngleDeg: 181 } }).ok).toBe(false);
+    });
+
+    it('accepts beamAngleDeg = 180 (inclusive upper bound)', () => {
+      expect(validateCatalogEntry({ ...validLight, light: { beamAngleDeg: 180 } }).ok).toBe(true);
+    });
+
+    it('rejects fixtureLengthMm <= 0 (exclusiveMinimum 0)', () => {
+      expect(validateCatalogEntry({ ...validLight, light: { fixtureLengthMm: 0 } }).ok).toBe(false);
+    });
+
+    it('rejects a non-numeric light subfield', () => {
+      expect(validateCatalogEntry({ ...validLight, light: { lumens: 'bright' } }).ok).toBe(false);
+    });
+
+    it('accepts light alongside photoperiodHours (the F11.7 + overhead-lighting combo)', () => {
+      expect(
+        validateCatalogEntry({
+          ...validLight,
+          photoperiodHours: 8,
+          light: { lumens: 4500, colorTempK: 4750, beamAngleDeg: 110, fixtureLengthMm: 613 },
+        }).ok,
+      ).toBe(true);
+    });
+  });
+
   // ─── F11.7 photoperiodHours (additive, no schemaVersion bump) ─────────────
   describe('photoperiodHours (Stage 11 F11.7)', () => {
     it('accepts an equipment entry with no photoperiodHours (forward-compat)', () => {

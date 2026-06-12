@@ -5,11 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import type { StorageService } from '@aquascape/platform/platform-api';
 import { STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
 
-import {
-  STORAGE_KEY_VIEW_MODE,
-  ViewModeService,
-  type ViewMode,
-} from './view-mode.service';
+import { STORAGE_KEY_VIEW_MODE, ViewModeService, type ViewMode } from './view-mode.service';
 
 function makeStorage(initial: Record<string, unknown> = {}): {
   service: StorageService;
@@ -39,10 +35,7 @@ function configure(storageInitial: Record<string, unknown> = {}): {
 } {
   const storage = makeStorage(storageInitial);
   TestBed.configureTestingModule({
-    providers: [
-      { provide: STORAGE_SERVICE, useValue: storage.service },
-      ViewModeService,
-    ],
+    providers: [{ provide: STORAGE_SERVICE, useValue: storage.service }, ViewModeService],
   });
   const service = TestBed.inject(ViewModeService);
   return { service, setSpy: storage.setSpy };
@@ -97,6 +90,29 @@ describe('ViewModeService', () => {
     const { service } = configure();
     service.setMode('3d');
     expect(service.mode()).toBe('3d');
+  });
+
+  it('hydrates "fish-eye" from storage when persisted', async () => {
+    const { service } = configure({ [STORAGE_KEY_VIEW_MODE]: 'fish-eye' as ViewMode });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(service.mode()).toBe('fish-eye');
+  });
+
+  it('setMode("fish-eye") flips from 2d and persists', () => {
+    const { service, setSpy } = configure();
+    flushEffects();
+    service.setMode('fish-eye');
+    expect(service.mode()).toBe('fish-eye');
+    flushEffects();
+    expect(setSpy).toHaveBeenCalledWith(STORAGE_KEY_VIEW_MODE, 'fish-eye');
+  });
+
+  it('toggle() from fish-eye lands on 2d (leave the 3D family)', () => {
+    const { service } = configure();
+    service.setMode('fish-eye');
+    service.toggle();
+    expect(service.mode()).toBe('2d');
   });
 
   it('setMode("3d") while already in "3d" is a no-op (signal identity preserved)', async () => {

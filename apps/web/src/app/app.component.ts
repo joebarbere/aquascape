@@ -310,9 +310,7 @@ type DragState =
               [attr.aria-label]="
                 breakpoint() === 'phone' ? 'Close tools panel' : 'Collapse tools panel'
               "
-              [attr.title]="
-                breakpoint() === 'phone' ? 'Close tools panel' : 'Collapse tools panel'
-              "
+              [attr.title]="breakpoint() === 'phone' ? 'Close tools panel' : 'Collapse tools panel'"
               (click)="collapseSidebar()"
             >
               <svg aria-hidden="true" viewBox="0 0 12 16" width="12" height="16">
@@ -374,7 +372,7 @@ type DragState =
             class="scene-canvas"
             aria-label="Aquascape design canvas (2D)"
             role="img"
-            [hidden]="viewMode.mode() === '3d'"
+            [hidden]="viewMode.mode() !== '2d'"
             (pointerdown)="onCanvasPointerDown($event)"
             (pointermove)="onCanvasPointerMove($event)"
             (pointerleave)="onCanvasPointerLeave()"
@@ -720,14 +718,16 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private canvas3dRef!: ElementRef<HTMLCanvasElement>;
 
   /** The renderer currently driving paints. Recomputed per call so a
-   *  view-mode flip immediately picks up the right instance. */
+   *  view-mode flip immediately picks up the right instance. Every
+   *  non-'2d' mode ('3d' + 'fish-eye') uses the 3D renderer — fish-eye
+   *  is a camera mode on the same renderer, not a third renderer. */
   private get activeRenderer(): SceneRenderer {
-    return this.viewMode.mode() === '3d' ? this.renderer3d : this.renderer2d;
+    return this.viewMode.mode() !== '2d' ? this.renderer3d : this.renderer2d;
   }
 
   /** The canvas the active renderer paints into. */
   private get activeCanvas(): HTMLCanvasElement {
-    return this.viewMode.mode() === '3d'
+    return this.viewMode.mode() !== '2d'
       ? this.canvas3dRef.nativeElement
       : this.canvas2dRef.nativeElement;
   }
@@ -1019,12 +1019,15 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       this.viewModeFirstRun = false;
       return;
     }
-    // Dispose the renderer that was active BEFORE this swap. `mode` is
-    // the new mode → the old one is its opposite.
-    if (mode === '3d' && this.attached2d) {
+    // Dispose the renderer that was active BEFORE this swap. '3d' and
+    // 'fish-eye' share the 3D renderer + canvas, so a flip between those
+    // two disposes NOTHING — only crossing the 2D ↔ 3D-family boundary
+    // tears a renderer down (the attached flags make the no-op case safe).
+    const is3dFamily = mode !== '2d';
+    if (is3dFamily && this.attached2d) {
       this.renderer2d.dispose();
       this.attached2d = false;
-    } else if (mode === '2d' && this.attached3d) {
+    } else if (!is3dFamily && this.attached3d) {
       this.renderer3d.dispose();
       this.attached3d = false;
     }
@@ -1096,9 +1099,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Write the host's CSS custom properties for the current width signals. */
   private applyHostWidths(): void {
     const host =
-      (this.canvas2d.ownerDocument?.querySelector(
-        'aquascape-root',
-      ) as HTMLElement | null) ?? null;
+      (this.canvas2d.ownerDocument?.querySelector('aquascape-root') as HTMLElement | null) ?? null;
     if (host === null) return;
     host.style.setProperty('--sidebar-width', `${this.sidebarWidth()}px`);
     host.style.setProperty('--rail-width', `${this.railWidth()}px`);
@@ -1243,9 +1244,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     // Write straight to the host CSS var — no signal write yet (avoids
     // change-detection per frame). The signal is committed on pointerup.
     const host =
-      (this.canvas2d.ownerDocument?.querySelector(
-        'aquascape-root',
-      ) as HTMLElement | null) ?? null;
+      (this.canvas2d.ownerDocument?.querySelector('aquascape-root') as HTMLElement | null) ?? null;
     if (host !== null) {
       host.style.setProperty(
         state.panel === 'sidebar' ? '--sidebar-width' : '--rail-width',
@@ -1496,9 +1495,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     const target = event.target as HTMLElement | null;
     if (
       target !== null &&
-      (target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'SELECT')
+      (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')
     ) {
       return;
     }
@@ -1566,9 +1563,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     const previewBase = this.computeFinalTransform(state);
     const scene = this.currentScene;
     const finalTransform =
-      scene === null
-        ? previewBase
-        : this.applySnapToPreview(scene, state, previewBase).transform;
+      scene === null ? previewBase : this.applySnapToPreview(scene, state, previewBase).transform;
 
     this.dragState = null;
     // F5.3 / F5.4 — clear visual drag affordances now that the gesture
@@ -1845,7 +1840,8 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     const canvas = this.activeCanvas;
     const surface = this.buildSurface(canvas);
     const renderer = this.activeRenderer;
-    const is3d = this.viewMode.mode() === '3d';
+    const mode = this.viewMode.mode();
+    const is3d = mode !== '2d';
     if (is3d) {
       renderer.attach(surface);
       this.attached3d = true;
@@ -1907,6 +1903,12 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       // static-asset copy of `libs/domain/catalog/assets/textures` — see
       // the asset glob in apps/web/project.json.
       ...(is3d ? { catalogTextureBaseUrl: CATALOG_TEXTURE_BASE_URL } : {}),
+      // Fish-eye view — camera mode for the 3D renderer. 'fish-eye' parks
+      // the camera at a live fish's eye; plain '3d' stays on OrbitControls.
+      // Omitted on 2D renders (no camera in 2D).
+      ...(is3d
+        ? { cameraMode: mode === 'fish-eye' ? ('fish-eye' as const) : ('orbit' as const) }
+        : {}),
     });
   }
 
@@ -1920,11 +1922,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     const state = this.dragState;
     const previewBase = this.computeFinalTransform(state);
-    const { transform: preview, guides } = this.applySnapToPreview(
-      scene,
-      state,
-      previewBase,
-    );
+    const { transform: preview, guides } = this.applySnapToPreview(scene, state, previewBase);
     this.currentSnapGuides = guides;
     this.updateDragReadout(state, preview);
     return mapObjectTransform(scene, state.objectId, preview);
@@ -2091,7 +2089,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       const newMult = clampZoomMult(currentMult * factor);
       // No change at the clamp ceiling/floor — skip the pan update so the
       // cursor anchor doesn't drift on a no-op zoom.
-      if (newMult === currentMult && (currentMult === ZOOM_MULT_MAX || currentMult === ZOOM_MULT_MIN)) {
+      if (
+        newMult === currentMult &&
+        (currentMult === ZOOM_MULT_MAX || currentMult === ZOOM_MULT_MIN)
+      ) {
         return;
       }
       const effectiveZoom = def.zoom * newMult;

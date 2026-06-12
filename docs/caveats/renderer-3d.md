@@ -36,7 +36,7 @@ Cached on the renderer (`this.waterMesh: WaterMeshHandle | null`, tagged by `WxH
 
 **Caustics: shipped (fidelity pass).** See "Animated caustics" below — the `onBeforeCompile` patch the F11.7 note worried about turned out clean: a procedural (no-texture) caustic injected into the substrate + hardscape `MeshStandardMaterial`s.
 
-**Refraction: still deferred.** A proper screen-space refraction of the *water surface* needs an extra render-target pre-pass (a single-pass shader can't sample the framebuffer it's writing to). The now-transmissive **glass** (PR1) already supplies the dominant refraction read of the tank contents, so water-surface refraction is low incremental value for the render-target cost; revisit if demand surfaces.
+**Refraction: still deferred.** A proper screen-space refraction of the _water surface_ needs an extra render-target pre-pass (a single-pass shader can't sample the framebuffer it's writing to). The now-transmissive **glass** (PR1) already supplies the dominant refraction read of the tank contents, so water-surface refraction is low incremental value for the render-target cost; revisit if demand surfaces.
 
 **Post-processing bloom: shipped (fidelity pass).** See "Post-processing bloom" below — the `EffectComposer` pipeline (RenderPass → UnrealBloomPass → OutputPass) is wired and headless-validated. Tone mapping is applied **once**, by OutputPass: `renderer.toneMapping = ACESFilmic` + OutputPass = correct single application (verified visually — the scene is neither washed out nor double-darkened).
 
@@ -108,6 +108,26 @@ The renderer's realism baseline is four compounding renderer-side changes — **
 
 **Why ambient + hemisphere were pulled back** (0.7→0.45, 0.4→0.3): strong uniform fill flattens the very shadows we now cast and washes out the directional key. The IBL env supplies most of the soft fill the old over-bright ambient was compensating for.
 
+## Overhead equipment lights
+
+Attaching a `category: 'light'` equipment entry to the scene builds one **SpotLight + emissive fixture-housing mesh** per entry (`scene-builder/equipment-lights.ts`), hung `FIXTURE_GAP_ABOVE_RIM_MM` (60) above the rim at the depth midline, aimed straight down.
+
+- **Auto-positioned** — the document's `EquipmentEntry` has no per-instance position (the F11.5 `flow` precedent: the catalog row owns world data), so _n_ fixtures distribute evenly along the tank width in document order. The group gets the same `applyDocToWorldMirror` as content + lighting so the left-to-right order matches the equipment list on screen.
+- **Catalog `light` block drives the look** — `lumens` → spot intensity (`SPOT_INTENSITY_PER_KILOLUMEN`, clamped), `colorTempK` → colour via `kelvinToColor` (Tanner Helland blackbody approximation, clamped 1000–20000 K), `beamAngleDeg` → spot half-angle, `fixtureLengthMm` → housing length. Every field is optional; renderer defaults (1200 lm / 6500 K / 110°) apply per-field.
+- **`decay = 0` is load-bearing.** The scene is in millimetres; physically-correct inverse-square decay attenuates to nothing across a ~400 mm tank. With decay 0 the spot is a simple multiplier like the rig's directional key.
+- **Spot count capped at `MAX_EQUIPMENT_SPOTLIGHTS` (4)** — SpotLights cost per-fragment in every lit shader. Fixtures beyond the cap keep their housing mesh (the user sees the hardware) but emit nothing. **Spot shadows stay OFF** — the directional key in `lighting.ts` is the only shadow caster.
+- **Cached + tagged** like the lighting rig (`equipmentLightsTag` = tank dims + ordered light refs; rebuild on change, dispose on teardown). Per render, `setLevel(dayNightLookup?.directionalIntensity ?? 1)` dims spot intensity + fixture emissive in place — attached lights read "off" at night.
+- Pure function of `(scene.equipment, catalog, tank)` — idempotency holds. Validated headlessly (SwiftShader) and asserted by the `lights-fisheye.spec.ts` e2e (with-light frame measurably brighter than without).
+
+## Fish-eye camera mode
+
+`RenderOptions.cameraMode?: 'orbit' | 'fish-eye'` (default `'orbit'`). In fish-eye the **RAF tick** parks the camera at fish 0's eye each frame using the SAME interpolated snapshot the mesh sync consumed (no one-frame lag), looking along the fish's heading, with `FISH_EYE_FOV_DEGREES` (95).
+
+- **The doc→world X-mirror applies manually.** Snapshot positions/orientations are doc-space, but the camera lives outside the mirrored content group: `worldX = tank.width − docX`, heading X negates. The nose direction is the orientation quaternion applied to `(-1, 0, 0)` — the steering integrator's convention (`rotateOrientationToward`).
+- **`controls.update()` MUST be skipped while the follow-cam drives** — OrbitControls re-derives the camera from its own spherical state and would yank the camera back every frame. The tick disables `controls.enabled` on enter; exit restores `FOV_DEGREES`, re-enables controls, and calls `resetView()` (the camera was left inside the tank — OrbitControls needs a sane pose resync).
+- **Graceful degradation:** no `livestockWorld` / no fish ⇒ the orbit camera stays in charge. Fish-eye over an empty tank is just plain 3D.
+- **Host wiring:** `ViewMode` gained `'fish-eye'` (a 3D _sub-mode_ — same canvas, same renderer; `apps/web` treats every non-`'2d'` mode as 3D for canvas/renderer/dispose decisions, and a 3d ↔ fish-eye flip disposes NOTHING). The zoom pill disables in fish-eye (the follow-cam owns the camera); the orbit pad stays `'3d'`-only.
+
 ## Hardscape + plant placement pipeline (Stage 10 v1.1)
 
 For every hardscape rock and single-specimen plant the position runs through four steps **in this exact order** — they're independent but composable, so changing the order changes the visible result:
@@ -115,7 +135,7 @@ For every hardscape rock and single-specimen plant the position runs through fou
 1. **Layer zone → world Z.** When the containing layer has a `zone` (`foreground` | `midground` | `background`), `computeZonedZ(scene, objectId, layerId)` linearly remaps the object's `transform.position.z` into the band's third of `tank.depth` (foreground = `[0, depth/3]`, etc.). Min-max remap preserves the relative ordering of objects within the band — two foreground rocks that were close in 2D stay close in 3D. Pass-through when zone is undefined OR the band would degenerate (n=1 in layer).
 2. **Tank clamp.** `clampToScene(position, halfExtents, scene)` clamps X and Z so the object's scaled AABB (post-flip absolute scale) fits inside the tank interior. Oversized objects (half-extent exceeds tank's half-dimension) get centred instead — the clamp can't help and the centre is the least-wrong answer.
 3. **Substrate Y snap.** `mesh.position.y = substrateHeightAt(scene, clampedX)` after the geometry's local origin has been pre-translated to the silhouette's bottom edge.
-4. **Hardscape noise (rocks only).** `applyHardscapeNoise(geometry, { seed, minNaturalMm })` displaces every vertex along the unit vector from the geometry's bounding-box CENTRE to the vertex position, by `magnitude × noise(seed, qx, qy, qz)` (quantised position-only hash). Primary magnitude = `min(naturalSize) × 0.18`; a second octave at `0.5 ×` primary magnitude (different seed mix, double-frequency sampling) adds finer surface detail so rocks don't read as smooth blobs. Seed = `fnv1a32(catalogId + ':' + objectId)` — two instances of the same catalog entry produce different shapes; the same instance always produces the same shape. `geometry.computeVertexNormals()` runs AFTER displacement so the displaced surface lights correctly (without the post-pass Three.js shades using stale normals). **Seam-watertight invariant (load-bearing):** `ExtrudeGeometry` duplicates positions where the front face, side walls, and back face meet — each face owns its own copy with its own face normal so the slab can light with sharp 90° edges. Hashing the vertex INDEX *or* displacing along per-face NORMALS makes those duplicated vertices move independently and the rock develops visible cracks ("disconnected edges"). Position-only hash + radial-from-centroid direction → coincident vertices share both inputs → they land at the same post-displacement position → surface stays watertight. Regression covered by `hardscape-noise.spec.ts` → "keeps the surface watertight at seams".
+4. **Hardscape noise (rocks only).** `applyHardscapeNoise(geometry, { seed, minNaturalMm })` displaces every vertex along the unit vector from the geometry's bounding-box CENTRE to the vertex position, by `magnitude × noise(seed, qx, qy, qz)` (quantised position-only hash). Primary magnitude = `min(naturalSize) × 0.18`; a second octave at `0.5 ×` primary magnitude (different seed mix, double-frequency sampling) adds finer surface detail so rocks don't read as smooth blobs. Seed = `fnv1a32(catalogId + ':' + objectId)` — two instances of the same catalog entry produce different shapes; the same instance always produces the same shape. `geometry.computeVertexNormals()` runs AFTER displacement so the displaced surface lights correctly (without the post-pass Three.js shades using stale normals). **Seam-watertight invariant (load-bearing):** `ExtrudeGeometry` duplicates positions where the front face, side walls, and back face meet — each face owns its own copy with its own face normal so the slab can light with sharp 90° edges. Hashing the vertex INDEX _or_ displacing along per-face NORMALS makes those duplicated vertices move independently and the rock develops visible cracks ("disconnected edges"). Position-only hash + radial-from-centroid direction → coincident vertices share both inputs → they land at the same post-displacement position → surface stays watertight. Regression covered by `hardscape-noise.spec.ts` → "keeps the surface watertight at seams".
 
 **Why deterministic noise:** the `SceneRenderer.render` contract requires idempotency. Repeated calls with the same scene must produce identical output. Random noise per render would violate that AND would mean rocks look different every time the user reopens the doc.
 
@@ -141,11 +161,11 @@ These divergences live entirely inside the scene-builder helpers. The 2D rendere
 
 Both the `.aqua` document and Three.js use a right-handed, +Y-up coordinate system, but they disagree on **what +Z means**:
 
-| | Document | Three.js |
-|---|---|---|
-| +X | right | right |
-| +Y | up | up |
-| +Z | **back of tank** | **toward the viewer** (default camera at +Z looking down −Z) |
+|     | Document         | Three.js                                                     |
+| --- | ---------------- | ------------------------------------------------------------ |
+| +X  | right            | right                                                        |
+| +Y  | up               | up                                                           |
+| +Z  | **back of tank** | **toward the viewer** (default camera at +Z looking down −Z) |
 
 Both are right-handed — but the two right-handed systems differ by an X-axis flip when one viewer is reconciled to the other. The 3D renderer places the camera in front of the tank (world `−Z`) looking at world `+Z`. Three.js `lookAt`-derived basis then has `_x = up × _z = (−1, 0, 0)` in world coords — so screen-right points at **world −X**. A doc point on the right of the tank (high `+X`) lands on screen LEFT.
 
@@ -241,13 +261,14 @@ Adding the storage key to the master list in `docs/caveats/app-shell.md`'s "Stor
 
 ## Toolbar toggle UX
 
-`ViewToggleComponent` is a **segmented two-button control** (`2D` | `3D`), `role="group"` + `aria-label="Canvas view mode"`, each button `aria-pressed` reflecting the active mode. Click on the inactive button → `viewMode.setMode(mode)`. `setMode` is idempotent — clicking "2D" while already in 2D is a no-op (no command emitted, signal identity preserved).
+`ViewToggleComponent` is a **segmented three-button control** (`2D` | `3D` | `Fish eye`), `role="group"` + `aria-label="Canvas view mode"`, each button `aria-pressed` reflecting the active mode. Click on an inactive button → `viewMode.setMode(mode)`. `setMode` is idempotent — clicking "2D" while already in 2D is a no-op (no command emitted, signal identity preserved).
 
-Keyboard shortcut: **`Cmd/Ctrl+Shift+3`** toggles. Like the other shortcuts in the editor-shell, **ignored when the event target is `INPUT` / `TEXTAREA` / `SELECT`** so users typing in numeric fields don't accidentally swap views.
+Keyboard shortcut: **`Cmd/Ctrl+Shift+3`** toggles 2D ↔ 3D; from fish-eye it lands on 2D ("leave the 3D family" — a 3-cycle would surprise muscle memory; fish-eye is entered via its segment only). Like the other shortcuts in the editor-shell, **ignored when the event target is `INPUT` / `TEXTAREA` / `SELECT`** so users typing in numeric fields don't accidentally swap views.
 
 ## 3D-mode UI gating
 
-In 3D mode (`viewMode.mode() === '3d'`), hide:
+In the 3D-family modes (`viewMode.mode() !== '2d'` — i.e. `'3d'` and `'fish-eye'`), hide:
+
 - `<aquascape-selection-inspector>` (no selection in 3D)
 - The drag readout pill (no drags in 3D)
 

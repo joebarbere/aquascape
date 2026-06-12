@@ -1,7 +1,7 @@
 # Development history — the stage roadmap
 
 > **Looking for what the app can do today?** See the [feature list in the
-> README](../README.md#features). This page is the historical record of *how*
+> README](../README.md#features). This page is the historical record of _how_
 > the project got there: the staged roadmap, what each stage delivered, and
 > in what order. Load it when you need to know when something landed or why
 > the work was sequenced the way it was.
@@ -15,21 +15,21 @@ abstraction stabilized.
 
 ## Stage summary
 
-| Stage | Theme | Status |
-| --- | --- | --- |
-| 0 | Foundation & walking skeleton | ✅ Shipped |
-| 1 | Tank setup & document lifecycle | ✅ Shipped |
-| 2 | Substrate tool | ✅ Shipped |
-| 3 | Hardscape tool | ✅ Shipped |
-| 4 | Layers, planting, growth simulation | ✅ Shipped |
-| 5 | Templates, snapping, composition overlays | ✅ Shipped |
-| 6 | Image export, layout summary, photo backdrop, PWA install, packaged installers | ✅ Shipped |
-| 7 | Livestock & equipment + stocking guidance + setup sheet | ✅ Shipped |
-| 8 | Community gallery (browse + remix shared layouts) — [`plans/stage-8-community-gallery/`](../plans/stage-8-community-gallery/) | 📐 Planned |
-| 9 | AI photorealistic render (local + hosted) — [`plans/stage-9-ai-render/`](../plans/stage-9-ai-render/) | 📐 Planned |
-| 10 | 3D renderer (Three.js / WebGL — read-only) | ✅ Shipped |
-| 11 | Animated livestock & ambient simulation (F11.1–F11.7) — [`plans/stage-11-animated-livestock.md`](../plans/stage-11-animated-livestock.md) | ✅ Shipped |
-| 12 | Release pipeline — `pnpm release <version>`, installers, GitHub Releases — [`plans/stage-12-release-pipeline.md`](../plans/stage-12-release-pipeline.md) | 📐 Planned |
+| Stage | Theme                                                                                                                                                    | Status     |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 0     | Foundation & walking skeleton                                                                                                                            | ✅ Shipped |
+| 1     | Tank setup & document lifecycle                                                                                                                          | ✅ Shipped |
+| 2     | Substrate tool                                                                                                                                           | ✅ Shipped |
+| 3     | Hardscape tool                                                                                                                                           | ✅ Shipped |
+| 4     | Layers, planting, growth simulation                                                                                                                      | ✅ Shipped |
+| 5     | Templates, snapping, composition overlays                                                                                                                | ✅ Shipped |
+| 6     | Image export, layout summary, photo backdrop, PWA install, packaged installers                                                                           | ✅ Shipped |
+| 7     | Livestock & equipment + stocking guidance + setup sheet                                                                                                  | ✅ Shipped |
+| 8     | Community gallery (browse + remix shared layouts) — [`plans/stage-8-community-gallery/`](../plans/stage-8-community-gallery/)                            | 📐 Planned |
+| 9     | AI photorealistic render (local + hosted) — [`plans/stage-9-ai-render/`](../plans/stage-9-ai-render/)                                                    | 📐 Planned |
+| 10    | 3D renderer (Three.js / WebGL — read-only)                                                                                                               | ✅ Shipped |
+| 11    | Animated livestock & ambient simulation (F11.1–F11.7) — [`plans/stage-11-animated-livestock.md`](../plans/stage-11-animated-livestock.md)                | ✅ Shipped |
+| 12    | Release pipeline — `pnpm release <version>`, installers, GitHub Releases — [`plans/stage-12-release-pipeline.md`](../plans/stage-12-release-pipeline.md) | 📐 Planned |
 
 Remaining work is tracked in the [README's TODO section](../README.md#todo--whats-next).
 
@@ -96,8 +96,8 @@ livestock/equipment/warnings sections.
 
 ### Stage 10 — 3D renderer (shipped before Stages 8–9)
 
-`renderer-3d` (Three.js/WebGL) implementing the *same* `SceneRenderer`
-interface over the *same* canonical mm coordinates in the document — the
+`renderer-3d` (Three.js/WebGL) implementing the _same_ `SceneRenderer`
+interface over the _same_ canonical mm coordinates in the document — the
 architectural bet from Stage 0 paying off. Read-only (`hitTest` returns
 `null`); OrbitControls camera; per-element scene builders (glass tank,
 extruded substrate, hardscape/plant silhouettes, lighting). The 2D ⇄ 3D
@@ -111,20 +111,21 @@ adding optional `Layer.zone` (foreground / midground / background) so the
 Delivered in seven substages, anchored by
 [`docs/research/stage-11-livestock-subsystem.md`](research/stage-11-livestock-subsystem.md):
 
-| Substage | What landed |
-| --- | --- |
+| Substage  | What landed                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **F11.1** | ECS foundation — `libs/domain/livestock-ecs/` (bitECS world, 30 Hz fixed-dt scheduler), `libs/domain/fish-anatomy/` (six procedural archetype geometry generators), `libs/rendering/livestock-renderer-3d/` (one InstancedMesh per archetype + carangiform tail-beat vertex shader), and the `LivestockSimulationService` that owns the world across 2D ⇄ 3D toggles and respawns deterministically from `scene.seed`. |
-| **F11.2** | Swimming — Couzin three-zone schooling (ZOR/ZOO/ZOA with blind cone), Reynolds separation/alignment/cohesion, vertical depth bands (surface / midwater / bottom presets), turn-rate-clamped steering. `libs/domain/livestock-behaviors/` became the single source of truth for behaviour params; catalog manifest schemaVersion 2 → 3 added the optional `LivestockEntry.behavior` block. |
-| **F11.3** | Personality — territoriality (bourgeois owner-wins chase with fatigue), fin-nipping (group-threshold-suppressed), fear (FORAGE → REFUGE mode flip, dart to nearest hardscape cover). Hardscape gained `coverScore`; priority arbitration runs Fear → Nip → Territory → Schooling via `BehaviorMode`. |
-| **F11.4** | Feeding — hunger drive across six feeding categories (surface / midwater / substrate / algae-grazer / plant-eater / detritivore), algae scores on hardscape that decay under grazing and regrow, boldness-gated glass-surfing, the "Feed tank" button dropping transient food sprites. |
-| **F11.5** | Environment — `libs/domain/fluid-sim/` baking a 32³ divergence-free flow field from filter equipment and a 64³ hardscape SDF for collision; FlowFieldSystem + CollisionSystem; air-stone bubble columns (capped at 200 particles). Catalog gained `EquipmentEntry.flow?` + `airRateMl?`. |
-| **F11.6** | Breadth + budget — 24 livestock species exercising every behaviour branch; the 7th "crawler" archetype for shrimp + snails; the dev-only behaviour debug overlay (Ctrl/Cmd+Shift+D); the perf benchmark gating a 4 ms ECS step at n=200 fish (measured 3.43 ms p95). |
-| **F11.7** | Ambient polish — animated water surface (≤ 2 mm sine bands), the day-night cycle (4-keypoint lookup ramp, sidebar slider, manual / real-time / equipment modes), deterministic plant sway seeded from the document. Catalog gained `EquipmentEntry.photoperiodHours?`. |
+| **F11.2** | Swimming — Couzin three-zone schooling (ZOR/ZOO/ZOA with blind cone), Reynolds separation/alignment/cohesion, vertical depth bands (surface / midwater / bottom presets), turn-rate-clamped steering. `libs/domain/livestock-behaviors/` became the single source of truth for behaviour params; catalog manifest schemaVersion 2 → 3 added the optional `LivestockEntry.behavior` block.                              |
+| **F11.3** | Personality — territoriality (bourgeois owner-wins chase with fatigue), fin-nipping (group-threshold-suppressed), fear (FORAGE → REFUGE mode flip, dart to nearest hardscape cover). Hardscape gained `coverScore`; priority arbitration runs Fear → Nip → Territory → Schooling via `BehaviorMode`.                                                                                                                   |
+| **F11.4** | Feeding — hunger drive across six feeding categories (surface / midwater / substrate / algae-grazer / plant-eater / detritivore), algae scores on hardscape that decay under grazing and regrow, boldness-gated glass-surfing, the "Feed tank" button dropping transient food sprites.                                                                                                                                 |
+| **F11.5** | Environment — `libs/domain/fluid-sim/` baking a 32³ divergence-free flow field from filter equipment and a 64³ hardscape SDF for collision; FlowFieldSystem + CollisionSystem; air-stone bubble columns (capped at 200 particles). Catalog gained `EquipmentEntry.flow?` + `airRateMl?`.                                                                                                                               |
+| **F11.6** | Breadth + budget — 24 livestock species exercising every behaviour branch; the 7th "crawler" archetype for shrimp + snails; the dev-only behaviour debug overlay (Ctrl/Cmd+Shift+D); the perf benchmark gating a 4 ms ECS step at n=200 fish (measured 3.43 ms p95).                                                                                                                                                   |
+| **F11.7** | Ambient polish — animated water surface (≤ 2 mm sine bands), the day-night cycle (4-keypoint lookup ramp, sidebar slider, manual / real-time / equipment modes), deterministic plant sway seeded from the document. Catalog gained `EquipmentEntry.photoperiodHours?`.                                                                                                                                                 |
 
 Stage 11 also forced long-overdue infrastructure: `apps/web-e2e/` went from
 a Stage-0 placeholder to real Playwright driving `nx serve web` under
 SwiftShader WebGL, asserting that a 3D fish actually paints (pixel-variance
-+ frame-diff floors, the read-only `window.__aquascape_debug__` hook).
+
+- frame-diff floors, the read-only `window.__aquascape_debug__` hook).
 
 ### The 3D fidelity passes (post-Stage 11)
 
@@ -138,7 +139,7 @@ demo on the README (follow-ups tracked in
 - **Caustics** — procedural world-anchored caustic light on substrate +
   hardscape, faded by the day-night cycle; later extended to the water
   surface itself.
-- **Flow-coupled plant sway** (amplitude *and* frequency) + **iridescent
+- **Flow-coupled plant sway** (amplitude _and_ frequency) + **iridescent
   fish sheen** + **per-fin flutter** (dorsal/anal/pectoral secondary
   animation at 2.3× the tail beat).
 - **Startle-wave propagation** — fear ripples through a school
@@ -150,8 +151,8 @@ demo on the README (follow-ups tracked in
 - **Catalog-driven PBR textures** — 9 deterministic, seamlessly-tiling
   texture families baked offline (`pnpm generate:textures`), applied
   triplanar in world space, opt-in via `RenderOptions.catalogTextureBaseUrl`.
-- **The render-target capability gate** — SSAO was attempted and *backed
-  out* because it blanks the canvas under the SwiftShader headless path CI
+- **The render-target capability gate** — SSAO was attempted and _backed
+  out_ because it blanks the canvas under the SwiftShader headless path CI
   uses; `getRenderTargetEffectsSupported()` now guards any future
   multi-pass effect. The load-bearing lesson lives in
   [`docs/caveats/e2e.md`](caveats/e2e.md).
@@ -159,16 +160,25 @@ demo on the README (follow-ups tracked in
   `Tank.waterLevelMm`; the 3D water plane, 2D tint band, and the fish
   simulation's ceiling all read one source of truth
   (`effectiveWaterLevelMm`).
+- **Overhead equipment lighting + fish-eye view** — attaching a
+  `category: 'light'` equipment entry hangs a glowing LED-bar fixture above
+  the rim (SpotLight + emissive housing, auto-distributed along the width,
+  dimmed by the day-night cycle); the catalog gained an additive
+  `EquipmentEntry.light?` block (`lumens` / `colorTempK` / `beamAngleDeg` /
+  `fixtureLengthMm`) and six new researched LED fixtures (NICREW, Finnex,
+  ADA, Kessil, ONF, Current USA — nine lights total). A third toolbar view
+  mode, **Fish eye**, parks the camera at a live fish's eye with a wide
+  FOV and follows it in first person (`RenderOptions.cameraMode`).
 
 ## Document & catalog version history
 
-| Version | Change |
-| --- | --- |
-| `.aqua` v1 | Initial locked format (Stage 0). |
-| `.aqua` v2 | Optional `Layer.zone` ('foreground' \| 'midground' \| 'background') for 3D depth banding (Stage 10 follow-up). |
-| `.aqua` v3 | Optional `Tank.waterLevelMm` — the adjustable water fill line (post-Stage-11 fidelity work). |
-| Catalog v1 → v2 | Pre-Stage-11 manifest evolution. |
-| Catalog v3 | Optional `LivestockEntry.behavior`, `HardscapeEntry.coverScore?`, `EquipmentEntry.flow?` / `airRateMl?` / `photoperiodHours?`, and `textures?` refs on substrate/hardscape/plant entries — all additive; older manifests load unchanged. |
+| Version         | Change                                                                                                                                                                                                                                   |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.aqua` v1      | Initial locked format (Stage 0).                                                                                                                                                                                                         |
+| `.aqua` v2      | Optional `Layer.zone` ('foreground' \| 'midground' \| 'background') for 3D depth banding (Stage 10 follow-up).                                                                                                                           |
+| `.aqua` v3      | Optional `Tank.waterLevelMm` — the adjustable water fill line (post-Stage-11 fidelity work).                                                                                                                                             |
+| Catalog v1 → v2 | Pre-Stage-11 manifest evolution.                                                                                                                                                                                                         |
+| Catalog v3      | Optional `LivestockEntry.behavior`, `HardscapeEntry.coverScore?`, `EquipmentEntry.flow?` / `airRateMl?` / `photoperiodHours?`, and `textures?` refs on substrate/hardscape/plant entries — all additive; older manifests load unchanged. |
 
 Every format bump shipped with a pure `Migration` entry and a round-trip
 property test, per the v1-locked checklist in

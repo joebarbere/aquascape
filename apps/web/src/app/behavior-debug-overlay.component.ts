@@ -94,7 +94,7 @@ import {
   Velocity,
 } from '@aquascape/domain/livestock-ecs';
 import { sampleSdf } from '@aquascape/domain/fluid-sim';
-import { ViewModeService } from '@aquascape/features/editor-shell';
+import { ViewModeService, type ViewMode } from '@aquascape/features/editor-shell';
 
 import { BehaviorDebugService } from './behavior-debug.service';
 import { LivestockSimulationService } from './livestock-simulation.service';
@@ -164,7 +164,7 @@ interface OverlaySnapshot {
   readonly hasSdf: boolean;
   /** Simulation tick counter (advances at SIM_HZ inside the renderer's RAF). */
   readonly tickCounter: number;
-  readonly viewMode: '2d' | '3d';
+  readonly viewMode: ViewMode;
   readonly rows: readonly DebugRow[];
   /** How many entities were elided past `MAX_ROWS`. */
   readonly more: number;
@@ -232,7 +232,11 @@ const EMPTY_SNAPSHOT: OverlaySnapshot = {
         padding: 8px 10px;
         background: rgba(0, 0, 0, 0.78);
         color: #c8e6c9;
-        font: 11px / 1.35 'Monaco', 'Menlo', 'Consolas', monospace;
+        font:
+          11px / 1.35 'Monaco',
+          'Menlo',
+          'Consolas',
+          monospace;
         border-radius: 6px;
         pointer-events: none;
         z-index: 9999;
@@ -291,7 +295,7 @@ export class BehaviorDebugOverlayComponent implements OnInit, OnDestroy {
   readonly visible = computed<boolean>(() => {
     if (!isDevMode()) return false;
     if (!this.debug.enabled()) return false;
-    if (this.viewMode.mode() !== '3d') return false;
+    if (this.viewMode.mode() === '2d') return false;
     return this.snapshot().entityCount > 0;
   });
 

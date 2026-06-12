@@ -33,7 +33,7 @@ import type { Store } from '@ngrx/store';
 import type { LivestockWorld } from '@aquascape/domain/livestock-ecs';
 import type { Scene } from '@aquascape/domain/scene-model';
 import { selectScene } from '@aquascape/state';
-import type { ViewModeService } from '@aquascape/features/editor-shell';
+import type { ViewMode, ViewModeService } from '@aquascape/features/editor-shell';
 
 import type { LivestockSimulationService } from './livestock-simulation.service';
 
@@ -87,7 +87,7 @@ export interface AquascapeDebugHandle {
    */
   getScene(): Scene | null;
   /** The current canvas view mode driven by `ViewModeService`. */
-  getViewMode(): '2d' | '3d';
+  getViewMode(): ViewMode;
 }
 
 declare global {

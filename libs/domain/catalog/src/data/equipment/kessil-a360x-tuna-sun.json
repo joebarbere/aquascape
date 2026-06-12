@@ -1,0 +1,16 @@
+{
+  "catalog": "core",
+  "id": "equipment.light.kessil-a360x-tuna-sun",
+  "version": 1,
+  "name": "Kessil A360X Tuna Sun",
+  "kind": "equipment",
+  "category": "light",
+  "subcategory": "led-pendant",
+  "color": "#fdf3d0",
+  "wattage": 90,
+  "photoperiodHours": 8,
+  "description": "Compact freshwater pendant with Kessil's Dense Matrix LED: a single point source that throws strong shimmer lines, tunable across a published 6,000-9,000K range. light.colorTempK records the mid-point (7500) of that range. Kessil publishes PAR and coverage area rather than luminous flux, so light.lumens is omitted rather than estimated. light.beamAngleDeg is the published 130-degree reflector spread; light.fixtureLengthMm is the published 110 mm puck diameter (the fixture is round, not a bar). coverageLitres is omitted: Kessil publishes a 60 x 60 cm footprint for densely planted systems, not a tank-volume window.",
+  "tags": ["light", "led", "pendant", "shimmer", "tunable", "premium"],
+  "defaultSettings": { "photoperiodHours": 8, "intensityPct": 70, "colorTempK": 7500 },
+  "light": { "colorTempK": 7500, "beamAngleDeg": 130, "fixtureLengthMm": 110 }
+}

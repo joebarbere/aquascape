@@ -187,9 +187,7 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
   });
 
   it('most livestock entries with an annotated behavior block stay sparse (F11.6 expansion)', () => {
-    const annotated = coreCatalog
-      .byKind('livestock')
-      .filter((e) => e.behavior !== undefined);
+    const annotated = coreCatalog.byKind('livestock').filter((e) => e.behavior !== undefined);
     // F11.6 broadens the curated species list to ~24; most new fish carry at
     // least one override (cohesion tweak, depth bump, territory tune, nipping
     // opt-in/out). Cap is the size of the curated set + headroom — if it keeps
@@ -207,14 +205,14 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     expect(entry.temperament).toBe('peaceful');
   });
 
-  it('ships exactly the 12 seeded equipment items (4 filters + 3 heaters + 3 lights + 2 CO2)', () => {
+  it('ships exactly the 18 seeded equipment items (4 filters + 3 heaters + 9 lights + 2 CO2)', () => {
     const equipment = coreCatalog.byKind('equipment');
-    expect(equipment.length).toBe(12);
+    expect(equipment.length).toBe(18);
     const categories = equipment.reduce<Record<string, number>>((acc, entry) => {
       acc[entry.category] = (acc[entry.category] ?? 0) + 1;
       return acc;
     }, {});
-    expect(categories).toEqual({ filter: 4, heater: 3, light: 3, co2: 2 });
+    expect(categories).toEqual({ filter: 4, heater: 3, light: 9, co2: 2 });
   });
 
   it('every equipment entry has a valid swatch color and positive optional metrics when set', () => {
@@ -287,6 +285,64 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     expect(entry).not.toBeNull();
     if (entry?.kind !== 'equipment') return;
     expect(entry.airRateMl).toBe(800);
+  });
+
+  it('every category:light equipment entry carries a light block with in-range researched values', () => {
+    const lights = coreCatalog.byKind('equipment').filter((e) => e.category === 'light');
+    expect(lights.length).toBe(9);
+    for (const entry of lights) {
+      // Every core light ships at least one researched light subfield (no
+      // fabricated specs — unpublished figures stay omitted instead).
+      const light = entry.light;
+      expect(light).toBeDefined();
+      if (light === undefined) continue;
+      if (light.lumens !== undefined) expect(light.lumens).toBeGreaterThan(0);
+      if (light.colorTempK !== undefined) {
+        expect(light.colorTempK).toBeGreaterThanOrEqual(1000);
+        expect(light.colorTempK).toBeLessThanOrEqual(20000);
+      }
+      if (light.beamAngleDeg !== undefined) {
+        expect(light.beamAngleDeg).toBeGreaterThan(0);
+        expect(light.beamAngleDeg).toBeLessThanOrEqual(180);
+      }
+      // Fixture length is almost always published — every core light has it.
+      expect(light.fixtureLengthMm).toBeGreaterThan(0);
+    }
+  });
+
+  it('non-light equipment never declares a light block', () => {
+    for (const entry of coreCatalog.byKind('equipment')) {
+      if (entry.category === 'light') continue;
+      expect(entry.light).toBeUndefined();
+    }
+  });
+
+  it('the Fluval Plant 3.0 entry carries its fully-published light block', () => {
+    const entry = coreCatalog.get({
+      catalog: 'core',
+      id: 'equipment.light.fluval-plant-3-36w',
+    });
+    expect(entry).not.toBeNull();
+    if (entry?.kind !== 'equipment') return;
+    expect(entry.light).toEqual({
+      lumens: 2350,
+      colorTempK: 6500,
+      beamAngleDeg: 120,
+      fixtureLengthMm: 610,
+    });
+  });
+
+  it('the Kessil A360X entry omits lumens (PAR-only vendor — no fabricated specs)', () => {
+    const entry = coreCatalog.get({
+      catalog: 'core',
+      id: 'equipment.light.kessil-a360x-tuna-sun',
+    });
+    expect(entry).not.toBeNull();
+    if (entry?.kind !== 'equipment') return;
+    expect(entry.light?.lumens).toBeUndefined();
+    expect(entry.light?.colorTempK).toBe(7500);
+    expect(entry.light?.beamAngleDeg).toBe(130);
+    expect(entry.light?.fixtureLengthMm).toBe(110);
   });
 
   it('only a small handful of equipment entries declare flow / airRateMl (defaults still exercise the absent-block path)', () => {

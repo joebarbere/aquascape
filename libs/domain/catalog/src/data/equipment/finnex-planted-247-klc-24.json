@@ -1,0 +1,17 @@
+{
+  "catalog": "core",
+  "id": "equipment.light.finnex-planted-247-klc-24",
+  "version": 1,
+  "name": "Finnex Planted+ 24/7 KLC 24 in (KL-C24A)",
+  "kind": "equipment",
+  "category": "light",
+  "subcategory": "led-clip",
+  "color": "#f6e9bc",
+  "wattage": 25,
+  "coverageLitres": { "min": 57, "max": 76 },
+  "photoperiodHours": 10,
+  "description": "Finnex's automated 24/7 cycle light: a wireless remote drives a full dawn-noon-dusk-moonlight loop. The 24 in KLC carries 32 white + 16 red + 24 RGB diodes; Finnex publishes 7000K for the daytime white channel but no luminous flux, so light.lumens is omitted rather than estimated. coverageLitres converts the manufacturer's 15-20 US gal recommendation (57-76 L). photoperiodHours 10 approximates the daylight-dominant portion of the fixture's continuous 24/7 program.",
+  "tags": ["light", "led", "24-7-cycle", "remote", "planted", "ramping"],
+  "defaultSettings": { "photoperiodHours": 10, "mode": "24/7", "intensityPct": 100 },
+  "light": { "colorTempK": 7000, "fixtureLengthMm": 610 }
+}
