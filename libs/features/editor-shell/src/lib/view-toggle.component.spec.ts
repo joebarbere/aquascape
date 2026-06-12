@@ -41,17 +41,19 @@ function configure(): {
 }
 
 describe('ViewToggleComponent', () => {
-  it('renders two buttons labelled "2D" and "3D"', () => {
+  it('renders three buttons labelled "2D", "3D" and "Fish eye"', () => {
     const { buttons } = configure();
-    expect(buttons.length).toBe(2);
+    expect(buttons.length).toBe(3);
     expect(buttons[0]?.textContent?.trim()).toBe('2D');
     expect(buttons[1]?.textContent?.trim()).toBe('3D');
+    expect(buttons[2]?.textContent?.trim()).toBe('Fish eye');
   });
 
   it('marks the 2D button as pressed by default', () => {
     const { buttons } = configure();
     expect(buttons[0]?.getAttribute('aria-pressed')).toBe('true');
     expect(buttons[1]?.getAttribute('aria-pressed')).toBe('false');
+    expect(buttons[2]?.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('renders a role="group" with a meaningful aria-label', () => {
@@ -70,6 +72,28 @@ describe('ViewToggleComponent', () => {
     expect(service.mode()).toBe('3d');
     expect(buttons[1]?.getAttribute('aria-pressed')).toBe('true');
     expect(buttons[0]?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('clicking the fish-eye button dispatches setMode("fish-eye")', () => {
+    const { buttons, service, fixture } = configure();
+    const spy = jest.spyOn(service, 'setMode');
+    buttons[2]?.click();
+    fixture.detectChanges();
+    expect(spy).toHaveBeenCalledWith('fish-eye');
+    expect(service.mode()).toBe('fish-eye');
+    expect(buttons[2]?.getAttribute('aria-pressed')).toBe('true');
+    expect(buttons[0]?.getAttribute('aria-pressed')).toBe('false');
+    expect(buttons[1]?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('fish-eye aria-label reflects the active mode', () => {
+    const { buttons, service, fixture } = configure();
+    expect(buttons[2]?.getAttribute('aria-label')).toBe(
+      'Switch to fish-eye view (camera rides a fish)',
+    );
+    service.setMode('fish-eye');
+    fixture.detectChanges();
+    expect(buttons[2]?.getAttribute('aria-label')).toBe('Fish-eye view (active)');
   });
 
   it('clicking the already-active button is a no-op (mode unchanged)', () => {

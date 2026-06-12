@@ -306,6 +306,18 @@ export interface RenderOptions {
    * linear), roughness (linear).
    */
   readonly catalogTextureBaseUrl?: string;
+  /**
+   * Fish-eye view — 3D camera mode. `'orbit'` (default when omitted) is
+   * the standard OrbitControls camera. `'fish-eye'` parks the camera at a
+   * live fish's eye (the first entity in the livestock world's snapshot),
+   * looking along the fish's heading with a wide fisheye-style FOV, and
+   * disables OrbitControls while active. When the scene has no livestock
+   * (or `livestockWorld` is absent) the renderer keeps the orbit camera —
+   * fish-eye degrades gracefully to plain 3D.
+   *
+   * The 2D renderer ignores this field (there is no camera in 2D).
+   */
+  readonly cameraMode?: 'orbit' | 'fish-eye';
 }
 
 /**

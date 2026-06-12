@@ -1,0 +1,17 @@
+{
+  "catalog": "core",
+  "id": "equipment.light.nicrew-classicled-plus-24",
+  "version": 1,
+  "name": "NICREW ClassicLED Plus (18-24 in)",
+  "kind": "equipment",
+  "category": "light",
+  "subcategory": "led-clip",
+  "color": "#f3f0d8",
+  "wattage": 15,
+  "coverageLitres": { "min": 38, "max": 75 },
+  "photoperiodHours": 8,
+  "description": "Hugely popular budget full-spectrum LED with extendable brackets, an integrated timer, and daylight/moonlight cycles with 15/30-minute sunrise-sunset ramping. NICREW publishes 6500K for the white channel (mixed with 450nm blue, 660nm deep red, and green diodes; CRI 91) but no luminous flux for this model, so light.lumens is omitted rather than estimated. light.fixtureLengthMm is the published 17.5 in (445 mm) housing at minimum bracket extension. coverageLitres is an approximate conversion of the manufacturer's 18-24 inch tank window (roughly 10-20 US gal).",
+  "tags": ["light", "led", "budget", "timer", "full-spectrum", "planted"],
+  "defaultSettings": { "photoperiodHours": 8, "intensityPct": 100 },
+  "light": { "colorTempK": 6500, "fixtureLengthMm": 445 }
+}

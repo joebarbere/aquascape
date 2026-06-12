@@ -62,7 +62,7 @@
 
 import type { Catalog } from '@aquascape/domain/catalog';
 import type { Vec2 } from '@aquascape/domain/geometry';
-import { SIM_DT, type LivestockWorld } from '@aquascape/domain/livestock-ecs';
+import { SIM_DT, type LivestockWorld, type WorldSnapshot } from '@aquascape/domain/livestock-ecs';
 import { effectiveWaterLevelMm } from '@aquascape/domain/scene-model';
 import type { Scene } from '@aquascape/domain/scene-model';
 import {
@@ -194,7 +194,12 @@ import {
   type RenderTargetGlContextLike,
 } from './render-target-support';
 import { buildBackdropTexture, updateBackdropTint } from './scene-builder/backdrop';
-import { buildCamera, tankCenter } from './scene-builder/camera';
+import { buildCamera, tankCenter, FOV_DEGREES } from './scene-builder/camera';
+import {
+  buildEquipmentLights,
+  equipmentLightsTag,
+  type EquipmentLightsHandle,
+} from './scene-builder/equipment-lights';
 import type { CatalogTextureResolver } from './scene-builder/catalog-texture';
 import {
   CAUSTIC_MATERIALS_KEY,
@@ -224,6 +229,18 @@ const BLOOM_STRENGTH = 0.35;
 const BLOOM_RADIUS = 0.4;
 const BLOOM_THRESHOLD = 0.85;
 
+/**
+ * Fish-eye view — wide field of view (degrees) while the camera rides a
+ * fish. ~95° reads as the through-a-fish-eye distortion the mode promises
+ * without the extreme rectilinear stretching a true 150°+ FOV produces on
+ * a perspective camera.
+ */
+const FISH_EYE_FOV_DEGREES = 95;
+/** Eye offset forward of the fish's body centre, as a fraction of body length. */
+const FISH_EYE_FORWARD_FRACTION = 0.35;
+/** Eye offset above the fish's body centre, as a fraction of body length. */
+const FISH_EYE_UP_FRACTION = 0.15;
+
 /** Damping factor for orbit interactions. 0.08 reads smooth on mid-tier HW. */
 const ORBIT_DAMPING = 0.08;
 /** Minimum orbit distance as a fraction of tank depth. */
@@ -244,7 +261,10 @@ interface RafLike {
 
 function getRaf(): RafLike | null {
   const g = globalThis as unknown as Partial<RafLike>;
-  if (typeof g.requestAnimationFrame === 'function' && typeof g.cancelAnimationFrame === 'function') {
+  if (
+    typeof g.requestAnimationFrame === 'function' &&
+    typeof g.cancelAnimationFrame === 'function'
+  ) {
     return {
       requestAnimationFrame: g.requestAnimationFrame.bind(globalThis),
       cancelAnimationFrame: g.cancelAnimationFrame.bind(globalThis),
@@ -448,6 +468,34 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    * `getRenderTargetEffectsSupported()`.
    */
   private renderTargetEffectsSupported = false;
+  /**
+   * Overhead equipment lighting — one SpotLight + fixture mesh per
+   * `category: 'light'` equipment entry attached to the scene. Cached +
+   * tagged like the lighting rig: rebuilt only when the tank dims or the
+   * attached-light set change (`equipmentLightsTag`). `setLevel` is
+   * mutated per render from the day-night directional level. Null when
+   * the scene has no light equipment.
+   */
+  private equipmentLights: EquipmentLightsHandle | null = null;
+  private equipmentLightsCacheTag: string | null = null;
+  /**
+   * Fish-eye view — the camera mode requested by the last `render()` call
+   * (`RenderOptions.cameraMode`, default `'orbit'`). The RAF tick reads it
+   * each frame: while `'fish-eye'` AND a livestock snapshot has at least
+   * one fish, the tick parks the camera at fish 0's eye and SKIPS
+   * `controls.update()` (OrbitControls would otherwise re-derive the
+   * camera from its own spherical state and fight the follow-cam).
+   */
+  private cameraMode: 'orbit' | 'fish-eye' = 'orbit';
+  /**
+   * Whether the fish-eye follow-cam drove the camera on the previous
+   * tick. Used to detect the enter/exit transitions: enter widens the
+   * FOV + disables OrbitControls; exit restores `FOV_DEGREES`, re-enables
+   * controls, and re-frames via `resetView()` (the follow-cam left the
+   * camera somewhere inside the tank — OrbitControls' internal state
+   * must be resynced from a sane pose).
+   */
+  private fishEyeWasActive = false;
 
   /**
    * @param rendererFactory injectable WebGLRenderer factory. The default
@@ -473,11 +521,7 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     // changes (which never happens in the current host, but is still
     // the correct contract — the canvas pair lives for the app's
     // lifetime).
-    if (
-      this.surface !== null &&
-      this.surface.canvas === surface.canvas &&
-      this.renderer !== null
-    ) {
+    if (this.surface !== null && this.surface.canvas === surface.canvas && this.renderer !== null) {
       this.surface = surface;
       this.renderer.setPixelRatio(surface.devicePixelRatio);
       this.renderer.setSize(surface.width, surface.height, false);
@@ -485,9 +529,8 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       this.composer?.setSize(surface.width, surface.height);
       this.bloomPass?.setSize(surface.width, surface.height);
       if (this.camera !== null) {
-        const aspect = surface.width === 0 || surface.height === 0
-          ? 1
-          : surface.width / surface.height;
+        const aspect =
+          surface.width === 0 || surface.height === 0 ? 1 : surface.width / surface.height;
         this.camera.aspect = aspect;
         this.camera.updateProjectionMatrix();
       }
@@ -539,14 +582,19 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     // `renderer.render(scene, camera)` immediately for OrbitControls
     // damping. The placeholder is a 1 m cube — never seen, just sized.
     const aspect = surface.width === 0 ? 1 : surface.width / surface.height;
-    this.camera = buildCamera({ width: 1000, height: 1000, depth: 1000, style: PLACEHOLDER_STYLE }, aspect);
+    this.camera = buildCamera(
+      { width: 1000, height: 1000, depth: 1000, style: PLACEHOLDER_STYLE },
+      aspect,
+    );
 
     // OrbitControls binds pointer / wheel listeners to the canvas only;
     // no document-level listeners.
     const controls = new OrbitControls(this.camera, surface.canvas);
     controls.enableDamping = true;
     controls.dampingFactor = ORBIT_DAMPING;
-    controls.target.copy(tankCenter({ width: 1000, height: 1000, depth: 1000, style: PLACEHOLDER_STYLE }));
+    controls.target.copy(
+      tankCenter({ width: 1000, height: 1000, depth: 1000, style: PLACEHOLDER_STYLE }),
+    );
     controls.minDistance = 1000 * ORBIT_MIN_DIST_MULT;
     controls.maxDistance = 1000 * ORBIT_MAX_DIST_MULT;
     controls.autoRotate = false;
@@ -557,12 +605,16 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     // shell zoom percent + orbit UI can re-read state when the user spins
     // the camera with the mouse. The orbit-controls-stub used in Jest
     // omits `addEventListener`, so guard the binding.
-    const addListener = (controls as unknown as {
-      addEventListener?: (event: string, cb: () => void) => void;
-    }).addEventListener;
-    const removeListener = (controls as unknown as {
-      removeEventListener?: (event: string, cb: () => void) => void;
-    }).removeEventListener;
+    const addListener = (
+      controls as unknown as {
+        addEventListener?: (event: string, cb: () => void) => void;
+      }
+    ).addEventListener;
+    const removeListener = (
+      controls as unknown as {
+        removeEventListener?: (event: string, cb: () => void) => void;
+      }
+    ).removeEventListener;
     if (typeof addListener === 'function' && typeof removeListener === 'function') {
       const onChange = (): void => this.notifyChange();
       addListener.call(controls, 'change', onChange);
@@ -612,6 +664,7 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
 
       const world = this.livestockWorld;
       const bundle = this.livestockBundle;
+      let snap: WorldSnapshot | null = null;
       if (world !== null && bundle !== null) {
         accumulator += dtMs;
         let steps = 0;
@@ -626,8 +679,17 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
           accumulator = 0;
         }
         const alpha = accumulator / SIM_DT_MS;
-        bundle.syncFromSnapshot(world.snapshot(alpha), now / 1000);
+        snap = world.snapshot(alpha);
+        bundle.syncFromSnapshot(snap, now / 1000);
       }
+
+      // Fish-eye view — when active, the follow-cam owns the camera this
+      // frame and OrbitControls' update must NOT run (it re-derives the
+      // camera pose from its own spherical state and would yank the
+      // camera back to the orbit). The snapshot is the SAME interpolated
+      // one the mesh sync just consumed, so the camera rides the visible
+      // fish without a one-frame lag.
+      const fishCamDrove = this.applyFishEyeCamera(snap, c);
 
       // Stage 11 F11.7 — drive the water surface's uTime uniform off the
       // wall clock so the swell + ripple bands animate at their authored
@@ -655,11 +717,86 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
         updateCausticTime(this.causticMaterials, now / 1000);
       }
 
-      ctl?.update();
+      if (!fishCamDrove) ctl?.update();
       this.paint(r, s, c);
       this.rafHandle = raf.requestAnimationFrame(tick);
     };
     this.rafHandle = raf.requestAnimationFrame(tick);
+  }
+
+  /**
+   * Fish-eye view — park the camera at fish 0's eye, looking along the
+   * fish's heading. Returns `true` when the follow-cam drove the camera
+   * this frame (the tick then skips `controls.update()`).
+   *
+   * Geometry: the snapshot's positions/orientations are in DOCUMENT
+   * coordinates, but the content group is rendered through the doc→world
+   * X-mirror (`applyDocToWorldMirror`). The camera lives OUTSIDE that
+   * mirrored group, so the fish's doc position/heading must be mirrored
+   * manually: `worldX = tank.width − docX`, and the heading's X component
+   * negates. The fish's nose direction in doc space is the orientation
+   * quaternion applied to `(-1, 0, 0)` — the same convention the
+   * steering integrator drives (see `rotateOrientationToward` in
+   * `livestock-ecs`).
+   *
+   * Graceful degradation: with no snapshot / no fish, the orbit camera
+   * stays in charge (controls re-enabled) — fish-eye over an empty tank
+   * is just plain 3D.
+   */
+  private applyFishEyeCamera(snap: WorldSnapshot | null, camera: PerspectiveCamera): boolean {
+    const tank = this.lastRenderedTank;
+    const active =
+      this.cameraMode === 'fish-eye' && snap !== null && snap.entityCount > 0 && tank !== null;
+
+    if (!active) {
+      if (this.fishEyeWasActive) {
+        // Exit transition — restore the editorial FOV, hand the camera
+        // back to OrbitControls, and re-frame to the default 3/4 view
+        // (the follow-cam left the camera inside the tank; OrbitControls'
+        // spherical state must be resynced from a sane pose).
+        this.fishEyeWasActive = false;
+        camera.fov = FOV_DEGREES;
+        camera.updateProjectionMatrix();
+        if (this.controls !== null) this.controls.enabled = true;
+        this.resetView();
+      }
+      return false;
+    }
+
+    if (!this.fishEyeWasActive) {
+      // Enter transition — widen the FOV, freeze OrbitControls input.
+      this.fishEyeWasActive = true;
+      camera.fov = FISH_EYE_FOV_DEGREES;
+      camera.updateProjectionMatrix();
+      if (this.controls !== null) this.controls.enabled = false;
+    }
+
+    // Fish 0 — the snapshot's first entity. Spawn order is deterministic
+    // (document order), so the followed fish is stable for a given scene.
+    const px = snap.position[0] as number;
+    const py = snap.position[1] as number;
+    const pz = snap.position[2] as number;
+    const qx = snap.orientation[0] as number;
+    const qy = snap.orientation[1] as number;
+    const qz = snap.orientation[2] as number;
+    const qw = snap.orientation[3] as number;
+    const bodyLen = (snap.scale[0] as number) || 30;
+
+    // Doc-space nose direction = quaternion · (-1, 0, 0).
+    const fx = -(1 - 2 * (qy * qy + qz * qz));
+    const fy = -(2 * (qz * qw + qx * qy));
+    const fz = -(2 * (qx * qz - qy * qw));
+
+    // Doc → world mirror (X only).
+    const wx = tank.width - px;
+    const wfx = -fx;
+
+    const ex = wx + wfx * bodyLen * FISH_EYE_FORWARD_FRACTION;
+    const ey = py + bodyLen * FISH_EYE_UP_FRACTION + fy * bodyLen * FISH_EYE_FORWARD_FRACTION;
+    const ez = pz + fz * bodyLen * FISH_EYE_FORWARD_FRACTION;
+    camera.position.set(ex, ey, ez);
+    camera.lookAt(ex + wfx * 100, ey + fy * 100, ez + fz * 100);
+    return true;
   }
 
   // ─── render ───────────────────────────────────────────────────────────
@@ -683,6 +820,17 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     // 2) Rebuild lighting if missing (first render) or if the tank
     //    dimensions changed (key-light position scales with the tank).
     this.ensureLightingForTank(scene, tScene);
+
+    // 2x) Overhead equipment lights — rebuilt only when the tank dims or
+    //     the attached-light set change; per-render the day-night level
+    //     scales spot intensity + fixture glow in place (no rebuild).
+    this.ensureEquipmentLights(scene, catalog, tScene);
+    this.equipmentLights?.setLevel(options.dayNightLookup?.directionalIntensity ?? 1);
+
+    // Fish-eye view — record the requested camera mode for the RAF tick.
+    // The tick owns the actual camera writes (it has the interpolated
+    // snapshot); render() just latches the request.
+    this.cameraMode = options.cameraMode ?? 'orbit';
 
     // 2a) Stage 11 F11.7 Wave 3 — day-night cycle. Mutate the cached
     //     ambient colour + directional intensity + scene background +
@@ -747,10 +895,7 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       ...((hardscapeGroup.userData[CAUSTIC_MATERIALS_KEY] as MeshStandardMaterial[] | undefined) ??
         []),
     ];
-    setCausticIntensity(
-      this.causticMaterials,
-      options.dayNightLookup?.directionalIntensity ?? 1,
-    );
+    setCausticIntensity(this.causticMaterials, options.dayNightLookup?.directionalIntensity ?? 1);
     // Stage 11 F11.7 — retain a handle on the plant group so the RAF tick
     // can drive its sway materials' `uTime` uniform. The group itself is
     // rebuilt + GPU-disposed every render (no caching), but we always
@@ -790,9 +935,7 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       // shimmer by the same day-night directional level the substrate +
       // hardscape caustics use (`setCausticIntensity` above), so the
       // water's bright rim shimmer fades out at night in lockstep.
-      this.waterMesh.setCausticStrength(
-        options.dayNightLookup?.directionalIntensity ?? 1,
-      );
+      this.waterMesh.setCausticStrength(options.dayNightLookup?.directionalIntensity ?? 1);
     }
 
     // Stage 11 F11.1 — livestock InstancedMesh bundle. The world is owned
@@ -937,9 +1080,36 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     });
     this.currentAmbientLight = ambient;
     this.currentDirectionalLight = directional;
-    this.baseDirectionalIntensity = directional !== null
-      ? (directional as DirectionalLight).intensity
-      : 1;
+    this.baseDirectionalIntensity =
+      directional !== null ? (directional as DirectionalLight).intensity : 1;
+  }
+
+  /**
+   * Lazily build / rebuild the overhead equipment-lights group. Tagged by
+   * tank dims + the ordered attached-light refs (`equipmentLightsTag`) —
+   * same caching policy as the lighting rig. Mirrored with the content
+   * (`applyDocToWorldMirror`) so the left-to-right fixture order matches
+   * the equipment list's document order on screen.
+   */
+  private ensureEquipmentLights(
+    scene: Scene,
+    catalog: Catalog | undefined,
+    tScene: ThreeScene,
+  ): void {
+    const tag = equipmentLightsTag(scene);
+    if (this.equipmentLightsCacheTag === tag) return;
+    if (this.equipmentLights !== null) {
+      tScene.remove(this.equipmentLights.group);
+      this.equipmentLights.dispose();
+      this.equipmentLights = null;
+    }
+    const handle = buildEquipmentLights(scene, catalog);
+    if (handle !== null) {
+      applyDocToWorldMirror(handle.group, scene.tank.width);
+      tScene.add(handle.group);
+      this.equipmentLights = handle;
+    }
+    this.equipmentLightsCacheTag = tag;
   }
 
   /**
@@ -1027,9 +1197,7 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    * async placeholder→image upgrade is monotonic, matching how the IBL
    * environment fills in.
    */
-  private buildTextureResolver(
-    baseUrl: string | undefined,
-  ): CatalogTextureResolver | undefined {
+  private buildTextureResolver(baseUrl: string | undefined): CatalogTextureResolver | undefined {
     if (baseUrl === undefined) return undefined;
     if (this.textureCache === null) {
       this.textureCache = new TextureCache();
@@ -1087,8 +1255,7 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     tScene.environment = this.envTexture;
     // Scale the IBL contribution globally so it fills shading + supplies
     // reflections without flattening the directional key's shadows.
-    (tScene as ThreeScene & { environmentIntensity: number }).environmentIntensity =
-      ENV_INTENSITY;
+    (tScene as ThreeScene & { environmentIntensity: number }).environmentIntensity = ENV_INTENSITY;
   }
 
   /**
@@ -1175,7 +1342,12 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    * renderer does not participate in the editor's pick/drag pipeline;
    * 3D is purely a viewer.
    */
-  hitTest(_point: Vec2, _scene: Scene, _viewport: Viewport, _options?: HitTestOptions): HitResult | null {
+  hitTest(
+    _point: Vec2,
+    _scene: Scene,
+    _viewport: Viewport,
+    _options?: HitTestOptions,
+  ): HitResult | null {
     void _point;
     void _scene;
     void _viewport;
@@ -1391,6 +1563,18 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       disposeNode(this.lighting);
       this.lighting = null;
     }
+    // Overhead equipment lights — release spots + fixture meshes, clear
+    // the cache tag so a re-attach rebuilds from scratch.
+    if (this.equipmentLights !== null) {
+      if (this.threeScene !== null) this.threeScene.remove(this.equipmentLights.group);
+      this.equipmentLights.dispose();
+      this.equipmentLights = null;
+    }
+    this.equipmentLightsCacheTag = null;
+    // Fish-eye view — reset the follow-cam latch so a re-attach starts in
+    // orbit mode (the camera itself is rebuilt on attach anyway).
+    this.cameraMode = 'orbit';
+    this.fishEyeWasActive = false;
     // Stage 11 F11.7 Wave 3 — drop cached light refs so a stale
     // `applyDayNightLookup` after dispose can't reach into disposed
     // resources. Reassigned next time `ensureLightingForTank` runs.

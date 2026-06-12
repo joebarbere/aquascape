@@ -64,9 +64,12 @@ interface AquascapeDebugHandle {
   /** Total live ECS entities across all archetypes. */
   getEntityCount(): number;
   /** Current scene from the NgRx store (or null before first emission). */
-  getScene(): { livestock?: ReadonlyArray<{ quantity: number }> } | null;
+  getScene(): {
+    livestock?: ReadonlyArray<{ quantity: number }>;
+    equipment?: ReadonlyArray<unknown>;
+  } | null;
   /** Current canvas view mode driven by ViewModeService. */
-  getViewMode(): '2d' | '3d';
+  getViewMode(): '2d' | '3d' | 'fish-eye';
 }
 
 declare global {
@@ -115,14 +118,11 @@ test.describe('livestock 3D rendering', () => {
 
     // Wait for the scene store to settle so the simulation-service has
     // picked up the new entries before we flip the view mode.
-    await page.waitForFunction(
-      (expected) => {
-        const scene = window.__aquascape_debug__?.getScene();
-        const total = scene?.livestock?.reduce((sum, e) => sum + e.quantity, 0) ?? 0;
-        return total === expected;
-      },
-      FISH_TO_ADD,
-    );
+    await page.waitForFunction((expected) => {
+      const scene = window.__aquascape_debug__?.getScene();
+      const total = scene?.livestock?.reduce((sum, e) => sum + e.quantity, 0) ?? 0;
+      return total === expected;
+    }, FISH_TO_ADD);
 
     // ── Switch to 3D. See "CROSS-PLATFORM SHORTCUT" above for why we use
     //    Control+Shift+3 on every OS.
@@ -347,21 +347,25 @@ test.describe('livestock 3D rendering', () => {
     // settle within a few RAF ticks. (We're already in 3D from
     // `addOneFishAndEnter3d` above, so the world ticks.)
     await expect
-      .poll(
-        () => page.evaluate(() => window.__aquascape_debug__?.getBubbleParticleCount() ?? 0),
-        { timeout: 5_000 },
-      )
+      .poll(() => page.evaluate(() => window.__aquascape_debug__?.getBubbleParticleCount() ?? 0), {
+        timeout: 5_000,
+      })
       .toBeGreaterThan(0);
 
     // Steady-state: with airRateMl=800, BUBBLE_SCALE=3, lifetime=6s, the
     // column converges to a few dozen bubbles before hitting the 200 cap.
     // Don't pin an exact number — the test just confirms the column is
-    // alive + non-trivial.
-    await page.waitForTimeout(500);
+    // alive + non-trivial. POLL rather than fixed-sleep-then-assert: under
+    // parallel software-WebGL load the sim ticks slower and a fixed 500 ms
+    // window can catch the column at exactly the floor.
+    await expect
+      .poll(() => page.evaluate(() => window.__aquascape_debug__?.getBubbleParticleCount() ?? 0), {
+        timeout: 5_000,
+      })
+      .toBeGreaterThan(5);
     const count = await page.evaluate(
       () => window.__aquascape_debug__?.getBubbleParticleCount() ?? 0,
     );
-    expect(count).toBeGreaterThan(5);
     expect(count).toBeLessThanOrEqual(200);
   });
 });
@@ -402,11 +406,9 @@ async function addOneFishAndEnter3d(page: Page): Promise<void> {
   if (!(await isIn3dMode(page))) {
     await page.getByRole('button', { name: /Switch to 3D view/ }).click();
   }
-  await page.waitForFunction(
-    () => window.__aquascape_debug__?.getViewMode() === '3d',
-    undefined,
-    { timeout: 5_000 },
-  );
+  await page.waitForFunction(() => window.__aquascape_debug__?.getViewMode() === '3d', undefined, {
+    timeout: 5_000,
+  });
   // Spawn is lazy — wait for at least one ECS entity to exist.
   await expect
     .poll(() => page.evaluate(() => window.__aquascape_debug__?.getEntityCount() ?? 0))

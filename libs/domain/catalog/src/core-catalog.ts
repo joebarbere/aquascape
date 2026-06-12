@@ -119,6 +119,12 @@ import equipmentCobaltNeoTherm100 from './data/equipment/cobalt-neo-therm-100.js
 import equipmentTwinstar600s from './data/equipment/twinstar-600s.json';
 import equipmentChihirosWrgbIIPro60 from './data/equipment/chihiros-wrgb-ii-pro-60.json';
 import equipmentFluvalPlant336W from './data/equipment/fluval-plant-3-36w.json';
+import equipmentNicrewClassicLedPlus24 from './data/equipment/nicrew-classicled-plus-24.json';
+import equipmentFinnexPlanted247Klc24 from './data/equipment/finnex-planted-247-klc-24.json';
+import equipmentAdaSolarRgb from './data/equipment/ada-solar-rgb.json';
+import equipmentKessilA360xTunaSun from './data/equipment/kessil-a360x-tuna-sun.json';
+import equipmentOnfFlatOnePlus60 from './data/equipment/onf-flat-one-plus-60.json';
+import equipmentCurrentSatellitePlusPro24 from './data/equipment/current-satellite-plus-pro-24.json';
 // Equipment — CO2
 import equipmentCo2artSePressurised from './data/equipment/co2art-se-pressurised.json';
 import equipmentAdaPollenGlassDiffuser from './data/equipment/ada-pollen-glass-diffuser.json';
@@ -227,6 +233,12 @@ export const CORE_CATALOG_MANIFESTS: readonly unknown[] = [
   equipmentTwinstar600s,
   equipmentChihirosWrgbIIPro60,
   equipmentFluvalPlant336W,
+  equipmentNicrewClassicLedPlus24,
+  equipmentFinnexPlanted247Klc24,
+  equipmentAdaSolarRgb,
+  equipmentKessilA360xTunaSun,
+  equipmentOnfFlatOnePlus60,
+  equipmentCurrentSatellitePlusPro24,
   // Equipment — CO2
   equipmentCo2artSePressurised,
   equipmentAdaPollenGlassDiffuser,

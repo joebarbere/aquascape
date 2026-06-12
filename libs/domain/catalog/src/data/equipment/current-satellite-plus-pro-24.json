@@ -1,0 +1,17 @@
+{
+  "catalog": "core",
+  "id": "equipment.light.current-satellite-plus-pro-24",
+  "version": 1,
+  "name": "Current USA Satellite Plus PRO (24-36 in)",
+  "kind": "equipment",
+  "category": "light",
+  "subcategory": "led-clip",
+  "color": "#f1eccd",
+  "wattage": 30,
+  "coverageLitres": { "min": 75, "max": 150 },
+  "photoperiodHours": 8,
+  "description": "Full-spectrum RGB+W bar with a wireless 24-hour ramp timer, dynamic weather effects, and adjustable spectrum; a long-running favourite for low-to-medium-light community planted tanks. light.colorTempK records the published 6500K white-diode channel (mixed with RGB; 30W is the retailer-published draw for the 24-36 in size). Current USA does not publish luminous flux for the Plus PRO, so light.lumens is omitted rather than estimated. light.fixtureLengthMm is the published 22.8 in (579 mm) housing at minimum extension. coverageLitres approximates the 24-36 inch tank window (roughly 20-40 US gal).",
+  "tags": ["light", "led", "rgbw", "timer", "ramping", "community"],
+  "defaultSettings": { "photoperiodHours": 8, "intensityPct": 90 },
+  "light": { "colorTempK": 6500, "fixtureLengthMm": 579 }
+}

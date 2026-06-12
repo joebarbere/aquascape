@@ -1,4 +1,5 @@
-// View-mode toggle — segmented "2D | 3D" control. Stage 10 F10.2.
+// View-mode toggle — segmented "2D | 3D | Fish eye" control. Stage 10
+// F10.2; fish-eye segment added with the fish-eye view mode.
 //
 // Mounted in `EditorShellComponent`'s toolbar next to the export button.
 // Pressing a segment calls `ViewModeService.setMode(...)`; clicking the
@@ -19,13 +20,7 @@
 // `EditorShellComponent` uses for its Cmd/N/O/S/Z shortcuts applies here,
 // so users typing in numeric inputs can't accidentally swap views.
 
-import {
-  ChangeDetectionStrategy,
-  Component,
-  HostListener,
-  computed,
-  inject,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, computed, inject } from '@angular/core';
 
 import { ViewModeService, type ViewMode } from './view-mode.service';
 
@@ -56,6 +51,17 @@ import { ViewModeService, type ViewMode } from './view-mode.service';
         (click)="onSelect('3d')"
       >
         3D
+      </button>
+      <button
+        type="button"
+        class="seg"
+        [class.is-active]="mode() === 'fish-eye'"
+        [attr.aria-pressed]="mode() === 'fish-eye'"
+        [attr.aria-label]="ariaLabelFishEye()"
+        [title]="ariaLabelFishEye()"
+        (click)="onSelect('fish-eye')"
+      >
+        Fish eye
       </button>
     </div>
   `,
@@ -118,6 +124,12 @@ export class ViewToggleComponent {
 
   readonly ariaLabel3d = computed<string>(() =>
     this.mode() === '3d' ? '3D view (active)' : 'Switch to 3D view',
+  );
+
+  readonly ariaLabelFishEye = computed<string>(() =>
+    this.mode() === 'fish-eye'
+      ? 'Fish-eye view (active)'
+      : 'Switch to fish-eye view (camera rides a fish)',
   );
 
   onSelect(mode: ViewMode): void {

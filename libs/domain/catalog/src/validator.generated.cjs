@@ -41,7 +41,7 @@ var require_ucs2length = __commonJS({
   }
 });
 
-// node_modules/.cache/aquascape-validators/tcIIjS/entry.cjs
+// node_modules/.cache/aquascape-validators/kqYpYu/entry.cjs
 module.exports = validate20;
 module.exports.default = validate20;
 var schema32 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "material", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "substrate" }, "material": { "enum": ["soil", "sand", "gravel"] }, "color": { "$ref": "#/$defs/HexColor" }, "grainSize": { "type": "number", "exclusiveMinimum": 0 }, "textures": { "$ref": "#/$defs/CatalogTextureRefs" } } };
@@ -3687,7 +3687,7 @@ function validate31(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate31.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema50 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "category", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "equipment" }, "category": { "enum": ["filter", "heater", "light", "co2"] }, "subcategory": { "type": "string", "minLength": 1 }, "wattage": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published power draw in watts." }, "flowRateLph": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published flow rate (litres per hour). Filter-specific; ignored for other categories." }, "coverageLitres": { "type": "object", "additionalProperties": false, "properties": { "min": { "type": "integer", "exclusiveMinimum": 0 }, "max": { "type": "integer", "exclusiveMinimum": 0 } }, "description": "Recommended tank-size window. Either bound is optional; both are positive integers when present." }, "defaultSettings": { "type": "object", "additionalProperties": { "anyOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }] }, "description": "Seed settings the future settings UI populates on first attach. F7.3 v1 is display-only; shape mirrors the document-side EquipmentEntry.settings Record." }, "color": { "$ref": "#/$defs/HexColor" }, "flow": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.5 flow contribution for filter / pump equipment. Drives the FlowFieldSystem source/sink bake. Every subfield is optional + additive \u2014 older manifests without `flow` keep loading unchanged.", "properties": { "outflowPos": { "$ref": "#/$defs/Vec3", "description": "World-space position where water exits the equipment (mm). Right-handed, +x right, +y up, +z back." }, "outflowVec": { "$ref": "#/$defs/Vec3", "description": "Direction vector of the outflow jet (unit-ish). Default (0, 0, 1) \u2014 points toward back of tank." }, "intakePos": { "$ref": "#/$defs/Vec3", "description": "World-space position where water enters the equipment intake (mm). Optional \u2014 when absent, the intake is co-located with `outflowPos`." }, "flowRate": { "type": "number", "minimum": 0, "description": "Volumetric flow rate (L/hr). Drives source/sink strength. Default 200." } } }, "airRateMl": { "type": "number", "minimum": 0, "description": "Stage 11 F11.5 air-stone air volumetric rate (mL/min). Drives BubbleParticleSystem spawn rate. When absent, the equipment is not an air-stone (or produces no visible bubbles)." }, "photoperiodHours": { "type": "number", "minimum": 0, "maximum": 24, "description": "Stage 11 F11.7 optional daily photoperiod for lighting equipment (hours per day, 0\u201324). Drives the day-night cycle's 'equipment' mode. Only meaningful when category === 'light'; absent = service default 10h on / 14h off." } } };
+var schema50 = { "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }], "type": "object", "required": ["kind", "category", "color"], "additionalProperties": false, "properties": { "catalog": true, "id": true, "version": true, "name": true, "description": true, "tags": true, "kind": { "const": "equipment" }, "category": { "enum": ["filter", "heater", "light", "co2"] }, "subcategory": { "type": "string", "minLength": 1 }, "wattage": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published power draw in watts." }, "flowRateLph": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published flow rate (litres per hour). Filter-specific; ignored for other categories." }, "coverageLitres": { "type": "object", "additionalProperties": false, "properties": { "min": { "type": "integer", "exclusiveMinimum": 0 }, "max": { "type": "integer", "exclusiveMinimum": 0 } }, "description": "Recommended tank-size window. Either bound is optional; both are positive integers when present." }, "defaultSettings": { "type": "object", "additionalProperties": { "anyOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }] }, "description": "Seed settings the future settings UI populates on first attach. F7.3 v1 is display-only; shape mirrors the document-side EquipmentEntry.settings Record." }, "color": { "$ref": "#/$defs/HexColor" }, "flow": { "type": "object", "additionalProperties": false, "description": "Stage 11 F11.5 flow contribution for filter / pump equipment. Drives the FlowFieldSystem source/sink bake. Every subfield is optional + additive \u2014 older manifests without `flow` keep loading unchanged.", "properties": { "outflowPos": { "$ref": "#/$defs/Vec3", "description": "World-space position where water exits the equipment (mm). Right-handed, +x right, +y up, +z back." }, "outflowVec": { "$ref": "#/$defs/Vec3", "description": "Direction vector of the outflow jet (unit-ish). Default (0, 0, 1) \u2014 points toward back of tank." }, "intakePos": { "$ref": "#/$defs/Vec3", "description": "World-space position where water enters the equipment intake (mm). Optional \u2014 when absent, the intake is co-located with `outflowPos`." }, "flowRate": { "type": "number", "minimum": 0, "description": "Volumetric flow rate (L/hr). Drives source/sink strength. Default 200." } } }, "airRateMl": { "type": "number", "minimum": 0, "description": "Stage 11 F11.5 air-stone air volumetric rate (mL/min). Drives BubbleParticleSystem spawn rate. When absent, the equipment is not an air-stone (or produces no visible bubbles)." }, "photoperiodHours": { "type": "number", "minimum": 0, "maximum": 24, "description": "Stage 11 F11.7 optional daily photoperiod for lighting equipment (hours per day, 0\u201324). Drives the day-night cycle's 'equipment' mode. Only meaningful when category === 'light'; absent = service default 10h on / 14h off." }, "light": { "type": "object", "additionalProperties": false, "description": "Light-emission parameters for category 'light' equipment. Drives the 3D renderer's overhead equipment lighting (one SpotLight + fixture mesh per attached light). Every subfield is optional + additive \u2014 the renderer supplies defaults; older manifests load unchanged. Only meaningful when category === 'light'; ignored otherwise. Omit unpublished figures rather than fabricating them.", "properties": { "lumens": { "type": "number", "exclusiveMinimum": 0, "description": "Manufacturer-published luminous flux, in lumens. Omitted when the manufacturer publishes PAR only (e.g. ADA, Kessil) rather than fabricated." }, "colorTempK": { "type": "number", "minimum": 1e3, "maximum": 2e4, "description": "Correlated colour temperature, in Kelvin (e.g. 6500). When the manufacturer publishes a range, manifests record the documented mid-point and say so in `description`." }, "beamAngleDeg": { "type": "number", "exclusiveMinimum": 0, "maximum": 180, "description": "Full beam spread angle, in degrees. LED panels are typically ~120; omitted when not published." }, "fixtureLengthMm": { "type": "number", "exclusiveMinimum": 0, "description": "Physical fixture length along the tank's width axis, in mm. Sizes the 3D renderer's fixture mesh." } } } } };
 function validate33(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -4563,12 +4563,142 @@ function validate33(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
+    if (data.light !== void 0) {
+      let data35 = data.light;
+      if (data35 && typeof data35 == "object" && !Array.isArray(data35)) {
+        for (const key7 in data35) {
+          if (!(key7 === "lumens" || key7 === "colorTempK" || key7 === "beamAngleDeg" || key7 === "fixtureLengthMm")) {
+            const err78 = { instancePath: instancePath + "/light", schemaPath: "#/properties/light/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key7 }, message: "must NOT have additional properties" };
+            if (vErrors === null) {
+              vErrors = [err78];
+            } else {
+              vErrors.push(err78);
+            }
+            errors++;
+          }
+        }
+        if (data35.lumens !== void 0) {
+          let data36 = data35.lumens;
+          if (typeof data36 == "number" && isFinite(data36)) {
+            if (data36 <= 0 || isNaN(data36)) {
+              const err79 = { instancePath: instancePath + "/light/lumens", schemaPath: "#/properties/light/properties/lumens/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+              if (vErrors === null) {
+                vErrors = [err79];
+              } else {
+                vErrors.push(err79);
+              }
+              errors++;
+            }
+          } else {
+            const err80 = { instancePath: instancePath + "/light/lumens", schemaPath: "#/properties/light/properties/lumens/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+            if (vErrors === null) {
+              vErrors = [err80];
+            } else {
+              vErrors.push(err80);
+            }
+            errors++;
+          }
+        }
+        if (data35.colorTempK !== void 0) {
+          let data37 = data35.colorTempK;
+          if (typeof data37 == "number" && isFinite(data37)) {
+            if (data37 > 2e4 || isNaN(data37)) {
+              const err81 = { instancePath: instancePath + "/light/colorTempK", schemaPath: "#/properties/light/properties/colorTempK/maximum", keyword: "maximum", params: { comparison: "<=", limit: 2e4 }, message: "must be <= 20000" };
+              if (vErrors === null) {
+                vErrors = [err81];
+              } else {
+                vErrors.push(err81);
+              }
+              errors++;
+            }
+            if (data37 < 1e3 || isNaN(data37)) {
+              const err82 = { instancePath: instancePath + "/light/colorTempK", schemaPath: "#/properties/light/properties/colorTempK/minimum", keyword: "minimum", params: { comparison: ">=", limit: 1e3 }, message: "must be >= 1000" };
+              if (vErrors === null) {
+                vErrors = [err82];
+              } else {
+                vErrors.push(err82);
+              }
+              errors++;
+            }
+          } else {
+            const err83 = { instancePath: instancePath + "/light/colorTempK", schemaPath: "#/properties/light/properties/colorTempK/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+            if (vErrors === null) {
+              vErrors = [err83];
+            } else {
+              vErrors.push(err83);
+            }
+            errors++;
+          }
+        }
+        if (data35.beamAngleDeg !== void 0) {
+          let data38 = data35.beamAngleDeg;
+          if (typeof data38 == "number" && isFinite(data38)) {
+            if (data38 > 180 || isNaN(data38)) {
+              const err84 = { instancePath: instancePath + "/light/beamAngleDeg", schemaPath: "#/properties/light/properties/beamAngleDeg/maximum", keyword: "maximum", params: { comparison: "<=", limit: 180 }, message: "must be <= 180" };
+              if (vErrors === null) {
+                vErrors = [err84];
+              } else {
+                vErrors.push(err84);
+              }
+              errors++;
+            }
+            if (data38 <= 0 || isNaN(data38)) {
+              const err85 = { instancePath: instancePath + "/light/beamAngleDeg", schemaPath: "#/properties/light/properties/beamAngleDeg/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+              if (vErrors === null) {
+                vErrors = [err85];
+              } else {
+                vErrors.push(err85);
+              }
+              errors++;
+            }
+          } else {
+            const err86 = { instancePath: instancePath + "/light/beamAngleDeg", schemaPath: "#/properties/light/properties/beamAngleDeg/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+            if (vErrors === null) {
+              vErrors = [err86];
+            } else {
+              vErrors.push(err86);
+            }
+            errors++;
+          }
+        }
+        if (data35.fixtureLengthMm !== void 0) {
+          let data39 = data35.fixtureLengthMm;
+          if (typeof data39 == "number" && isFinite(data39)) {
+            if (data39 <= 0 || isNaN(data39)) {
+              const err87 = { instancePath: instancePath + "/light/fixtureLengthMm", schemaPath: "#/properties/light/properties/fixtureLengthMm/exclusiveMinimum", keyword: "exclusiveMinimum", params: { comparison: ">", limit: 0 }, message: "must be > 0" };
+              if (vErrors === null) {
+                vErrors = [err87];
+              } else {
+                vErrors.push(err87);
+              }
+              errors++;
+            }
+          } else {
+            const err88 = { instancePath: instancePath + "/light/fixtureLengthMm", schemaPath: "#/properties/light/properties/fixtureLengthMm/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+            if (vErrors === null) {
+              vErrors = [err88];
+            } else {
+              vErrors.push(err88);
+            }
+            errors++;
+          }
+        }
+      } else {
+        const err89 = { instancePath: instancePath + "/light", schemaPath: "#/properties/light/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        if (vErrors === null) {
+          vErrors = [err89];
+        } else {
+          vErrors.push(err89);
+        }
+        errors++;
+      }
+    }
   } else {
-    const err78 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+    const err90 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
     if (vErrors === null) {
-      vErrors = [err78];
+      vErrors = [err90];
     } else {
-      vErrors.push(err78);
+      vErrors.push(err90);
     }
     errors++;
   }

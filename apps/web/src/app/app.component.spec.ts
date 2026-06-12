@@ -220,7 +220,10 @@ if (typeof (globalThis as { PointerEvent?: unknown }).PointerEvent === 'undefine
   class PointerEventPolyfill extends MouseEvent {
     readonly pointerId: number;
     readonly pointerType: string;
-    constructor(type: string, init: MouseEventInit & { pointerId?: number; pointerType?: string } = {}) {
+    constructor(
+      type: string,
+      init: MouseEventInit & { pointerId?: number; pointerType?: string } = {},
+    ) {
       super(type, init);
       this.pointerId = init.pointerId ?? 1;
       this.pointerType = init.pointerType ?? 'mouse';
@@ -274,7 +277,9 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     fixture.detectChanges();
     const spy = dispatchSpy();
     const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
-    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 400, clientY: 300 }));
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', { button: 0, clientX: 400, clientY: 300 }),
+    );
     const actions = spy.mock.calls.map((c) => c[0]);
     expect(actions[0]).toEqual(SelectionActions.replaceSelection({ ids: [asObjectId('a')] }));
   });
@@ -293,14 +298,16 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     fixture.detectChanges();
     const spy = dispatchSpy();
     const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
-    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 400, clientY: 300 }));
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', { button: 0, clientX: 400, clientY: 300 }),
+    );
     document.dispatchEvent(new PointerEvent('pointermove', { clientX: 500, clientY: 300 }));
     document.dispatchEvent(new PointerEvent('pointerup', { clientX: 500, clientY: 300 }));
     const dispatched = spy.mock.calls.map((c) => c[0]);
     const moveActions = dispatched.filter(
       (a) =>
         (a as ReturnType<typeof SceneActions.dispatchCommand>).type ===
-        '[Scene] Dispatch Command' &&
+          '[Scene] Dispatch Command' &&
         (a as ReturnType<typeof SceneActions.dispatchCommand>).command.kind === 'MoveObject',
     );
     expect(moveActions.length).toBe(1);
@@ -310,10 +317,9 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     const renderer = new MockSceneRenderer();
     const scene = sceneWithObject('a');
     configure(renderer, scene);
-    TestBed.inject(MockStore).overrideSelector(
-      selectSelectedIds,
-      [asObjectId('a')] as readonly ObjectId[],
-    );
+    TestBed.inject(MockStore).overrideSelector(selectSelectedIds, [
+      asObjectId('a'),
+    ] as readonly ObjectId[]);
     renderer.hitTest.mockReturnValue({
       objectId: asObjectId('a'),
       layerId: asLayerId('layer-1'),
@@ -323,14 +329,16 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     fixture.detectChanges();
     const spy = dispatchSpy();
     const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
-    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 450, clientY: 250 }));
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', { button: 0, clientX: 450, clientY: 250 }),
+    );
     document.dispatchEvent(new PointerEvent('pointermove', { clientX: 480, clientY: 220 }));
     document.dispatchEvent(new PointerEvent('pointerup', { clientX: 480, clientY: 220 }));
     const dispatched = spy.mock.calls.map((c) => c[0]);
     const reshapes = dispatched.filter(
       (a) =>
         (a as ReturnType<typeof SceneActions.dispatchCommand>).type ===
-        '[Scene] Dispatch Command' &&
+          '[Scene] Dispatch Command' &&
         (a as ReturnType<typeof SceneActions.dispatchCommand>).command.kind === 'ReshapeObject',
     );
     expect(reshapes.length).toBe(1);
@@ -340,10 +348,9 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     const renderer = new MockSceneRenderer();
     const scene = sceneWithObject('a');
     configure(renderer, scene);
-    TestBed.inject(MockStore).overrideSelector(
-      selectSelectedIds,
-      [asObjectId('a')] as readonly ObjectId[],
-    );
+    TestBed.inject(MockStore).overrideSelector(selectSelectedIds, [
+      asObjectId('a'),
+    ] as readonly ObjectId[]);
     renderer.hitTest.mockReturnValue({
       objectId: asObjectId('a'),
       layerId: asLayerId('layer-1'),
@@ -353,7 +360,9 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     fixture.detectChanges();
     const spy = dispatchSpy();
     const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
-    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 500, clientY: 300 }));
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', { button: 0, clientX: 500, clientY: 300 }),
+    );
     document.dispatchEvent(new PointerEvent('pointermove', { clientX: 400, clientY: 200 }));
     document.dispatchEvent(new PointerEvent('pointerup', { clientX: 400, clientY: 200 }));
     const dispatched = spy.mock.calls.map((c) => c[0]);
@@ -370,16 +379,17 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     const renderer = new MockSceneRenderer();
     const scene = sceneWithObject('a');
     configure(renderer, scene);
-    TestBed.inject(MockStore).overrideSelector(
-      selectSelectedIds,
-      [asObjectId('a')] as readonly ObjectId[],
-    );
+    TestBed.inject(MockStore).overrideSelector(selectSelectedIds, [
+      asObjectId('a'),
+    ] as readonly ObjectId[]);
     renderer.hitTest.mockReturnValue({ objectId: asObjectId('a'), layerId: asLayerId('layer-1') });
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const spy = dispatchSpy();
     const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
-    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 400, clientY: 300 }));
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', { button: 0, clientX: 400, clientY: 300 }),
+    );
     document.dispatchEvent(new PointerEvent('pointermove', { clientX: 500, clientY: 300 }));
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     // Pointer-up after cancel should now be a no-op (document listeners removed).
@@ -389,7 +399,7 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
       dispatched.some(
         (a) =>
           (a as ReturnType<typeof SceneActions.dispatchCommand>).type ===
-          '[Scene] Dispatch Command' &&
+            '[Scene] Dispatch Command' &&
           (a as ReturnType<typeof SceneActions.dispatchCommand>).command.kind === 'MoveObject',
       ),
     ).toBe(false);
@@ -402,7 +412,9 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
-    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 100, clientY: 100 }));
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', { button: 0, clientX: 100, clientY: 100 }),
+    );
     document.dispatchEvent(new PointerEvent('pointermove', { clientX: 200, clientY: 200 }));
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.marquee-overlay')).not.toBeNull();
@@ -423,11 +435,22 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     // return the canvas layout we expect for an 800×600 host.
     const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
     canvas.getBoundingClientRect = (): DOMRect =>
-      ({ left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600, x: 0, y: 0 }) as DOMRect;
+      ({
+        left: 0,
+        top: 0,
+        right: 800,
+        bottom: 600,
+        width: 800,
+        height: 600,
+        x: 0,
+        y: 0,
+      }) as DOMRect;
     const spy = dispatchSpy();
     // Marquee from (300, 200) to (500, 400) in CSS — straddles the canvas
     // centre (400, 300) which projects back to world (180, 110).
-    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 300, clientY: 200 }));
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', { button: 0, clientX: 300, clientY: 200 }),
+    );
     document.dispatchEvent(new PointerEvent('pointermove', { clientX: 500, clientY: 400 }));
     document.dispatchEvent(new PointerEvent('pointerup', { clientX: 500, clientY: 400 }));
     const dispatched = spy.mock.calls.map((c) => c[0]);
@@ -448,7 +471,9 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     fixture.detectChanges();
     const spy = dispatchSpy();
     const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
-    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 100, clientY: 100 }));
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', { button: 0, clientX: 100, clientY: 100 }),
+    );
     document.dispatchEvent(new PointerEvent('pointerup', { clientX: 100, clientY: 100 }));
     const dispatched = spy.mock.calls.map((c) => c[0]);
     expect(dispatched).toContainEqual(SelectionActions.clearSelection());
@@ -461,7 +486,9 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     fixture.detectChanges();
     const spy = dispatchSpy();
     const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
-    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 2, clientX: 100, clientY: 100 }));
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', { button: 2, clientX: 100, clientY: 100 }),
+    );
     expect(spy).not.toHaveBeenCalled();
   });
 
@@ -564,7 +591,16 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
 
     const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
     canvas.getBoundingClientRect = (): DOMRect =>
-      ({ left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600, x: 0, y: 0 }) as DOMRect;
+      ({
+        left: 0,
+        top: 0,
+        right: 800,
+        bottom: 600,
+        width: 800,
+        height: 600,
+        x: 0,
+        y: 0,
+      }) as DOMRect;
 
     canvas.dispatchEvent(
       new WheelEvent('wheel', {
@@ -645,7 +681,16 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     const viewport = TestBed.inject(ViewportService);
     const canvas = fixture.nativeElement.querySelector('canvas') as HTMLCanvasElement;
     canvas.getBoundingClientRect = (): DOMRect =>
-      ({ left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600, x: 0, y: 0 }) as DOMRect;
+      ({
+        left: 0,
+        top: 0,
+        right: 800,
+        bottom: 600,
+        width: 800,
+        height: 600,
+        x: 0,
+        y: 0,
+      }) as DOMRect;
 
     canvas.dispatchEvent(
       new WheelEvent('wheel', {
@@ -780,6 +825,77 @@ describe('AppComponent — 2D / 3D view mode', () => {
     expect(renderer3d.dispose).not.toHaveBeenCalled();
 
     fixture.destroy();
+    expect(renderer3d.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  // ─── Fish-eye view mode ──────────────────────────────────────────────────
+
+  it('fish-eye mode renders through the 3D renderer with cameraMode "fish-eye"', () => {
+    const renderer = new MockSceneRenderer();
+    const renderer3d = new MockSceneRenderer();
+    configure(renderer, defaultScene(), renderer3d);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const vm = TestBed.inject(ViewModeService);
+    vm.setMode('fish-eye');
+    fixture.detectChanges();
+
+    // 3D canvas visible, 2D hidden — fish-eye is a 3D-family mode.
+    expect(selectCanvas(fixture, '2D')!.hidden).toBe(true);
+    expect(selectCanvas(fixture, '3D')!.hidden).toBe(false);
+    expect(renderer3d.render).toHaveBeenCalled();
+    const lastCall = renderer3d.render.mock.calls.at(-1)!;
+    expect(lastCall[2]?.cameraMode).toBe('fish-eye');
+  });
+
+  it('plain 3D mode passes cameraMode "orbit"', () => {
+    const renderer = new MockSceneRenderer();
+    const renderer3d = new MockSceneRenderer();
+    configure(renderer, defaultScene(), renderer3d);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const vm = TestBed.inject(ViewModeService);
+    vm.setMode('3d');
+    fixture.detectChanges();
+
+    const lastCall = renderer3d.render.mock.calls.at(-1)!;
+    expect(lastCall[2]?.cameraMode).toBe('orbit');
+  });
+
+  it('2D mode omits cameraMode entirely (no camera in 2D)', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const firstCall = renderer.render.mock.calls[0]!;
+    expect(firstCall[2]?.cameraMode).toBeUndefined();
+  });
+
+  it('flipping 3D → fish-eye does NOT dispose the 3D renderer (same canvas + GL context)', () => {
+    const renderer = new MockSceneRenderer();
+    const renderer3d = new MockSceneRenderer();
+    configure(renderer, defaultScene(), renderer3d);
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const vm = TestBed.inject(ViewModeService);
+    vm.setMode('3d');
+    fixture.detectChanges();
+    expect(renderer3d.dispose).not.toHaveBeenCalled();
+
+    vm.setMode('fish-eye');
+    fixture.detectChanges();
+    // The 3D renderer keeps its GL context across the camera-mode flip;
+    // only crossing the 2D boundary disposes a renderer.
+    expect(renderer3d.dispose).not.toHaveBeenCalled();
+    const lastCall = renderer3d.render.mock.calls.at(-1)!;
+    expect(lastCall[2]?.cameraMode).toBe('fish-eye');
+
+    vm.setMode('2d');
+    fixture.detectChanges();
     expect(renderer3d.dispose).toHaveBeenCalledTimes(1);
   });
 

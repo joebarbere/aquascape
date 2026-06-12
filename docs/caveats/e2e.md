@@ -13,13 +13,14 @@ F11.1 + F11.2 landed the ECS-driven 3D livestock pipeline. Unit + component test
 ```ts
 export interface AquascapeDebugHandle {
   getWorld(): LivestockWorld | null;
-  getEntityCount(): number;            // sum over all archetypes, 0 when no world
+  getEntityCount(): number; // sum over all archetypes, 0 when no world
   getScene(): Scene | null;
-  getViewMode(): '2d' | '3d';
+  getViewMode(): '2d' | '3d' | 'fish-eye';
 }
 ```
 
 **Hard rules — don't break:**
+
 - **Read-only.** No dispatch, no setters, no renderer or world mutator surface. If a test needs to mutate state, it drives the real UI (click, key) like a user would. The `livestock-3d.spec.ts` smoke does exactly this — it adds tetras through `LivestockToolComponent` rather than reaching past it.
 - **Attached in `AppComponent.ngOnInit`, detached as the first line of `ngOnDestroy`.** Don't re-attach on every change-detection cycle; that's a regression. The spec asserts the hook detaches on teardown.
 - **Don't import the hook from production code paths.** It exists for tests only. If `app.component.ts` ever needs to read entity count for UI, that's a separate signal/selector — don't reuse the debug hook for it.
@@ -28,6 +29,7 @@ export interface AquascapeDebugHandle {
 ## Playwright config
 
 `apps/web-e2e/playwright.config.ts`:
+
 - **`webServer.command: 'pnpm exec nx serve web'` + 90s timeout.** The `docs/caveats/platform.md` dev-server race is real; 90s is intentional headroom.
 - **`reuseExistingServer: !process.env.CI`** — local dev shares an already-running `nx serve web`; CI spawns fresh.
 - **Single `chromium` project for now.** Firefox + WebKit can be added when cross-browser justifies the CI install time. Chromium is the bar.
@@ -43,6 +45,7 @@ If a shortcut is eaten because focus is in an INPUT / TEXTAREA / SELECT, the han
 ## Visual assertions — variance + frame-diff, never exact pixels
 
 `livestock-3d.spec.ts` uses two empirical floors:
+
 - **Pixel-channel variance > 100** to prove the canvas isn't blank. A solid colour measures ~0; a tank with substrate + lighting + a couple of fish measures ~7k (observed). 100 is generous floor with ~70× headroom.
 - **Frame-to-frame pixel diff > 50** between two screenshots 800ms apart to prove the RAF tick is alive. Tail wiggle alone produces ~500 differing pixels (observed). Floor is conservative so future renderer perf regressions trip it.
 
@@ -78,7 +81,7 @@ node tools/demo/record-demo.mjs        # terminal 2
 
 - **WebGL works headless via SwiftShader**, but only with the launch args `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist`. Without them the 3D canvas is blank.
 - **The main thread is saturated** by the RAF render loop, so every CDP round-trip (mouse move, `evaluate`, click) is slow. Keep the call COUNT low; resolve an element to a HANDLE once rather than re-querying a locator per frame; lean on `sleep` (no round-trip) for animation hold time. The recorder time-compresses the resulting long capture with ffmpeg.
-- **`PLAYWRIGHT_CHROMIUM`** overrides the browser binary — set it when Playwright's managed download is unavailable (e.g. CDN blocked) and a system / pre-provisioned chromium must be used. The recorder + any ad-hoc validation script reads it.
+- **`PLAYWRIGHT_CHROMIUM`** overrides the browser binary — set it when Playwright's managed download is unavailable (e.g. CDN blocked) and a system / pre-provisioned chromium must be used. The recorder, any ad-hoc validation script, AND `apps/web-e2e/playwright.config.ts` read it (the e2e config also adds the SwiftShader flags when it's set; unset ⇒ stock managed-browser behaviour). The `nx run web-e2e:e2e` target still attempts `playwright install` first — when the CDN is blocked, run `pnpm exec playwright test -c apps/web-e2e/playwright.config.ts` directly with the env var set.
 - **The Playwright-bundled ffmpeg is a MINIMAL build** — VP8 encoder only (no VP9), and only the `pad`/`crop`/`scale` filters (no `setpts`/`fps`). Speed-changes use the `-itsscale` INPUT option, not a filter; frame extraction uses `-ss T -frames:v 1`, not `-vf fps=`.
 - **Render-target / multi-pass post-processing can BLANK the canvas under SwiftShader.** `SSAOPass` (depth + normal + AO targets) was tried and rendered a fully blank 3D view headlessly — and the CI e2e uses the same SwiftShader path, so it would fail the 3D-paint assertion. The single-pass `UnrealBloomPass` + `OutputPass` work fine; the depth/normal/MRT-heavy passes (SSAO, screen-space refraction) do **not**. **Assume any new render-target effect breaks here and validate it on a real GPU before committing — don't ship blind off a headless pass.**
 

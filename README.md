@@ -16,6 +16,7 @@
 
 <!-- GitHub renders <video> with a relative src on the rendered README; the
      linked poster below is the always-works fallback. -->
+
 <video src="docs/media/demo-3d.webm" poster="docs/media/demo-3d-poster.png" controls muted loop playsinline width="760"></video>
 
 <a href="docs/media/demo-3d.webm"><img src="docs/media/demo-3d-poster.png" width="760" alt="Aquascape 3D simulation — transmissive glass, caustics, schooling fish, day-night cycle" /></a>
@@ -89,22 +90,24 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 ### 🐟 Livestock & equipment planning
 
 - **24 livestock species** — 20 fish (neon + cardinal + ember tetras, harlequin rasbora, cherry + tiger barb, marbled hatchetfish, dwarf + pearl gourami, angelfish, discus, German blue ram, apistogramma cacatuoides, betta, kuhli loach, pygmy + bronze cory, otocinclus, bristlenose + common pleco) + 2 shrimp (cherry, crystal red) + 2 snails (nerite, ramshorn)
-- **12 equipment entries** — Eheim Pro 4+ / Fluval 207 / AquaClear 50 / sponge filters, Fluval E300 / Eheim Jager 200 / Cobalt Neo-Therm 100 heaters, Twinstar 600S / Chihiros WRGB II Pro 60 / Fluval Plant 3.0 lights, Co2Art SE + ADA Pollen Glass CO2
+- **18 equipment entries** — Eheim Pro 4+ / Fluval 207 / AquaClear 50 / sponge filters, Fluval E300 / Eheim Jager 200 / Cobalt Neo-Therm 100 heaters, **9 real LED lights** (Twinstar 600S, Chihiros WRGB II Pro 60, Fluval Plant 3.0, NICREW ClassicLED Plus, Finnex Planted+ 24/7, ADA Solar RGB, Kessil A360X Tuna Sun, ONF Flat One+, Current USA Satellite Plus PRO — with manufacturer-published lumens / colour temperature / beam specs), Co2Art SE + ADA Pollen Glass CO2
 - **Stocking guidance** — six rule-based, explainable warnings: bioload vs. tank litres, temperature/pH range intersections, peaceful+aggressive temperament clash, schooling-below-minimum, fin-nipper presence
 - **Inline note editing** on each equipment row
 - All edits flow through the undo/redo Command pipeline
 
 ### 🧊 3D view
 
-- **One-click toggle** between 2D and 3D in the editor toolbar — segmented `2D | 3D` control, or `Cmd/Ctrl+Shift+3`
+- **One-click toggle** between 2D, 3D, and fish-eye in the editor toolbar — segmented `2D | 3D | Fish eye` control, or `Cmd/Ctrl+Shift+3` for 2D ↔ 3D
 - Three.js / WebGL renderer reads the **same** `.aqua` document — every change you make in 2D shows up immediately in 3D
 - **Orbit camera** — drag to rotate around the tank, wheel to zoom, two-finger drag to pan
+- **Fish-eye view** — ride a fish through the tank: the camera parks at a live fish's eye with a wide fisheye FOV and follows its swimming, schooling, and startles in first person
+- **Overhead equipment lighting** — attach a real LED fixture from the catalog and a glowing light bar appears above the rim, casting its published colour temperature + lumen-scaled light into the tank (dims with the day-night cycle)
 - Physically-based glass with transmission + refraction, ACES filmic tone mapping, image-based lighting, soft shadows, bloom
 - **Procedural underwater caustics** on substrate, hardscape, and the water surface — faded by the day-night cycle
 - **Catalog-driven PBR textures** — substrate / hardscape / plant materials sample 9 deterministic, seamlessly-tiling texture families (triplanar, world-space)
 - **Animated water surface** (vertex-shader sine bands) at the adjustable fill line
 - **Day-night cycle** — scrub a phase slider (manual / real-time / equipment photoperiod modes); lighting, background tint, and plant emissive follow a midnight / dawn / noon / dusk ramp
-- **Plant sway** — height-weighted, flow-coupled (plants near a filter outflow wave wider *and* faster), deterministic per instance
+- **Plant sway** — height-weighted, flow-coupled (plants near a filter outflow wave wider _and_ faster), deterministic per instance
 - The time slider works in 3D too — scrub plant growth over weeks
 - **Read-only by design** — editing happens in 2D; flip to 3D to visualise
 
@@ -151,10 +154,10 @@ Every livestock entry in the document becomes visible, behaving fish in the 3D v
 
 ## Platforms
 
-| Platform | Bundle | Status |
-| --- | --- | --- |
-| **Web (Angular SPA + PWA)** | Installable via browser "Install Aquascape" prompt; offline-capable via `@angular/service-worker` | ✅ Shipped |
-| **Desktop (Electron)** | macOS DMG (arm64 + x64), Windows NSIS (x64), Linux AppImage (x64) | ✅ Shipped (unsigned) |
+| Platform                    | Bundle                                                                                            | Status                |
+| --------------------------- | ------------------------------------------------------------------------------------------------- | --------------------- |
+| **Web (Angular SPA + PWA)** | Installable via browser "Install Aquascape" prompt; offline-capable via `@angular/service-worker` | ✅ Shipped            |
+| **Desktop (Electron)**      | macOS DMG (arm64 + x64), Windows NSIS (x64), Linux AppImage (x64)                                 | ✅ Shipped (unsigned) |
 
 > **Note on the macOS installer:** code signing is OFF for the current open-source build. Gatekeeper requires right-click → Open the first time (or `xattr -d com.apple.quarantine Aquascape.app`). Production distribution will need an Apple Developer ID + Windows EV certificate.
 
@@ -206,16 +209,16 @@ The full stage-by-stage record of what shipped when lives in [`docs/history.md`]
 
 **[`docs/README.md`](docs/README.md) is the documentation hub** — organized by role (user, new contributor, feature developer, architect) and by topic, with diagrams throughout.
 
-| You want to… | Read |
-| --- | --- |
-| Understand the big picture | [Architecture overview](docs/architecture/overview.md) (diagrams of every layer + data flow) |
-| Get productive as a new contributor | [New-developer guide](docs/guides/new-developer-guide.md) |
-| Look up a term | [Glossary](docs/glossary.md) |
-| Understand a specific subsystem | [`docs/architecture/`](docs/architecture/) — scene model & commands, document format, rendering, state, platform, catalog, livestock simulation |
-| Know when something shipped | [Development history](docs/history.md) |
-| Avoid a known gotcha while changing an area | [`docs/caveats/`](docs/caveats/) (indexed by area) |
-| Understand a one-time architectural decision | [`docs/decisions/`](docs/decisions/) (ADRs) |
-| Read the original spec | [`aquascape-development-plan.md`](aquascape-development-plan.md) |
+| You want to…                                 | Read                                                                                                                                            |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Understand the big picture                   | [Architecture overview](docs/architecture/overview.md) (diagrams of every layer + data flow)                                                    |
+| Get productive as a new contributor          | [New-developer guide](docs/guides/new-developer-guide.md)                                                                                       |
+| Look up a term                               | [Glossary](docs/glossary.md)                                                                                                                    |
+| Understand a specific subsystem              | [`docs/architecture/`](docs/architecture/) — scene model & commands, document format, rendering, state, platform, catalog, livestock simulation |
+| Know when something shipped                  | [Development history](docs/history.md)                                                                                                          |
+| Avoid a known gotcha while changing an area  | [`docs/caveats/`](docs/caveats/) (indexed by area)                                                                                              |
+| Understand a one-time architectural decision | [`docs/decisions/`](docs/decisions/) (ADRs)                                                                                                     |
+| Read the original spec                       | [`aquascape-development-plan.md`](aquascape-development-plan.md)                                                                                |
 
 ### Architecture in four sentences
 

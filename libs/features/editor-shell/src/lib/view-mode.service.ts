@@ -28,13 +28,19 @@ import { Injectable, effect, inject, signal } from '@angular/core';
 import type { StorageService } from '@aquascape/platform/platform-api';
 import { STORAGE_SERVICE } from '@aquascape/platform/platform-api/angular';
 
-/** Discriminator for the active renderer + canvas. */
-export type ViewMode = '2d' | '3d';
+/**
+ * Discriminator for the active renderer + canvas. `'fish-eye'` is a 3D
+ * sub-mode: it uses the 3D canvas + `Three3DRenderer`, but the camera
+ * rides a live fish (via `RenderOptions.cameraMode`) instead of
+ * OrbitControls. The app shell treats every non-`'2d'` mode as "3D" for
+ * canvas/renderer selection.
+ */
+export type ViewMode = '2d' | '3d' | 'fish-eye';
 
 /** StorageService key for the persisted view mode. */
 export const STORAGE_KEY_VIEW_MODE = 'aquascape.ui.viewMode';
 
-const VALID: ReadonlyArray<ViewMode> = ['2d', '3d'];
+const VALID: ReadonlyArray<ViewMode> = ['2d', '3d', 'fish-eye'];
 
 @Injectable({ providedIn: 'root' })
 export class ViewModeService {
@@ -83,6 +89,11 @@ export class ViewModeService {
    * Flip `'2d'` ↔ `'3d'`. Keyboard shortcut path; the segmented buttons
    * call `setMode` directly so a click on the already-active button is a
    * no-op (preserving signal identity → OnPush components don't re-paint).
+   *
+   * From `'fish-eye'` the toggle lands on `'2d'` — the chord's promise is
+   * "leave the 3D family", and bouncing fish-eye → 3D would make the
+   * shortcut a 3-cycle that surprises muscle memory. Fish-eye is entered
+   * via its toolbar segment only.
    */
   toggle(): void {
     this.mode.update((m) => (m === '2d' ? '3d' : '2d'));

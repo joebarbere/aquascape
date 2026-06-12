@@ -16,8 +16,9 @@
 import type { Tank } from '@aquascape/domain/scene-model';
 import { PerspectiveCamera, Vector3 } from 'three';
 
-/** Field of view, in degrees. 50° reads natural at typical viewing distances. */
-const FOV_DEGREES = 50;
+/** Field of view, in degrees. 50° reads natural at typical viewing distances.
+ *  Exported so the fish-eye camera mode can restore it on exit. */
+export const FOV_DEGREES = 50;
 
 /**
  * Initial 3/4 camera framing. The camera is offset to the LEFT and

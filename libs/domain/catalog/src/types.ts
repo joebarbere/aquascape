@@ -431,6 +431,25 @@ export interface EquipmentEntry extends CatalogEntryBase {
    * the F11.5/F11.6 series, mirroring the `flow` / `airRateMl` pattern.
    */
   photoperiodHours?: number;
+
+  /**
+   * Light-emission parameters for `category: 'light'` equipment. Drives the
+   * 3D renderer's overhead equipment lighting (one SpotLight + fixture mesh
+   * per attached light). Every subfield is optional — the renderer supplies
+   * defaults — and the whole block is additive (older manifests load
+   * unchanged). Only meaningful when `category === 'light'`; ignored
+   * otherwise. Omit unpublished figures rather than fabricating them.
+   */
+  light?: {
+    /** Manufacturer-published luminous flux, in lumens. */
+    lumens?: number;
+    /** Correlated colour temperature, in Kelvin (e.g. 6500). */
+    colorTempK?: number;
+    /** Full beam spread angle, in degrees (LED panels are typically ~120). */
+    beamAngleDeg?: number;
+    /** Physical fixture length along the tank's width axis, in mm. */
+    fixtureLengthMm?: number;
+  };
 }
 
 // ─── Placeholders for later stages ────────────────────────────────────────

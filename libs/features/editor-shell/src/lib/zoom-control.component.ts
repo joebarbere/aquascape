@@ -150,15 +150,22 @@ export class ZoomControlComponent {
   readonly viewMode = inject(ViewModeService);
   private readonly orbit = inject(Orbit3DService);
 
-  /** Active zoom fraction — reads from whichever backend matches the mode. */
+  /** Active zoom fraction — reads from whichever backend matches the mode.
+   *  In fish-eye the camera rides a fish (no user zoom), so the label
+   *  pins at the 1× default. */
   private readonly activeFraction = computed<number | null>(() => {
-    if (this.viewMode.mode() === '3d') return this.orbit.zoomFraction();
+    const mode = this.viewMode.mode();
+    if (mode === 'fish-eye') return 1;
+    if (mode === '3d') return this.orbit.zoomFraction();
     return this.viewport.userZoomMult();
   });
 
   readonly percentLabel = computed<string>(() => formatZoomPercent(this.activeFraction()));
 
   readonly canZoomIn = computed<boolean>(() => {
+    // Fish-eye: the follow-cam owns the camera every frame — zoom input
+    // would be silently overwritten, so the buttons disable.
+    if (this.viewMode.mode() === 'fish-eye') return false;
     // 3D has no UI cap — OrbitControls clamps internally to its
     // minDistance/maxDistance bounds — so the button always stays
     // enabled in 3D. The 2D cap stays at ZOOM_MULT_MAX.
@@ -168,6 +175,7 @@ export class ZoomControlComponent {
   });
 
   readonly canZoomOut = computed<boolean>(() => {
+    if (this.viewMode.mode() === 'fish-eye') return false;
     if (this.viewMode.mode() === '3d') return true;
     const mult = this.viewport.userZoomMult() ?? 1;
     return mult > ZOOM_MULT_MIN;
@@ -176,9 +184,11 @@ export class ZoomControlComponent {
   /**
    * "Fit" → fit-to-window in 2D, reset-to-3/4-view in 3D. Disabled when
    * already at the default in either mode so the user can tell the
-   * action has nothing to undo.
+   * action has nothing to undo. Disabled in fish-eye — the follow-cam
+   * owns the framing.
    */
   readonly canFit = computed<boolean>(() => {
+    if (this.viewMode.mode() === 'fish-eye') return false;
     if (this.viewMode.mode() === '3d') {
       // Approximate "at default" by zoomFraction ≈ 1. Doesn't account for
       // pure pan/rotate offsets — but the cost of an extra reset is one
@@ -190,7 +200,9 @@ export class ZoomControlComponent {
   });
 
   onZoomIn(): void {
-    if (this.viewMode.mode() === '3d') {
+    const mode = this.viewMode.mode();
+    if (mode === 'fish-eye') return;
+    if (mode === '3d') {
       this.orbit.zoomIn();
       return;
     }
@@ -199,7 +211,9 @@ export class ZoomControlComponent {
   }
 
   onZoomOut(): void {
-    if (this.viewMode.mode() === '3d') {
+    const mode = this.viewMode.mode();
+    if (mode === 'fish-eye') return;
+    if (mode === '3d') {
       this.orbit.zoomOut();
       return;
     }
@@ -208,7 +222,9 @@ export class ZoomControlComponent {
   }
 
   onFit(): void {
-    if (this.viewMode.mode() === '3d') {
+    const mode = this.viewMode.mode();
+    if (mode === 'fish-eye') return;
+    if (mode === '3d') {
       this.orbit.reset();
       return;
     }

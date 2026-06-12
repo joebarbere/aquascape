@@ -1,0 +1,17 @@
+{
+  "catalog": "core",
+  "id": "equipment.light.ada-solar-rgb",
+  "version": 1,
+  "name": "ADA Solar RGB",
+  "kind": "equipment",
+  "category": "light",
+  "subcategory": "led-pendant",
+  "color": "#eef3ff",
+  "wattage": 130,
+  "coverageLitres": { "min": 64, "max": 182 },
+  "photoperiodHours": 8,
+  "description": "ADA's flagship suspended RGB pendant: 160 RGB LEDs tuned for plant coloration, the reference light of Nature Aquarium gallery layouts. ADA publishes a 3,000-3,500 lm luminous-flux range; light.lumens records the conservative low bound (3000). ADA publishes a 9,000-12,000K colour-temperature range (with unit-to-unit variation); light.colorTempK records the mid-point (10500). light.fixtureLengthMm is the published 430 mm unit width; beam angle is not published and is omitted. coverageLitres approximates ADA's 60-90 cm tank recommendation using the 60-P (64 L) and 90-P (182 L) volumes; ADA otherwise publishes PAR/illuminance (~21,000 lx at 30 cm) rather than retail-style coverage.",
+  "tags": ["light", "led", "rgb", "pendant", "high-light", "premium", "nature-aquarium"],
+  "defaultSettings": { "photoperiodHours": 8, "intensityPct": 100 },
+  "light": { "lumens": 3000, "colorTempK": 10500, "fixtureLengthMm": 430 }
+}

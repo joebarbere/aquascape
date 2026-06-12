@@ -1,0 +1,17 @@
+{
+  "catalog": "core",
+  "id": "equipment.light.onf-flat-one-plus-60",
+  "version": 1,
+  "name": "ONF Flat One+ 60",
+  "kind": "equipment",
+  "category": "light",
+  "subcategory": "led-pendant",
+  "color": "#f4ead2",
+  "wattage": 70,
+  "coverageLitres": { "min": 60, "max": 150 },
+  "photoperiodHours": 9,
+  "description": "Design-led app-controlled bar light for 60 cm planted tanks with touch dimming and programmable schedules. ONF publishes 4,500 lm, a 110-degree beam, and a 613 mm housing for the 60 cm model. light.colorTempK records the mid-point (4750) of the yellow/white variant's published 3,000-6,500K adjustable range (the blue/white variant spans 6,500-20,500K instead). coverageLitres is an approximate window for the 60 cm tank class the fixture is sold for; ONF publishes tank length, not volume.",
+  "tags": ["light", "led", "app-control", "design", "planted", "60cm"],
+  "defaultSettings": { "photoperiodHours": 9, "intensityPct": 80 },
+  "light": { "lumens": 4500, "colorTempK": 4750, "beamAngleDeg": 110, "fixtureLengthMm": 613 }
+}
