@@ -1045,7 +1045,13 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    * tick's `updateTime()` writes per-frame state.
    */
   private ensureWaterMeshForTank(scene: Scene): void {
-    const tag = `${scene.tank.width}x${scene.tank.height}x${scene.tank.depth}`;
+    // The tag includes the authored waterTint: the animated surface bakes
+    // the tint into its `uBaseColor` uniform at build time (it took over
+    // the retired tank-mesh static water plane's job), so a tint edit must
+    // dispose + rebuild exactly like a tank resize.
+    const tag =
+      `${scene.tank.width}x${scene.tank.height}x${scene.tank.depth}` +
+      `:${scene.tank.style.waterTint ?? 'default'}`;
     if (this.waterMesh !== null && this.waterMeshTag === tag) return;
     if (this.waterMesh !== null) {
       this.waterMesh.dispose();

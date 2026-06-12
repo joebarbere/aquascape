@@ -46,6 +46,7 @@
 
 import type { Scene } from '@aquascape/domain/scene-model';
 import {
+  Color,
   DoubleSide,
   Mesh,
   PlaneGeometry,
@@ -60,6 +61,13 @@ import {
  * the silhouette touching the rim.
  */
 const WATER_OFFSET_BELOW_RIM_MM = 5;
+
+/**
+ * Default base water colour (linear components — matches the value the
+ * fragment shader carried as a literal before `uBaseColor` existed, so a
+ * document WITHOUT an authored `waterTint` renders identically).
+ */
+const DEFAULT_WATER_COLOR = { r: 0.55, g: 0.75, b: 0.92 } as const;
 
 /**
  * Tessellation along each axis. 16 segments is enough for the longest wave
@@ -125,6 +133,7 @@ void main() {
 const FRAGMENT_SHADER = /* glsl */ `
 uniform float uTime;
 uniform float uCausticStrength;
+uniform vec3 uBaseColor;
 varying vec3 vWorldPosition;
 varying vec3 vNormal;
 
@@ -143,8 +152,9 @@ float aqWaterCaustic(vec2 p, float t) {
 const float WATER_CAUSTIC_ALPHA_CAP = 0.12;
 
 void main() {
-  // Base water color: pale blue-white, low alpha.
-  vec3 baseColor = vec3(0.55, 0.75, 0.92);
+  // Base water color — the document's authored \`style.waterTint\` when set,
+  // else the editorial pale blue-white default (see DEFAULT_WATER_COLOR).
+  vec3 baseColor = uBaseColor;
   // Specular highlight from a fake sun direction.
   vec3 sunDir = normalize(vec3(0.3, 1.0, 0.2));
   float spec = pow(max(0.0, dot(vNormal, sunDir)), 32.0);
@@ -206,8 +216,21 @@ export function buildWaterMesh(scene: Scene): WaterMeshHandle {
   // Caustic shimmer strength — default 1 (noon). The host scales it by the
   // day-night directional intensity per render; see `setCausticStrength`.
   const uCausticStrength: IUniform<number> = { value: 1 };
+  // Base water colour. The document's authored `style.waterTint` (sRGB hex,
+  // converted to the linear working space by `Color.set`) when present —
+  // this is what RETIRED the Stage 10 v1 static water plane in
+  // `tank-mesh.ts`: the authored tint now rides the one animated surface
+  // instead of painting a second plane 25 mm below it. Absent ⇒ the
+  // editorial pale-blue default (numeric Color components = linear, the
+  // exact values the old GLSL literal carried).
+  const uBaseColor: IUniform<Color> = {
+    value:
+      tank.style.waterTint !== undefined
+        ? new Color(tank.style.waterTint)
+        : new Color(DEFAULT_WATER_COLOR.r, DEFAULT_WATER_COLOR.g, DEFAULT_WATER_COLOR.b),
+  };
   const material = new ShaderMaterial({
-    uniforms: { uTime, uCausticStrength },
+    uniforms: { uTime, uCausticStrength, uBaseColor },
     vertexShader: VERTEX_SHADER,
     fragmentShader: FRAGMENT_SHADER,
     transparent: true,

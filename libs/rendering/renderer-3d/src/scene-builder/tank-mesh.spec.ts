@@ -75,27 +75,61 @@ describe('tank-mesh builder', () => {
     expect(frameMeshes.some((m) => m.name === 'aquascape:tank/frame/brace')).toBe(true);
   });
 
-  it('skips the water plane when waterTint is undefined', () => {
-    const group = buildTankMesh(tank());
-    const hasWater = group.children.some((c) => c.name === 'aquascape:tank/water');
-    expect(hasWater).toBe(false);
-  });
-
-  it('adds a horizontal water plane just below the rim when waterTint is set', () => {
-    const group = buildTankMesh(
+  it('never builds the retired static water plane — even when waterTint is set', () => {
+    // The Stage 10 v1 `aquascape:tank/water` plane was retired: the tint
+    // now rides the renderer-level ANIMATED surface (water-mesh.ts).
+    // Regression: two stacked water planes 25 mm apart read as a bug.
+    const tinted = buildTankMesh(
       tank({
-        style: {
-          frame: 'rimless',
-          background: { kind: 'none' },
-          waterTint: '#88ccff',
-        },
+        style: { frame: 'rimless', background: { kind: 'none' }, waterTint: '#88ccff' },
       }),
     );
-    const water = group.children.find((c) => c.name === 'aquascape:tank/water') as Mesh;
-    expect(water).toBeDefined();
-    // Plane is rotated −π/2 about X axis so it lies in the XZ plane.
-    expect(water.rotation.x).toBeCloseTo(-Math.PI / 2, 5);
-    // Y position is height − WATER_LINE_GAP_MM (30).
-    expect(water.position.y).toBeCloseTo(360 - 30, 5);
+    expect(tinted.children.some((c) => c.name === 'aquascape:tank/water')).toBe(false);
+    const untinted = buildTankMesh(tank());
+    expect(untinted.children.some((c) => c.name === 'aquascape:tank/water')).toBe(false);
+  });
+
+  describe('open-topped glass (aquariums have no lid)', () => {
+    /**
+     * True when the mesh's geometry contains at least one triangle whose
+     * three vertices ALL sit on the given local-Y plane — i.e. a face
+     * coplanar with that horizontal plane.
+     */
+    function hasFaceAtY(mesh: Mesh, y: number): boolean {
+      const geo = mesh.geometry;
+      const index = geo.getIndex();
+      const pos = geo.getAttribute('position');
+      if (index === null) return false;
+      const eps = 1e-4;
+      for (let i = 0; i < index.count; i += 3) {
+        const ys = [index.getX(i), index.getX(i + 1), index.getX(i + 2)].map((v) =>
+          pos.getY(v),
+        );
+        if (ys.every((v) => Math.abs(v - y) < eps)) return true;
+      }
+      return false;
+    }
+
+    it('the transmissive glass box has no top face but keeps its bottom', () => {
+      const group = buildTankMesh(tank());
+      const glass = group.children.find(
+        (m) => m instanceof Mesh && m.name === 'aquascape:tank/glass',
+      ) as Mesh;
+      // Local frame is centred: lid would be at +height/2, floor at −height/2.
+      expect(hasFaceAtY(glass, 180)).toBe(false);
+      expect(hasFaceAtY(glass, -180)).toBe(true);
+    });
+
+    it('the inner sheen shell is open-topped too', () => {
+      const group = buildTankMesh(tank());
+      const glass = group.children.find(
+        (m) => m instanceof Mesh && m.name === 'aquascape:tank/glass',
+      ) as Mesh;
+      const sheen = glass.children.find(
+        (c) => c.name === 'aquascape:tank/glass-sheen',
+      ) as Mesh;
+      expect(hasFaceAtY(sheen, 180)).toBe(false);
+      expect(hasFaceAtY(sheen, -180)).toBe(true);
+    });
   });
 });

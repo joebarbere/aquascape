@@ -1,4 +1,4 @@
-import { Mesh, PlaneGeometry, ShaderMaterial } from 'three';
+import { Color, Mesh, PlaneGeometry, ShaderMaterial } from 'three';
 import type { Scene } from '@aquascape/domain/scene-model';
 import { buildWaterMesh } from './water-mesh';
 
@@ -208,3 +208,42 @@ describe('buildWaterMesh — dispose', () => {
     expect(matSpy).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('buildWaterMesh — authored water tint (retired tank-mesh plane)', () => {
+  it('defaults the base colour to the editorial pale blue when no waterTint is set', () => {
+    const { mesh } = buildWaterMesh(sceneOf());
+    const mat = mesh.material as ShaderMaterial;
+    const base = mat.uniforms['uBaseColor']!.value as Color;
+    expect(base.r).toBeCloseTo(0.55, 5);
+    expect(base.g).toBeCloseTo(0.75, 5);
+    expect(base.b).toBeCloseTo(0.92, 5);
+  });
+
+  it('bakes style.waterTint into uBaseColor when authored', () => {
+    const scene = sceneOf();
+    const tinted: Scene = {
+      ...scene,
+      tank: {
+        ...scene.tank,
+        style: { ...scene.tank.style, waterTint: '#f4ede0' },
+      },
+    };
+    const { mesh } = buildWaterMesh(tinted);
+    const mat = mesh.material as ShaderMaterial;
+    const base = mat.uniforms['uBaseColor']!.value as Color;
+    // `Color.set('#hex')` converts sRGB → the linear working space; assert
+    // against the same conversion rather than raw byte fractions.
+    const expected = new Color('#f4ede0');
+    expect(base.r).toBeCloseTo(expected.r, 6);
+    expect(base.g).toBeCloseTo(expected.g, 6);
+    expect(base.b).toBeCloseTo(expected.b, 6);
+  });
+
+  it('the fragment shader samples uBaseColor (no baked colour literal)', () => {
+    const { mesh } = buildWaterMesh(sceneOf());
+    const mat = mesh.material as ShaderMaterial;
+    expect(mat.fragmentShader).toContain('uniform vec3 uBaseColor;');
+    expect(mat.fragmentShader).not.toContain('vec3(0.55, 0.75, 0.92)');
+  });
+});
+
