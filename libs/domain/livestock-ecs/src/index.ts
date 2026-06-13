@@ -36,6 +36,7 @@ export {
   FearState,
   Hardscape,
   NippingDrive,
+  Player,
   Predator,
   Territory,
   FISH_ARCHETYPE,

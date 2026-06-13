@@ -48,15 +48,31 @@ const ipc: IpcContract = {
 // 'normal' so a malformed argv can't smuggle an arbitrary string into the
 // renderer's global.
 const MODE_ARG_PREFIX = '--aquascape-mode=';
-const VALID_MODES = ['normal', 'simulation'] as const;
-type AppMode = (typeof VALID_MODES)[number];
+// Single-token modes + the `game:<submode>` colon family (ADR-0007). The
+// canonical grammar lives in `../main/app-mode.ts`; this is the inlined copy
+// the sandbox forces (it can't `require` siblings). Keep the two in sync.
+const SINGLE_TOKEN_MODES = ['normal', 'simulation'] as const;
+const GAME_MODES = ['survival', 'feeding', 'predator', 'cleaner'] as const;
+const GAME_MODE_PREFIX = 'game:';
+type GameMode = (typeof GAME_MODES)[number];
+type AppMode = (typeof SINGLE_TOKEN_MODES)[number] | `game:${GameMode}`;
+function parseModeToken(value: string): AppMode | null {
+  if ((SINGLE_TOKEN_MODES as readonly string[]).includes(value)) {
+    return value as AppMode;
+  }
+  if (value.startsWith(GAME_MODE_PREFIX)) {
+    const sub = value.slice(GAME_MODE_PREFIX.length);
+    if ((GAME_MODES as readonly string[]).includes(sub)) {
+      return `game:${sub as GameMode}`;
+    }
+  }
+  return null;
+}
 function readMode(): AppMode {
   for (const arg of process.argv) {
     if (arg.startsWith(MODE_ARG_PREFIX)) {
-      const value = arg.slice(MODE_ARG_PREFIX.length);
-      if ((VALID_MODES as readonly string[]).includes(value)) {
-        return value as AppMode;
-      }
+      const parsed = parseModeToken(arg.slice(MODE_ARG_PREFIX.length));
+      if (parsed !== null) return parsed;
     }
   }
   return 'normal';
@@ -70,8 +86,9 @@ function readMode(): AppMode {
 const MODE_CHANNEL = 'app.mode.set';
 function onSetMode(callback: (mode: AppMode) => void): () => void {
   const listener = (_event: unknown, mode: unknown): void => {
-    if (typeof mode === 'string' && (VALID_MODES as readonly string[]).includes(mode)) {
-      callback(mode as AppMode);
+    if (typeof mode === 'string') {
+      const parsed = parseModeToken(mode);
+      if (parsed !== null) callback(parsed);
     }
   };
   ipcRenderer.on(MODE_CHANNEL, listener);

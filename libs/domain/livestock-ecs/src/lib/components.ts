@@ -222,6 +222,28 @@ export const Hardscape = defineComponent({
 export const Predator = defineComponent();
 
 /**
+ * Tag for the single player-controlled fish (Stage 16 F16.1 — game modes).
+ *
+ * A player fish is an ordinary fish entity (same Position / Velocity /
+ * Orientation / Archetype slabs, same snapshot slot) but its velocity is
+ * INJECTED from live input each tick instead of being produced by the AI
+ * steering integrator. The world's `step()` writes the injected velocity
+ * onto the player's `Velocity` BEFORE the systems run, and `SteeringIntegrator`
+ * skips any `Player`-tagged entity so the AI behaviour forces never overwrite
+ * the player's input. KinematicSystem then integrates the injected velocity
+ * exactly like any other fish, and the AABB clamp keeps the player in the tank.
+ *
+ * DETERMINISM BOUNDARY (load-bearing): this is the ONE place a live,
+ * non-deterministic signal (keyboard / gamepad input) enters the otherwise
+ * byte-identical world. The player ENTITY is spawned deterministically (same
+ * seed → same spawn); only the per-tick injected velocity is live. A world
+ * with NO player marked never touches the injection path, so the 1000-tick
+ * replay stays byte-identical for non-game worlds. See
+ * `docs/caveats/livestock-ecs.md` → "Player-control seam".
+ */
+export const Player = defineComponent();
+
+/**
  * Per-fish body colour (fidelity pass — enhancement). Linear-ish RGB in
  * `[0, 1]`, set at spawn from the catalog row's display colour
  * (`spawnFish({ colorRgb })`). Surfaced in `WorldSnapshot.color` so the

@@ -140,7 +140,7 @@ import type {
 import { SceneActions, SelectionActions, selectScene, selectSelectedIds } from '@aquascape/state';
 import { Store } from '@ngrx/store';
 
-import { resolveAppMode } from './app-mode';
+import { isGameAppMode, resolveAppMode, type AppMode } from './app-mode';
 import { BehaviorDebugOverlayComponent } from './behavior-debug-overlay.component';
 import { BehaviorDebugService } from './behavior-debug.service';
 import { attachDebugHook, detachDebugHook } from './debug-hook';
@@ -945,10 +945,23 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
-  /** Apply a mode chosen at runtime: enter the showcase, or return to editing. */
-  private applyMode(mode: 'normal' | 'simulation'): void {
+  /**
+   * Apply a mode chosen at runtime: enter the showcase, or return to editing.
+   *
+   * Stage 16 F16.1 wires the `game:<submode>` CLI grammar end-to-end (parse +
+   * menu + the `livestock-ecs` player seam + the fish-eye player retarget +
+   * the `@aquascape/features/game` shell). The in-app activation of a game run
+   * here (load a player scene, mark the player entity, mount the game HUD) is
+   * the remaining slice — until it lands, a runtime switch INTO a game mode is
+   * treated as a return to the editor so the menu can never strand the user.
+   * `?mode=game:<submode>` still resolves + falls back correctly at boot.
+   */
+  private applyMode(mode: AppMode): void {
     if (mode === 'simulation') {
       this.enterSimulationMode();
+    } else if (isGameAppMode(mode)) {
+      // TODO(Stage 16): activate the game run (scene + player + game HUD).
+      this.leaveSimulationToEditor();
     } else {
       this.leaveSimulationToEditor();
     }

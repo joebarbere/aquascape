@@ -21,6 +21,7 @@ import {
   addEntity,
   createWorld,
   defineQuery,
+  hasComponent,
   removeEntity,
   type IWorld,
 } from 'bitecs';
@@ -46,6 +47,7 @@ import {
   NO_INTEREST,
   BodyColor,
   Orientation,
+  Player,
   Position,
   Predator,
   SpeciesId,
@@ -436,6 +438,30 @@ export interface LivestockWorld {
   getBubbleParticleCount(): number;
   /** F11.5 Wave 5 — count of currently-registered bubble sources. Tests. */
   getBubbleSourceCount(): number;
+  /**
+   * Stage 16 F16.1 (game modes) — mark `eid` as the single player-controlled
+   * fish. Replaces any previous player. Pass `NO_ENTITY_REF` (or call
+   * `clearPlayer()`) to relinquish control. The entity keeps all its normal
+   * fish components — it's still drawn, still collidable — but `step()`
+   * injects `setPlayerVelocity` onto its Velocity each tick and the AI
+   * steering integrator skips it (so behaviour forces never fight the input).
+   *
+   * DETERMINISM: marking a player does NOT by itself break replay — only the
+   * live velocity injected via `setPlayerVelocity` is non-deterministic. A
+   * world with no player marked never touches the injection path.
+   */
+  setPlayer(eid: number): void;
+  /** Clear the player marker. The (now AI-driven) fish resumes normal steering. */
+  clearPlayer(): void;
+  /** The current player entity id, or `NO_ENTITY_REF` when none is marked. */
+  getPlayerEntity(): number;
+  /**
+   * Set the player's intended velocity (mm/s, canonical doc coords). The next
+   * `step()` writes this onto the player's Velocity BEFORE the systems run;
+   * the steering integrator skips the player so it survives into Kinematic.
+   * No-op when no player is marked. This is the single live-input seam.
+   */
+  setPlayerVelocity(vx: number, vy: number, vz: number): void;
   /** Run one sim tick of duration `dt` (callers pass `SIM_DT`). */
   step(dt: number): void;
   /**
@@ -603,6 +629,17 @@ export function createLivestockWorld(
   // bubbles. Empty until `registerBubbleSources` builds slices to match the
   // live source set. Quiescent + zero-allocation while no air-stone exists.
   const bubbleFluid: BubbleFluidState = makeEmptyBubbleFluidState();
+
+  // Stage 16 F16.1 (game modes) — the single player-controlled fish, or
+  // `NO_ENTITY_REF` when none is marked. The injected velocity is the ONE
+  // live, non-deterministic signal entering the world; it's overwritten onto
+  // the player's Velocity at the start of each `step()` before any system
+  // runs. A null player (the default) means `step()` skips the injection
+  // entirely, so non-game worlds replay byte-identically.
+  let playerEid = NO_ENTITY_REF;
+  let playerVx = 0;
+  let playerVy = 0;
+  let playerVz = 0;
 
   // `tickCounter` and `seed` live on the world object so `tickPrng(world,…)`
   // can read them without a closure variable per tick.
@@ -930,7 +967,62 @@ export function createLivestockWorld(
       return bubbleSources.count;
     },
 
+    setPlayer(eid: number): void {
+      // Drop the tag from any prior player so only one entity is ever the
+      // player. bitECS has no removeComponent import here, but re-tagging is
+      // idempotent and the integrator-skip is gated on the live `playerEid`,
+      // not on the tag alone — so a stale `Player` tag on a former player is
+      // harmless (it's no longer the marked eid). We still add the tag to the
+      // new player so a future query-based renderer can find it.
+      if (eid === NO_ENTITY_REF) {
+        playerEid = NO_ENTITY_REF;
+        return;
+      }
+      playerEid = eid;
+      if (!hasComponent(ecs, Player, eid)) {
+        addComponent(ecs, Player, eid);
+      }
+      // Reset the injected velocity so a freshly-marked player doesn't inherit
+      // a stale input vector from a previous game.
+      playerVx = 0;
+      playerVy = 0;
+      playerVz = 0;
+    },
+
+    clearPlayer(): void {
+      playerEid = NO_ENTITY_REF;
+      playerVx = 0;
+      playerVy = 0;
+      playerVz = 0;
+    },
+
+    getPlayerEntity(): number {
+      return playerEid;
+    },
+
+    setPlayerVelocity(vx: number, vy: number, vz: number): void {
+      // Stored, not applied — the next step() writes it onto the player's
+      // Velocity slab before the systems run. No-op semantics when no player
+      // is marked are handled in step() (the write is guarded there).
+      playerVx = vx;
+      playerVy = vy;
+      playerVz = vz;
+    },
+
     step(dt: number): void {
+      // Stage 16 F16.1 — player input injection. The ONE live,
+      // non-deterministic write into the world. Done at the very TOP of the
+      // tick (before any system) so the player's Velocity is what Kinematic
+      // integrates; SteeringIntegrator skips the Player-tagged entity so AI
+      // forces never overwrite the input. When no player is marked
+      // (`playerEid === NO_ENTITY_REF`) this branch is skipped entirely and
+      // the tick is byte-identical to a pre-F16.1 world.
+      if (playerEid !== NO_ENTITY_REF && hasComponent(ecs, Velocity, playerEid)) {
+        Velocity.x[playerEid] = playerVx;
+        Velocity.y[playerEid] = playerVy;
+        Velocity.z[playerEid] = playerVz;
+      }
+
       // F11.5 Wave 5 system order — see docs/caveats/livestock-ecs.md
       //   Perception → Fear → Nip → Territory → Feeding → Curiosity →
       //   Schooling → Depth → FlowField → SteeringIntegrator →
@@ -1100,6 +1192,10 @@ export function createLivestockWorld(
       hardscapeEids = [];
       flowField = null;
       hardscapeSdf = null;
+      playerEid = NO_ENTITY_REF;
+      playerVx = 0;
+      playerVy = 0;
+      playerVz = 0;
       // Clear bubble sources but keep the typed arrays at length 0 (no
       // GC churn — the next register call will reallocate based on the
       // new source count anyway).

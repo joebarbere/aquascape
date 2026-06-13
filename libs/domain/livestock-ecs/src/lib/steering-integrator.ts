@@ -39,12 +39,13 @@
  *     fish swim tail-first (visible as "swimming in reverse") and stick
  *     their bodies through walls and the water surface.
  */
-import { defineQuery } from 'bitecs';
+import { defineQuery, hasComponent } from 'bitecs';
 import {
   BehaviorParamsRef,
   BodyLength,
   Force,
   Orientation,
+  Player,
   Position,
   Velocity,
 } from './components';
@@ -71,6 +72,19 @@ export function steeringIntegrator(world: LivestockWorld, dt: number): void {
   const store = world.paramStore;
 
   for (const eid of integratorQuery(world.ecs)) {
+    // Stage 16 F16.1 — the player-controlled fish has its Velocity injected
+    // from live input at the top of `world.step()`. Skip it entirely so the
+    // AI behaviour forces (schooling, depth, flow, …) don't overwrite the
+    // player's input. We still reset Force so any force an earlier system
+    // accumulated for it doesn't leak into the next tick. The Player tag is
+    // the seam's only renderer/integrator-visible footprint; the live
+    // injection itself lives on the world, not the ECS slabs.
+    if (hasComponent(world.ecs, Player, eid)) {
+      Force.x[eid] = 0;
+      Force.y[eid] = 0;
+      Force.z[eid] = 0;
+      continue;
+    }
     const handle = BehaviorParamsRef.handleIdx[eid] as number;
     const behavior = store.get(handle);
     // Static-wiggle path: entities without a registered behaviour stay

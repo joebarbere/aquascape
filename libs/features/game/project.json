@@ -1,0 +1,19 @@
+{
+  "name": "features-game",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/features/game/src",
+  "projectType": "library",
+  "tags": ["scope:feature", "type:lib"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/features/game",
+        "main": "libs/features/game/src/index.ts",
+        "tsConfig": "libs/features/game/tsconfig.lib.json",
+        "assets": ["libs/features/game/*.md"]
+      }
+    }
+  }
+}
