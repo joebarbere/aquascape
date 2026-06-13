@@ -33,6 +33,7 @@ import type {
   Tank,
   TankStyle,
   Transform,
+  WaterChemistry,
 } from '@aquascape/domain/document';
 import { CURRENT_SCHEMA_VERSION } from '@aquascape/domain/document';
 
@@ -177,6 +178,42 @@ const arbTankStyle = (): fc.Arbitrary<TankStyle> =>
     { requiredKeys: ['frame', 'background'] },
   );
 
+/**
+ * v4: optional persisted water-chemistry snapshot. Mirrors `water-sim`'s
+ * `WaterState` (`chemistry` block) + denormalized `cycle` stage + optional
+ * per-type `algae` block. Present-or-absent on the tank is toggled by
+ * `requiredKeys` so the round-trip property exercises both branches.
+ */
+const arbWaterChemistry = (): fc.Arbitrary<WaterChemistry> =>
+  fc.record(
+    {
+      chemistry: fc.record({
+        ammonia: arbFiniteNumber(0, 8),
+        nitrite: arbFiniteNumber(0, 8),
+        nitrate: arbFiniteNumber(0, 80),
+        ph: arbFiniteNumber(5.5, 8.6),
+        aobColony: arbFiniteNumber(0, 10),
+        nobColony: arbFiniteNumber(0, 10),
+        ageWeeks: arbFiniteNumber(0, 52),
+        engineVersion: fc.integer({ min: 1, max: 3 }),
+      }),
+      cycle: fc.constantFrom('uncycled', 'cycling', 'cycled') as fc.Arbitrary<
+        WaterChemistry['cycle']
+      >,
+      // Each algae type is independently present-or-absent (absent = none).
+      algae: fc.record(
+        {
+          'green-spot': arbFiniteNumber(0, 1),
+          hair: arbFiniteNumber(0, 1),
+          'black-beard': arbFiniteNumber(0, 1),
+          diatom: arbFiniteNumber(0, 1),
+        },
+        { requiredKeys: [] },
+      ),
+    },
+    { requiredKeys: ['chemistry', 'cycle'] },
+  );
+
 const arbTank = (): fc.Arbitrary<Tank> =>
   fc.record(
     {
@@ -190,6 +227,9 @@ const arbTank = (): fc.Arbitrary<Tank> =>
       // exceeds the minimum generated height — the [1, height] range is
       // advisory in the schema, but generated documents stay semantically sane.
       waterLevelMm: arbMm(1, 100),
+      // v4: optional persisted chemistry snapshot. Present-or-absent toggled
+      // by `requiredKeys` so the round-trip property exercises both branches.
+      waterChemistry: arbWaterChemistry(),
       presetRef: arbCatalogRef(),
       style: arbTankStyle(),
     },

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://aquascape.dev/schemas/aqua-document-v3.json",
+  "$id": "https://aquascape.dev/schemas/aqua-document-v4.json",
   "title": "AquaDocument",
-  "description": "Aquascape layout document, schema version 3. All linear units are millimetres. v2 adds optional Layer.zone (foreground/midground/background); v3 adds optional Tank.waterLevelMm (water-surface height above the interior floor, integer mm; absent = default fill derived at render time; the [1, height] upper bound is advisory — cross-field comparison is not expressible here). Prior-version docs migrate forward without transformation.",
+  "description": "Aquascape layout document, schema version 4. All linear units are millimetres. v2 adds optional Layer.zone (foreground/midground/background); v3 adds optional Tank.waterLevelMm (water-surface height above the interior floor, integer mm; absent = default fill derived at render time; the [1, height] upper bound is advisory — cross-field comparison is not expressible here); v4 adds optional Tank.waterChemistry (a persisted domain/water-sim WaterState snapshot + denormalized cycle stage + per-type algae block; absent = no chemistry recorded). Prior-version docs migrate forward without transformation.",
   "type": "object",
   "required": ["format", "schemaVersion", "meta", "tank", "substrate", "layers"],
   "additionalProperties": false,
@@ -130,8 +130,51 @@
         "depth": { "type": "number", "exclusiveMinimum": 0 },
         "glassThickness": { "type": "number", "minimum": 0 },
         "waterLevelMm": { "type": "integer", "minimum": 1 },
+        "waterChemistry": { "$ref": "#/$defs/WaterChemistry" },
         "presetRef": { "$ref": "#/$defs/CatalogRef" },
         "style": { "$ref": "#/$defs/TankStyle" }
+      }
+    },
+    "WaterChemistry": {
+      "type": "object",
+      "required": ["chemistry", "cycle"],
+      "additionalProperties": false,
+      "properties": {
+        "chemistry": {
+          "type": "object",
+          "required": [
+            "ammonia",
+            "nitrite",
+            "nitrate",
+            "ph",
+            "aobColony",
+            "nobColony",
+            "ageWeeks",
+            "engineVersion"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ammonia": { "type": "number", "minimum": 0 },
+            "nitrite": { "type": "number", "minimum": 0 },
+            "nitrate": { "type": "number", "minimum": 0 },
+            "ph": { "type": "number" },
+            "aobColony": { "type": "number", "minimum": 0 },
+            "nobColony": { "type": "number", "minimum": 0 },
+            "ageWeeks": { "type": "number", "minimum": 0 },
+            "engineVersion": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "cycle": { "enum": ["uncycled", "cycling", "cycled"] },
+        "algae": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "green-spot": { "type": "number", "minimum": 0 },
+            "hair": { "type": "number", "minimum": 0 },
+            "black-beard": { "type": "number", "minimum": 0 },
+            "diatom": { "type": "number", "minimum": 0 }
+          }
+        }
       }
     },
     "TankStyle": {

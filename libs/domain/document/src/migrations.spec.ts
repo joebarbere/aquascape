@@ -105,12 +105,14 @@ describe('runMigrations', () => {
     });
   });
 
-  it('exports a frozen migration list with the v1 → v2 and v2 → v3 no-op steps', () => {
-    expect(AQUA_MIGRATIONS).toHaveLength(2);
+  it('exports a frozen migration list with the v1 → v2, v2 → v3 and v3 → v4 no-op steps', () => {
+    expect(AQUA_MIGRATIONS).toHaveLength(3);
     expect(AQUA_MIGRATIONS[0]?.from).toBe(1);
     expect(AQUA_MIGRATIONS[0]?.to).toBe(2);
     expect(AQUA_MIGRATIONS[1]?.from).toBe(2);
     expect(AQUA_MIGRATIONS[1]?.to).toBe(3);
+    expect(AQUA_MIGRATIONS[2]?.from).toBe(3);
+    expect(AQUA_MIGRATIONS[2]?.to).toBe(4);
     expect(Object.isFrozen(AQUA_MIGRATIONS)).toBe(true);
   });
 
@@ -151,6 +153,33 @@ describe('runMigrations', () => {
     expect('waterLevelMm' in v3.tank).toBe(false);
     // Every other field is preserved unchanged (incl. the v2 layer zone).
     expect({ ...v3, schemaVersion: 2 }).toEqual(v2);
+  });
+
+  it('v3 → v4 step is an identity that only bumps schemaVersion (additive Tank.waterChemistry)', () => {
+    const v3 = {
+      format: 'aquascape',
+      schemaVersion: 3,
+      meta: { id: 'x', title: 't', createdAt: 'c', updatedAt: 'u', appVersion: '1.0.0', seed: 1 },
+      tank: {
+        width: 600,
+        height: 360,
+        depth: 360,
+        waterLevelMm: 320,
+        style: { frame: 'rimless', background: { kind: 'none' } },
+      },
+      substrate: { regions: [] },
+      layers: [{ id: 'l1', name: 'L1', opacity: 1, visible: true, locked: false, objects: [], zone: 'midground' }],
+    };
+    const step = AQUA_MIGRATIONS[2]!;
+    const v4 = step.migrate(v3) as typeof v3;
+    expect(v4.schemaVersion).toBe(4);
+    // The tank must NOT gain a waterChemistry — absent means "no chemistry
+    // recorded"; the migration has no authority to invent a cycle history.
+    expect('waterChemistry' in v4.tank).toBe(false);
+    // The v3 waterLevelMm survives untouched.
+    expect(v4.tank.waterLevelMm).toBe(320);
+    // Every other field is preserved unchanged.
+    expect({ ...v4, schemaVersion: 3 }).toEqual(v3);
   });
 
   it('treats null and non-object inputs as version 0', () => {

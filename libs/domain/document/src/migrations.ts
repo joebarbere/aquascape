@@ -4,10 +4,11 @@
  * Migrations are pure, total, single-step (`from` → `from + 1`) transforms.
  * The loader walks the chain in order until the document's `schemaVersion`
  * matches the reader's `CURRENT_SCHEMA_VERSION`. v1 is the baseline; v2 adds
- * the optional `Layer.zone` field and v3 adds the optional `Tank.waterLevelMm`
- * field — both additive + optional, so each migration is an identity that
- * only bumps the version number. Prior-version documents in the wild keep
- * loading transparently.
+ * the optional `Layer.zone` field, v3 adds the optional `Tank.waterLevelMm`
+ * field, and v4 adds the optional `Tank.waterChemistry` snapshot — all
+ * additive + optional, so each migration is an identity that only bumps the
+ * version number. Prior-version documents in the wild keep loading
+ * transparently.
  *
  * Re-exports the `Migration` interface from `./aqua-document` so callers have
  * one import for the whole document module.
@@ -34,6 +35,12 @@ export type { Migration };
  *   MUST NOT invent a water level: absent means "default fill", derived at
  *   render time by scene-model's `effectiveWaterLevelMm`, and absent stays
  *   absent through migration + round-trip.
+ * - v3 → v4: adds optional `Tank.waterChemistry` (the persisted water-sim
+ *   snapshot — Stage 13 F13.2 / ADR-0006). No-op identity migration — every
+ *   v3 document is structurally a valid v4 document. The migration MUST NOT
+ *   invent chemistry: absent means "no chemistry recorded" (the tank was
+ *   never cycled), and absent stays absent through migration + round-trip.
+ *   Inventing a snapshot would falsely claim a tank had been cycled.
  */
 export const AQUA_MIGRATIONS: readonly Migration[] = Object.freeze([
   {
@@ -45,6 +52,11 @@ export const AQUA_MIGRATIONS: readonly Migration[] = Object.freeze([
     from: 2,
     to: 3,
     migrate: (doc) => ({ ...(doc as AquaDocument), schemaVersion: 3 }),
+  },
+  {
+    from: 3,
+    to: 4,
+    migrate: (doc) => ({ ...(doc as AquaDocument), schemaVersion: 4 }),
   },
 ]);
 

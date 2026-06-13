@@ -1,5 +1,5 @@
 /**
- * .aqua document format — TypeScript schema (v3)
+ * .aqua document format — TypeScript schema (v4)
  *
  * This is the canonical, framework-free definition of an Aquascape layout
  * document. It lives in `libs/domain/document` and is the single source of
@@ -18,6 +18,16 @@
  *      v2 → v3 migration is a no-op identity that only bumps `schemaVersion`
  *      and MUST NOT invent a water level — absent means "default fill",
  *      derived at render time, and absent stays absent through a round-trip.
+ * v4 — added optional `Tank.waterChemistry` (a persisted snapshot of the
+ *      `domain/water-sim` `WaterState` — ammonia/nitrite/nitrate/pH + the
+ *      AOB/NOB colony capacities + `ageWeeks` cycling clock + `engineVersion`),
+ *      plus the denormalized `cycle` stage and an `algae` per-type coverage
+ *      block. Stage 13 F13.2 / ADR-0006. Additive + optional; the v3 → v4
+ *      migration is a no-op identity that only bumps `schemaVersion` and MUST
+ *      NOT invent chemistry — absent means "no chemistry recorded" (a tank
+ *      that was never cycled in the editor) and absent stays absent through a
+ *      round-trip. The live tick is owned by a runtime `WaterChemistryService`;
+ *      the document stores only the snapshot needed to resume deterministically.
  *
  * DESIGN RULES
  * ------------
@@ -102,7 +112,7 @@ export interface CatalogRef {
 // Document root
 // ─────────────────────────────────────────────────────────────────────────
 
-export const CURRENT_SCHEMA_VERSION = 3 as const;
+export const CURRENT_SCHEMA_VERSION = 4 as const;
 
 export interface AquaDocument {
   /** Magic discriminator; always "aquascape". */
@@ -180,9 +190,90 @@ export interface Tank {
    * stop ordering). Consumers clamp via `effectiveWaterLevelMm`.
    */
   waterLevelMm?: Millimetres;
+  /**
+   * Persisted water-chemistry snapshot. Added in schema v4 (additive +
+   * optional; Stage 13 F13.2 / ADR-0006).
+   *
+   * Mirrors the persistable subset of `domain/water-sim`'s `WaterState`
+   * (`chemistry` block) plus the denormalized `cycle` stage and an `algae`
+   * per-type coverage block. The runtime `WaterChemistryService` owns the live
+   * tick; this field stores only the snapshot needed to RESUME a cycle
+   * deterministically — so a saved tank reloads mid-cycle rather than starting
+   * fresh.
+   *
+   * Absent ⇒ "no chemistry recorded" (a tank that was never cycled in the
+   * editor). The v3 → v4 migration MUST NOT invent values — absent stays
+   * absent through migration + round-trip, exactly like `waterLevelMm`. The
+   * marshal carries the field verbatim on the `tank`.
+   */
+  waterChemistry?: WaterChemistry;
   /** Optional reference to a known preset, e.g. "core:ada-mini-m". */
   presetRef?: CatalogRef;
   style: TankStyle;
+}
+
+/**
+ * Persisted water-chemistry state — the v4 snapshot of the `domain/water-sim`
+ * simulation that lets a saved tank reload mid-cycle (Stage 13 F13.2 /
+ * ADR-0006). Plain serializable data; the simulation logic lives in the
+ * `water-sim` lib, the live tick in a runtime service, and only this snapshot
+ * round-trips through the document.
+ *
+ * EVERY field of `WaterState` is persisted (none is recomputed): the snapshot
+ * IS the resume point, and the model can't reconstruct the colony capacities,
+ * the cycling clock, or the engine provenance from concentrations alone. The
+ * `cycle` stage is a pure function of `chemistry` (`water-sim`'s
+ * `cycleProgress`) — it's denormalized here so offline readers (e.g. the 2D
+ * test-kit readout, gallery thumbnails) can show the stage without importing
+ * `water-sim` or recomputing it; consumers that DO import `water-sim` MAY
+ * recompute it from `chemistry`. The `algae` block accumulates over sim-time
+ * and is genuinely independent state (not derivable from chemistry), so it is
+ * a persisted snapshot too.
+ */
+export interface WaterChemistry {
+  /**
+   * The persistable subset of `water-sim`'s `WaterState`. Field-for-field
+   * mirror so the runtime service can lift it back into a `WaterState`
+   * (`freshWaterState(chemistry)`) and resume `simulateChemistry` exactly.
+   */
+  chemistry: {
+    /** Total ammonia as nitrogen, mg/L (test-kit reading). */
+    ammonia: number;
+    /** Nitrite as nitrogen, mg/L. */
+    nitrite: number;
+    /** Nitrate as nitrogen, mg/L. Accumulates until a water change. */
+    nitrate: number;
+    /** Water pH. */
+    ph: number;
+    /** Ammonia-oxidiser colony capacity (dimensionless). 0 = brand-new tank. */
+    aobColony: number;
+    /** Nitrite-oxidiser colony capacity (dimensionless). 0 = brand-new tank. */
+    nobColony: number;
+    /** Total simulated weeks advanced — the cycling clock + jitter offset. */
+    ageWeeks: number;
+    /**
+     * `water-sim` rate-model engine version that produced this snapshot
+     * (replay / future-migration provenance). Mirrors `ENGINE_VERSION`.
+     */
+    engineVersion: number;
+  };
+  /**
+   * Denormalized tank-cycling stage. A pure function of `chemistry` (via
+   * `water-sim`'s `cycleProgress`), persisted so offline readers can display
+   * it without importing the model.
+   */
+  cycle: 'uncycled' | 'cycling' | 'cycled';
+  /**
+   * Per-type algae coverage scalars (each a `[0, 1]`-ish accumulated score).
+   * Omit a type whose coverage is zero — absent reads as "none". Independent
+   * accumulated state (not derivable from chemistry), so it is a snapshot.
+   */
+  algae?: {
+    'green-spot'?: number;
+    hair?: number;
+    'black-beard'?: number;
+    diatom?: number;
+  };
 }
 
 export interface TankStyle {
