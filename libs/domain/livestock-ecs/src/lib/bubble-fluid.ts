@@ -273,7 +273,13 @@ export function bubbleFluidStepSystem(world: LivestockWorld, dt: number): void {
       const rMag = tickPrng(world, BUBBLE_FLUID_KEY, s, 1);
       const puffRow = 1 + Math.floor(rRow * Math.max(1, g / 2));
       const puffMag = (rMag * 2 - 1) * BUBBLE_FLUID_TURBULENCE;
-      fU[ix(centreCol, puffRow, g)] += puffMag;
+      // Read-with-coalesce (not `+=`): under the build's strict
+      // `noUncheckedIndexedAccess` a typed-array index reads as
+      // `number | undefined`, so a compound assignment trips TS2532. The cell
+      // was just zeroed by `fU.fill(0, …)` above, so the `?? 0` is purely a
+      // type guard — behaviour is identical.
+      const puffIdx = ix(centreCol, puffRow, g);
+      fU[puffIdx] = (fU[puffIdx] ?? 0) + puffMag;
     }
 
     stepBubbleSlice(slice, dt, { u: fU, v: fV });
