@@ -79,6 +79,37 @@ function makeScene(): Scene {
   } as Scene;
 }
 
+/** Scene carrying a single real-catalog decor ornament, so the markdown
+ *  export resolves the decor name against `coreCatalog` through the UI. */
+function makeSceneWithDecor(): Scene {
+  return {
+    ...makeScene(),
+    layers: [
+      {
+        id: 'L-0',
+        name: 'Decor',
+        opacity: 1,
+        visible: true,
+        locked: false,
+        objects: [
+          {
+            kind: 'decor',
+            id: 'D-1',
+            ref: { catalog: 'core', id: 'decor.treasure-chest', version: 1 },
+            transform: {
+              position: { x: 100, y: 0, z: 100 },
+              rotation: { x: 0, y: 0, z: 0 },
+              scale: { x: 1, y: 1, z: 1 },
+              flipX: false,
+              flipY: false,
+            },
+          },
+        ],
+      },
+    ],
+  } as unknown as Scene;
+}
+
 async function flushPromises(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
@@ -261,6 +292,18 @@ describe('ExportDialogComponent', () => {
       await fixture.componentInstance.onExportSummary();
       fixture.detectChanges();
       expect(fixture.componentInstance.summaryFeedback().kind).toBe('ok');
+    });
+
+    it('includes a Decor section resolved against the core catalog', async () => {
+      const { fixture, exportSvc } = configure();
+      fixture.componentInstance.currentScene = makeSceneWithDecor();
+      fixture.componentInstance.open();
+      fixture.detectChanges();
+      await fixture.componentInstance.onExportSummary();
+      await flushPromises();
+      const text = new TextDecoder().decode(exportSvc.calls[0]?.bytes);
+      expect(text).toContain('## Decor');
+      expect(text).toContain('Sunken Treasure Chest');
     });
   });
 
