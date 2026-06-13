@@ -131,7 +131,7 @@ Every livestock entry in the document becomes visible, behaving fish in the 3D v
 - **Fin-nipping** — tiger barbs harass long-finned, slow-swimming tankmates (suppressed when their own school is large enough — just like real ones)
 - **Fear & startle waves** — frightened fish dart to cover, and panic ripples through a school; a predator (the angelfish) keeps prey on edge
 - **Feeding** — a "Feed tank" button drops food sprites; surface / midwater / substrate feeders find food at their band, otos graze algae off rocks (it regrows), detritivores wander the floor
-- **Flow & physics** — filter equipment bakes a divergence-free flow field that drags fish; a hardscape signed-distance-field deflects them off rocks; air stones stream wobbling bubble columns
+- **Flow & physics** — filter equipment bakes a divergence-free flow field that drags fish; a hardscape signed-distance-field deflects them off rocks; air stones stream bubble columns advected by a real per-stone Stam fluid slice (turbulent vortex shedding + cross-plume interaction between adjacent stones), not a scripted path
 - **Deterministic & budgeted** — same seed ⇒ same simulation, byte-identical over a 1000-tick replay; the full system steps in 3.43 ms p95 at 200 fish (4 ms budget)
 - A dev-only **behaviour debug overlay** (Ctrl/Cmd+Shift+D) shows each fish's mode, territory anchor, and refuge
 
@@ -214,7 +214,6 @@ Everything above is shipped. Remaining work, roughly in priority order:
 - [ ] **3D fidelity: screen-space water-surface refraction** — deferred (not blocked): the transmissive glass already supplies the dominant refraction read, so distorting the water plane is low marginal value for an extra render-target pre-pass. Revisit if the glass read proves insufficient. See [`plans/3d-fidelity-followups.md`](plans/3d-fidelity-followups.md).
 - [ ] **Community gallery** — browse + remix shared layouts. See [`plans/stage-8-community-gallery/`](plans/stage-8-community-gallery/).
 - [ ] **AI photorealistic render** — local + hosted providers behind one interface; keys live in OS secure storage, never in the document. See [`plans/stage-9-ai-render/`](plans/stage-9-ai-render/).
-- [ ] **Bubble fluid fidelity pass** — `createBubbleSlice` / `stepBubbleSlice` (a Stam 1999 advect/diffuse/project loop) is wired in `domain/fluid-sim` but unused; bubbles currently rise on a simple kinematic path.
 - [ ] **Image tank backgrounds** — solid + gradient ship today.
 - [ ] **Per-species fish textures** — deferred; fights per-archetype instancing and the WebGL 16-attribute budget.
 - [ ] **Code signing** — Apple Developer ID + Windows EV certificate for production installers.
