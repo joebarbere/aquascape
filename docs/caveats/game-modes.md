@@ -109,6 +109,80 @@ keeps `features/*` free of a concrete renderer/platform (layer-boundary rule).
   mistaken for real health. Don't wire real chemistry/health here — that's
   Stage 14, surfaced through this same bar later.
 
+## In-app activation (F16.1b — `apps/web`)
+
+The shell shipped in F16.1; **F16.1b wires it into `apps/web` so a
+`game:<submode>` launch is actually playable**. The activation lives in
+`AppComponent` and MIRRORS the simulation-mode machinery (see
+[`app-modes.md`](app-modes.md)) — don't invent a second path:
+
+- **`maybeActivateGameMode`** (in `ngOnInit`, alongside the simulation check)
+  resolves `gameModeOf(resolveAppMode())` and, when non-null, calls
+  `enterGameMode(sub)`. The runtime **Mode-menu** switch (`applyMode`) routes a
+  `game:<submode>` push into the same `enterGameMode`; the old F16.1 no-op TODO
+  is gone.
+- **`enterGameMode(mode)`** does, in order: load `createShowcaseScene()`
+  (reused, NOT forked — a populated deterministic tank is exactly the
+  playground a game wants), `forceMode('fish-eye')`, `store.dispatch(setScene)`
+  (which synchronously drives the `LivestockSimulationService` re-spawn, so
+  `getWorld()` is populated immediately after), `pickPlayerEntity(world)` →
+  `world.setPlayer(eid)`, `GameModeService.startGame(mode)` + `dispatch('start')`
+  (straight to the live `playing` loop — the generic shell doesn't wait on the
+  "Start" button), then `GameInputService.start(sink)`.
+- **`leaveGameMode`** stops the input loop, `world.clearPlayer()` (so the world
+  replays byte-identically again — the seam is gated on a marked player),
+  clears `gameMode`, and dispatches `quit`. The loaded scene stays in the store.
+- **Esc** mirrors the simulation rule exactly (`exitGameMode`): desktop bails
+  (main owns quit/return); browser tries `window.close()` then falls back to
+  `leaveGameMode`. The `.simulation-mode` chrome-hiding class is shared
+  (`simulationMode() || gameMode() !== null`).
+
+### The input loop is the ONE app-layer seam
+
+`GameInputService` (`apps/web/src/app/game/game-input.service.ts`) owns the
+keyboard listener (a live `Set<KeyboardEvent.code>`) + the rAF loop. **It must
+stay in the app**, never a domain/feature lib (those are DOM-free). Each frame
+(`step(nowMs)`, exposed for deterministic tests): `keysToIntent(held)` →
+`GameModeService.setIntent` → read `playerVelocity` (zero unless live) → push
+onto the world via the `sink` callback `(vx,vy,vz) => world.setPlayerVelocity` →
+`GameModeService.tick(dt)`. **`setPlayerVelocity` only STORES** — `world.step()`
+applies it at the top of the tick (see [`livestock-ecs.md`](livestock-ecs.md) →
+"Player-control seam"), so the rAF rate (≈60 Hz) is decoupled from the sim step
+(30 Hz). A `blur` listener clears held keys (no phantom held key on focus loss).
+The gamepad backend plugs in at the SAME spot — build the `InputIntent` from
+`navigator.getGamepads()` inside this rAF; the rest is unchanged.
+
+### `pickPlayerEntity` is deterministic
+
+`apps/web/src/app/game/game-activation.ts` — the player is snapshot index 0 (the
+first-spawned fish; the service walks `scene.livestock` in document order). The
+player ENTITY is deterministic; only the live INPUT velocity is not. An empty
+world returns `NO_ENTITY_REF` and the caller skips `setPlayer` (so a no-livestock
+scene is still a clean non-game world).
+
+### Per-mode rules are still pending
+
+F16.1b is the **generic** playable loop only — objective/score HUD + Esc-exit +
+a player you can swim. The real win/lose evaluation, food-aiming, fear-coupling,
+algae grazing (16.2–16.5) hook into the shared state machine + `GameModeService`
+later. Stage 16 stays on the README TODO until those land.
+
+### Tests + e2e
+
+- `apps/web/src/app/game/game-activation.spec.ts` — pure helper (real world).
+- `apps/web/src/app/game/game-input.service.spec.ts` — the FULL pipeline
+  (synthetic `keydown` → velocity → a real `world.step()` moves a marked
+  player); `step(nowMs)` drives frames without a real rAF.
+- `app.component.spec.ts` — AppComponent wiring (HUD mounts, `forceMode`,
+  Esc-exit, the Mode-menu game switch).
+- `apps/web-e2e/src/game-mode.spec.ts` — boots `?mode=game:predator`, asserts
+  3D fish-eye + a marked player, then a synthetic key moves the player's world
+  position. **Needs hardware/SwiftShader WebGL** (the world only ticks while the
+  3D canvas paints) — runs under `nx serve web` per the e2e caveat; it was NOT
+  run in the authoring environment (no chromium binary provisioned there), so
+  the equivalent coverage is the component + integration specs above. Validate
+  it on a box with a GPU / provisioned chromium.
+
 ## CI
 
 `features-game` is in the `pr.yml` coverage-gate selector (90 %

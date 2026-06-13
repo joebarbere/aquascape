@@ -140,7 +140,10 @@ import type {
 import { SceneActions, SelectionActions, selectScene, selectSelectedIds } from '@aquascape/state';
 import { Store } from '@ngrx/store';
 
-import { isGameAppMode, resolveAppMode, type AppMode } from './app-mode';
+import { gameModeOf, isGameAppMode, resolveAppMode, type AppMode } from './app-mode';
+import { GameHudComponent, GameModeService, type GameMode } from '@aquascape/features/game';
+import { GameInputService } from './game/game-input.service';
+import { pickPlayerEntity } from './game/game-activation';
 import { BehaviorDebugOverlayComponent } from './behavior-debug-overlay.component';
 import { BehaviorDebugService } from './behavior-debug.service';
 import { attachDebugHook, detachDebugHook } from './debug-hook';
@@ -213,6 +216,7 @@ type DragState =
     SimulationConsoleComponent,
     SimulationControlsComponent,
     SimulationHudComponent,
+    GameHudComponent,
     EditorShellComponent,
     EquipmentToolComponent,
     HardscapeToolComponent,
@@ -238,7 +242,7 @@ type DragState =
       [class.rail-collapsed]="railCollapsed()"
       [class.sidebar-open]="phoneSidebarOpen()"
       [class.rail-open]="phoneRailOpen()"
-      [class.simulation-mode]="simulationMode()"
+      [class.simulation-mode]="simulationMode() || gameMode() !== null"
     >
       <aquascape-editor-shell></aquascape-editor-shell>
 
@@ -473,6 +477,14 @@ type DragState =
               ></aquascape-simulation-hud>
             }
             <aquascape-simulation-console></aquascape-simulation-console>
+          }
+          <!-- Game HUD — Stage 16. Mounts over the 3D fish-eye view while a
+               game submode run is active. Binds to GameModeService (objective
+               / score / vitality + the state-machine overlays). The per-frame
+               input loop lives in GameInputService; per-mode win/lose rules
+               (16.2-16.5) hook in later. -->
+          @if (gameMode() !== null) {
+            <aquascape-game-hud></aquascape-game-hud>
           }
         </main>
 
@@ -849,6 +861,20 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly simulationMode = signal<boolean>(false);
   readonly simulationScene = signal<Scene | null>(null);
 
+  /**
+   * Stage 16 — the active game sub-mode (`'survival' | 'feeding' | 'predator'
+   * | 'cleaner'`), or null when no game run is active. Drives the `.game` HUD
+   * mount + the chrome-hiding class (shared with `simulationMode`). Set by
+   * `enterGameMode`, cleared by `leaveGameMode`.
+   */
+  readonly gameMode = signal<GameMode | null>(null);
+
+  /** The shared game shell (state machine + score + vitality the HUD binds to). */
+  readonly game = inject(GameModeService);
+
+  /** Keyboard + per-frame input loop for an active game run (app-layer glue). */
+  private readonly gameInput = inject(GameInputService);
+
   /** Live performance sampler feeding the HUD's metrics strip (simulation only). */
   readonly simPerf = inject(SimulationPerfService);
 
@@ -926,8 +952,15 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
    * the populated scene straight into the 3D canvas.
    */
   private maybeActivateSimulationMode(): void {
-    if (resolveAppMode() !== 'simulation') return;
-    this.enterSimulationMode();
+    const mode = resolveAppMode();
+    if (mode === 'simulation') {
+      this.enterSimulationMode();
+      return;
+    }
+    // Stage 16 — `?mode=game:<submode>` (or the Electron CLI flag forwarded
+    // over the preload bridge) boots straight into a playable game run.
+    const sub = gameModeOf(mode);
+    if (sub !== null) this.enterGameMode(sub);
   }
 
   /**
@@ -948,22 +981,28 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   /**
    * Apply a mode chosen at runtime: enter the showcase, or return to editing.
    *
-   * Stage 16 F16.1 wires the `game:<submode>` CLI grammar end-to-end (parse +
-   * menu + the `livestock-ecs` player seam + the fish-eye player retarget +
-   * the `@aquascape/features/game` shell). The in-app activation of a game run
-   * here (load a player scene, mark the player entity, mount the game HUD) is
-   * the remaining slice — until it lands, a runtime switch INTO a game mode is
-   * treated as a return to the editor so the menu can never strand the user.
-   * `?mode=game:<submode>` still resolves + falls back correctly at boot.
+   * Stage 16 F16.1b activates a game run in-app: a runtime switch into a
+   * `game:<submode>` mode loads the player scene, marks the player entity,
+   * forces 3D fish-eye, mounts the game HUD, and starts the input loop. The
+   * per-mode win/lose RULES (16.2-16.5) hook into the shared shell later; this
+   * is the generic playable loop (objective/score HUD + Esc-to-pause). Leaving
+   * to any non-kiosk mode returns to the editor.
    */
   private applyMode(mode: AppMode): void {
     if (mode === 'simulation') {
+      // Leaving a game for the showcase: drop game state first so the two
+      // kiosk surfaces never overlap.
+      this.leaveGameMode();
       this.enterSimulationMode();
     } else if (isGameAppMode(mode)) {
-      // TODO(Stage 16): activate the game run (scene + player + game HUD).
+      const sub = gameModeOf(mode);
+      // The showcase + game are mutually exclusive kiosks; leave the showcase
+      // before entering the game.
       this.leaveSimulationToEditor();
+      if (sub !== null) this.enterGameMode(sub);
     } else {
       this.leaveSimulationToEditor();
+      this.leaveGameMode();
     }
   }
 
@@ -994,6 +1033,73 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.simulationMode.set(false);
     this.simulationScene.set(null);
     this.simPerf.stop();
+  }
+
+  /**
+   * Stage 16 F16.1b — activate a playable game run. Mirrors
+   * `enterSimulationMode` (the showcase machinery) but adds the player seam:
+   *
+   *   1. Load a DETERMINISTIC scene (we reuse the showcase scene — a populated,
+   *      seed-stable tank with fish + hardscape + plants is exactly the
+   *      playground a game wants, and reusing it keeps determinism + avoids a
+   *      parallel scene to maintain). The store dispatch synchronously drives
+   *      the LivestockSimulationService re-spawn, so `getWorld()` is populated
+   *      immediately after.
+   *   2. Force 3D + fish-eye (`forceMode('fish-eye')`) so the camera rides the
+   *      player — the renderer's fish-eye retarget already follows
+   *      `world.getPlayerEntity()`.
+   *   3. Mark the player (`pickPlayerEntity` → `world.setPlayer`) — one fish,
+   *      chosen deterministically (snapshot index 0).
+   *   4. Start the shared game shell at the objective briefing, then go LIVE
+   *      (`start`) so the loop is immediately playable; the briefing text still
+   *      shows in the HUD top strip + Esc pauses. (A per-mode flow could leave
+   *      the player on the briefing until "Start" is clicked; the generic shell
+   *      goes straight to playing.)
+   *   5. Start the input loop, pushing derived player velocity onto the world's
+   *      `setPlayerVelocity` BEFORE each `world.step()` runs (the seam injects
+   *      at the top of the tick — see the loop's header).
+   *
+   * Idempotent on the same sub-mode. Switching sub-modes restarts the run.
+   */
+  private enterGameMode(mode: GameMode): void {
+    if (this.gameMode() === mode) return;
+    const scene = createShowcaseScene();
+    this.gameMode.set(mode);
+    this.simUi.resetLayout();
+    this.viewMode.forceMode('fish-eye');
+    // Drive the world re-spawn synchronously (the sim service subscribes to
+    // the scene selector), then mark the player on the now-populated world.
+    this.store.dispatch(SceneActions.setScene({ scene }));
+    const world = this.livestockSim.getWorld();
+    if (world !== null) {
+      const playerEid = pickPlayerEntity(world);
+      world.setPlayer(playerEid);
+    }
+    // Shared shell: reset the run to the objective briefing, then start playing
+    // so the generic loop is immediately controllable. Per-mode rules
+    // (16.2-16.5) will own the objective→playing handoff + win/lose later.
+    this.game.startGame(mode);
+    this.game.dispatch({ type: 'start' });
+    // Per-frame input → intent → velocity → world.setPlayerVelocity.
+    this.gameInput.start((vx, vy, vz) => {
+      const w = this.livestockSim.getWorld();
+      w?.setPlayerVelocity(vx, vy, vz);
+    });
+  }
+
+  /**
+   * Leave a game run back to the editor: stop the input loop, relinquish the
+   * player tag (so the world replays byte-identically again — the seam is
+   * gated on a marked player), and drop the HUD + chrome-hiding class. The
+   * loaded scene stays in the store, so the user lands in the editor looking
+   * at the tank. Idempotent.
+   */
+  private leaveGameMode(): void {
+    if (this.gameMode() === null) return;
+    this.gameInput.stop();
+    this.livestockSim.getWorld()?.clearPlayer();
+    this.gameMode.set(null);
+    this.game.dispatch({ type: 'quit' });
   }
 
   ngAfterViewInit(): void {
@@ -1644,6 +1750,16 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       this.exitSimulationMode();
       return;
     }
+    // Stage 16 — Esc in a game run. The FINAL quit/return outcome is owned by
+    // main on the desktop (kiosk launch → app.quit; menu-entered → switch to
+    // normal, pushed back over onSetMode). In a browser tab there's no main
+    // process, so Esc leaves the game back to the editor (mirrors the showcase
+    // Esc fallback). The in-game pause overlay is reachable via the HUD's
+    // own controls; the seam here is the exit/return path.
+    if (this.gameMode() !== null) {
+      this.exitGameMode();
+      return;
+    }
     if (this.dragState !== null) {
       this.cancelDrag();
       // Re-render so the preview transform reverts to the store's state.
@@ -1680,6 +1796,30 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     // Fallback for browsers that ignored window.close(): reveal the editor.
     this.leaveSimulationToEditor();
+  }
+
+  /**
+   * Handle Esc while in a game run. Same ownership split as
+   * `exitSimulationMode`:
+   *   - **Desktop (Electron):** main owns Esc (quit a `--mode game:*` kiosk /
+   *     switch a menu-entered game back to normal). The renderer must NOT
+   *     touch the view here or it would race the main-driven outcome — bail.
+   *   - **Browser tab:** try `window.close()` (kiosk / script-opened windows),
+   *     then fall back to leaving the game back to the editor so the user
+   *     isn't trapped in the chrome-free fish-eye view.
+   */
+  private exitGameMode(): void {
+    if (this.gameMode() === null) return;
+
+    const isElectron = typeof window !== 'undefined' && (window as Window).aquascape !== undefined;
+    if (isElectron) return; // main process owns Esc (quit or switch-to-normal)
+
+    try {
+      window.close();
+    } catch {
+      /* browsers throw or no-op for non-script-opened windows — ignore */
+    }
+    this.leaveGameMode();
   }
 
   /**
