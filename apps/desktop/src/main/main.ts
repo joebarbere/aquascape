@@ -19,7 +19,7 @@ import * as path from 'node:path';
 
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, session, shell } from 'electron';
 
-import { type AppMode, MODE_ARG_PREFIX, parseAppMode } from './app-mode';
+import { type AppMode, MODE_ARG_PREFIX, isGameAppMode, parseAppMode } from './app-mode';
 import { buildMenuTemplate } from './menu';
 import {
   createDialogBackend,
@@ -44,6 +44,16 @@ const DEV_SERVER_ENV = 'DEV_SERVER_URL';
 // `onSetMode` subscription — keep the two in sync (the sandbox can't share a
 // const). See `apps/web/src/app/app.component.ts` for the renderer end.
 const MODE_CHANNEL = 'app.mode.set';
+
+/**
+ * A "kiosk" launch is a chrome-free fullscreen showcase that owns Esc:
+ * `simulation` (the demo) and any `game:<submode>` (Stage 16). The normal
+ * editor is the only non-kiosk launch. Centralised so the window profile +
+ * fullscreen + Esc-quit rules all agree.
+ */
+function isKioskMode(mode: AppMode): boolean {
+  return mode === 'simulation' || isGameAppMode(mode);
+}
 
 /**
  * Swallow EPIPE on stdout / stderr.
@@ -143,15 +153,14 @@ function createMainWindow(mode: AppMode): BrowserWindow {
   // actually drives the visible brand at runtime there.
   const icon = nativeImage.createFromPath(resolvePlatformIconPath(__dirname, process.platform));
 
-  // Simulation mode is a borderless, fullscreen showcase: no window chrome, no
-  // menu bar, sized to fill the display. The default editor window keeps
-  // standard 1280×800 chrome. Both share the secure webPreferences + CSP +
-  // navigation lockdown below — the mode only changes the frame/size, never
-  // the security posture.
-  const modeWindowOptions =
-    mode === 'simulation'
-      ? ({ frame: false, fullscreen: true, autoHideMenuBar: true } as const)
-      : ({ width: 1280, height: 800 } as const);
+  // Kiosk modes (the simulation showcase + any `game:<submode>`) are a
+  // borderless, fullscreen surface: no window chrome, no menu bar, sized to
+  // fill the display. The default editor window keeps standard 1280×800
+  // chrome. Both share the secure webPreferences + CSP + navigation lockdown
+  // below — the mode only changes the frame/size, never the security posture.
+  const modeWindowOptions = isKioskMode(mode)
+    ? ({ frame: false, fullscreen: true, autoHideMenuBar: true } as const)
+    : ({ width: 1280, height: 800 } as const);
 
   const win = new BrowserWindow({
     ...modeWindowOptions,
@@ -174,11 +183,11 @@ function createMainWindow(mode: AppMode): BrowserWindow {
     void win.loadFile(resolveIndexPath(__dirname));
   }
 
-  // Auto-open DevTools in dev builds — but NEVER in simulation mode. The showcase
-  // is a clean, chrome-free presentation; a detached DevTools window (or the
-  // docked panel) would break that. Simulation mode is debuggable on demand via
-  // `--remote-debugging-port` if needed.
-  if (!app.isPackaged && mode !== 'simulation') {
+  // Auto-open DevTools in dev builds — but NEVER in a kiosk mode (simulation
+  // showcase or a game). The kiosk is a clean, chrome-free presentation; a
+  // detached DevTools window (or the docked panel) would break that. Kiosk
+  // launches are debuggable on demand via `--remote-debugging-port` if needed.
+  if (!app.isPackaged && !isKioskMode(mode)) {
     win.webContents.openDevTools({ mode: 'detach' });
   }
 
@@ -283,20 +292,25 @@ app
       if (win === null || mode === currentMode) return;
       currentMode = mode;
       win.webContents.send(MODE_CHANNEL, mode);
-      win.setFullScreen(mode === 'simulation');
+      // Kiosk modes (simulation + any game) go fullscreen; the editor exits it.
+      win.setFullScreen(isKioskMode(mode));
       refreshMenu();
     }
 
     // Esc handling lives in main so it works regardless of renderer state.
-    // In simulation mode: a window LAUNCHED as the kiosk (`--mode simulation`) quits the
-    // app (nothing to return to); a window that ENTERED demo via the menu
-    // switches back to the editor instead. Outside simulation mode Esc is the
-    // renderer's (selection-clear / drag-cancel) — we don't touch it.
+    // In a kiosk mode (simulation showcase OR a `game:<submode>`): a window
+    // LAUNCHED as the kiosk quits the app (nothing to return to); a window
+    // that ENTERED the kiosk via the menu switches back to the editor
+    // instead. Outside a kiosk mode Esc is the renderer's (selection-clear /
+    // drag-cancel) — we don't touch it. (The renderer's in-game pause UI
+    // handles Esc-to-pause before quit at the app layer; main owns the final
+    // quit/return, mirroring the demo-mode rule — see docs/caveats/app-modes.md
+    // + docs/caveats/game-modes.md.)
     const attachEscHandler = (win: BrowserWindow): void => {
       win.webContents.on('before-input-event', (_event, input) => {
         if (input.type !== 'keyDown' || input.key !== 'Escape') return;
-        if (currentMode !== 'simulation') return;
-        if (appMode === 'simulation') {
+        if (!isKioskMode(currentMode)) return;
+        if (isKioskMode(appMode)) {
           app.quit();
         } else {
           switchMode('normal');

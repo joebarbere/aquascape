@@ -1,4 +1,4 @@
-import { resolveAppMode } from './app-mode';
+import { GAME_MODES, gameModeOf, isGameAppMode, resolveAppMode } from './app-mode';
 
 /** Build a fake `globalThis` carrying just the bits `resolveAppMode` reads. */
 function fakeGlobal(opts: { bridgeMode?: string; search?: string }): typeof globalThis {
@@ -49,5 +49,41 @@ describe('resolveAppMode', () => {
 
   it('is safe when window is absent (SSR / test shell)', () => {
     expect(resolveAppMode({} as unknown as typeof globalThis)).toBe('normal');
+  });
+
+  // ── Stage 16 / ADR-0007 — `game:<submode>` colon grammar ──────────────
+  it.each(GAME_MODES)('reads game:%s from the preload bridge', (sub) => {
+    expect(resolveAppMode(fakeGlobal({ bridgeMode: `game:${sub}` }))).toBe(`game:${sub}`);
+  });
+
+  it.each(GAME_MODES)('reads game:%s from the ?mode= query param', (sub) => {
+    expect(resolveAppMode(fakeGlobal({ search: `?mode=game:${sub}` }))).toBe(`game:${sub}`);
+  });
+
+  it('falls back to normal for an unknown game sub-mode (never crashes)', () => {
+    expect(resolveAppMode(fakeGlobal({ search: '?mode=game:racing' }))).toBe('normal');
+    expect(resolveAppMode(fakeGlobal({ bridgeMode: 'game:racing' }))).toBe('normal');
+    expect(resolveAppMode(fakeGlobal({ search: '?mode=game:' }))).toBe('normal');
+    expect(resolveAppMode(fakeGlobal({ search: '?mode=game' }))).toBe('normal');
+  });
+
+  it('ignores an unknown game bridge mode and falls through to a valid query', () => {
+    expect(
+      resolveAppMode(fakeGlobal({ bridgeMode: 'game:racing', search: '?mode=game:feeding' })),
+    ).toBe('game:feeding');
+  });
+});
+
+describe('isGameAppMode / gameModeOf', () => {
+  it.each(GAME_MODES)('recognises game:%s', (sub) => {
+    expect(isGameAppMode(`game:${sub}`)).toBe(true);
+    expect(gameModeOf(`game:${sub}`)).toBe(sub);
+  });
+
+  it('rejects the single-token modes', () => {
+    expect(isGameAppMode('normal')).toBe(false);
+    expect(isGameAppMode('simulation')).toBe(false);
+    expect(gameModeOf('normal')).toBeNull();
+    expect(gameModeOf('simulation')).toBeNull();
   });
 });

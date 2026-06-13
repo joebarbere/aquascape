@@ -852,9 +852,33 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
   }
 
   /**
-   * Fish-eye view — park the camera at fish 0's eye, looking along the
-   * fish's heading. Returns `true` when the follow-cam drove the camera
-   * this frame (the tick then skips `controls.update()`).
+   * Resolve which snapshot index the fish-eye camera should follow.
+   *
+   * Stage 16 F16.1 — when a game mode has marked a player entity
+   * (`world.getPlayerEntity() !== NO_ENTITY_REF`), follow THAT fish by
+   * finding its eid in `snap.ids`. Otherwise (and as a fallback when the
+   * player isn't in the current snapshot) follow index 0 — the pre-F16.1
+   * behaviour. This is the minimal retarget: the camera math below is
+   * unchanged; only WHICH index it reads moves.
+   */
+  private fishEyeFollowIndex(snap: WorldSnapshot): number {
+    const world = this.livestockWorld;
+    if (world === null) return 0;
+    const playerEid = world.getPlayerEntity();
+    // NO_ENTITY_REF (0xffffffff) = no player marked → follow fish 0.
+    if (playerEid === 0xffffffff) return 0;
+    for (let i = 0; i < snap.entityCount; i++) {
+      if (snap.ids[i] === playerEid) return i;
+    }
+    // Player marked but not in this snapshot (e.g. mid-respawn) → fish 0.
+    return 0;
+  }
+
+  /**
+   * Fish-eye view — park the camera at the followed fish's eye, looking
+   * along the fish's heading. Follows the game player entity when one is
+   * marked (Stage 16 F16.1), else fish 0. Returns `true` when the follow-cam
+   * drove the camera this frame (the tick then skips `controls.update()`).
    *
    * Geometry: the snapshot's positions/orientations are in DOCUMENT
    * coordinates, but the content group is rendered through the doc→world
@@ -898,16 +922,19 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       if (this.controls !== null) this.controls.enabled = false;
     }
 
-    // Fish 0 — the snapshot's first entity. Spawn order is deterministic
-    // (document order), so the followed fish is stable for a given scene.
-    const px = snap.position[0] as number;
-    const py = snap.position[1] as number;
-    const pz = snap.position[2] as number;
-    const qx = snap.orientation[0] as number;
-    const qy = snap.orientation[1] as number;
-    const qz = snap.orientation[2] as number;
-    const qw = snap.orientation[3] as number;
-    const bodyLen = (snap.scale[0] as number) || 30;
+    // Follow the game player entity when one is marked (Stage 16 F16.1),
+    // else fish 0 — the snapshot's first entity. Spawn order is
+    // deterministic (document order), so the followed fish is stable for a
+    // given scene + player.
+    const f = this.fishEyeFollowIndex(snap);
+    const px = snap.position[f * 3 + 0] as number;
+    const py = snap.position[f * 3 + 1] as number;
+    const pz = snap.position[f * 3 + 2] as number;
+    const qx = snap.orientation[f * 4 + 0] as number;
+    const qy = snap.orientation[f * 4 + 1] as number;
+    const qz = snap.orientation[f * 4 + 2] as number;
+    const qw = snap.orientation[f * 4 + 3] as number;
+    const bodyLen = (snap.scale[f] as number) || 30;
 
     // Doc-space nose direction = quaternion · (-1, 0, 0).
     const fx = -(1 - 2 * (qy * qy + qz * qz));

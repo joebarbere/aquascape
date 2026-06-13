@@ -49,6 +49,7 @@
       "@aquascape/features/decorations-tool": ["libs/features/decorations-tool/src/index.ts"],
       "@aquascape/features/editor-shell": ["libs/features/editor-shell/src/index.ts"],
       "@aquascape/features/export": ["libs/features/export/src/index.ts"],
+      "@aquascape/features/game": ["libs/features/game/src/index.ts"],
       "@aquascape/features/hardscape-tool": ["libs/features/hardscape-tool/src/index.ts"],
       "@aquascape/features/layers-panel": ["libs/features/layers-panel/src/index.ts"],
       "@aquascape/features/livestock-equipment": ["libs/features/livestock-equipment/src/index.ts"],

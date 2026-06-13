@@ -1,18 +1,30 @@
 # Caveats: app launch modes
 
-**Load this when** touching the `--mode` CLI flag, the showcase demo scene/HUDs, the `~` developer console, the borderless-fullscreen window, or the renderer-side mode resolution.
+**Load this when** touching the `--mode` CLI flag, the showcase demo scene/HUDs, the `~` developer console, the borderless-fullscreen window, or the renderer-side mode resolution. For the `game:<submode>` family specifically, load [`game-modes.md`](game-modes.md) too.
 
 > User + author guide (launching, HUDs, full CLI command reference):
 > [`docs/guides/simulation-mode.md`](../guides/simulation-mode.md). This file is the gotchas.
 
 ## What "modes" are
 
-A launch profile selected at startup. Today there are two: `'normal'` (the
-full editor — the default) and `'simulation'` (the borderless-fullscreen
-showcase; its built-in scene is the `demo` simulation). The mode flows **main
+A launch profile selected at startup. Today there are: `'normal'` (the
+full editor — the default), `'simulation'` (the borderless-fullscreen
+showcase; its built-in scene is the `demo` simulation), and the
+`` `game:${GameMode}` `` family (Stage 16 / ADR-0007 — `game:survival`,
+`game:feeding`, `game:predator`, `game:cleaner`). The mode flows **main
 process → preload → renderer**, and the renderer also
-honours a `?mode=` URL query param so the showcase works in a plain browser /
-e2e / `nx serve web` without packaging the desktop app.
+honours a `?mode=` URL query param so the showcase / games work in a plain
+browser / e2e / `nx serve web` without packaging the desktop app.
+
+**The `game:<submode>` colon grammar is a branch of this same single-token
+parse — NOT new plumbing.** `parseModeToken` (in both `app-mode.ts` copies +
+the inlined preload copy) validates the `game:` prefix + the sub-mode
+allowlist; an unknown sub-mode falls back to `'normal'` (never crashes — the
+existing contract). A `game:<submode>` launch is a **kiosk** like
+`simulation` (`isKioskMode` in `main.ts` groups them): borderless fullscreen,
+main owns Esc, the Mode menu gains a **Game** submenu. The exhaustive details
+(the four parse sites, the player seam, the input-intent layer, the fish-eye
+retarget) live in [`game-modes.md`](game-modes.md).
 
 ```
 aquascape --mode simulation            apps/desktop/src/main/app-mode.ts   parseAppMode()

@@ -30,13 +30,23 @@ declare global {
        * falls back to the `?mode=` query param. Mirrors
        * `apps/desktop/src/preload/global.d.ts`.
        */
-      readonly mode?: 'normal' | 'simulation';
+      readonly mode?:
+        | 'normal'
+        | 'simulation'
+        | `game:${'survival' | 'feeding' | 'predator' | 'cleaner'}`;
       /**
        * Subscribe to runtime mode switches from the desktop "Mode" menu. The
        * callback gets the new mode; the returned thunk unsubscribes. Absent in
        * a browser build. Mirrors `apps/desktop/src/preload/global.d.ts`.
        */
-      readonly onSetMode?: (callback: (mode: 'normal' | 'simulation') => void) => () => void;
+      readonly onSetMode?: (
+        callback: (
+          mode:
+            | 'normal'
+            | 'simulation'
+            | `game:${'survival' | 'feeding' | 'predator' | 'cleaner'}`,
+        ) => void,
+      ) => () => void;
     };
   }
 }

@@ -13,7 +13,7 @@
 
 import type { MenuItemConstructorOptions } from 'electron';
 
-import type { AppMode } from './app-mode';
+import { GAME_MODES, type AppMode } from './app-mode';
 
 export interface MenuTemplateOptions {
   /** The mode currently active — drives which radio item is checked. */
@@ -60,6 +60,23 @@ export function buildMenuTemplate(options: MenuTemplateOptions): MenuItemConstru
         click: () => onSelectMode('simulation'),
       },
     ],
+  });
+
+  // Stage 16 / ADR-0007 — a "Game" submenu, one radio item per game
+  // sub-mode (`game:<submode>`). Picking one switches the running app into
+  // the corresponding fish-eye mini-game (`switchMode` in main.ts). The
+  // checked state reflects the current mode, so a non-game current mode
+  // leaves every item unchecked.
+  template.push({
+    label: 'Game',
+    submenu: GAME_MODES.map((sub) => ({
+      id: `mode-game-${sub}`,
+      // Title-case the sub-mode for display (survival → Survival).
+      label: sub.charAt(0).toUpperCase() + sub.slice(1),
+      type: 'radio' as const,
+      checked: currentMode === `game:${sub}`,
+      click: () => onSelectMode(`game:${sub}`),
+    })),
   });
 
   template.push({ role: 'windowMenu' });

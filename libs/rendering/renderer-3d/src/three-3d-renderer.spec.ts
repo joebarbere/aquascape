@@ -1668,6 +1668,38 @@ describe('Three3DRenderer — fish-eye camera mode', () => {
     r.dispose();
     raf.uninstall();
   });
+
+  it('fish-eye follows the marked player entity, not fish 0 (Stage 16 F16.1)', () => {
+    const raf = manualRaf();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()));
+    r.attach(makeSurface());
+    const world = createLivestockWorld(7);
+    // Fish 0 sits at doc x≈100 (world x≈500); the player sits at doc x≈500
+    // (world x≈100). Following the PLAYER must park the camera near world x≈100.
+    world.spawnFish({
+      archetype: 0,
+      speciesId: 1,
+      bodyLengthMm: 40,
+      position: { x: 100, y: 150, z: 200 },
+    });
+    const player = world.spawnFish({
+      archetype: 0,
+      speciesId: 1,
+      bodyLengthMm: 40,
+      position: { x: 500, y: 300, z: 350 },
+    });
+    world.setPlayer(player);
+    world.setPlayerVelocity(0, 0, 0); // hold the player still for a clean assert
+    r.render(sceneOf(), viewport, { livestockWorld: world, cameraMode: 'fish-eye' });
+    raf.fire(SIM_DT * 1000);
+    const { camera } = r as unknown as CameraView;
+    // Doc x=500 on a 600 mm tank mirrors to world x≈100 — the player, NOT fish 0.
+    expect(Math.abs(camera.position.x - 100)).toBeLessThan(45);
+    expect(Math.abs(camera.position.y - 300)).toBeLessThan(45);
+    expect(Math.abs(camera.position.z - 350)).toBeLessThan(45);
+    r.dispose();
+    raf.uninstall();
+  });
 });
 
 // ─── Decor models (GLB ornaments) ────────────────────────────────────────

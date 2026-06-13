@@ -47,6 +47,50 @@ describe('buildMenuTemplate', () => {
     expect(onSelectMode).toHaveBeenCalledWith('normal');
   });
 
+  function gameItems(template: MenuItemConstructorOptions[]): MenuItemConstructorOptions[] {
+    const game = template.find((m) => m.label === 'Game');
+    return (game?.submenu as MenuItemConstructorOptions[]) ?? [];
+  }
+
+  it('includes a Game submenu with one radio item per game sub-mode', () => {
+    const items = gameItems(
+      buildMenuTemplate({ currentMode: 'normal', isMac: false, onSelectMode: noop }),
+    );
+    expect(items.map((i) => i.id)).toEqual([
+      'mode-game-survival',
+      'mode-game-feeding',
+      'mode-game-predator',
+      'mode-game-cleaner',
+    ]);
+    expect(items.every((i) => i.type === 'radio')).toBe(true);
+    // Title-cased labels.
+    expect(items.map((i) => i.label)).toEqual(['Survival', 'Feeding', 'Predator', 'Cleaner']);
+  });
+
+  it('checks the game radio item matching the current game mode', () => {
+    const items = gameItems(
+      buildMenuTemplate({ currentMode: 'game:predator', isMac: false, onSelectMode: noop }),
+    );
+    expect(items.find((i) => i.id === 'mode-game-predator')?.checked).toBe(true);
+    expect(items.find((i) => i.id === 'mode-game-survival')?.checked).toBe(false);
+  });
+
+  it('leaves every game item unchecked in a non-game mode', () => {
+    const items = gameItems(
+      buildMenuTemplate({ currentMode: 'simulation', isMac: false, onSelectMode: noop }),
+    );
+    expect(items.every((i) => i.checked === false)).toBe(true);
+  });
+
+  it('invokes onSelectMode with the game:<submode> token on click', () => {
+    const onSelectMode = jest.fn();
+    const items = gameItems(
+      buildMenuTemplate({ currentMode: 'normal', isMac: false, onSelectMode }),
+    );
+    (items.find((i) => i.id === 'mode-game-feeding')?.click as () => void)();
+    expect(onSelectMode).toHaveBeenCalledWith('game:feeding');
+  });
+
   it('keeps the standard roles so Quit / Copy / DevTools survive', () => {
     const roles = buildMenuTemplate({
       currentMode: 'normal',

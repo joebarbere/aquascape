@@ -18,16 +18,27 @@ declare global {
       readonly ipc: IpcContract;
       /**
        * Launch mode forwarded from the main process (`aquascape --mode <mode>`).
-       * `'simulation'` drives the borderless-fullscreen showcase; absent / `'normal'`
-       * is the full editor. See `apps/desktop/src/main/app-mode.ts`.
+       * `'simulation'` drives the borderless-fullscreen showcase; `game:<submode>`
+       * (ADR-0007) launches a playable mini-game; absent / `'normal'` is the
+       * full editor. See `apps/desktop/src/main/app-mode.ts`.
        */
-      readonly mode?: 'normal' | 'simulation';
+      readonly mode?:
+        | 'normal'
+        | 'simulation'
+        | `game:${'survival' | 'feeding' | 'predator' | 'cleaner'}`;
       /**
        * Subscribe to runtime mode switches pushed from the "Mode" application
        * menu. The callback receives the validated mode; the returned thunk
        * unsubscribes. Absent in a browser build.
        */
-      readonly onSetMode?: (callback: (mode: 'normal' | 'simulation') => void) => () => void;
+      readonly onSetMode?: (
+        callback: (
+          mode:
+            | 'normal'
+            | 'simulation'
+            | `game:${'survival' | 'feeding' | 'predator' | 'cleaner'}`,
+        ) => void,
+      ) => () => void;
     };
   }
 }
