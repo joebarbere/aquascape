@@ -246,6 +246,41 @@ equipment list. Validated on the real-GPU Playwright loop (3D view, populated
 HUD, chrome gone). See
 [`docs/caveats/app-modes.md`](caveats/app-modes.md).
 
+## Nutrients & additives + dosing
+
+A new catalog **kind** of real-world aquarium nutrients/additives plus a way to
+dose them in simulation mode. Landed across three PRs:
+
+- **F-A — catalog `nutrient` kind.** A seventh `CatalogEntry` branch
+  (`NutrientEntry`: `category` / `brand` / `form` / `dose` / `disclosed` /
+  optional `contributes` / `affects[]` / `color` / cited `source`), 30 real
+  products seeded under `src/data/nutrients/` (dry EI salts, all-in-one liquids,
+  liquid carbon, conditioners, remineralizers, buffers, bacteria). **Honesty
+  contract:** disclosed products carry per-dose ppm/dGH from a cited source;
+  proprietary products omit `contributes` and rely on a qualitative `affects`
+  list — fabricating ppm is forbidden. Catalog `schemaVersion` stays **3**
+  (purely additive).
+- **F-B — `DoseNutrient` command** (scene-model, undoable). The
+  `doseNutrient(resolvedNutrient, amount, { id, seq, unit? })` factory resolves
+  the catalog row, linearly scales the disclosed `contributes` block
+  (`delta = contributes × amount / dose.amount`), and bakes a finished
+  `DoseEvent` so apply/invert stay a pure push/pop append/remove on the new
+  optional runtime `Scene.doseLog`. **Runtime-only / chemistry deferred** — no
+  `Tank.waterChemistry` exists yet (Stage 13); the dose log records the intent,
+  a future `domain/water-sim` consumes it. `doseLog` is **not** persisted, so
+  `document-round-trip` is untouched. Selectors `selectDoseLog` /
+  `selectDoseEventById` / `nextDoseSeq`.
+- **F-C — Dose action HUD + `dose` console verb.** The simulation control HUD
+  gained a **Dose nutrient** group (category filter, colour-swatched nutrient
+  picker, representative-dose-prefilled amount stepper, accessible status line)
+  and the Quake console gained a `dose list | dose <product> [amount]` verb with
+  fuzzy product matching (reusing the `matchSpecies` helper), a unit-suffix
+  amount token (`2ml` / `0.6g`), Tab-completion over nutrient ids/names, and a
+  `help` entry. Both surfaces go through a shared `doseNutrientOp` in
+  `simulation-scene-ops.ts` and dispatch `DoseNutrient` through the normal NgRx +
+  Command pipeline — the UI never mutates the scene directly. Dosing is
+  surfaced as recorded-only, with the chemistry effect explicitly deferred.
+
 ## Document & catalog version history
 
 | Version         | Change                                                                                                                                                                                                                                                                                                                                     |

@@ -52,6 +52,7 @@ Point-and-click controls that mutate the live scene:
 - **Water level** slider.
 - **Livestock** rows with `−` / `+` quantity steppers and `✕` remove, plus an **Add species** dropdown.
 - **Add items**: `+ Rock`, `+ Wood`, `+ Plant`, `+ Decor` (each drops a random one in).
+- **Dose nutrient**: a category filter, a nutrient picker (with a colour swatch), an amount stepper (pre-filled with the product's representative dose), and a **Dose** button. Picks from the ~30 real `nutrient` catalog products. **Recorded only** — the dose is appended to the scene's dose log via the `DoseNutrient` command; the actual water-chemistry effect is deferred pending `domain/water-sim` (Stage 13).
 - **Reset scene**.
 
 ### 3. The console — bottom-left (the CLI) ⌨️
@@ -101,11 +102,42 @@ Grammar is simple: `command [args…]`, whitespace-separated. Run `help` any tim
 |         | `fish remove <species>`                                       | Remove a stocked species.                                                    |
 |         | `fish set <species> <qty>`                                    | Set a stocked species' quantity (0 removes it).                              |
 | `item`  | `item add <rock\|wood\|plant\|decor>`                         | Drop a random catalog item of that kind into the tank.                       |
+| `dose`  | `dose list`                                                   | List every catalog nutrient (name · category · representative dose).        |
+|         | `dose <product> [amount]`                                    | Dose a nutrient. `<product>` is fuzzy (id or name fragment, Tab-completes). `amount` defaults to the product's representative dose, and may carry a unit suffix (`2ml`, `0.6g`). **Recorded only** (see below). |
 | `reset` | `reset`                                                       | Reload the pristine showcase scene.                                          |
 | `sim`   | `sim save <name>`                                             | Save the **current** scene as a named simulation (overwrites if it exists).  |
 |         | `sim load <name>`                                             | Load a saved simulation. `sim load demo` loads the built-in showcase.        |
 |         | `sim list`                                                    | List simulations (the built-in `demo` + your saved ones).                    |
 |         | `sim delete <name>`                                           | Delete a saved simulation.                                                   |
+
+### Dosing nutrients (recorded only)
+
+The **Dose** control HUD group and the `dose` console verb both add a real
+aquarium nutrient / additive (dry fertiliser salts, all-in-one liquids, liquid
+carbon, conditioners, remineralizers, buffers, bacteria) from the catalog. Both
+resolve the catalog `nutrient` row and dispatch the **`DoseNutrient`** command
+through the normal NgRx + Command pipeline (so it's undoable like any other
+mutation).
+
+> **Recorded only — chemistry deferred.** `DoseNutrient` appends a `DoseEvent` to
+> the runtime `scene.doseLog` (with linearly-scaled per-axis ppm/dGH deltas for
+> products that publicly **disclose** them, and a qualitative `affects` list for
+> proprietary ones — no fabricated numbers). It does **not** yet move any
+> water-chemistry parameter: the canonical `Tank.waterChemistry` state is a Stage
+> 13 (`domain/water-sim`) addition that hasn't shipped. A future water-sim reads
+> the dose log to apply the actual effect.
+
+`dose` fuzzy-matches the product the same way `fish` matches species:
+`dose easy-green`, `dose nutrient.aio.easy-green`, and `dose easy` (if
+unambiguous) all resolve to the same product; an ambiguous token lists the
+candidates. Tab-completes over nutrient ids + names.
+
+```text
+> dose list                  # list every nutrient
+> dose easy-green            # dose Easy Green at its representative dose
+> dose kno3 0.6              # 0.6 g of dry KNO3
+> dose excel 2ml             # 2 ml of liquid carbon (unit suffix optional)
+```
 
 ### Saving your own simulations
 
@@ -144,6 +176,7 @@ can disambiguate.
 > fish set neon 50            # bump neon tetras to 50
 > fish remove harlequin       # remove the harlequin rasboras
 > item add rock               # drop in a random rock
+> dose easy-green             # dose a nutrient (recorded only)
 > water 540                   # raise the water line to 540 mm
 > light dusk                  # warm, low evening light
 > hud hide controls           # hide the left control panel

@@ -18,7 +18,7 @@
 import { ChangeDetectionStrategy, Component, Input, computed, inject, signal } from '@angular/core';
 import { Store } from '@ngrx/store';
 
-import { coreCatalog } from '@aquascape/domain/catalog';
+import { coreCatalog, type NutrientCategory } from '@aquascape/domain/catalog';
 import {
   removeLivestockEntry,
   setWaterLevel,
@@ -32,7 +32,9 @@ import { SceneActions } from '@aquascape/state';
 import {
   addRandomItem,
   addSpecies as addSpeciesOp,
+  doseNutrientOp,
   NAME_BY_ID,
+  NUTRIENT_ENTRIES,
   uuid,
   type ItemKind,
 } from './simulation-scene-ops';
@@ -51,6 +53,18 @@ interface SpeciesOption {
   readonly id: string;
   readonly name: string;
 }
+
+interface NutrientOption {
+  readonly id: string;
+  readonly name: string;
+  readonly category: NutrientCategory;
+  readonly color: string;
+  readonly unit: 'g' | 'ml';
+  readonly doseAmount: number;
+}
+
+/** Filter chips for the Dose picker — `'all'` plus each used `NutrientCategory`. */
+type NutrientFilter = 'all' | NutrientCategory;
 
 @Component({
   selector: 'aquascape-simulation-controls',
@@ -148,6 +162,64 @@ interface SpeciesOption {
             <button type="button" (click)="addItem('wood')">+ Wood</button>
             <button type="button" (click)="addItem('plant')">+ Plant</button>
             <button type="button" (click)="addItem('decor')">+ Decor</button>
+          </div>
+        </div>
+
+        <div class="sim-controls__group">
+          <div class="sim-controls__group-title" id="demo-dose-title">Dose nutrient</div>
+          <div class="sim-controls__dose" role="group" aria-labelledby="demo-dose-title">
+            <select
+              [value]="doseFilter()"
+              (change)="onDoseFilter($any($event.target).value)"
+              aria-label="Filter nutrients by category"
+            >
+              <option value="all">All categories</option>
+              @for (cat of nutrientCategories; track cat) {
+                <option [value]="cat">{{ cat }}</option>
+              }
+            </select>
+            <div class="sim-controls__dose-pick">
+              <span
+                class="sim-controls__swatch"
+                aria-hidden="true"
+                [style.background]="selectedNutrient()?.color ?? 'transparent'"
+              ></span>
+              <select
+                [value]="doseId()"
+                (change)="onDoseSelect($any($event.target).value)"
+                aria-label="Nutrient to dose"
+              >
+                @for (opt of filteredNutrients(); track opt.id) {
+                  <option [value]="opt.id">{{ opt.name }}</option>
+                } @empty {
+                  <option value="" disabled>No nutrients</option>
+                }
+              </select>
+            </div>
+            <div class="sim-controls__dose-amount">
+              <label class="sim-controls__dose-label" for="demo-dose-amount">
+                Amount ({{ selectedNutrient()?.unit ?? 'ml' }})
+              </label>
+              <input
+                id="demo-dose-amount"
+                type="number"
+                min="0"
+                step="0.1"
+                [value]="doseAmount()"
+                (input)="onDoseAmount($any($event.target).value)"
+                aria-label="Dose amount"
+              />
+              <button
+                type="button"
+                [disabled]="selectedNutrient() === null"
+                (click)="dose()"
+              >
+                Dose
+              </button>
+            </div>
+            @if (doseStatus(); as status) {
+              <p class="sim-controls__dose-status" role="status" aria-live="polite">{{ status }}</p>
+            }
           </div>
         </div>
 
@@ -295,6 +367,58 @@ interface SpeciesOption {
       .sim-controls__reset {
         margin-top: 2px;
       }
+      .sim-controls__dose {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .sim-controls__dose select,
+      .sim-controls__dose input[type='number'] {
+        font: inherit;
+        color: #eaf4f8;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 6px;
+        padding: 2px 4px;
+        min-width: 0;
+      }
+      .sim-controls__dose-pick {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .sim-controls__dose-pick select {
+        flex: 1 1 auto;
+      }
+      .sim-controls__swatch {
+        flex: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+      }
+      .sim-controls__dose-amount {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .sim-controls__dose-label {
+        flex: 1 1 auto;
+        opacity: 0.85;
+      }
+      .sim-controls__dose-amount input[type='number'] {
+        width: 64px;
+        flex: none;
+      }
+      .sim-controls button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .sim-controls__dose-status {
+        margin: 0;
+        font-size: 11px;
+        color: #9fe0f5;
+      }
     `,
   ],
 })
@@ -315,6 +439,40 @@ export class SimulationControlsComponent {
   readonly speciesOptions: readonly SpeciesOption[] = coreCatalog
     .byKind('livestock')
     .map((e) => ({ id: e.id, name: e.name }));
+
+  /** All nutrients pickable in the Dose group, with swatch + dose metadata. */
+  readonly nutrientOptions: readonly NutrientOption[] = NUTRIENT_ENTRIES.map((e) => ({
+    id: e.id,
+    name: e.name,
+    category: e.category,
+    color: e.color,
+    unit: e.dose.unit,
+    doseAmount: e.dose.amount,
+  }));
+
+  /** Distinct categories present, for the Dose filter dropdown. */
+  readonly nutrientCategories: readonly NutrientCategory[] = [
+    ...new Set(this.nutrientOptions.map((o) => o.category)),
+  ];
+
+  /** Current Dose-picker filter + selection + amount + last-action feedback. */
+  readonly doseFilter = signal<NutrientFilter>('all');
+  readonly doseId = signal<string>(this.nutrientOptions[0]?.id ?? '');
+  readonly doseAmount = signal<number>(this.nutrientOptions[0]?.doseAmount ?? 1);
+  readonly doseStatus = signal<string>('');
+
+  /** Nutrients matching the active category filter. */
+  readonly filteredNutrients = computed<readonly NutrientOption[]>(() => {
+    const filter = this.doseFilter();
+    return filter === 'all'
+      ? this.nutrientOptions
+      : this.nutrientOptions.filter((o) => o.category === filter);
+  });
+
+  /** The currently-selected nutrient option (or null). */
+  readonly selectedNutrient = computed<NutrientOption | null>(
+    () => this.nutrientOptions.find((o) => o.id === this.doseId()) ?? null,
+  );
 
   readonly tank = computed(() => this.sceneSig()?.tank ?? null);
 
@@ -385,6 +543,45 @@ export class SimulationControlsComponent {
     const scene = this.sceneSig();
     if (scene === null) return;
     addRandomItem(this.store, scene, kind);
+  }
+
+  // ── Dose ─────────────────────────────────────────────────────────────────
+
+  onDoseFilter(value: string): void {
+    this.doseFilter.set(value as NutrientFilter);
+    // When the active selection falls out of the new filter, snap to the first
+    // visible nutrient + default its representative dose amount into the field.
+    const visible = this.filteredNutrients();
+    if (!visible.some((o) => o.id === this.doseId())) {
+      const first = visible[0];
+      if (first !== undefined) {
+        this.doseId.set(first.id);
+        this.doseAmount.set(first.doseAmount);
+      }
+    }
+  }
+
+  onDoseSelect(id: string): void {
+    this.doseId.set(id);
+    const option = this.nutrientOptions.find((o) => o.id === id);
+    if (option !== undefined) this.doseAmount.set(option.doseAmount);
+  }
+
+  onDoseAmount(value: string): void {
+    const n = Number(value);
+    this.doseAmount.set(Number.isFinite(n) ? n : 0);
+  }
+
+  dose(): void {
+    const scene = this.sceneSig();
+    const option = this.selectedNutrient();
+    if (scene === null || option === null) return;
+    const entry = doseNutrientOp(this.store, scene, option.id, this.doseAmount(), uuid);
+    this.doseStatus.set(
+      entry === null
+        ? 'Enter a positive amount to dose.'
+        : `Dosed ${this.doseAmount()} ${option.unit} of ${option.name} (recorded only).`,
+    );
   }
 
   // ── Reset ────────────────────────────────────────────────────────────────

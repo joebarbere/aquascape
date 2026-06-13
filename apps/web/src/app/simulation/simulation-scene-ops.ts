@@ -6,20 +6,23 @@
 
 import type { Store } from '@ngrx/store';
 
-import { coreCatalog } from '@aquascape/domain/catalog';
+import { coreCatalog, type NutrientEntry } from '@aquascape/domain/catalog';
 import {
   addLayer,
   addLivestockEntry,
   addObject,
+  doseNutrient,
   identityTransform,
   newLayerId,
   newObjectId,
+  nextDoseSeq,
   type DecorObject,
   type HardscapeObject,
   type Layer,
   type LayerId,
   type LivestockEntry,
   type PlantObject,
+  type ResolvedNutrient,
   type Scene,
   type SceneObject,
 } from '@aquascape/domain/scene-model';
@@ -162,4 +165,55 @@ export function matchSpecies(token: string, candidateIds: readonly string[]): Sp
     return { status: 'ambiguous', candidates: hits.map((id) => NAME_BY_ID.get(id) ?? id) };
   }
   return { status: 'none' };
+}
+
+// ─── Nutrient dosing (Nutrients & additives + dosing, F-C) ─────────────────
+
+/**
+ * The `NutrientEntry` catalog rows, in load order. Both the Dose HUD group and
+ * the `dose` console verb pick from this list.
+ */
+export const NUTRIENT_ENTRIES: readonly NutrientEntry[] = coreCatalog.byKind('nutrient');
+
+/** Fuzzy-resolve a user token to one `nutrient` catalog id (reuses {@link matchSpecies}). */
+export function matchNutrient(token: string): SpeciesMatch {
+  return matchSpecies(
+    token,
+    NUTRIENT_ENTRIES.map((e) => e.id),
+  );
+}
+
+/**
+ * Dose a nutrient through the normal NgRx + Command pipeline.
+ *
+ * Resolves the catalog `NutrientEntry`, hands its structural slice to the
+ * scene-model `doseNutrient(...)` factory (which computes the deltas + bakes a
+ * `DoseEvent`), mints the event id, assigns `seq` via `nextDoseSeq(scene)`, and
+ * dispatches the resulting `DoseNutrient` command. Returns the resolved entry on
+ * success (for confirmation feedback) or `null` when the id is unknown / the
+ * amount is non-positive.
+ *
+ * Chemistry is recorded-only: `DoseNutrient` appends to `scene.doseLog`; the
+ * actual water-chemistry effect is deferred pending `domain/water-sim`.
+ */
+export function doseNutrientOp(
+  store: Store,
+  scene: Scene,
+  catalogId: string,
+  amount: number,
+  makeId: () => string,
+  unit?: 'g' | 'ml',
+): NutrientEntry | null {
+  const entry = NUTRIENT_ENTRIES.find((e) => e.id === catalogId);
+  if (entry === undefined) return null;
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  // `NutrientEntry` is structurally assignable to `ResolvedNutrient`.
+  const resolved: ResolvedNutrient = entry;
+  const command = doseNutrient(resolved, amount, {
+    id: makeId(),
+    seq: nextDoseSeq(scene),
+    ...(unit !== undefined ? { unit } : {}),
+  });
+  store.dispatch(SceneActions.dispatchCommand({ command }));
+  return entry;
 }
