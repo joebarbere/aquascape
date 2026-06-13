@@ -1,0 +1,16 @@
+{
+  "catalog": "core",
+  "id": "food.wafer.repashy-soilent-green",
+  "version": 1,
+  "name": "Repashy Soilent Green",
+  "kind": "food",
+  "type": "wafer",
+  "brand": "Repashy",
+  "description": "Gel-premix algae/aufwuchs grazing diet, set into a sinking gel block (modelled here as a wafer-form substrate food). Manufacturer guaranteed-analysis crude protein minimum is 30%. wasteFactor (0.32) is MODELLED — gel holds together well while grazed but a sizeable uneaten block fouls fast, so the high end of the wafer band.",
+  "tags": ["food", "wafer", "gel", "herbivore", "aufwuchs", "shrimp"],
+  "proteinPct": 30,
+  "wasteFactor": 0.32,
+  "color": "#4d7a35",
+  "source": "https://www.repashy.com/soilent-green.html",
+  "notes": "Grazing diet for shrimp + herbivorous bottom feeders. Prepared from powder; the gel block is treated as a wafer-form substrate food by the husbandry sim."
+}

@@ -1,0 +1,15 @@
+{
+  "catalog": "core",
+  "id": "water-test-kit.jbl.co2-drop-checker",
+  "version": 1,
+  "name": "JBL ProAquaTest CO2/pH Permanent",
+  "kind": "water-test-kit",
+  "brand": "JBL",
+  "method": "drop-checker",
+  "description": "A continuous CO2 indicator (drop checker): an indicator fluid in a glass bulb changes colour with dissolved CO2, reading roughly 5–40 mg/L CO2 by hue (blue = low, green = ~optimal ~30 ppm, yellow = high). Reads CO2 indirectly; unlike a reagent kit it gives a constant at-a-glance value.",
+  "tags": ["test-kit", "drop-checker", "co2", "planted", "permanent"],
+  "reads": [{ "parameter": "co2", "min": 5, "max": 40, "unit": "ppm" }],
+  "color": "#5bbf4a",
+  "source": "https://www.jbl.de/en/products/detail/5567/jbl-proaquatest-co2-ph-permanent",
+  "notes": "Lags real CO2 by ~1–2 hours and depends on the indicator fluid's KH; treat the ppm band as approximate. Green is the planted-tank target."
+}

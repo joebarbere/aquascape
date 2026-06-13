@@ -1,0 +1,15 @@
+{
+  "catalog": "core",
+  "id": "algae.green-spot",
+  "version": 1,
+  "name": "Green Spot Algae",
+  "kind": "algae",
+  "type": "green-spot",
+  "description": "Hard green dots (GSA, Coleochaete-type) on glass and slow-growing leaves. Hobby consensus: thrives under bright light with low phosphate; the cure is RAISING phosphate, not lowering light. growthRate / lightDependence are MODELLED tuning weights, not measured rates.",
+  "tags": ["algae", "green-spot", "glass", "high-light", "low-phosphate"],
+  "growthRate": 0.45,
+  "lightDependence": 0.9,
+  "grazers": ["nerite-snail"],
+  "color": "#5f8f3a",
+  "notes": "Nerite snails rasp it off glass + hardscape; otos and shrimp largely ignore the hard mature dots. Scrape glass + dose PO4 to control."
+}

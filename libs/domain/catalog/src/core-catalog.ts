@@ -180,6 +180,28 @@ import nutrientReminSaltyshrimpGhKhPlus from './data/nutrients/remin-saltyshrimp
 // Buffers
 import nutrientBufferAlkaline from './data/nutrients/buffer-alkaline.json';
 import nutrientBufferAcid from './data/nutrients/buffer-acid.json';
+// Food (Stage 13 F13.4 — husbandry sim) — flake / pellet / wafer / live
+import foodFlakeTetramin from './data/food/flake-tetramin.json';
+import foodFlakeOmegaOneColor from './data/food/flake-omega-one-color.json';
+import foodPelletHikariMicro from './data/food/pellet-hikari-micro.json';
+import foodPelletBugBites from './data/food/pellet-bug-bites.json';
+import foodPelletFluvalShrimp from './data/food/pellet-fluval-shrimp.json';
+import foodWaferHikariAlgae from './data/food/wafer-hikari-algae.json';
+import foodWaferRepashySoilentGreen from './data/food/wafer-repashy-soilent-green.json';
+import foodLiveFrozenBloodworms from './data/food/live-frozen-bloodworms.json';
+import foodLiveBabyBrineShrimp from './data/food/live-baby-brine-shrimp.json';
+// Algae (Stage 13 F13.4) — the four husbandry types (match water-sim AlgaeType)
+import algaeGreenSpot from './data/algae/green-spot.json';
+import algaeHair from './data/algae/hair.json';
+import algaeBlackBeard from './data/algae/black-beard.json';
+import algaeDiatom from './data/algae/diatom.json';
+// Water test kits (Stage 13 F13.4) — real kits with published readable ranges
+import testKitApiFreshwaterMaster from './data/water-test-kit/api-freshwater-master.json';
+import testKitApiAmmonia from './data/water-test-kit/api-ammonia.json';
+import testKitSalifertNitrate from './data/water-test-kit/salifert-nitrate.json';
+import testKitJblTestlab from './data/water-test-kit/jbl-testlab.json';
+import testKitApi5in1Strips from './data/water-test-kit/api-5in1-strips.json';
+import testKitJblCo2DropChecker from './data/water-test-kit/jbl-co2-drop-checker.json';
 import { loadCatalog, type CatalogLoadResult } from './loader';
 
 /** Raw manifest array — exposed so tests + tools can re-load it deliberately. */
@@ -349,6 +371,28 @@ export const CORE_CATALOG_MANIFESTS: readonly unknown[] = [
   // Buffers
   nutrientBufferAlkaline,
   nutrientBufferAcid,
+  // Food (Stage 13 F13.4) — 9 foods: 2 flake + 3 pellet + 2 wafer + 2 live
+  foodFlakeTetramin,
+  foodFlakeOmegaOneColor,
+  foodPelletHikariMicro,
+  foodPelletBugBites,
+  foodPelletFluvalShrimp,
+  foodWaferHikariAlgae,
+  foodWaferRepashySoilentGreen,
+  foodLiveFrozenBloodworms,
+  foodLiveBabyBrineShrimp,
+  // Algae (Stage 13 F13.4) — the four husbandry types (match water-sim AlgaeType)
+  algaeGreenSpot,
+  algaeHair,
+  algaeBlackBeard,
+  algaeDiatom,
+  // Water test kits (Stage 13 F13.4) — 6 kits across liquid / strip / drop-checker
+  testKitApiFreshwaterMaster,
+  testKitApiAmmonia,
+  testKitSalifertNitrate,
+  testKitJblTestlab,
+  testKitApi5in1Strips,
+  testKitJblCo2DropChecker,
 ];
 
 /**

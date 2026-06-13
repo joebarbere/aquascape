@@ -22,6 +22,9 @@ flowchart TD
         L[livestock ×24]
         E[equipment ×12]
         N[nutrient ×30]
+        F[food ×9]
+        A[algae ×4]
+        TK[water-test-kit ×6]
     end
     manifests --> V["validateCatalogEntry (AJV)<br/>one JSON Schema, oneOf per kind<br/>schemaVersion 3"]
     V --> LD["loadCatalog(entries)"]
@@ -30,7 +33,7 @@ flowchart TD
     CC --> R2D[renderer-2d] & R3D[renderer-3d] & STK[stocking rules] & SIM[livestock simulation] & UI[palette browsers]
 ```
 
-`CatalogEntry` is a discriminated union over the seven kinds. What each kind
+`CatalogEntry` is a discriminated union over the ten kinds. What each kind
 carries (beyond id/name/description/tags):
 
 | Kind | Notable fields |
@@ -42,6 +45,9 @@ carries (beyond id/name/description/tags):
 | `livestock` | group, size, water params (`temperatureRange`, `pHRange`), `bioloadClass`, temperament, `schoolingMin`, `predator?`, `behavior?` (schooling / depth / animation / territory / nipping / fear overrides) |
 | `equipment` | category (filter/heater/light/CO2), settings, `flow?` (outflow/intake for the flow field), `airRateMl?` (bubble source), `photoperiodHours?` |
 | `nutrient` | category (macro-salt / micro-trace / all-in-one / liquid-carbon / conditioner / remineralizer / buffer / bacteria), `brand`, `form` (dry/liquid), representative `dose`, `affects[]` (qualitative), `contributes?` (per-dose ppm/dGH — **disclosed products only**), `disclosed`, `formula?`, `source?`, swatch `color`, `shrimpSafe?` |
+| `food` (F13.4) | `type` (flake/pellet/wafer/live), `brand`, `proteinPct?` (**published GA crude protein** — omitted for whole live/frozen), `wasteFactor` (**MODELLED** Stage 14 source-term coefficient), swatch `color`, `source?` |
+| `algae` (F13.4) | `type` (green-spot / hair / black-beard / diatom — **must match `water-sim`'s `AlgaeType`**), `growthRate` + `lightDependence` (**MODELLED** tuning weights), `grazers[]` (honest cleanup-crew list), `color` (a render hint — algae paints) |
+| `water-test-kit` (F13.4) | `brand`, `method` (liquid/strip/drop-checker), `reads[]` of `{ parameter, min, max, unit }` (**published ranges only**), swatch `color`, `source?` |
 
 Tank presets are a separate typed list (`tank-presets.ts`), each with a
 documented real-world source — **no fabricated dimensions**.
@@ -57,6 +63,9 @@ documented real-world source — **no fabricated dimensions**.
   `flow`, `airRateMl`, `photoperiodHours`, `textures`) land without a
   schemaVersion bump when older manifests still load unchanged;
   `additionalProperties: false` everywhere catches typos at load time.
+  Whole new **kinds** are equally additive (a new `oneOf` branch) — `decor`,
+  `nutrient`, and the Stage 13 F13.4 husbandry trio (`food` / `algae` /
+  `water-test-kit`) all landed at schemaVersion 3.
 - **Defaults belong to one owner.** Some fields default in the loader
   (`coverScore` by category), some at resolve time
   (`resolveBehavior()` presets), some are pure pass-through (`textures`).

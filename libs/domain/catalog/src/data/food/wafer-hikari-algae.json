@@ -1,0 +1,16 @@
+{
+  "catalog": "core",
+  "id": "food.wafer.hikari-algae",
+  "version": 1,
+  "name": "Hikari Tropical Algae Wafers",
+  "kind": "food",
+  "type": "wafer",
+  "brand": "Hikari",
+  "description": "Dense sinking discs for bottom-dwelling herbivores (plecos, otos, shrimp). Manufacturer guaranteed-analysis crude protein minimum is 33%. wasteFactor (0.3) is MODELLED — a wafer stays put and is clean when grazed promptly, but a heavy single-source nutrient load if left, so slightly above the pellet band.",
+  "tags": ["food", "wafer", "herbivore", "pleco", "bottom-feeder", "algae"],
+  "proteinPct": 33,
+  "wasteFactor": 0.3,
+  "color": "#3f6b2e",
+  "source": "https://www.hikariusa.com/products/algae-wafers/",
+  "notes": "Substrate grazers. Remove the uneaten remnant after a few hours — a half-eaten wafer is a localized ammonia + detritus source."
+}

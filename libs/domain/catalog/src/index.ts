@@ -9,6 +9,9 @@
 
 // ─── Types ────────────────────────────────────────────────────────────────
 export type {
+  AlgaeEntry,
+  AlgaeGrazer,
+  AlgaeType,
   Catalog,
   CatalogEntry,
   CatalogEntryBase,
@@ -16,6 +19,8 @@ export type {
   CatalogTextureRefs,
   DecorEntry,
   EquipmentEntry,
+  FoodEntry,
+  FoodType,
   HardscapeEntry,
   HexColor,
   LivestockEntry,
@@ -26,6 +31,9 @@ export type {
   NutrientEntry,
   PlantEntry,
   SubstrateEntry,
+  WaterParameter,
+  WaterTestKitEntry,
+  WaterTestReading,
 } from './types';
 
 // ─── Validator ────────────────────────────────────────────────────────────

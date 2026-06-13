@@ -1,0 +1,15 @@
+{
+  "catalog": "core",
+  "id": "algae.diatom",
+  "version": 1,
+  "name": "Diatoms (Brown Algae)",
+  "kind": "algae",
+  "type": "diatom",
+  "description": "Brown dusty film coating surfaces in new tanks — silicate-fed diatoms that bloom in low light and fade as the tank matures. Suppressed by strong flow. growthRate / lightDependence are MODELLED tuning weights, not measured rates.",
+  "tags": ["algae", "diatom", "brown", "new-tank", "low-light", "silicate"],
+  "growthRate": 0.6,
+  "lightDependence": 0.2,
+  "grazers": ["oto", "nerite-snail", "shrimp"],
+  "color": "#9a7b3f",
+  "notes": "Otocinclus and nerite snails graze the soft film readily — the classic new-tank cleanup crew. Usually self-resolves within weeks as silicate depletes."
+}

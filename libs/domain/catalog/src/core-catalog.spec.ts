@@ -15,7 +15,7 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     expect(coreCatalog.entries.length).toBe(CORE_CATALOG_MANIFESTS.length);
   });
 
-  it('ships substrate (Stage 2), hardscape (Stage 3), plant (Stage 4), livestock (Stage 7 F7.1), equipment (Stage 7 F7.3), decor, and nutrient kinds', () => {
+  it('ships substrate (Stage 2), hardscape (Stage 3), plant (Stage 4), livestock (Stage 7 F7.1), equipment (Stage 7 F7.3), decor, nutrient, and the Stage 13 F13.4 husbandry kinds (food / algae / water-test-kit)', () => {
     expect(coreCatalog.byKind('substrate').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('hardscape').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('plant').length).toBeGreaterThan(0);
@@ -23,6 +23,9 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     expect(coreCatalog.byKind('equipment').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('decor').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('nutrient').length).toBeGreaterThan(0);
+    expect(coreCatalog.byKind('food').length).toBeGreaterThan(0);
+    expect(coreCatalog.byKind('algae').length).toBeGreaterThan(0);
+    expect(coreCatalog.byKind('water-test-kit').length).toBeGreaterThan(0);
     expect(
       coreCatalog.byKind('substrate').length +
         coreCatalog.byKind('hardscape').length +
@@ -30,7 +33,10 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
         coreCatalog.byKind('livestock').length +
         coreCatalog.byKind('equipment').length +
         coreCatalog.byKind('decor').length +
-        coreCatalog.byKind('nutrient').length,
+        coreCatalog.byKind('nutrient').length +
+        coreCatalog.byKind('food').length +
+        coreCatalog.byKind('algae').length +
+        coreCatalog.byKind('water-test-kit').length,
     ).toBe(coreCatalog.entries.length);
   });
 
@@ -510,6 +516,121 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     // F11.6 will broaden this. If this creeps up before F11.6 lands, the
     // wiring tests for the "no flow / no bubbles" default path lose coverage.
     expect(annotated.length).toBeLessThanOrEqual(2);
+  });
+
+  // ─── Stage 13 F13.4 — food / algae / water-test-kit husbandry kinds ────────
+
+  it('ships exactly the 9 seeded foods across the 4 types (2 flake + 3 pellet + 2 wafer + 2 live)', () => {
+    const food = coreCatalog.byKind('food');
+    expect(food.length).toBe(9);
+    const types = food.reduce<Record<string, number>>((acc, entry) => {
+      acc[entry.type] = (acc[entry.type] ?? 0) + 1;
+      return acc;
+    }, {});
+    expect(types).toEqual({ flake: 2, pellet: 3, wafer: 2, live: 2 });
+  });
+
+  it('every food entry carries an sRGB swatch, a wasteFactor in [0, 1], and a plausible proteinPct when published', () => {
+    for (const entry of coreCatalog.byKind('food')) {
+      expect(entry.color).toMatch(/^#[0-9a-fA-F]{6}$/);
+      expect(entry.wasteFactor).toBeGreaterThanOrEqual(0);
+      expect(entry.wasteFactor).toBeLessThanOrEqual(1);
+      if (entry.proteinPct !== undefined) {
+        expect(entry.proteinPct).toBeGreaterThan(0);
+        expect(entry.proteinPct).toBeLessThanOrEqual(100);
+      }
+    }
+  });
+
+  it('honesty: every food with a published proteinPct cites a source; live/frozen whole foods omit proteinPct', () => {
+    for (const entry of coreCatalog.byKind('food')) {
+      if (entry.proteinPct !== undefined) {
+        expect(typeof entry.source).toBe('string');
+        expect(entry.source && entry.source.length).toBeGreaterThan(0);
+      }
+      // Whole live/frozen foods carry no standardized guaranteed-analysis label.
+      if (entry.type === 'live') {
+        expect(entry.proteinPct).toBeUndefined();
+      }
+    }
+  });
+
+  it('the TetraMin flake entry is reachable with its published 46% protein + high flake waste', () => {
+    const entry = coreCatalog.get({ catalog: 'core', id: 'food.flake.tetramin' });
+    expect(entry).not.toBeNull();
+    expect(entry?.kind).toBe('food');
+    if (entry?.kind !== 'food') return;
+    expect(entry.type).toBe('flake');
+    expect(entry.proteinPct).toBe(46);
+    // Flakes carry the highest modelled waste band.
+    expect(entry.wasteFactor).toBeGreaterThanOrEqual(0.35);
+  });
+
+  it('ships exactly the four algae types, and they match water-sim AlgaeType', () => {
+    const algae = coreCatalog.byKind('algae');
+    expect(algae.length).toBe(4);
+    const types = new Set(algae.map((e) => e.type));
+    // These four MUST stay in lock-step with @aquascape/domain/water-sim's
+    // AlgaeType (libs/domain/water-sim/src/algae.ts) for the F13.6 wiring.
+    expect(types).toEqual(new Set(['green-spot', 'hair', 'black-beard', 'diatom']));
+  });
+
+  it('every algae entry carries a render tint, a modelled growthRate in (0,1], lightDependence in [0,1], and a non-empty grazer list', () => {
+    for (const entry of coreCatalog.byKind('algae')) {
+      expect(entry.color).toMatch(/^#[0-9a-fA-F]{6}$/);
+      expect(entry.growthRate).toBeGreaterThan(0);
+      expect(entry.growthRate).toBeLessThanOrEqual(1);
+      expect(entry.lightDependence).toBeGreaterThanOrEqual(0);
+      expect(entry.lightDependence).toBeLessThanOrEqual(1);
+      expect(entry.grazers.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('the black-beard algae entry reads as a low-light, flow-loving, grazer-resistant red alga', () => {
+    const entry = coreCatalog.get({ catalog: 'core', id: 'algae.black-beard' });
+    expect(entry).not.toBeNull();
+    if (entry?.kind !== 'algae') return;
+    expect(entry.type).toBe('black-beard');
+    // BBA tolerates lower light than green algae — low lightDependence.
+    expect(entry.lightDependence).toBeLessThan(0.5);
+    // Only the SAE reliably eats it among common grazers.
+    expect(entry.grazers).toEqual(['siamese-algae-eater']);
+  });
+
+  it('ships exactly the 6 seeded water test kits across the 3 methods (4 liquid + 1 strip + 1 drop-checker)', () => {
+    const kits = coreCatalog.byKind('water-test-kit');
+    expect(kits.length).toBe(6);
+    const methods = kits.reduce<Record<string, number>>((acc, entry) => {
+      acc[entry.method] = (acc[entry.method] ?? 0) + 1;
+      return acc;
+    }, {});
+    expect(methods).toEqual({ liquid: 4, strip: 1, 'drop-checker': 1 });
+  });
+
+  it('every water-test-kit entry carries a swatch, a non-empty reads list, and well-formed reading ranges', () => {
+    for (const entry of coreCatalog.byKind('water-test-kit')) {
+      expect(entry.color).toMatch(/^#[0-9a-fA-F]{6}$/);
+      expect(entry.reads.length).toBeGreaterThan(0);
+      for (const reading of entry.reads) {
+        // Manifest-author contract: min < max for every swatch series.
+        expect(reading.min).toBeLessThan(reading.max);
+        expect(['ppm', 'dKH', 'dGH', 'pH', 'other']).toContain(reading.unit);
+      }
+    }
+  });
+
+  it('the API Freshwater Master kit reads the nitrogen-cycle trio + pH with published ranges', () => {
+    const entry = coreCatalog.get({
+      catalog: 'core',
+      id: 'water-test-kit.api.freshwater-master',
+    });
+    expect(entry).not.toBeNull();
+    if (entry?.kind !== 'water-test-kit') return;
+    expect(entry.method).toBe('liquid');
+    const params = new Set(entry.reads.map((r) => r.parameter));
+    expect(params).toEqual(new Set(['ph', 'ammonia', 'nitrite', 'nitrate']));
+    const nitrate = entry.reads.find((r) => r.parameter === 'nitrate');
+    expect(nitrate).toEqual({ parameter: 'nitrate', min: 0, max: 160, unit: 'ppm' });
   });
 });
 

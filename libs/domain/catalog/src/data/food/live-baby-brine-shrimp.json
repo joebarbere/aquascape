@@ -1,0 +1,14 @@
+{
+  "catalog": "core",
+  "id": "food.live.baby-brine-shrimp",
+  "version": 1,
+  "name": "Live Baby Brine Shrimp",
+  "kind": "food",
+  "type": "live",
+  "brand": "DIY / hatched",
+  "description": "Freshly hatched Artemia nauplii — the classic live fry + small-fish food, hatched from cysts at home, so no brand and no standardized protein label (proteinPct omitted rather than fabricated). wasteFactor (0.12) is MODELLED — tiny live prey are chased and eaten almost completely, the lowest-waste food in the set.",
+  "tags": ["food", "live", "fry", "brine-shrimp", "artemia"],
+  "wasteFactor": 0.12,
+  "color": "#e08a2c",
+  "notes": "Live nauplii die in fresh water within hours; uneaten ones decay, so the low waste assumes they're eaten promptly. Hatched from cysts — no manufacturer protein spec exists for the live product."
+}

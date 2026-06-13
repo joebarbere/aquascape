@@ -1,0 +1,15 @@
+{
+  "catalog": "core",
+  "id": "algae.black-beard",
+  "version": 1,
+  "name": "Black Beard Algae",
+  "kind": "algae",
+  "type": "black-beard",
+  "description": "Dark red/black tufts (BBA, Audouinella — a red alga) on hardscape and slow plant edges. Hobby consensus: thrives in strong flow with unstable / low CO2; tolerates lower light than green algae, so its light dependence is modest. growthRate / lightDependence are MODELLED tuning weights, not measured rates.",
+  "tags": ["algae", "black-beard", "bba", "high-flow", "unstable-co2"],
+  "growthRate": 0.4,
+  "lightDependence": 0.35,
+  "grazers": ["siamese-algae-eater"],
+  "color": "#2b2330",
+  "notes": "True SAE are the only common fish that reliably eat it, and only when young. Mature BBA is grazer-resistant — spot-treat with liquid carbon / Excel and stabilize CO2 + flow."
+}

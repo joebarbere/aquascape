@@ -1,0 +1,15 @@
+{
+  "catalog": "core",
+  "id": "algae.hair",
+  "version": 1,
+  "name": "Hair / Thread Algae",
+  "kind": "algae",
+  "type": "hair",
+  "description": "Long green strands (hair / thread / Oedogonium-type) riding excess nutrients under long, bright photoperiods. The fastest spreader of the four when light + nutrients run high. growthRate / lightDependence are MODELLED tuning weights, not measured rates.",
+  "tags": ["algae", "hair", "thread", "high-light", "excess-nutrients"],
+  "growthRate": 0.85,
+  "lightDependence": 0.85,
+  "grazers": ["shrimp", "siamese-algae-eater"],
+  "color": "#6fae45",
+  "notes": "Amano shrimp + SAE graze soft new growth eagerly; mature tufts are best manually twirled out. Shorten the photoperiod and stabilize CO2 to control."
+}

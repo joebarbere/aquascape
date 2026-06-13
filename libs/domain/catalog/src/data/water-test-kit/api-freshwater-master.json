@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "water-test-kit.api.freshwater-master",
+  "version": 1,
+  "name": "API Freshwater Master Test Kit",
+  "kind": "water-test-kit",
+  "brand": "API",
+  "method": "liquid",
+  "description": "The ubiquitous reagent master kit. Reads pH (6.0–7.6), high-range pH (7.4–8.8), ammonia (0–8 ppm), nitrite (0–5 ppm) and nitrate (0–160 ppm) by reagent drops against a colour card. Ranges are the published first/last swatch values; readings past the top swatch clamp to it.",
+  "tags": ["test-kit", "liquid", "master", "ammonia", "nitrite", "nitrate", "ph"],
+  "reads": [
+    { "parameter": "ph", "min": 6.0, "max": 7.6, "unit": "pH" },
+    { "parameter": "ph", "min": 7.4, "max": 8.8, "unit": "pH" },
+    { "parameter": "ammonia", "min": 0, "max": 8, "unit": "ppm" },
+    { "parameter": "nitrite", "min": 0, "max": 5, "unit": "ppm" },
+    { "parameter": "nitrate", "min": 0, "max": 160, "unit": "ppm" }
+  ],
+  "color": "#2f6fb0",
+  "source": "https://apifishcare.com/product/freshwater-master-test-kit",
+  "notes": "The two pH entries are the normal-range and high-range pH tests, which share the parameter but cover different swatch bands. Shake the nitrate bottle #2 hard to avoid a false low reading."
+}
