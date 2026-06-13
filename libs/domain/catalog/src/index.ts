@@ -14,6 +14,7 @@ export type {
   CatalogEntryBase,
   CatalogKind,
   CatalogTextureRefs,
+  DecorEntry,
   EquipmentEntry,
   HardscapeEntry,
   HexColor,

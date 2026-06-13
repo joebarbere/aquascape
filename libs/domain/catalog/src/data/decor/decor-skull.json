@@ -1,0 +1,29 @@
+{
+  "catalog": "core",
+  "id": "decor.skull",
+  "version": 1,
+  "name": "Giant Skull",
+  "kind": "decor",
+  "category": "bones",
+  "subcategory": "skeleton",
+  "naturalSize": { "width": 180, "height": 170, "depth": 210 },
+  "color": "#d8d0bd",
+  "description": "Oversized human-style skull with swim-through eye sockets. Generic archetype of the classic resin aquarium ornament — no brand; dimensions are the authored model's bounding box, not a manufacturer spec.",
+  "tags": ["decor", "bones", "skull"],
+  "silhouette": [
+    { "x": -0.6, "y": -1.0 },
+    { "x": 0.45, "y": -1.0 },
+    { "x": 0.7, "y": -0.75 },
+    { "x": 0.95, "y": -0.7 },
+    { "x": 0.9, "y": -0.35 },
+    { "x": 0.75, "y": -0.1 },
+    { "x": 0.95, "y": 0.3 },
+    { "x": 0.8, "y": 0.75 },
+    { "x": 0.35, "y": 1.0 },
+    { "x": -0.35, "y": 0.95 },
+    { "x": -0.85, "y": 0.6 },
+    { "x": -1.0, "y": 0.05 },
+    { "x": -0.9, "y": -0.5 }
+  ],
+  "model": "skull.glb"
+}

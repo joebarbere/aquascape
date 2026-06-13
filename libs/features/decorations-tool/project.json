@@ -1,0 +1,19 @@
+{
+  "name": "features-decorations-tool",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/features/decorations-tool/src",
+  "projectType": "library",
+  "tags": ["scope:feature", "type:lib"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/features/decorations-tool",
+        "main": "libs/features/decorations-tool/src/index.ts",
+        "tsConfig": "libs/features/decorations-tool/tsconfig.lib.json",
+        "assets": ["libs/features/decorations-tool/*.md"]
+      }
+    }
+  }
+}

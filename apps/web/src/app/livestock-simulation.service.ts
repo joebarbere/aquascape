@@ -28,6 +28,9 @@
 //    spawn pass via `setTankAabb`, so DepthSystem + SteeringIntegrator
 //    + the post-Kinematic clamp track tank resizes without a world rebuild.
 // 6. F11.3: Walk `scene.layers[].objects` for `kind === 'hardscape'` items
+//    (and, since the Decorations feature, `kind === 'decor'` items, which
+//    register with category OTHER + the DecorEntry's loader-defaulted
+//    coverScore — ornaments have swim-through cavities, so they're refuges)
 //    in document order, build a `HardscapeRegistrationEntry[]` from the
 //    LOADED catalog row (coverScore + category are already defaulted by
 //    the catalog loader — do NOT re-default here), and call
@@ -77,6 +80,7 @@ import { Store } from '@ngrx/store';
 import { coreCatalog } from '@aquascape/domain/catalog';
 import type {
   Catalog,
+  DecorEntry as CatalogDecorEntry,
   EquipmentEntry as CatalogEquipmentEntry,
   HardscapeEntry as CatalogHardscapeEntry,
   LivestockEntry as CatalogLivestockEntry,
@@ -895,8 +899,11 @@ function isLivestockRow(catalogRow: unknown): boolean {
  *
  * Plants are intentionally excluded: per the livestock-ecs caveat,
  * plant cover is runtime-computed by FearSystem from scatter density,
- * not registered as a discrete refuge anchor. Decor entries are also
- * skipped — only `kind === 'hardscape'` SceneObjects make the list.
+ * not registered as a discrete refuge anchor. Decor SceneObjects DO make
+ * the list (Decorations feature): the classic ornaments are authored with
+ * swim-through cavities, so they register as refuges with category
+ * `HARDSCAPE_CATEGORY.OTHER` and the loader-defaulted `DecorEntry.coverScore`
+ * (structure→0.6, wreck→0.5, bones→0.4, ruin→0.3 when the manifest omits it).
  *
  * `category` mapping: catalog's string union `'rock' | 'wood' | 'other'`
  * → the integer `HARDSCAPE_CATEGORY.*` the ECS slab stores. Plants would
@@ -995,11 +1002,19 @@ function collectHardscapeSpheres(scene: Scene, catalog: Catalog): HardscapeSpher
   const out: HardscapeSphere[] = [];
   for (const layer of scene.layers) {
     for (const obj of layer.objects) {
-      if (obj.kind !== 'hardscape') continue;
+      // Hardscape AND decor contribute to the SDF bake — fish should
+      // deflect around a sunken galleon exactly like they do around a
+      // seiryu stone. Both kinds approximate via the bounding-sphere-of-
+      // bounding-box on the catalog row's `naturalSize`; the walk stays
+      // a single document-order pass so the bake input ordering matches
+      // `collectHardscape` (determinism contract).
+      if (obj.kind !== 'hardscape' && obj.kind !== 'decor') continue;
       const row = catalog.get(obj.ref);
-      const hardscapeRow =
-        row !== null && row.kind === 'hardscape' ? (row as CatalogHardscapeEntry) : null;
-      const radius = sphereRadiusForHardscape(hardscapeRow);
+      const sized =
+        row !== null && (row.kind === 'hardscape' || row.kind === 'decor')
+          ? (row as CatalogHardscapeEntry | CatalogDecorEntry)
+          : null;
+      const radius = sphereRadiusForHardscape(sized);
       out.push({
         position: {
           x: obj.transform.position.x,
@@ -1014,13 +1029,13 @@ function collectHardscapeSpheres(scene: Scene, catalog: Catalog): HardscapeSpher
 }
 
 /**
- * Pick a sphere radius approximating the hardscape entry's mesh extent.
- * Half of the longest `naturalSize` dim is the "bounding sphere of the
- * bounding box" — coarse but correct in order of magnitude for both
- * small pebbles + large boulders. Falls back to the const when
+ * Pick a sphere radius approximating the hardscape / decor entry's mesh
+ * extent. Half of the longest `naturalSize` dim is the "bounding sphere of
+ * the bounding box" — coarse but correct in order of magnitude for both
+ * small pebbles + large galleons. Falls back to the const when
  * `naturalSize` is missing (catalog row absent or under-populated).
  */
-function sphereRadiusForHardscape(row: CatalogHardscapeEntry | null): number {
+function sphereRadiusForHardscape(row: CatalogHardscapeEntry | CatalogDecorEntry | null): number {
   if (row === null) return HARDSCAPE_SDF_FALLBACK_RADIUS_MM;
   const ns = row.naturalSize;
   if (ns === undefined) return HARDSCAPE_SDF_FALLBACK_RADIUS_MM;
@@ -1036,29 +1051,72 @@ function collectHardscape(
   const out: HardscapeRegistrationEntry[] = [];
   for (const layer of scene.layers) {
     for (const obj of layer.objects) {
-      if (obj.kind !== 'hardscape') continue;
-      const row = catalog.get(obj.ref);
-      const hardscapeRow =
-        row !== null && row.kind === 'hardscape' ? (row as CatalogHardscapeEntry) : null;
-      const category = mapHardscapeCategory(obj, hardscapeRow);
-      // coverScore should be loader-defaulted on `hardscapeRow`; the
-      // `?? defaultCoverScore(...)` is a defensive fallback for the
-      // missing-row path (tests that don't register the entry) — NOT a
-      // re-defaulting of an already-loaded row.
-      const coverScore =
-        hardscapeRow?.coverScore ?? defaultCoverScoreForCategoryInt(category);
-      out.push({
-        position: {
-          x: obj.transform.position.x,
-          y: obj.transform.position.y,
-          z: obj.transform.position.z,
-        },
-        coverScore,
-        category,
-      });
+      if (obj.kind === 'hardscape') {
+        const row = catalog.get(obj.ref);
+        const hardscapeRow =
+          row !== null && row.kind === 'hardscape' ? (row as CatalogHardscapeEntry) : null;
+        const category = mapHardscapeCategory(obj, hardscapeRow);
+        // coverScore should be loader-defaulted on `hardscapeRow`; the
+        // `?? defaultCoverScore(...)` is a defensive fallback for the
+        // missing-row path (tests that don't register the entry) — NOT a
+        // re-defaulting of an already-loaded row.
+        const coverScore =
+          hardscapeRow?.coverScore ?? defaultCoverScoreForCategoryInt(category);
+        out.push({
+          position: {
+            x: obj.transform.position.x,
+            y: obj.transform.position.y,
+            z: obj.transform.position.z,
+          },
+          coverScore,
+          category,
+        });
+      } else if (obj.kind === 'decor') {
+        // Decorations register as refuges too — same document-order walk
+        // (hardscape + decor interleave exactly as authored, which keeps
+        // the auto-anchor's order-stable nearest-pick + the spawnKey
+        // fingerprint deterministic). Category is always OTHER (an
+        // ornament is neither rock nor wood); coverScore comes off the
+        // loaded DecorEntry (loader-defaulted by decor category) with a
+        // defensive fallback mirroring the loader for the missing-row /
+        // un-loaded-fixture path.
+        const row = catalog.get(obj.ref);
+        const decorRow = row !== null && row.kind === 'decor' ? (row as CatalogDecorEntry) : null;
+        const coverScore =
+          decorRow?.coverScore ??
+          (decorRow !== null ? defaultCoverScoreForDecorCategoryStr(decorRow.category) : 0);
+        out.push({
+          position: {
+            x: obj.transform.position.x,
+            y: obj.transform.position.y,
+            z: obj.transform.position.z,
+          },
+          coverScore,
+          category: HARDSCAPE_CATEGORY.OTHER,
+        });
+      }
     }
   }
   return out;
+}
+
+/**
+ * Defensive decor coverScore default used only when the loaded row carries
+ * no `coverScore` (a fixture that bypassed the loader). Mirrors the catalog
+ * loader's `defaultCoverScoreForDecorCategory` — these numbers must stay
+ * in sync (structure→0.6, wreck→0.5, bones→0.4, ruin→0.3).
+ */
+function defaultCoverScoreForDecorCategoryStr(category: CatalogDecorEntry['category']): number {
+  switch (category) {
+    case 'structure':
+      return 0.6;
+    case 'wreck':
+      return 0.5;
+    case 'bones':
+      return 0.4;
+    default:
+      return 0.3;
+  }
 }
 
 /**

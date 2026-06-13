@@ -23,12 +23,15 @@ export default {
   },
   moduleFileExtensions: ['ts', 'js', 'html'],
   moduleNameMapper: {
-    '^three/examples/jsm/controls/OrbitControls$':
-      '<rootDir>/src/__mocks__/orbit-controls-stub.ts',
+    '^three/examples/jsm/controls/OrbitControls$': '<rootDir>/src/__mocks__/orbit-controls-stub.ts',
     // Fidelity pass (bloom) — the postprocessing addons are ESM-only; redirect
     // them to a single stub so the module-level imports resolve under Jest.
     '^three/examples/jsm/postprocessing/(EffectComposer|RenderPass|UnrealBloomPass|OutputPass)$':
       '<rootDir>/src/__mocks__/postprocessing-stub.ts',
+    // Decor models — GLTFLoader is ESM-only too; the ModelCache only builds
+    // the real loader behind a `typeof document !== 'undefined'` guard, so
+    // the stub merely has to be requireable.
+    '^three/examples/jsm/loaders/GLTFLoader$': '<rootDir>/src/__mocks__/gltf-loader-stub.ts',
   },
   coverageDirectory: '../../../coverage/libs/rendering/renderer-3d',
   collectCoverageFrom: [

@@ -13,7 +13,7 @@
  * id is a warning, not a crash.
  */
 
-import type { Catalog, CatalogEntry, CatalogKind, HardscapeEntry } from './types';
+import type { Catalog, CatalogEntry, CatalogKind, DecorEntry, HardscapeEntry } from './types';
 import { type ValidationError, validateCatalogEntry } from './validator';
 
 /**
@@ -35,6 +35,31 @@ function defaultCoverScoreForCategory(category: HardscapeEntry['category']): num
       return 0.4;
     default:
       return 0;
+  }
+}
+
+/**
+ * Default decor `coverScore` derived from `category` when the manifest omits
+ * the field — mirrors the hardscape defaulting above. Decorations rate higher
+ * than flat hardscape `other` decor (0) because the classic ornaments are
+ * authored with swim-through cavities (hollow hulls, arched doors, eye
+ * sockets) that read as real refuges to the F11.3 FearSystem.
+ *
+ * - structure → 0.6   castle keeps etc. with swim-through openings
+ * - wreck     → 0.5   hulls, helmets, chests with sheltered voids
+ * - bones     → 0.4   skull cavities
+ * - ruin      → 0.3   columns + amphorae offer partial shelter
+ */
+function defaultCoverScoreForDecorCategory(category: DecorEntry['category']): number {
+  switch (category) {
+    case 'structure':
+      return 0.6;
+    case 'wreck':
+      return 0.5;
+    case 'bones':
+      return 0.4;
+    default:
+      return 0.3;
   }
 }
 
@@ -107,16 +132,19 @@ export function loadCatalog(input: readonly unknown[]): CatalogLoadResult {
 }
 
 /**
- * Apply loader-side defaults that the schema can't express. Today this only
- * fills hardscape `coverScore` from `category`; other kinds pass through
- * untouched. The original manifest object is never mutated — when a default
- * is applied we return a shallow clone with the populated field, so the
- * `CoreCatalog` consumers see a fully-populated entry while the `import`-ed
- * JSON object stays as-is.
+ * Apply loader-side defaults that the schema can't express. Today this fills
+ * hardscape + decor `coverScore` from their respective `category` tables;
+ * other kinds pass through untouched. The original manifest object is never
+ * mutated — when a default is applied we return a shallow clone with the
+ * populated field, so the `CoreCatalog` consumers see a fully-populated
+ * entry while the `import`-ed JSON object stays as-is.
  */
 function populateDefaults(entry: CatalogEntry): CatalogEntry {
   if (entry.kind === 'hardscape' && entry.coverScore === undefined) {
     return { ...entry, coverScore: defaultCoverScoreForCategory(entry.category) };
+  }
+  if (entry.kind === 'decor' && entry.coverScore === undefined) {
+    return { ...entry, coverScore: defaultCoverScoreForDecorCategory(entry.category) };
   }
   return entry;
 }

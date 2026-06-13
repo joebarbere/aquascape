@@ -170,6 +170,34 @@ demo on the README (follow-ups tracked in
   mode, **Fish eye**, parks the camera at a live fish's eye with a wide
   FOV and follows it in first person (`RenderOptions.cameraMode`).
 
+### 3D-modeled decorations (post-Stage 11)
+
+The classic aquarium ornaments — researched archetypes, not brands: sunken
+treasure chest, galleon wreck, giant skull, antique diver helmet, ship
+anchor, Greek column ruins, moai head, castle tower, toppled amphora,
+pirate cannon. The scene model's dormant `DecorObject` (`kind: 'decor'`,
+reserved since Stage 7) finally got a backing catalog kind (`DecorEntry`,
+additive oneOf branch — manifest schemaVersion stays 3) and both render
+paths:
+
+- **Models are glTF binaries (GLB)** — baked deterministically offline by
+  `tools/generate-decor-models.mjs` (`pnpm generate:models`, double-bake
+  byte-identity asserted, splitmix32 seeds) from three.js primitives +
+  seeded displacement, carrying `MeshPhysicalMaterial` PBR via KHR
+  extensions (clearcoat, transmission + IOR, iridescence, emissive
+  strength) and vertex-colour weathering — no embedded images.
+- **3D**: a renderer-lifetime model cache (GLTFLoader, placeholder
+  upgrades in place, failed loads keep an extruded-silhouette fallback,
+  opt-in via `RenderOptions.catalogModelBaseUrl`); models rest on the
+  substrate, clamp inside the glass, cast + receive shadows, and take the
+  caustics patch. **2D**: silhouette painting + hit-testing on the
+  hardscape convention.
+- **Fish integration**: decor registers with the livestock world as cover
+  (per-category coverScore defaults) and joins the hardscape-SDF collision
+  bake — frightened fish genuinely shelter in the wreck.
+- **UI**: a Decorations palette (wreck / ruin / bones / structure chips,
+  silhouette tiles, drag-to-place) in `libs/features/decorations-tool/`.
+
 ## Document & catalog version history
 
 | Version         | Change                                                                                                                                                                                                                                   |
@@ -178,7 +206,7 @@ demo on the README (follow-ups tracked in
 | `.aqua` v2      | Optional `Layer.zone` ('foreground' \| 'midground' \| 'background') for 3D depth banding (Stage 10 follow-up).                                                                                                                           |
 | `.aqua` v3      | Optional `Tank.waterLevelMm` — the adjustable water fill line (post-Stage-11 fidelity work).                                                                                                                                             |
 | Catalog v1 → v2 | Pre-Stage-11 manifest evolution.                                                                                                                                                                                                         |
-| Catalog v3      | Optional `LivestockEntry.behavior`, `HardscapeEntry.coverScore?`, `EquipmentEntry.flow?` / `airRateMl?` / `photoperiodHours?`, and `textures?` refs on substrate/hardscape/plant entries — all additive; older manifests load unchanged. |
+| Catalog v3      | Optional `LivestockEntry.behavior`, `HardscapeEntry.coverScore?`, `EquipmentEntry.flow?` / `airRateMl?` / `photoperiodHours?`, and `textures?` refs on substrate/hardscape/plant entries — all additive; older manifests load unchanged. The `decor` entry kind (GLB model refs) landed later as another additive oneOf branch — still v3. |
 
 Every format bump shipped with a pure `Migration` entry and a round-trip
 property test, per the v1-locked checklist in

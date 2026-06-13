@@ -38,7 +38,14 @@ export type Millimetres = number;
 export type HexColor = string;
 
 /** Discriminated union over catalog content types. */
-export type CatalogKind = 'substrate' | 'tank' | 'hardscape' | 'plant' | 'equipment' | 'livestock';
+export type CatalogKind =
+  | 'substrate'
+  | 'tank'
+  | 'hardscape'
+  | 'plant'
+  | 'equipment'
+  | 'livestock'
+  | 'decor';
 
 /**
  * Optional photorealistic texture maps (Bucket 2 of the 3D fidelity plan,
@@ -452,6 +459,61 @@ export interface EquipmentEntry extends CatalogEntryBase {
   };
 }
 
+// ─── Decor (3D-modelled classic ornaments) ────────────────────────────────
+
+/**
+ * A classic aquarium ornament — treasure chest, sunken galleon, skull,
+ * castle tower… Unlike hardscape (procedural silhouette extrusion), decor
+ * is 3D-modelled: `model` references a committed glTF-binary (GLB) file the
+ * 3D renderer loads. The GLB carries its own authored PBR materials, so
+ * there is deliberately NO `textures` block on decor — the triplanar
+ * catalog-texture pipeline exists to dress procedural geometry, and layering
+ * it over authored materials would fight the baker's work.
+ *
+ * - `category` drives the filter chips in the decorations-tool UI.
+ * - `naturalSize` is the world-space bounding box at `transform.scale = 1`
+ *   (mm). The GLB is authored to exactly this box — the renderer never has
+ *   to measure or re-fit the mesh.
+ * - `color` + `silhouette` are the deterministic 2D baseline, same
+ *   convention as hardscape: the 2D renderer fills the closed polygon with
+ *   `color` and the palette tile renders it as an SVG. The 3D renderer
+ *   ignores both (the GLB is the 3D look).
+ * - `model` is resolved by the 3D renderer as `baseUrl + ref` against the
+ *   catalog model root — the host serves `libs/domain/catalog/assets/models/`
+ *   at `assets/catalog-models/`. The 2D renderer ignores it.
+ *
+ * Core decor entries are generic archetypes of the classic resin ornaments
+ * (no brand names, no fabricated manufacturer specs): `naturalSize` is the
+ * authored model's bounding box, not a vendor figure.
+ */
+export interface DecorEntry extends CatalogEntryBase {
+  kind: 'decor';
+  /** Filter chips in the decorations-tool UI. */
+  category: 'wreck' | 'ruin' | 'bones' | 'structure';
+  /** Free-form secondary filter pill (e.g. 'pirate', 'greco-roman'). */
+  subcategory?: string;
+  /** World-space bounding box at transform.scale = 1 (mm). The GLB is authored to exactly this box. */
+  naturalSize: { width: Millimetres; height: Millimetres; depth: Millimetres };
+  /** 2D silhouette fill (3D renderer ignores; the GLB carries its own PBR materials). */
+  color: HexColor;
+  /** Closed polygon in normalized [-1,1] space, ≥3 points — same convention as hardscape. Drives the 2D renderer + palette tile SVG. */
+  silhouette: ReadonlyArray<{ x: number; y: number }>;
+  /**
+   * Refuge value `[0, 1]` for the Stage 11 F11.3 FearSystem; loader defaults
+   * by category when absent: structure → 0.6, wreck → 0.5, bones → 0.4,
+   * ruin → 0.3 (decorations have swim-through cavities, unlike flat
+   * hardscape 'other' decor, which defaults to 0).
+   */
+  coverScore?: number;
+  /**
+   * REQUIRED glTF-binary model ref relative to the catalog model root,
+   * pattern `^[a-z0-9._/-]+\.glb$`. Host serves
+   * `libs/domain/catalog/assets/models/` at `assets/catalog-models/`; the
+   * 3D renderer resolves `baseUrl + ref`. 2D ignores.
+   */
+  model: string;
+}
+
 // ─── Placeholders for later stages ────────────────────────────────────────
 //
 // Each future kind adds a branch here AND a matching schema branch. Until
@@ -463,7 +525,8 @@ export type CatalogEntry =
   | HardscapeEntry
   | PlantEntry
   | LivestockEntry
-  | EquipmentEntry;
+  | EquipmentEntry
+  | DecorEntry;
 
 /**
  * Lookup table built from a validated catalog: `(catalog, id) -> entry`.

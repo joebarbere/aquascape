@@ -36,6 +36,11 @@
             "glob": "**/*",
             "input": "libs/domain/catalog/assets/textures",
             "output": "/assets/catalog-textures"
+          },
+          {
+            "glob": "**/*",
+            "input": "libs/domain/catalog/assets/models",
+            "output": "/assets/catalog-models"
           }
         ],
         "serviceWorker": "apps/web/ngsw-config.json"

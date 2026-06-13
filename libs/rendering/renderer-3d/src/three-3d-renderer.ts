@@ -206,6 +206,7 @@ import {
   setCausticIntensity,
   updateCausticTime,
 } from './scene-builder/caustics';
+import { buildDecorMeshes, type DecorModelOptions } from './scene-builder/decor-mesh';
 import { buildEnvEquirectTexture, ENV_INTENSITY } from './scene-builder/environment';
 import { buildHardscapeMeshes } from './scene-builder/hardscape-mesh';
 import { buildLighting } from './scene-builder/lighting';
@@ -217,6 +218,7 @@ import {
 import { buildSubstrateMeshes } from './scene-builder/substrate-mesh';
 import { buildTankMesh } from './scene-builder/tank-mesh';
 import { buildWaterMesh, type WaterMeshHandle } from './scene-builder/water-mesh';
+import { ModelCache, type ModelLoadFn } from './model-cache';
 import { TextureCache } from './texture-cache';
 
 /**
@@ -371,6 +373,16 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    */
   private causticMaterials: MeshStandardMaterial[] = [];
   /**
+   * Decor — the LIVE caustic-material array stashed on the decor group's
+   * `userData[CAUSTIC_MATERIALS_KEY]`. Held by REFERENCE (not flattened
+   * into `causticMaterials`) because GLB loads resolve asynchronously and
+   * push freshly-patched materials into this same array AFTER the render
+   * that built the group — keeping the reference live means the RAF tick
+   * animates late-attached models without waiting for the next `render()`.
+   * Re-pointed on every rebuild; reset on dispose.
+   */
+  private decorCausticMaterials: MeshStandardMaterial[] = [];
+  /**
    * Stage 11 F11.7 Wave 3 — cached references to the lighting rig's
    * Ambient + Directional lights. Set in `ensureLightingForTank` after
    * every (re)build of the lighting group; nulled in `dispose()`. The
@@ -460,6 +472,22 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    */
   private textureCache: TextureCache | null = null;
   /**
+   * Decor models — URL-keyed GLB cache, created lazily on the first render
+   * that supplies `options.catalogModelBaseUrl` and kept for the renderer's
+   * LIFETIME (loaded GLB sources survive content rebuilds; per-render the
+   * builders just get fresh containers + clones). Disposed exactly once,
+   * in `dispose()`. See `model-cache.ts` for the container / clone /
+   * fallback contracts.
+   */
+  private modelCache: ModelCache | null = null;
+  /**
+   * Injectable GLB loader forwarded to the lazily-created `ModelCache` —
+   * tests pass a fake; production omits it and the cache builds its own
+   * `GLTFLoader`-backed default (null under jsdom-less envs → permanent
+   * extruded-silhouette fallback, headless-test-safe).
+   */
+  private readonly loadModel: ModelLoadFn | undefined;
+  /**
    * Bucket-0 capability gate — whether render-target / multi-pass effects
    * (SSAO, screen-space refraction) are safe on the attached GL context.
    * Computed in `setupComposer` (real `WebGLRenderer` only) via
@@ -501,9 +529,15 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    * @param rendererFactory injectable WebGLRenderer factory. The default
    * constructs a real `THREE.WebGLRenderer`; tests inject a stub so they
    * don't need a real WebGL context.
+   * @param options.loadModel injectable GLB loader for the decor
+   * `ModelCache` — tests pass a synchronous fake; production omits it.
    */
-  constructor(rendererFactory: RendererFactory = defaultRendererFactory) {
+  constructor(
+    rendererFactory: RendererFactory = defaultRendererFactory,
+    options: { loadModel?: ModelLoadFn } = {},
+  ) {
     this.rendererFactory = rendererFactory;
+    this.loadModel = options.loadModel;
   }
 
   // ─── attach ───────────────────────────────────────────────────────────
@@ -716,6 +750,12 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       if (this.causticMaterials.length > 0) {
         updateCausticTime(this.causticMaterials, now / 1000);
       }
+      // Decor caustics — the array is LIVE (async GLB loads push patched
+      // materials into it after render()), so re-reading it per tick is
+      // what makes late-attached models animate without a rebuild.
+      if (this.decorCausticMaterials.length > 0) {
+        updateCausticTime(this.decorCausticMaterials, now / 1000);
+      }
 
       if (!fishCamDrove) ctl?.update();
       this.paint(r, s, c);
@@ -872,6 +912,9 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       // materials were just disposed; drop the non-owning view. Reassigned
       // when the new substrate + hardscape groups are built below.
       this.causticMaterials = [];
+      // Decor — same: the decor group's materials were just disposed; drop
+      // the live-array reference. Re-pointed at the new group's array below.
+      this.decorCausticMaterials = [];
     }
     const content = new Object3D();
     content.name = 'aquascape:content';
@@ -896,6 +939,24 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
         []),
     ];
     setCausticIntensity(this.causticMaterials, options.dayNightLookup?.directionalIntensity ?? 1);
+    // Decor — classic ornaments (treasure chest, galleon, skull…). GLB
+    // models when the host supplied `catalogModelBaseUrl` (loaded through
+    // the renderer-lifetime ModelCache, attach-in-place on arrival),
+    // extruded-silhouette fallbacks otherwise. The group's caustic-material
+    // array is held by LIVE reference so async GLB loads that resolve
+    // between renders still animate (see the field doc).
+    const decorGroup = buildDecorMeshes(
+      scene,
+      catalog,
+      this.buildDecorModelOptions(options.catalogModelBaseUrl),
+    );
+    content.add(decorGroup);
+    this.decorCausticMaterials =
+      (decorGroup.userData[CAUSTIC_MATERIALS_KEY] as MeshStandardMaterial[] | undefined) ?? [];
+    setCausticIntensity(
+      this.decorCausticMaterials,
+      options.dayNightLookup?.directionalIntensity ?? 1,
+    );
     // Stage 11 F11.7 — retain a handle on the plant group so the RAF tick
     // can drive its sway materials' `uTime` uniform. The group itself is
     // rebuilt + GPU-disposed every render (no caching), but we always
@@ -1204,6 +1265,22 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     }
     const cache = this.textureCache;
     return (ref, kind) => cache.get(baseUrl + ref, kind);
+  }
+
+  /**
+   * Decor models — build the `DecorModelOptions` for this render, or
+   * `undefined` when the host didn't supply a base URL (the opt-in
+   * contract: absent ⇒ extruded-silhouette fallback, no network, no
+   * GLTFLoader construction — headless-test-safe). Lazily creates the
+   * renderer-lifetime `ModelCache` on first use, forwarding the
+   * constructor-injected loader so tests drive loads with a fake.
+   */
+  private buildDecorModelOptions(baseUrl: string | undefined): DecorModelOptions | undefined {
+    if (baseUrl === undefined) return undefined;
+    if (this.modelCache === null) {
+      this.modelCache = new ModelCache(this.loadModel);
+    }
+    return { cache: this.modelCache, baseUrl };
   }
 
   /**
@@ -1538,6 +1615,8 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     // Fidelity pass (caustics) — drop the non-owning material view (the
     // materials themselves were disposed by `disposeNode` above).
     this.causticMaterials = [];
+    // Decor — drop the live caustic-array reference too.
+    this.decorCausticMaterials = [];
 
     // Stage 11 F11.1 — release the GPU resources behind the livestock
     // bundle. The world itself is owned by the host (it survives a
@@ -1625,6 +1704,17 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     if (this.textureCache !== null) {
       this.textureCache.dispose();
       this.textureCache = null;
+    }
+
+    // Decor models — release every geometry + material the cache created
+    // (loaded GLB sources + per-clone material clones). Clones living in
+    // the content tree were already disposed by `disposeNode` above; the
+    // cache's dispose is the backstop for the off-tree sources and any
+    // late-resolved clones (double-dispose is harmless — Three.js
+    // `.dispose()` is idempotent).
+    if (this.modelCache !== null) {
+      this.modelCache.dispose();
+      this.modelCache = null;
     }
 
     if (this.renderer !== null) {

@@ -1,0 +1,26 @@
+{
+  "catalog": "core",
+  "id": "decor.treasure-chest",
+  "version": 1,
+  "name": "Sunken Treasure Chest",
+  "kind": "decor",
+  "category": "wreck",
+  "subcategory": "pirate",
+  "naturalSize": { "width": 150, "height": 120, "depth": 110 },
+  "color": "#7a5230",
+  "description": "Open-lidded chest spilling gold coins and gems. Generic archetype of the classic resin aquarium ornament — no brand; dimensions are the authored model's bounding box, not a manufacturer spec.",
+  "tags": ["decor", "wreck", "pirate", "treasure"],
+  "silhouette": [
+    { "x": -0.95, "y": -1.0 },
+    { "x": 0.95, "y": -1.0 },
+    { "x": 0.95, "y": -0.1 },
+    { "x": 0.6, "y": 0.0 },
+    { "x": 0.9, "y": 0.55 },
+    { "x": 0.7, "y": 0.95 },
+    { "x": 0.3, "y": 1.0 },
+    { "x": 0.0, "y": 0.55 },
+    { "x": -0.4, "y": 0.35 },
+    { "x": -0.95, "y": 0.3 }
+  ],
+  "model": "treasure-chest.glb"
+}
