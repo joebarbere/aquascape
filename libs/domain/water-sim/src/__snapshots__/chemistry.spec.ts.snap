@@ -1,0 +1,69 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`determinism — property test (same seed ⇒ byte-identical evolution) a fixed scenario matches a recorded golden snapshot (rate-model drift guard) 1`] = `
+[
+  {
+    "nh3": 0,
+    "no2": 0,
+    "no3": 0,
+    "stage": "uncycled",
+    "w": 0,
+  },
+  {
+    "nh3": 16.0599,
+    "no2": 0.4068,
+    "no3": 0.6093,
+    "stage": "cycling",
+    "w": 1,
+  },
+  {
+    "nh3": 15.1384,
+    "no2": 2.8653,
+    "no3": 16.6805,
+    "stage": "cycling",
+    "w": 2,
+  },
+  {
+    "nh3": 0,
+    "no2": 0,
+    "no3": 52.1604,
+    "stage": "cycled",
+    "w": 3,
+  },
+  {
+    "nh3": 0,
+    "no2": 0.0917,
+    "no3": 69.8412,
+    "stage": "cycled",
+    "w": 4,
+  },
+  {
+    "nh3": 0,
+    "no2": 0.0298,
+    "no3": 87.0705,
+    "stage": "cycled",
+    "w": 5,
+  },
+  {
+    "nh3": 0,
+    "no2": 0.0322,
+    "no3": 104.2773,
+    "stage": "cycled",
+    "w": 6,
+  },
+  {
+    "nh3": 0,
+    "no2": 0.0519,
+    "no3": 121.607,
+    "stage": "cycled",
+    "w": 7,
+  },
+  {
+    "nh3": 0,
+    "no2": 0.0449,
+    "no3": 139.61,
+    "stage": "cycled",
+    "w": 8,
+  },
+]
+`;

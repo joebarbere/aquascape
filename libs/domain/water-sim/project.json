@@ -1,0 +1,19 @@
+{
+  "name": "domain-water-sim",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/water-sim/src",
+  "projectType": "library",
+  "tags": ["scope:domain", "type:lib", "framework:none", "domain:water-sim"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/domain/water-sim",
+        "main": "libs/domain/water-sim/src/index.ts",
+        "tsConfig": "libs/domain/water-sim/tsconfig.lib.json",
+        "assets": ["libs/domain/water-sim/*.md"]
+      }
+    }
+  }
+}

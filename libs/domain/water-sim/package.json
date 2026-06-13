@@ -1,0 +1,6 @@
+{
+  "name": "@aquascape/domain/water-sim",
+  "version": "0.0.1",
+  "private": true,
+  "type": "commonjs"
+}

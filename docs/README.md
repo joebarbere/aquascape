@@ -39,6 +39,7 @@ data flow, determinism); then go deep per subsystem:
 | [Platform abstraction](architecture/platform-abstraction.md)       | One codebase → web + Electron; the four services; Electron security          |
 | [Catalog](architecture/catalog.md)                                 | Content-as-data: manifests, schema, loader, textures                         |
 | [Livestock simulation](architecture/livestock-simulation.md)       | The ECS world, behaviour systems, 30/60 Hz loop, determinism                 |
+| [Water chemistry](architecture/water-sim.md)                       | The nitrogen cycle, tank cycling, pH, algae — the deterministic chemistry model |
 
 ## Reference
 
