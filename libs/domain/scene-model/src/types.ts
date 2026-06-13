@@ -253,6 +253,78 @@ export interface EquipmentEntry {
   note?: string;
 }
 
+// ─── Dosing (Nutrients & additives + dosing, F-B) ─────────────────────────
+
+/**
+ * The canonical hobby parameter axes a nutrient dose moves, mirrored from the
+ * catalog's `NutrientContributions` so the scene-model has no dependency on
+ * `@aquascape/domain/catalog`. ppm for the nutrient axes (`no3` / `po4` / `k` /
+ * `fe` / `mg` / `ca`); degrees of general / carbonate hardness (dGH / dKH) for
+ * `gh` / `kh`. Every field optional — a recorded dose carries only the axes the
+ * product actually contributes.
+ */
+export interface DoseDeltas {
+  no3?: number;
+  po4?: number;
+  k?: number;
+  fe?: number;
+  mg?: number;
+  ca?: number;
+  gh?: number;
+  kh?: number;
+}
+
+/**
+ * A single recorded dosing event in the runtime scene's {@link Scene.doseLog}.
+ *
+ * **Runtime-only / chemistry deferred.** A `DoseEvent` records that the user
+ * dosed a product; it does NOT mutate any water-chemistry state, because the
+ * canonical `Tank.waterChemistry` field is a deferred Stage 13 addition that
+ * does not exist yet. A future water-sim consumes `doseLog` to apply the
+ * chemistry effect. Until then this is the "UX now, chemistry later" record.
+ *
+ * The event is fully self-describing — the `DoseNutrient` command factory
+ * resolves the catalog row and computes the deltas at construction time, so
+ * `DoseNutrient.apply` / `invert` are a pure push / pop of a finished record
+ * (they never reach into the catalog).
+ *
+ * Determinism: `seq` is a monotonic per-dose sequence number assigned by the
+ * command factory's caller (or the highest existing `doseLog[].seq + 1`), used
+ * to give the log a stable total order independent of array index so replay /
+ * collaboration stay deterministic.
+ */
+export interface DoseEvent {
+  /** Stable identity for this dose event (UUID). */
+  id: Uuid;
+  /** Monotonic ordering key — strictly increasing across a scene's dose log. */
+  seq: number;
+  /** The dosed product, referenced by catalog id (never inlined). */
+  ref: CatalogRef;
+  /** The amount the user dosed, in `unit`. */
+  amount: number;
+  /** Unit of `amount` — grams (dry) or millilitres (liquid). */
+  unit: 'g' | 'ml';
+  /**
+   * Whether the dosed product publicly discloses per-dose ppm/dGH figures.
+   * Mirrors `NutrientEntry.disclosed`; drives which of `deltas` / `affects`
+   * a downstream water-sim trusts as numbers vs. as a qualitative hint.
+   */
+  disclosed: boolean;
+  /**
+   * The computed per-parameter deltas for THIS dose — present (and trusted as
+   * real numbers) only for `disclosed: true` products, where the factory scales
+   * the catalog `contributes` block linearly by `amount / dose.amount`. Omitted
+   * for proprietary products: no numbers are ever fabricated.
+   */
+  deltas?: DoseDeltas;
+  /**
+   * The product's qualitative `affects` list (copied from the catalog entry).
+   * Always present — it is the only honest signal for a proprietary product and
+   * a useful highlight hint even when `deltas` is available.
+   */
+  affects: string[];
+}
+
 // ─── Scene root ───────────────────────────────────────────────────────────
 
 /**
@@ -290,4 +362,19 @@ export interface Scene {
    * the marshal asymmetry CLAUDE.md documents.
    */
   equipment?: EquipmentEntry[];
+  /**
+   * Append-only log of dosing events (Nutrients & additives + dosing, F-B).
+   * Optional + additive — absent on a fresh scene, and an absent field
+   * round-trips losslessly through the document marshalling layer (persistence
+   * of `doseLog` is a deferred, separately-owned PR; today the on-disk
+   * `.aqua` format does NOT carry it, so this is a RUNTIME-ONLY field).
+   *
+   * `DoseNutrient.apply` appends a {@link DoseEvent}; its `invert` removes the
+   * same event. The chemistry EFFECT of a dose is deferred to Stage 13's
+   * `Tank.waterChemistry`; a future water-sim reads this log to apply deltas.
+   *
+   * Treated as immutable: commands replace the array wholesale rather than
+   * mutating it in place, so renderer references stay valid.
+   */
+  doseLog?: readonly DoseEvent[];
 }
