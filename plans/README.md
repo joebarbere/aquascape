@@ -137,3 +137,14 @@ Plan §"Stage <N>" F<X.Y>; <relevant architecture sections>.
 ### Cross-cutting
 
 - **Stage 12 — Release pipeline** ([plan](stage-12-release-pipeline.md)) — first release cuts `v0.1.0`; version scheme covers the full pre-v1 / v1.0 / post-v1 progression. Lands when we're ready to ship signed installers; the plan-as-spec is already locked.
+
+### Simulation & gameplay (post-simulation-mode)
+
+A dependency-ordered wave building on simulation mode (the borderless 3D showcase + HUDs + `~` console). Do the bug fix + debugger first; Stage 13 is the foundation; 14 → 15 → 16 build on it.
+
+- **Fix — 3D light flicker** ([plan](fix-3d-light-flicker.md)) — kill the brightness flicker while orbiting; single-source the day-night/caustic lighting in the RAF tick.
+- **Simulation debugger** ([plan](simulation-debugger.md)) — a `debugger` console command + 3D dev overlay (flow field / SDF / AABBs / entity inspector / system timings). Force-multiplier for the stages below.
+- **Stage 13 — Aquarium husbandry** ([plan](stage-13-aquarium-husbandry.md)) — `domain/water-sim` nitrogen cycle, water quality, cycling, water testing, water changes, algae types. ⚑ [ADR-0006](../docs/decisions/0006-water-sim-lib-and-chemistry-state.md). _Foundation._
+- **Stage 14 — Fish vitality & feeding** ([plan](stage-14-fish-vitality-feeding.md)) — food types + animated drops; fish health (hearts) + hunger, surfaced as a HUD + click-to-inspect. _Builds on 13._
+- **Stage 15 — Simulation action HUD** ([plan](stage-15-husbandry-interactions.md)) — a bottom-center tool HUD: feeding (place the drop) + a multi-step water change (place/move a siphon, siphon out → in). Builds the reusable `SiphonTool`. _Builds on 13 + 14._
+- **Stage 16 — Game modes** ([plan](stage-16-game-modes.md)) — `--mode game:<submode>` survival / feeding / predator / cleaner; fish-eye, player-controlled. ⚑ [ADR-0007](../docs/decisions/0007-game-mode-cli-grammar.md). _Capstone; cleaner reuses Stage 15's siphon._
