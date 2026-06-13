@@ -30,15 +30,29 @@ headlessly validated; demo regenerated.
 
 **Bucket 2 (catalog-driven textures) also shipped** — see its section below.
 
-**Not yet done** — one bucket:
+**Bucket 1 status — SSAO SHIPPED, refraction deferred:**
 
-1. **Render-target / multi-pass effects** (SSAO, screen-space water refraction)
-   — BLOCKED on validation, not on code. SSAO was wired + then backed out
-   because it renders a **blank canvas under SwiftShader** (the headless path
-   the visual loop + CI e2e both use). These need a **real-GPU validation loop**
-   first — the capability gate is in place, but the *validation-loop choice*
-   (local GPU dev vs GPU CI runner vs manual checklist, below) is still an
-   open decision for the maintainer.
+The validation-loop decision is settled: **local GPU dev** on the maintainer's
+AMD RX 7600 XT box (Mesa/radeonsi). Headless Chromium gets hardware WebGL via
+ANGLE-over-GL, so render-target effects can be seen rendering (not blanked).
+The reusable harness is `tools/demo/gl-probe.mjs` (confirm hardware GL) +
+`tools/demo/validate-3d.mjs` (screenshot the 3D canvas) — see
+`docs/caveats/e2e.md` → "Real-GPU validation loop".
+
+1. **SSAO — ✅ SHIPPED** behind the Bucket-0 capability gate. `RenderPass →
+   SSAOPass → bloom → OutputPass` on hardware GL; the unchanged bloom-only
+   chain on software WebGL (gate `false`), so the SwiftShader e2e never blanks.
+   See `docs/caveats/renderer-3d.md` → "Screen-space ambient occlusion" for the
+   ordering / units / tuning gotchas (the big one: three 0.184's SSAOPass
+   AUGMENTS the read buffer, it does NOT replace RenderPass — the plan text
+   below assumed the older self-beauty SSAOPass).
+2. **Screen-space water-surface refraction — DEFERRED (not blocked).** On the
+   real-GPU render the transmissive glass (PR1) already refracts the tank
+   contents through the front/side panes — the dominant cue. Distorting the
+   water PLANE adds an extra opaque-scene render-target pre-pass threaded around
+   the now-4-pass composer for a marginal payoff at typical viewing angles (you
+   look THROUGH the glass, not down through the surface). Revisit only if the
+   glass read proves insufficient. Same capability gate as SSAO when it lands.
 
 ---
 
@@ -50,58 +64,55 @@ MRT render-target passes (proven by the SSAO attempt — see
 Single-pass effects (bloom, OutputPass) are fine; SSAO + refraction are not. So
 **nothing in Bucket 1 can ship until there's a way to see it render on a GPU.**
 
-**Options (pick one):**
-- **Local GPU dev** — run `pnpm exec nx serve web` + the visual loop on a
-  machine with a real GPU (hardware WebGL). Cheapest; the Playwright scripts
-  already work, just drop the SwiftShader `--use-angle=swiftshader` flag.
-- **GPU CI runner** — a self-hosted GitHub Actions runner with a GPU (or a
-  cloud GPU runner) for a `nx affected -t e2e` job gated to renderer-3d changes.
-  Heavier to stand up; gives automated regression coverage.
-- **Manual pre-merge checklist** — a documented "open these N scenes in a real
-  browser, eyeball these effects" checklist for renderer-3d PRs. Lowest effort,
-  no automation.
+**✅ DECIDED: Local GPU dev.** Run `pnpm exec nx serve web` + the Playwright
+visual loop on the maintainer's AMD RX 7600 XT box (Mesa/radeonsi). Headless
+Chromium gets hardware WebGL via `--use-gl=angle --use-angle=gl
+--ignore-gpu-blocklist --enable-gpu` (NOT the SwiftShader flags) — confirmed by
+`tools/demo/gl-probe.mjs` reporting `ANGLE (AMD … radeonsi navi33 …)`. Cheapest
+option, zero standing infrastructure. (A GPU CI runner remains a future option
+for automated regression coverage of gated effects; a manual checklist was the
+fallback.)
 
 **✅ Capability gate: SHIPPED.** `src/render-target-support.ts` exposes
 `detectRenderTargetEffectsSupport(gl)` (software-renderer string match via
 `WEBGL_debug_renderer_info` + depth-texture availability; defensive — anything
 unprovable → `false`). `Three3DRenderer.setupComposer` probes it and exposes
-`getRenderTargetEffectsSupported()`. **The validation-loop choice above is
-still open** — pick one before starting Bucket 1.
+`getRenderTargetEffectsSupported()`. **SSAO is its first consumer** (Bucket 1a,
+shipped).
 
 ---
 
 ## Bucket 1: render-target effects (after Bucket 0)
 
-### 1a. SSAO (re-apply the backed-out work)
+### 1a. SSAO — ✅ SHIPPED
 
-The wiring + composer integration already existed (reverted commit on this
-branch — recover from git history). Tasks:
-- Re-add the `SSAOPass` addon wiring: `__mocks__/postprocessing-stub.ts`
-  (`SSAOPass` class), the jest `moduleNameMapper` regex in BOTH
+Written fresh — no backed-out commit ever existed in history (the earlier
+attempt only lived in a working tree; `9b64a02` was docs-only). What landed:
+- `SSAOPass` addon wiring: the `SSAOPass` class in
+  `__mocks__/postprocessing-stub.ts`, the jest `moduleNameMapper` regex in BOTH
   `libs/rendering/renderer-3d/jest.config.ts` + `apps/web/jest.config.ts`, the
   `apps/web/tsconfig.app.json` path-map, and the ambient shim
   `apps/web/src/three-orbitcontrols.d.ts`.
-- In `setupComposer`, add `SSAOPass(scene, camera, w, h)` as the scene pass
-  (REPLACING `RenderPass`) → bloom → `OutputPass`. Constants
-  `SSAO_KERNEL_RADIUS_MM ≈ 18`, `SSAO_MIN_DISTANCE_MM ≈ 1`,
-  `SSAO_MAX_DISTANCE_MM ≈ 60` (the SSAOPass defaults are metre-scale; the tank
-  is mm-scale). **Behind the Bucket-0 capability gate.**
-- Sequence it so it deepens crevices/contact shadows WITHOUT re-crushing the
-  (now grain-lifted) substrate to black — tune on a real GPU.
-- **Validate on a real GPU** (Bucket 0). Confirm the canvas is non-blank +
-  AO reads on the substrate/rock contacts before committing.
+- In `setupComposer`, `SSAOPass(scene, camera, w, h)` inserted AFTER `RenderPass`
+  (NOT replacing it — three 0.184's SSAOPass multiplies AO onto the read buffer;
+  see `docs/caveats/renderer-3d.md`), giving `RenderPass → SSAOPass → bloom →
+  OutputPass`. **Behind the Bucket-0 capability gate** — gated out ⇒ plain
+  bloom-only chain. Constants `SSAO_KERNEL_RADIUS_MM = 40` (view-space mm),
+  `SSAO_MIN_DISTANCE_MM = 1`, `SSAO_MAX_DISTANCE_MM = 180` (converted to
+  normalised depth at build time). The plan's 18/60 was nearly invisible.
+- Validated on the AMD RX 7600 XT real-GPU loop: canvas non-blank, AO darkens
+  ~2.3 % of pixels at contacts, substrate not re-crushed to black. The 9/9
+  SwiftShader e2e guards the gated-off fallback.
 
-### 1b. Screen-space water-surface refraction
+### 1b. Screen-space water-surface refraction — DEFERRED (not blocked)
 
-- Render the opaque scene to a `WebGLRenderTarget`, pass its texture to the
-  water `ShaderMaterial` (`scene-builder/water-mesh.ts`), and sample it with a
-  surface-normal-derived screen-UV offset for "looking through the surface"
-  distortion. Thread the pre-pass around the EffectComposer (or use a
-  `MeshPhysicalMaterial` transmission water plane — cheaper, reuses three's
-  transmission target — but loses the custom wave vertex shader unless patched).
-- **Low incremental value** — the transmissive glass (PR1) already gives the
-  dominant refraction — so do this only if a real-GPU loop exists and the glass
-  read isn't enough. Same capability gate as SSAO.
+The real-GPU render confirmed the transmissive glass (PR1) already gives the
+dominant refraction read of the tank contents, so this is low incremental value
+for the cost (an extra opaque-scene `WebGLRenderTarget` pre-pass threaded around
+the now-4-pass EffectComposer, sampled by the water `ShaderMaterial` with a
+surface-normal-derived screen-UV offset; or a `MeshPhysicalMaterial`-transmission
+water plane that loses the custom wave vertex shader). Revisit only if the glass
+read proves insufficient. Same capability gate as SSAO when/if it lands.
 
 ---
 

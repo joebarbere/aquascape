@@ -308,6 +308,25 @@ describe('Three3DRenderer — attach / render / dispose', () => {
     r.dispose();
     raf.uninstall();
   });
+
+  it('SSAO pass stays null under the headless stub (gated out — never blanks software WebGL)', () => {
+    // Bucket 1a — `SSAOPass` is built ONLY inside `setupComposer`, which
+    // no-ops for a non-`WebGLRenderer`, AND only when the Bucket-0
+    // capability gate clears. The stub is neither a real renderer nor a
+    // gated-clear context, so the pass must stay null. (The gate-CLEARS
+    // path — real WebGLRenderer on hardware GL → SSAOPass built + AO
+    // composited — is validated on a real GPU via
+    // `tools/demo/validate-3d.mjs`, since a stub can't exercise the GL
+    // depth/normal render targets.)
+    const raf = stubRaf();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()));
+    r.attach(makeSurface());
+    r.render(sceneOf(), viewport);
+    expect((r as unknown as { ssaoPass: unknown }).ssaoPass).toBeNull();
+    expect(r.getRenderTargetEffectsSupported()).toBe(false);
+    r.dispose();
+    raf.uninstall();
+  });
 });
 
 // ─── Dispose discipline (long-running) ───────────────────────────────────

@@ -117,6 +117,12 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
+// Bucket 1a (SSAO) — render-target ambient-occlusion pass. GATED behind the
+// Bucket-0 capability probe (`getRenderTargetEffectsSupported`): its
+// depth/normal MRT passes render a blank canvas under software WebGL
+// (SwiftShader), so it is only constructed on a provably hardware-accelerated
+// context. Same ESM-addon resolution story as the bloom passes above.
+import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass';
 
 /**
  * Subset of `WebGLRenderer` the orchestrator actually calls. Lets test
@@ -230,6 +236,30 @@ import { TextureCache } from './texture-cache';
 const BLOOM_STRENGTH = 0.35;
 const BLOOM_RADIUS = 0.4;
 const BLOOM_THRESHOLD = 0.85;
+
+/**
+ * Bucket 1a (SSAO) — tuning, in MILLIMETRES because the scene is mm-scale.
+ * `SSAOPass`'s metre-scale defaults (kernelRadius 8, min 0.005, max 0.1) would
+ * sample a sub-millimetre neighbourhood in this scene and produce no visible
+ * occlusion. These are world-space (view-space) distances:
+ * - `KERNEL_RADIUS` — how far around each fragment we look for occluders.
+ *   40 mm reads the rock-on-substrate + plant-base + leaf-cluster contacts
+ *   without darkening broad open substrate (the plan's starting 18 mm was
+ *   nearly invisible on the validation scene — convex rocks + thin plant
+ *   cards generate little AO, so the radius has to reach the contact zone).
+ * - `MIN_DISTANCE` — depth deltas below this are ignored (self-occlusion /
+ *   depth-precision noise). 1 mm.
+ * - `MAX_DISTANCE` — depth deltas above this don't occlude (a far wall behind
+ *   a near rock shouldn't cast AO onto it). 180 mm.
+ * `MIN`/`MAX` are converted to the shader's NORMALISED-depth space at build
+ * time (see `setupComposer`); `KERNEL_RADIUS` is view-space mm and used as-is.
+ * Tuned on the AMD RX 7600 XT real-GPU validation loop (`tools/demo/
+ * validate-3d.mjs`): AO darkens ~2.3 % of pixels (93 % of them darker), all at
+ * contacts — substrate is NOT re-crushed to black.
+ */
+const SSAO_KERNEL_RADIUS_MM = 40;
+const SSAO_MIN_DISTANCE_MM = 1;
+const SSAO_MAX_DISTANCE_MM = 180;
 
 /**
  * Fish-eye view — wide field of view (degrees) while the camera rides a
@@ -462,6 +492,22 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
   private composer: EffectComposer | null = null;
   private bloomPass: UnrealBloomPass | null = null;
   /**
+   * Bucket 1a (SSAO) — the ambient-occlusion pass, inserted into the composer
+   * AFTER the RenderPass beauty + BEFORE bloom, but ONLY when the Bucket-0
+   * capability gate (`renderTargetEffectsSupported`) clears. Null under the
+   * headless stub, on software WebGL (SwiftShader), before attach, and after
+   * dispose — in those cases the composer is the plain RenderPass → bloom →
+   * OutputPass chain and the view never blanks. Resized alongside the composer
+   * + bloom in `attach()`, disposed in `dispose()`.
+   *
+   * NOTE on ordering: three 0.184's `SSAOPass` does NOT render its own beauty
+   * (older versions did). With `output = Default` it MULTIPLIES the blurred AO
+   * onto the read buffer via CustomBlending (`needsSwap = false`), so it must
+   * sit downstream of a RenderPass that fills that buffer — it augments, it
+   * doesn't replace.
+   */
+  private ssaoPass: SSAOPass | null = null;
+  /**
    * Bucket 2 (catalog textures) — URL-keyed texture cache, created lazily
    * on the first render that supplies `options.catalogTextureBaseUrl` and
    * kept for the renderer's LIFETIME (textures survive content rebuilds —
@@ -562,6 +608,9 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       // Keep the bloom composer's render targets sized to the canvas.
       this.composer?.setSize(surface.width, surface.height);
       this.bloomPass?.setSize(surface.width, surface.height);
+      // Bucket 1a (SSAO) — its normal/depth/ssao/blur render targets must
+      // track the canvas too (null when gated out).
+      this.ssaoPass?.setSize(surface.width, surface.height);
       if (this.camera !== null) {
         const aspect =
           surface.width === 0 || surface.height === 0 ? 1 : surface.width / surface.height;
@@ -1364,6 +1413,30 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     composer.setPixelRatio(surface.devicePixelRatio);
     composer.setSize(w, h);
     composer.addPass(new RenderPass(tScene, camera));
+    // Bucket 1a (SSAO) — only on a provably hardware-accelerated context.
+    // `SSAOPass` augments the RenderPass beauty (multiplies AO onto the read
+    // buffer); on software WebGL its depth/normal MRT passes blank the canvas,
+    // so the gate keeps it out of the SwiftShader e2e + headless paths. When
+    // gated out the chain is the unchanged, SwiftShader-safe RenderPass →
+    // bloom → OutputPass.
+    if (this.renderTargetEffectsSupported) {
+      const ssao = new SSAOPass(tScene, camera, w, h);
+      // `kernelRadius` is a view-space distance (mm) — the sample point is
+      // `viewPosition + sampleVector * kernelRadius`, both in mm. Set directly.
+      ssao.kernelRadius = SSAO_KERNEL_RADIUS_MM;
+      // `minDistance` / `maxDistance` are NORMALISED orthographic-depth deltas
+      // in [0, 1] (the SSAO shader's `delta = sampleDepth − realDepth`, both
+      // run through `viewZToOrthographicDepth`), NOT view-space mm — that's why
+      // three's defaults are 0.005 / 0.1. Convert our mm intent to normalised
+      // by dividing by the camera's near→far span (the placeholder camera's far
+      // is fixed for the renderer's lifetime, so this is stable).
+      const depthSpanMm = Math.max(1, camera.far - camera.near);
+      ssao.minDistance = SSAO_MIN_DISTANCE_MM / depthSpanMm;
+      ssao.maxDistance = SSAO_MAX_DISTANCE_MM / depthSpanMm;
+      ssao.output = SSAOPass.OUTPUT.Default;
+      composer.addPass(ssao);
+      this.ssaoPass = ssao;
+    }
     const bloom = new UnrealBloomPass(
       new Vector2(w, h),
       BLOOM_STRENGTH,
@@ -1692,6 +1765,11 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     if (this.bloomPass !== null) {
       this.bloomPass.dispose();
       this.bloomPass = null;
+    }
+    // Bucket 1a (SSAO) — release its four render targets + four materials.
+    if (this.ssaoPass !== null) {
+      this.ssaoPass.dispose();
+      this.ssaoPass = null;
     }
     // Bucket-0 gate — back to the pre-attach default; the next real
     // `setupComposer` run re-probes the (possibly different) context.

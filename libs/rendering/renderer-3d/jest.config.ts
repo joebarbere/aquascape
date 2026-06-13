@@ -26,7 +26,7 @@ export default {
     '^three/examples/jsm/controls/OrbitControls$': '<rootDir>/src/__mocks__/orbit-controls-stub.ts',
     // Fidelity pass (bloom) — the postprocessing addons are ESM-only; redirect
     // them to a single stub so the module-level imports resolve under Jest.
-    '^three/examples/jsm/postprocessing/(EffectComposer|RenderPass|UnrealBloomPass|OutputPass)$':
+    '^three/examples/jsm/postprocessing/(EffectComposer|RenderPass|UnrealBloomPass|OutputPass|SSAOPass)$':
       '<rootDir>/src/__mocks__/postprocessing-stub.ts',
     // Decor models — GLTFLoader is ESM-only too; the ModelCache only builds
     // the real loader behind a `typeof document !== 'undefined'` guard, so

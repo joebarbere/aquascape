@@ -111,6 +111,7 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 - **Fish-eye view** — ride a fish through the tank: the camera parks at a live fish's eye with a wide fisheye FOV and follows its swimming, schooling, and startles in first person
 - **Overhead equipment lighting** — attach a real LED fixture from the catalog and a glowing light bar appears above the rim, casting its published colour temperature + lumen-scaled light into the tank (dims with the day-night cycle)
 - Physically-based glass with transmission + refraction, ACES filmic tone mapping, image-based lighting, soft shadows, bloom
+- **Screen-space ambient occlusion (SSAO)** — grounds rocks, plant bases, and crevices with soft contact shadows on hardware GPUs (auto-disabled on software WebGL so the view never blanks)
 - **Procedural underwater caustics** on substrate, hardscape, and the water surface — faded by the day-night cycle
 - **Catalog-driven PBR textures** — substrate / hardscape / plant materials sample 9 deterministic, seamlessly-tiling texture families (triplanar, world-space)
 - **Animated water surface** (vertex-shader sine bands) at the adjustable fill line
@@ -199,8 +200,7 @@ New to the codebase? Start with the **[new-developer guide](docs/guides/new-deve
 Everything above is shipped. Remaining work, roughly in priority order:
 
 - [ ] **Release pipeline** — `pnpm release <version>`, electron-builder installers published to GitHub Releases. The version scheme is an open maintainer decision (ADR-0005 pending). See [`plans/stage-12-release-pipeline.md`](plans/stage-12-release-pipeline.md).
-- [ ] **3D fidelity: real-GPU validation loop** — choose between local GPU dev, a GPU CI runner, or a manual checklist (maintainer decision). Blocks the next item.
-- [ ] **3D fidelity: SSAO + screen-space water refraction** — multi-pass render-target effects that blank under software WebGL; gated behind `getRenderTargetEffectsSupported()` and the validation loop above. See [`plans/3d-fidelity-followups.md`](plans/3d-fidelity-followups.md).
+- [ ] **3D fidelity: screen-space water-surface refraction** — deferred (not blocked): the transmissive glass already supplies the dominant refraction read, so distorting the water plane is low marginal value for an extra render-target pre-pass. Revisit if the glass read proves insufficient. See [`plans/3d-fidelity-followups.md`](plans/3d-fidelity-followups.md).
 - [ ] **Community gallery** — browse + remix shared layouts. See [`plans/stage-8-community-gallery/`](plans/stage-8-community-gallery/).
 - [ ] **AI photorealistic render** — local + hosted providers behind one interface; keys live in OS secure storage, never in the document. See [`plans/stage-9-ai-render/`](plans/stage-9-ai-render/).
 - [ ] **Bubble fluid fidelity pass** — `createBubbleSlice` / `stepBubbleSlice` (a Stam 1999 advect/diffuse/project loop) is wired in `domain/fluid-sim` but unused; bubbles currently rise on a simple kinematic path.
