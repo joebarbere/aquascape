@@ -186,6 +186,42 @@ export interface SnapGuides {
  * as "off / no-op when omitted" are documented per-field; combining flags
  * doesn't interact (each pass is independent).
  */
+/**
+ * Stage 11 F11.7 — day-night cycle lookup values consumed by the 3D
+ * renderer's lighting (ambient colour + directional intensity + background
+ * tint + plant emissive boost). Computed by the host's `DayNightService`;
+ * the shape is declared here (not imported from the feature lib) so the
+ * rendering libs stay host-free.
+ */
+export interface DayNightLookupValues {
+  readonly ambientColor: string;
+  readonly directionalIntensity: number;
+  readonly backgroundTint: string;
+  readonly emissiveBoost: number;
+}
+
+/**
+ * The neutral (full-daylight, no tint) day-night lookup. This is what the
+ * renderer applies when no cycle is active — equivalent to the editorial
+ * "noon" defaults.
+ *
+ * **Why this is exported + load-bearing for the flicker fix:** the host
+ * must NEVER omit `dayNightLookup` on a 3D render. Omitting it and applying
+ * it on alternate frames is what produced the orbit brightness flicker (one
+ * frame applies the cycle, the next resets to renderer defaults). The host's
+ * `renderCurrent()` passes this constant instead of dropping the field when
+ * its `DayNightService` value is unavailable, so every 3D render path drives
+ * the *same* single lighting computation rather than flipping between
+ * "apply" and "renderer default". See `docs/caveats/renderer-3d.md` →
+ * "Lighting is applied once per frame from cached options".
+ */
+export const NEUTRAL_DAY_NIGHT_LOOKUP: DayNightLookupValues = {
+  ambientColor: '#ffffff',
+  directionalIntensity: 1,
+  backgroundTint: '#ffffff',
+  emissiveBoost: 0,
+};
+
 export interface RenderOptions {
   /**
    * Catalog the renderer consults for content lookups (substrate colours
@@ -268,12 +304,7 @@ export interface RenderOptions {
    *  - `emissiveBoost` — `[0, 0.5]`. Written into the plant material's
    *    `uPlantEmissiveBoost` uniform so dark scenes don't go featureless.
    */
-  readonly dayNightLookup?: {
-    readonly ambientColor: string;
-    readonly directionalIntensity: number;
-    readonly backgroundTint: string;
-    readonly emissiveBoost: number;
-  };
+  readonly dayNightLookup?: DayNightLookupValues;
   /**
    * Fidelity pass — the baked tank flow field (filter / pump current),
    * already computed by the host's `LivestockSimulationService` for the

@@ -129,6 +129,7 @@ import type {
   RenderExportService,
   StorageService,
 } from '@aquascape/platform/platform-api';
+import { NEUTRAL_DAY_NIGHT_LOOKUP } from '@aquascape/rendering/renderer-api';
 import type {
   HitResult,
   RenderSurface,
@@ -2121,11 +2122,17 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     // renderer's spread-skip below means the field is absent rather
     // than set to undefined.
     const livestockWorld = is3d ? this.livestockSim.getWorld() : null;
-    // Stage 11 F11.7 Wave 3 — only forward the day-night lookup in 3D.
-    // The 2D renderer ignores it (day-night is 3D-only in v1), and
-    // omitting the field on 2D renders keeps the options bag minimal
-    // + mirrors the `livestockWorld` pattern above.
-    const dayNightLookup = is3d ? this.dayNight.lookup() : null;
+    // Stage 11 F11.7 Wave 3 / flicker fix — forward the day-night lookup in
+    // 3D, and NEVER omit it on a 3D render. The 2D renderer ignores it
+    // (day-night is 3D-only in v1), but on 3D the renderer single-sources its
+    // lighting from this value every frame: if the host dropped the field on
+    // some interaction frames, the renderer would alternate between the cycle
+    // and its neutral defaults and the user would see a brightness flicker
+    // while orbiting. So in 3D we always pass an explicit lookup, falling back
+    // to `NEUTRAL_DAY_NIGHT_LOOKUP` if the service ever yields null.
+    const dayNightLookup = is3d
+      ? (this.dayNight.lookup() ?? NEUTRAL_DAY_NIGHT_LOOKUP)
+      : null;
     // Fidelity pass — forward the baked tank flow field in 3D so the renderer
     // can couple plant sway to the current. Null when no filter/pump
     // equipment is present (the renderer falls back to constant sway).

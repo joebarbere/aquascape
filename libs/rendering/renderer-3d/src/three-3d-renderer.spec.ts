@@ -1,4 +1,8 @@
-import type { RenderSurface, Viewport } from '@aquascape/rendering/renderer-api';
+import {
+  NEUTRAL_DAY_NIGHT_LOOKUP,
+  type RenderSurface,
+  type Viewport,
+} from '@aquascape/rendering/renderer-api';
 import type { Catalog, CatalogEntry, CatalogKind, DecorEntry } from '@aquascape/domain/catalog';
 import type { DecorObject, HardscapeObject, Layer, Scene } from '@aquascape/domain/scene-model';
 import {
@@ -1178,6 +1182,165 @@ describe('Three3DRenderer — day-night cycle', () => {
     };
     expect(rAny.currentAmbientLight).toBeNull();
     expect(rAny.currentDirectionalLight).toBeNull();
+    raf.uninstall();
+  });
+});
+
+// ─── Flicker fix — single-sourced per-frame lighting ──────────────────────
+
+describe('Three3DRenderer — single-sourced lighting (flicker fix)', () => {
+  // Typed view onto the renderer's private lighting state + the single-source
+  // per-frame apply method. The RAF tick calls `applyLightingFrame(scene)`
+  // every frame; tests drive it directly (the stub RAF never fires the
+  // scheduled callback) to prove the result is STABLE no matter how many
+  // frames run — which is the property whose absence produced the flicker.
+  type LightingView = {
+    threeScene: object;
+    currentAmbientLight: { color: { r: number; g: number; b: number } } | null;
+    currentDirectionalLight: { intensity: number } | null;
+    baseDirectionalIntensity: number;
+    causticStrengthCurrent: number;
+    dayNightLookup: { directionalIntensity: number };
+    applyLightingFrame: (scene: object) => void;
+  };
+
+  it('exports a neutral (full-daylight) default lookup', () => {
+    expect(NEUTRAL_DAY_NIGHT_LOOKUP).toEqual({
+      ambientColor: '#ffffff',
+      directionalIntensity: 1,
+      backgroundTint: '#ffffff',
+      emissiveBoost: 0,
+    });
+  });
+
+  it('a latched dusk lookup yields a STABLE directional intensity across many frames', () => {
+    // The flicker bug was the directional intensity flipping between the cycle
+    // value and the renderer default on alternate frames. Here we latch a
+    // dusk-ish lookup once, then run the per-frame apply 30 times: the
+    // intensity must land on the cycle value on the FIRST apply and never move.
+    const raf = stubRaf();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport, {
+      dayNightLookup: {
+        ambientColor: '#a87344',
+        directionalIntensity: 0.45,
+        backgroundTint: '#3a3030',
+        emissiveBoost: 0.1,
+      },
+    });
+    const v = r as unknown as LightingView;
+    const base = v.baseDirectionalIntensity;
+    const expected = base * 0.45;
+    const seen = new Set<number>();
+    for (let i = 0; i < 30; i++) {
+      v.applyLightingFrame(v.threeScene);
+      seen.add(v.currentDirectionalLight!.intensity);
+    }
+    // Exactly ONE distinct intensity value across all frames — no flicker.
+    expect(seen.size).toBe(1);
+    expect([...seen][0]!).toBeCloseTo(expected, 6);
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('repeated frames at a fixed lookup are idempotent (ambient + directional unchanged)', () => {
+    const raf = stubRaf();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport, {
+      dayNightLookup: {
+        ambientColor: '#ff0000',
+        directionalIntensity: 0.7,
+        backgroundTint: '#001020',
+        emissiveBoost: 0.2,
+      },
+    });
+    const v = r as unknown as LightingView;
+    v.applyLightingFrame(v.threeScene);
+    const a0 = { ...v.currentAmbientLight!.color };
+    const d0 = v.currentDirectionalLight!.intensity;
+    for (let i = 0; i < 10; i++) v.applyLightingFrame(v.threeScene);
+    expect(v.currentAmbientLight!.color.r).toBeCloseTo(a0.r, 9);
+    expect(v.currentAmbientLight!.color.g).toBeCloseTo(a0.g, 9);
+    expect(v.currentAmbientLight!.color.b).toBeCloseTo(a0.b, 9);
+    expect(v.currentDirectionalLight!.intensity).toBeCloseTo(d0, 9);
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('omitting dayNightLookup latches the neutral lookup (intensity returns to base)', () => {
+    // Toggling the cycle OFF mid-session: a render without a lookup must drive
+    // the SAME single path to the neutral daylight values, not leave a stale
+    // tint. Render dark first, then render with no lookup + run frames.
+    const raf = stubRaf();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport, {
+      dayNightLookup: {
+        ambientColor: '#0a1430',
+        directionalIntensity: 0.05,
+        backgroundTint: '#0a1430',
+        emissiveBoost: 0.4,
+      },
+    });
+    r.render(sceneOf(600, 360, 300), viewport); // cycle off
+    const v = r as unknown as LightingView;
+    expect(v.dayNightLookup.directionalIntensity).toBe(1);
+    for (let i = 0; i < 20; i++) v.applyLightingFrame(v.threeScene);
+    expect(v.currentDirectionalLight!.intensity).toBeCloseTo(v.baseDirectionalIntensity, 6);
+    expect(v.currentAmbientLight!.color.r).toBeCloseTo(1, 3);
+    expect(v.currentAmbientLight!.color.g).toBeCloseTo(1, 3);
+    expect(v.currentAmbientLight!.color.b).toBeCloseTo(1, 3);
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('caustic strength EASES toward the target then settles (no per-frame snap)', () => {
+    // Render noon (target 1) so current = 1, then render midnight (target ~0):
+    // the first post-midnight frames must show current STRICTLY between 1 and
+    // the target (easing), then converge + lock — proving the smoothing that
+    // turns a directional-level change into a fade rather than a snap.
+    const raf = stubRaf();
+    const r = new Three3DRenderer(makeFactory(new StubRenderer()));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport, {
+      dayNightLookup: {
+        ambientColor: '#ffffff',
+        directionalIntensity: 1,
+        backgroundTint: '#ffffff',
+        emissiveBoost: 0,
+      },
+    });
+    const v = r as unknown as LightingView;
+    // Force the easing to fully settle at 1 first.
+    for (let i = 0; i < 40; i++) v.applyLightingFrame(v.threeScene);
+    expect(v.causticStrengthCurrent).toBeCloseTo(1, 6);
+    // Now latch a near-dark target.
+    r.render(sceneOf(600, 360, 300), viewport, {
+      dayNightLookup: {
+        ambientColor: '#0a1430',
+        directionalIntensity: 0.05,
+        backgroundTint: '#0a1430',
+        emissiveBoost: 0.4,
+      },
+    });
+    // The synchronous paint in render() already ran one ease step; sample a
+    // couple of mid-fade frames — each must be a monotone decrease toward 0.05
+    // and never below the target.
+    const samples: number[] = [v.causticStrengthCurrent];
+    for (let i = 0; i < 3; i++) {
+      v.applyLightingFrame(v.threeScene);
+      samples.push(v.causticStrengthCurrent);
+    }
+    for (let i = 1; i < samples.length; i++) {
+      expect(samples[i]!).toBeLessThan(samples[i - 1]!); // easing down
+      expect(samples[i]!).toBeGreaterThanOrEqual(0.05); // never past target
+    }
+    // Eventually it locks exactly to the target.
+    for (let i = 0; i < 60; i++) v.applyLightingFrame(v.threeScene);
+    expect(v.causticStrengthCurrent).toBe(0.05);
+    r.dispose();
     raf.uninstall();
   });
 });
