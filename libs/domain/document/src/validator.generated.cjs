@@ -244,10 +244,10 @@ var require_ucs2length = __commonJS({
   }
 });
 
-// node_modules/.cache/aquascape-validators/r903l5/entry.cjs
+// node_modules/.cache/aquascape-validators/LwjdXf/entry.cjs
 module.exports = validate20;
 module.exports.default = validate20;
-var schema31 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://aquascape.dev/schemas/aqua-document-v3.json", "title": "AquaDocument", "description": "Aquascape layout document, schema version 3. All linear units are millimetres. v2 adds optional Layer.zone (foreground/midground/background); v3 adds optional Tank.waterLevelMm (water-surface height above the interior floor, integer mm; absent = default fill derived at render time; the [1, height] upper bound is advisory \u2014 cross-field comparison is not expressible here). Prior-version docs migrate forward without transformation.", "type": "object", "required": ["format", "schemaVersion", "meta", "tank", "substrate", "layers"], "additionalProperties": false, "properties": { "format": { "const": "aquascape" }, "schemaVersion": { "type": "integer", "minimum": 1 }, "meta": { "$ref": "#/$defs/DocumentMeta" }, "tank": { "$ref": "#/$defs/Tank" }, "substrate": { "$ref": "#/$defs/Substrate" }, "layers": { "type": "array", "items": { "$ref": "#/$defs/Layer" } }, "livestock": { "type": "array", "items": { "$ref": "#/$defs/LivestockEntry" } }, "equipment": { "type": "array", "items": { "$ref": "#/$defs/EquipmentEntry" } }, "renderHistory": { "type": "array", "items": { "$ref": "#/$defs/RenderRecord" } }, "extensions": { "type": "object" } }, "$defs": { "Vec3": { "type": "object", "required": ["x", "y", "z"], "additionalProperties": false, "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "z": { "type": "number" } } }, "Vec2": { "type": "object", "required": ["x", "y"], "additionalProperties": false, "properties": { "x": { "type": "number" }, "y": { "type": "number" } } }, "HexColor": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" }, "Uuid": { "type": "string", "format": "uuid" }, "Transform": { "type": "object", "required": ["position", "rotation", "scale", "flipX", "flipY"], "additionalProperties": false, "properties": { "position": { "$ref": "#/$defs/Vec3" }, "rotation": { "type": "object", "required": ["x", "y", "z"], "additionalProperties": false, "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "z": { "type": "number" } } }, "scale": { "type": "object", "required": ["x", "y", "z"], "additionalProperties": false, "properties": { "x": { "type": "number", "exclusiveMinimum": 0 }, "y": { "type": "number", "exclusiveMinimum": 0 }, "z": { "type": "number", "exclusiveMinimum": 0 } } }, "flipX": { "type": "boolean" }, "flipY": { "type": "boolean" } } }, "CatalogRef": { "type": "object", "required": ["catalog", "id", "version"], "additionalProperties": false, "properties": { "catalog": { "type": "string", "minLength": 1 }, "id": { "type": "string", "minLength": 1 }, "version": { "type": "integer", "minimum": 1 } } }, "AssetRef": { "type": "object", "required": ["id", "uri", "mimeType"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "uri": { "type": "string", "minLength": 1 }, "mimeType": { "type": "string" }, "width": { "type": "integer", "minimum": 0 }, "height": { "type": "integer", "minimum": 0 }, "hash": { "type": "string" } } }, "DocumentMeta": { "type": "object", "required": ["id", "title", "createdAt", "updatedAt", "appVersion", "seed"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "title": { "type": "string" }, "description": { "type": "string" }, "author": { "type": "string" }, "createdAt": { "type": "string", "format": "date-time" }, "updatedAt": { "type": "string", "format": "date-time" }, "appVersion": { "type": "string" }, "isTemplate": { "type": "boolean" }, "tags": { "type": "array", "items": { "type": "string" } }, "remixOf": { "type": "object", "required": ["documentId"], "additionalProperties": false, "properties": { "documentId": { "$ref": "#/$defs/Uuid" }, "author": { "type": "string" }, "source": { "type": "string" } } }, "seed": { "type": "number" } } }, "Tank": { "type": "object", "required": ["width", "height", "depth", "style"], "additionalProperties": false, "properties": { "width": { "type": "number", "exclusiveMinimum": 0 }, "height": { "type": "number", "exclusiveMinimum": 0 }, "depth": { "type": "number", "exclusiveMinimum": 0 }, "glassThickness": { "type": "number", "minimum": 0 }, "waterLevelMm": { "type": "integer", "minimum": 1 }, "presetRef": { "$ref": "#/$defs/CatalogRef" }, "style": { "$ref": "#/$defs/TankStyle" } } }, "TankStyle": { "type": "object", "required": ["frame", "background"], "additionalProperties": false, "properties": { "frame": { "enum": ["rimless", "framed", "braced"] }, "frameColor": { "$ref": "#/$defs/HexColor" }, "waterTint": { "$ref": "#/$defs/HexColor" }, "background": { "oneOf": [{ "type": "object", "required": ["kind", "color"], "additionalProperties": false, "properties": { "kind": { "const": "color" }, "color": { "$ref": "#/$defs/HexColor" } } }, { "type": "object", "required": ["kind", "asset"], "additionalProperties": false, "properties": { "kind": { "const": "image" }, "asset": { "$ref": "#/$defs/AssetRef" } } }, { "type": "object", "required": ["kind", "angle", "stops"], "additionalProperties": false, "properties": { "kind": { "const": "gradient" }, "angle": { "type": "number" }, "stops": { "type": "array", "minItems": 2, "items": { "type": "object", "required": ["at", "color"], "additionalProperties": false, "properties": { "at": { "type": "number", "minimum": 0, "maximum": 1 }, "color": { "$ref": "#/$defs/HexColor" } } } } } }, { "type": "object", "required": ["kind"], "additionalProperties": false, "properties": { "kind": { "const": "none" } } }] } } }, "Substrate": { "type": "object", "required": ["regions"], "additionalProperties": false, "properties": { "regions": { "type": "array", "items": { "$ref": "#/$defs/SubstrateRegion" } } } }, "SubstrateRegion": { "type": "object", "required": ["id", "material", "fromX", "toX", "profile"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "material": { "$ref": "#/$defs/CatalogRef" }, "fromX": { "type": "number", "minimum": 0, "maximum": 1 }, "toX": { "type": "number", "minimum": 0, "maximum": 1 }, "blend": { "type": "number", "minimum": 0 }, "profile": { "type": "array", "minItems": 2, "items": { "type": "object", "required": ["x", "y"], "additionalProperties": false, "properties": { "x": { "type": "number", "minimum": 0, "maximum": 1 }, "y": { "type": "number", "minimum": 0 } } } } } }, "Layer": { "type": "object", "required": ["id", "name", "opacity", "visible", "locked", "objects"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "name": { "type": "string" }, "opacity": { "type": "number", "minimum": 0, "maximum": 1 }, "visible": { "type": "boolean" }, "locked": { "type": "boolean" }, "objects": { "type": "array", "items": { "$ref": "#/$defs/SceneObject" } }, "zone": { "enum": ["foreground", "midground", "background"] } } }, "SceneObject": { "oneOf": [{ "$ref": "#/$defs/HardscapeObject" }, { "$ref": "#/$defs/PlantObject" }, { "$ref": "#/$defs/DecorObject" }] }, "HardscapeObject": { "type": "object", "required": ["kind", "id", "transform", "ref"], "additionalProperties": false, "properties": { "kind": { "const": "hardscape" }, "id": { "$ref": "#/$defs/Uuid" }, "transform": { "$ref": "#/$defs/Transform" }, "groupId": { "$ref": "#/$defs/Uuid" }, "note": { "type": "string" }, "ref": { "$ref": "#/$defs/CatalogRef" }, "category": { "enum": ["rock", "wood", "other"] } } }, "PlantObject": { "type": "object", "required": ["kind", "id", "transform", "ref", "growth"], "additionalProperties": false, "properties": { "kind": { "const": "plant" }, "id": { "$ref": "#/$defs/Uuid" }, "transform": { "$ref": "#/$defs/Transform" }, "groupId": { "$ref": "#/$defs/Uuid" }, "note": { "type": "string" }, "ref": { "$ref": "#/$defs/CatalogRef" }, "zone": { "enum": ["foreground", "midground", "background"] }, "growth": { "type": "object", "required": ["ageWeeks", "vigor"], "additionalProperties": false, "properties": { "ageWeeks": { "type": "number", "minimum": 0 }, "vigor": { "type": "number", "exclusiveMinimum": 0 } } }, "scatter": { "type": "object", "required": ["polygon", "density"], "additionalProperties": false, "properties": { "polygon": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/Vec2" } }, "density": { "type": "number", "exclusiveMinimum": 0 }, "seed": { "type": "number" } } } } }, "DecorObject": { "type": "object", "required": ["kind", "id", "transform", "ref"], "additionalProperties": false, "properties": { "kind": { "const": "decor" }, "id": { "$ref": "#/$defs/Uuid" }, "transform": { "$ref": "#/$defs/Transform" }, "groupId": { "$ref": "#/$defs/Uuid" }, "note": { "type": "string" }, "ref": { "$ref": "#/$defs/CatalogRef" }, "excludeFromScapeExport": { "type": "boolean" } } }, "LivestockEntry": { "type": "object", "required": ["id", "ref", "quantity"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "ref": { "$ref": "#/$defs/CatalogRef" }, "quantity": { "type": "integer", "minimum": 1 }, "decorObjectId": { "$ref": "#/$defs/Uuid" } } }, "EquipmentEntry": { "type": "object", "required": ["id", "ref"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "ref": { "$ref": "#/$defs/CatalogRef" }, "settings": { "type": "object" }, "note": { "type": "string" } } }, "RenderRecord": { "type": "object", "required": ["id", "createdAt", "provider", "request", "resultAsset"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "createdAt": { "type": "string", "format": "date-time" }, "provider": { "type": "object", "required": ["kind", "name"], "additionalProperties": false, "properties": { "kind": { "enum": ["local", "hosted"] }, "name": { "type": "string" } } }, "request": { "type": "object", "required": ["prompt"], "additionalProperties": false, "properties": { "prompt": { "type": "string" }, "seed": { "type": "number" }, "sourceRenderAssetId": { "$ref": "#/$defs/Uuid" }, "params": { "type": "object" } } }, "resultAsset": { "$ref": "#/$defs/AssetRef" } } } } };
+var schema31 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://aquascape.dev/schemas/aqua-document-v4.json", "title": "AquaDocument", "description": "Aquascape layout document, schema version 4. All linear units are millimetres. v2 adds optional Layer.zone (foreground/midground/background); v3 adds optional Tank.waterLevelMm (water-surface height above the interior floor, integer mm; absent = default fill derived at render time; the [1, height] upper bound is advisory \u2014 cross-field comparison is not expressible here); v4 adds optional Tank.waterChemistry (a persisted domain/water-sim WaterState snapshot + denormalized cycle stage + per-type algae block; absent = no chemistry recorded). Prior-version docs migrate forward without transformation.", "type": "object", "required": ["format", "schemaVersion", "meta", "tank", "substrate", "layers"], "additionalProperties": false, "properties": { "format": { "const": "aquascape" }, "schemaVersion": { "type": "integer", "minimum": 1 }, "meta": { "$ref": "#/$defs/DocumentMeta" }, "tank": { "$ref": "#/$defs/Tank" }, "substrate": { "$ref": "#/$defs/Substrate" }, "layers": { "type": "array", "items": { "$ref": "#/$defs/Layer" } }, "livestock": { "type": "array", "items": { "$ref": "#/$defs/LivestockEntry" } }, "equipment": { "type": "array", "items": { "$ref": "#/$defs/EquipmentEntry" } }, "renderHistory": { "type": "array", "items": { "$ref": "#/$defs/RenderRecord" } }, "extensions": { "type": "object" } }, "$defs": { "Vec3": { "type": "object", "required": ["x", "y", "z"], "additionalProperties": false, "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "z": { "type": "number" } } }, "Vec2": { "type": "object", "required": ["x", "y"], "additionalProperties": false, "properties": { "x": { "type": "number" }, "y": { "type": "number" } } }, "HexColor": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" }, "Uuid": { "type": "string", "format": "uuid" }, "Transform": { "type": "object", "required": ["position", "rotation", "scale", "flipX", "flipY"], "additionalProperties": false, "properties": { "position": { "$ref": "#/$defs/Vec3" }, "rotation": { "type": "object", "required": ["x", "y", "z"], "additionalProperties": false, "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "z": { "type": "number" } } }, "scale": { "type": "object", "required": ["x", "y", "z"], "additionalProperties": false, "properties": { "x": { "type": "number", "exclusiveMinimum": 0 }, "y": { "type": "number", "exclusiveMinimum": 0 }, "z": { "type": "number", "exclusiveMinimum": 0 } } }, "flipX": { "type": "boolean" }, "flipY": { "type": "boolean" } } }, "CatalogRef": { "type": "object", "required": ["catalog", "id", "version"], "additionalProperties": false, "properties": { "catalog": { "type": "string", "minLength": 1 }, "id": { "type": "string", "minLength": 1 }, "version": { "type": "integer", "minimum": 1 } } }, "AssetRef": { "type": "object", "required": ["id", "uri", "mimeType"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "uri": { "type": "string", "minLength": 1 }, "mimeType": { "type": "string" }, "width": { "type": "integer", "minimum": 0 }, "height": { "type": "integer", "minimum": 0 }, "hash": { "type": "string" } } }, "DocumentMeta": { "type": "object", "required": ["id", "title", "createdAt", "updatedAt", "appVersion", "seed"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "title": { "type": "string" }, "description": { "type": "string" }, "author": { "type": "string" }, "createdAt": { "type": "string", "format": "date-time" }, "updatedAt": { "type": "string", "format": "date-time" }, "appVersion": { "type": "string" }, "isTemplate": { "type": "boolean" }, "tags": { "type": "array", "items": { "type": "string" } }, "remixOf": { "type": "object", "required": ["documentId"], "additionalProperties": false, "properties": { "documentId": { "$ref": "#/$defs/Uuid" }, "author": { "type": "string" }, "source": { "type": "string" } } }, "seed": { "type": "number" } } }, "Tank": { "type": "object", "required": ["width", "height", "depth", "style"], "additionalProperties": false, "properties": { "width": { "type": "number", "exclusiveMinimum": 0 }, "height": { "type": "number", "exclusiveMinimum": 0 }, "depth": { "type": "number", "exclusiveMinimum": 0 }, "glassThickness": { "type": "number", "minimum": 0 }, "waterLevelMm": { "type": "integer", "minimum": 1 }, "waterChemistry": { "$ref": "#/$defs/WaterChemistry" }, "presetRef": { "$ref": "#/$defs/CatalogRef" }, "style": { "$ref": "#/$defs/TankStyle" } } }, "WaterChemistry": { "type": "object", "required": ["chemistry", "cycle"], "additionalProperties": false, "properties": { "chemistry": { "type": "object", "required": ["ammonia", "nitrite", "nitrate", "ph", "aobColony", "nobColony", "ageWeeks", "engineVersion"], "additionalProperties": false, "properties": { "ammonia": { "type": "number", "minimum": 0 }, "nitrite": { "type": "number", "minimum": 0 }, "nitrate": { "type": "number", "minimum": 0 }, "ph": { "type": "number" }, "aobColony": { "type": "number", "minimum": 0 }, "nobColony": { "type": "number", "minimum": 0 }, "ageWeeks": { "type": "number", "minimum": 0 }, "engineVersion": { "type": "integer", "minimum": 1 } } }, "cycle": { "enum": ["uncycled", "cycling", "cycled"] }, "algae": { "type": "object", "additionalProperties": false, "properties": { "green-spot": { "type": "number", "minimum": 0 }, "hair": { "type": "number", "minimum": 0 }, "black-beard": { "type": "number", "minimum": 0 }, "diatom": { "type": "number", "minimum": 0 } } } } }, "TankStyle": { "type": "object", "required": ["frame", "background"], "additionalProperties": false, "properties": { "frame": { "enum": ["rimless", "framed", "braced"] }, "frameColor": { "$ref": "#/$defs/HexColor" }, "waterTint": { "$ref": "#/$defs/HexColor" }, "background": { "oneOf": [{ "type": "object", "required": ["kind", "color"], "additionalProperties": false, "properties": { "kind": { "const": "color" }, "color": { "$ref": "#/$defs/HexColor" } } }, { "type": "object", "required": ["kind", "asset"], "additionalProperties": false, "properties": { "kind": { "const": "image" }, "asset": { "$ref": "#/$defs/AssetRef" } } }, { "type": "object", "required": ["kind", "angle", "stops"], "additionalProperties": false, "properties": { "kind": { "const": "gradient" }, "angle": { "type": "number" }, "stops": { "type": "array", "minItems": 2, "items": { "type": "object", "required": ["at", "color"], "additionalProperties": false, "properties": { "at": { "type": "number", "minimum": 0, "maximum": 1 }, "color": { "$ref": "#/$defs/HexColor" } } } } } }, { "type": "object", "required": ["kind"], "additionalProperties": false, "properties": { "kind": { "const": "none" } } }] } } }, "Substrate": { "type": "object", "required": ["regions"], "additionalProperties": false, "properties": { "regions": { "type": "array", "items": { "$ref": "#/$defs/SubstrateRegion" } } } }, "SubstrateRegion": { "type": "object", "required": ["id", "material", "fromX", "toX", "profile"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "material": { "$ref": "#/$defs/CatalogRef" }, "fromX": { "type": "number", "minimum": 0, "maximum": 1 }, "toX": { "type": "number", "minimum": 0, "maximum": 1 }, "blend": { "type": "number", "minimum": 0 }, "profile": { "type": "array", "minItems": 2, "items": { "type": "object", "required": ["x", "y"], "additionalProperties": false, "properties": { "x": { "type": "number", "minimum": 0, "maximum": 1 }, "y": { "type": "number", "minimum": 0 } } } } } }, "Layer": { "type": "object", "required": ["id", "name", "opacity", "visible", "locked", "objects"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "name": { "type": "string" }, "opacity": { "type": "number", "minimum": 0, "maximum": 1 }, "visible": { "type": "boolean" }, "locked": { "type": "boolean" }, "objects": { "type": "array", "items": { "$ref": "#/$defs/SceneObject" } }, "zone": { "enum": ["foreground", "midground", "background"] } } }, "SceneObject": { "oneOf": [{ "$ref": "#/$defs/HardscapeObject" }, { "$ref": "#/$defs/PlantObject" }, { "$ref": "#/$defs/DecorObject" }] }, "HardscapeObject": { "type": "object", "required": ["kind", "id", "transform", "ref"], "additionalProperties": false, "properties": { "kind": { "const": "hardscape" }, "id": { "$ref": "#/$defs/Uuid" }, "transform": { "$ref": "#/$defs/Transform" }, "groupId": { "$ref": "#/$defs/Uuid" }, "note": { "type": "string" }, "ref": { "$ref": "#/$defs/CatalogRef" }, "category": { "enum": ["rock", "wood", "other"] } } }, "PlantObject": { "type": "object", "required": ["kind", "id", "transform", "ref", "growth"], "additionalProperties": false, "properties": { "kind": { "const": "plant" }, "id": { "$ref": "#/$defs/Uuid" }, "transform": { "$ref": "#/$defs/Transform" }, "groupId": { "$ref": "#/$defs/Uuid" }, "note": { "type": "string" }, "ref": { "$ref": "#/$defs/CatalogRef" }, "zone": { "enum": ["foreground", "midground", "background"] }, "growth": { "type": "object", "required": ["ageWeeks", "vigor"], "additionalProperties": false, "properties": { "ageWeeks": { "type": "number", "minimum": 0 }, "vigor": { "type": "number", "exclusiveMinimum": 0 } } }, "scatter": { "type": "object", "required": ["polygon", "density"], "additionalProperties": false, "properties": { "polygon": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/Vec2" } }, "density": { "type": "number", "exclusiveMinimum": 0 }, "seed": { "type": "number" } } } } }, "DecorObject": { "type": "object", "required": ["kind", "id", "transform", "ref"], "additionalProperties": false, "properties": { "kind": { "const": "decor" }, "id": { "$ref": "#/$defs/Uuid" }, "transform": { "$ref": "#/$defs/Transform" }, "groupId": { "$ref": "#/$defs/Uuid" }, "note": { "type": "string" }, "ref": { "$ref": "#/$defs/CatalogRef" }, "excludeFromScapeExport": { "type": "boolean" } } }, "LivestockEntry": { "type": "object", "required": ["id", "ref", "quantity"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "ref": { "$ref": "#/$defs/CatalogRef" }, "quantity": { "type": "integer", "minimum": 1 }, "decorObjectId": { "$ref": "#/$defs/Uuid" } } }, "EquipmentEntry": { "type": "object", "required": ["id", "ref"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "ref": { "$ref": "#/$defs/CatalogRef" }, "settings": { "type": "object" }, "note": { "type": "string" } } }, "RenderRecord": { "type": "object", "required": ["id", "createdAt", "provider", "request", "resultAsset"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "createdAt": { "type": "string", "format": "date-time" }, "provider": { "type": "object", "required": ["kind", "name"], "additionalProperties": false, "properties": { "kind": { "enum": ["local", "hosted"] }, "name": { "type": "string" } } }, "request": { "type": "object", "required": ["prompt"], "additionalProperties": false, "properties": { "prompt": { "type": "string" }, "seed": { "type": "number" }, "sourceRenderAssetId": { "$ref": "#/$defs/Uuid" }, "params": { "type": "object" } } }, "resultAsset": { "$ref": "#/$defs/AssetRef" } } } } };
 var func1 = Object.prototype.hasOwnProperty;
 var schema32 = { "type": "object", "required": ["id", "title", "createdAt", "updatedAt", "appVersion", "seed"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "title": { "type": "string" }, "description": { "type": "string" }, "author": { "type": "string" }, "createdAt": { "type": "string", "format": "date-time" }, "updatedAt": { "type": "string", "format": "date-time" }, "appVersion": { "type": "string" }, "isTemplate": { "type": "boolean" }, "tags": { "type": "array", "items": { "type": "string" } }, "remixOf": { "type": "object", "required": ["documentId"], "additionalProperties": false, "properties": { "documentId": { "$ref": "#/$defs/Uuid" }, "author": { "type": "string" }, "source": { "type": "string" } } }, "seed": { "type": "number" } } };
 var formats0 = /^(?:urn:uuid:)?[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
@@ -576,8 +576,9 @@ function validate21(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate21.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema36 = { "type": "object", "required": ["chemistry", "cycle"], "additionalProperties": false, "properties": { "chemistry": { "type": "object", "required": ["ammonia", "nitrite", "nitrate", "ph", "aobColony", "nobColony", "ageWeeks", "engineVersion"], "additionalProperties": false, "properties": { "ammonia": { "type": "number", "minimum": 0 }, "nitrite": { "type": "number", "minimum": 0 }, "nitrate": { "type": "number", "minimum": 0 }, "ph": { "type": "number" }, "aobColony": { "type": "number", "minimum": 0 }, "nobColony": { "type": "number", "minimum": 0 }, "ageWeeks": { "type": "number", "minimum": 0 }, "engineVersion": { "type": "integer", "minimum": 1 } } }, "cycle": { "enum": ["uncycled", "cycling", "cycled"] }, "algae": { "type": "object", "additionalProperties": false, "properties": { "green-spot": { "type": "number", "minimum": 0 }, "hair": { "type": "number", "minimum": 0 }, "black-beard": { "type": "number", "minimum": 0 }, "diatom": { "type": "number", "minimum": 0 } } } } };
 var func3 = require_ucs2length().default;
-var schema37 = { "type": "object", "required": ["frame", "background"], "additionalProperties": false, "properties": { "frame": { "enum": ["rimless", "framed", "braced"] }, "frameColor": { "$ref": "#/$defs/HexColor" }, "waterTint": { "$ref": "#/$defs/HexColor" }, "background": { "oneOf": [{ "type": "object", "required": ["kind", "color"], "additionalProperties": false, "properties": { "kind": { "const": "color" }, "color": { "$ref": "#/$defs/HexColor" } } }, { "type": "object", "required": ["kind", "asset"], "additionalProperties": false, "properties": { "kind": { "const": "image" }, "asset": { "$ref": "#/$defs/AssetRef" } } }, { "type": "object", "required": ["kind", "angle", "stops"], "additionalProperties": false, "properties": { "kind": { "const": "gradient" }, "angle": { "type": "number" }, "stops": { "type": "array", "minItems": 2, "items": { "type": "object", "required": ["at", "color"], "additionalProperties": false, "properties": { "at": { "type": "number", "minimum": 0, "maximum": 1 }, "color": { "$ref": "#/$defs/HexColor" } } } } } }, { "type": "object", "required": ["kind"], "additionalProperties": false, "properties": { "kind": { "const": "none" } } }] } } };
+var schema38 = { "type": "object", "required": ["frame", "background"], "additionalProperties": false, "properties": { "frame": { "enum": ["rimless", "framed", "braced"] }, "frameColor": { "$ref": "#/$defs/HexColor" }, "waterTint": { "$ref": "#/$defs/HexColor" }, "background": { "oneOf": [{ "type": "object", "required": ["kind", "color"], "additionalProperties": false, "properties": { "kind": { "const": "color" }, "color": { "$ref": "#/$defs/HexColor" } } }, { "type": "object", "required": ["kind", "asset"], "additionalProperties": false, "properties": { "kind": { "const": "image" }, "asset": { "$ref": "#/$defs/AssetRef" } } }, { "type": "object", "required": ["kind", "angle", "stops"], "additionalProperties": false, "properties": { "kind": { "const": "gradient" }, "angle": { "type": "number" }, "stops": { "type": "array", "minItems": 2, "items": { "type": "object", "required": ["at", "color"], "additionalProperties": false, "properties": { "at": { "type": "number", "minimum": 0, "maximum": 1 }, "color": { "$ref": "#/$defs/HexColor" } } } } } }, { "type": "object", "required": ["kind"], "additionalProperties": false, "properties": { "kind": { "const": "none" } } }] } } };
 var pattern4 = new RegExp("^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$", "u");
 function validate25(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
@@ -796,7 +797,7 @@ function validate24(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.frame !== void 0) {
       let data0 = data.frame;
       if (!(data0 === "rimless" || data0 === "framed" || data0 === "braced")) {
-        const err3 = { instancePath: instancePath + "/frame", schemaPath: "#/properties/frame/enum", keyword: "enum", params: { allowedValues: schema37.properties.frame.enum }, message: "must be equal to one of the allowed values" };
+        const err3 = { instancePath: instancePath + "/frame", schemaPath: "#/properties/frame/enum", keyword: "enum", params: { allowedValues: schema38.properties.frame.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err3];
         } else {
@@ -1341,7 +1342,7 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
       errors++;
     }
     for (const key0 in data) {
-      if (!(key0 === "width" || key0 === "height" || key0 === "depth" || key0 === "glassThickness" || key0 === "waterLevelMm" || key0 === "presetRef" || key0 === "style")) {
+      if (!(key0 === "width" || key0 === "height" || key0 === "depth" || key0 === "glassThickness" || key0 === "waterLevelMm" || key0 === "waterChemistry" || key0 === "presetRef" || key0 === "style")) {
         const err4 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err4];
@@ -1462,11 +1463,11 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
         }
       }
     }
-    if (data.presetRef !== void 0) {
-      let data5 = data.presetRef;
+    if (data.waterChemistry !== void 0) {
+      let data5 = data.waterChemistry;
       if (data5 && typeof data5 == "object" && !Array.isArray(data5)) {
-        if (data5.catalog === void 0) {
-          const err15 = { instancePath: instancePath + "/presetRef", schemaPath: "#/$defs/CatalogRef/required", keyword: "required", params: { missingProperty: "catalog" }, message: "must have required property 'catalog'" };
+        if (data5.chemistry === void 0) {
+          const err15 = { instancePath: instancePath + "/waterChemistry", schemaPath: "#/$defs/WaterChemistry/required", keyword: "required", params: { missingProperty: "chemistry" }, message: "must have required property 'chemistry'" };
           if (vErrors === null) {
             vErrors = [err15];
           } else {
@@ -1474,8 +1475,8 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
           }
           errors++;
         }
-        if (data5.id === void 0) {
-          const err16 = { instancePath: instancePath + "/presetRef", schemaPath: "#/$defs/CatalogRef/required", keyword: "required", params: { missingProperty: "id" }, message: "must have required property 'id'" };
+        if (data5.cycle === void 0) {
+          const err16 = { instancePath: instancePath + "/waterChemistry", schemaPath: "#/$defs/WaterChemistry/required", keyword: "required", params: { missingProperty: "cycle" }, message: "must have required property 'cycle'" };
           if (vErrors === null) {
             vErrors = [err16];
           } else {
@@ -1483,31 +1484,31 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
           }
           errors++;
         }
-        if (data5.version === void 0) {
-          const err17 = { instancePath: instancePath + "/presetRef", schemaPath: "#/$defs/CatalogRef/required", keyword: "required", params: { missingProperty: "version" }, message: "must have required property 'version'" };
-          if (vErrors === null) {
-            vErrors = [err17];
-          } else {
-            vErrors.push(err17);
-          }
-          errors++;
-        }
         for (const key1 in data5) {
-          if (!(key1 === "catalog" || key1 === "id" || key1 === "version")) {
-            const err18 = { instancePath: instancePath + "/presetRef", schemaPath: "#/$defs/CatalogRef/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key1 }, message: "must NOT have additional properties" };
+          if (!(key1 === "chemistry" || key1 === "cycle" || key1 === "algae")) {
+            const err17 = { instancePath: instancePath + "/waterChemistry", schemaPath: "#/$defs/WaterChemistry/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key1 }, message: "must NOT have additional properties" };
             if (vErrors === null) {
-              vErrors = [err18];
+              vErrors = [err17];
             } else {
-              vErrors.push(err18);
+              vErrors.push(err17);
             }
             errors++;
           }
         }
-        if (data5.catalog !== void 0) {
-          let data6 = data5.catalog;
-          if (typeof data6 === "string") {
-            if (func3(data6) < 1) {
-              const err19 = { instancePath: instancePath + "/presetRef/catalog", schemaPath: "#/$defs/CatalogRef/properties/catalog/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
+        if (data5.chemistry !== void 0) {
+          let data6 = data5.chemistry;
+          if (data6 && typeof data6 == "object" && !Array.isArray(data6)) {
+            if (data6.ammonia === void 0) {
+              const err18 = { instancePath: instancePath + "/waterChemistry/chemistry", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/required", keyword: "required", params: { missingProperty: "ammonia" }, message: "must have required property 'ammonia'" };
+              if (vErrors === null) {
+                vErrors = [err18];
+              } else {
+                vErrors.push(err18);
+              }
+              errors++;
+            }
+            if (data6.nitrite === void 0) {
+              const err19 = { instancePath: instancePath + "/waterChemistry/chemistry", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/required", keyword: "required", params: { missingProperty: "nitrite" }, message: "must have required property 'nitrite'" };
               if (vErrors === null) {
                 vErrors = [err19];
               } else {
@@ -1515,21 +1516,17 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
               }
               errors++;
             }
-          } else {
-            const err20 = { instancePath: instancePath + "/presetRef/catalog", schemaPath: "#/$defs/CatalogRef/properties/catalog/type", keyword: "type", params: { type: "string" }, message: "must be string" };
-            if (vErrors === null) {
-              vErrors = [err20];
-            } else {
-              vErrors.push(err20);
+            if (data6.nitrate === void 0) {
+              const err20 = { instancePath: instancePath + "/waterChemistry/chemistry", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/required", keyword: "required", params: { missingProperty: "nitrate" }, message: "must have required property 'nitrate'" };
+              if (vErrors === null) {
+                vErrors = [err20];
+              } else {
+                vErrors.push(err20);
+              }
+              errors++;
             }
-            errors++;
-          }
-        }
-        if (data5.id !== void 0) {
-          let data7 = data5.id;
-          if (typeof data7 === "string") {
-            if (func3(data7) < 1) {
-              const err21 = { instancePath: instancePath + "/presetRef/id", schemaPath: "#/$defs/CatalogRef/properties/id/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
+            if (data6.ph === void 0) {
+              const err21 = { instancePath: instancePath + "/waterChemistry/chemistry", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/required", keyword: "required", params: { missingProperty: "ph" }, message: "must have required property 'ph'" };
               if (vErrors === null) {
                 vErrors = [err21];
               } else {
@@ -1537,30 +1534,26 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
               }
               errors++;
             }
-          } else {
-            const err22 = { instancePath: instancePath + "/presetRef/id", schemaPath: "#/$defs/CatalogRef/properties/id/type", keyword: "type", params: { type: "string" }, message: "must be string" };
-            if (vErrors === null) {
-              vErrors = [err22];
-            } else {
-              vErrors.push(err22);
+            if (data6.aobColony === void 0) {
+              const err22 = { instancePath: instancePath + "/waterChemistry/chemistry", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/required", keyword: "required", params: { missingProperty: "aobColony" }, message: "must have required property 'aobColony'" };
+              if (vErrors === null) {
+                vErrors = [err22];
+              } else {
+                vErrors.push(err22);
+              }
+              errors++;
             }
-            errors++;
-          }
-        }
-        if (data5.version !== void 0) {
-          let data8 = data5.version;
-          if (!(typeof data8 == "number" && (!(data8 % 1) && !isNaN(data8)) && isFinite(data8))) {
-            const err23 = { instancePath: instancePath + "/presetRef/version", schemaPath: "#/$defs/CatalogRef/properties/version/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
-            if (vErrors === null) {
-              vErrors = [err23];
-            } else {
-              vErrors.push(err23);
+            if (data6.nobColony === void 0) {
+              const err23 = { instancePath: instancePath + "/waterChemistry/chemistry", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/required", keyword: "required", params: { missingProperty: "nobColony" }, message: "must have required property 'nobColony'" };
+              if (vErrors === null) {
+                vErrors = [err23];
+              } else {
+                vErrors.push(err23);
+              }
+              errors++;
             }
-            errors++;
-          }
-          if (typeof data8 == "number" && isFinite(data8)) {
-            if (data8 < 1 || isNaN(data8)) {
-              const err24 = { instancePath: instancePath + "/presetRef/version", schemaPath: "#/$defs/CatalogRef/properties/version/minimum", keyword: "minimum", params: { comparison: ">=", limit: 1 }, message: "must be >= 1" };
+            if (data6.ageWeeks === void 0) {
+              const err24 = { instancePath: instancePath + "/waterChemistry/chemistry", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/required", keyword: "required", params: { missingProperty: "ageWeeks" }, message: "must have required property 'ageWeeks'" };
               if (vErrors === null) {
                 vErrors = [err24];
               } else {
@@ -1568,14 +1561,451 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
               }
               errors++;
             }
+            if (data6.engineVersion === void 0) {
+              const err25 = { instancePath: instancePath + "/waterChemistry/chemistry", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/required", keyword: "required", params: { missingProperty: "engineVersion" }, message: "must have required property 'engineVersion'" };
+              if (vErrors === null) {
+                vErrors = [err25];
+              } else {
+                vErrors.push(err25);
+              }
+              errors++;
+            }
+            for (const key2 in data6) {
+              if (!(key2 === "ammonia" || key2 === "nitrite" || key2 === "nitrate" || key2 === "ph" || key2 === "aobColony" || key2 === "nobColony" || key2 === "ageWeeks" || key2 === "engineVersion")) {
+                const err26 = { instancePath: instancePath + "/waterChemistry/chemistry", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key2 }, message: "must NOT have additional properties" };
+                if (vErrors === null) {
+                  vErrors = [err26];
+                } else {
+                  vErrors.push(err26);
+                }
+                errors++;
+              }
+            }
+            if (data6.ammonia !== void 0) {
+              let data7 = data6.ammonia;
+              if (typeof data7 == "number" && isFinite(data7)) {
+                if (data7 < 0 || isNaN(data7)) {
+                  const err27 = { instancePath: instancePath + "/waterChemistry/chemistry/ammonia", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/properties/ammonia/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err27];
+                  } else {
+                    vErrors.push(err27);
+                  }
+                  errors++;
+                }
+              } else {
+                const err28 = { instancePath: instancePath + "/waterChemistry/chemistry/ammonia", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/properties/ammonia/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err28];
+                } else {
+                  vErrors.push(err28);
+                }
+                errors++;
+              }
+            }
+            if (data6.nitrite !== void 0) {
+              let data8 = data6.nitrite;
+              if (typeof data8 == "number" && isFinite(data8)) {
+                if (data8 < 0 || isNaN(data8)) {
+                  const err29 = { instancePath: instancePath + "/waterChemistry/chemistry/nitrite", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/properties/nitrite/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err29];
+                  } else {
+                    vErrors.push(err29);
+                  }
+                  errors++;
+                }
+              } else {
+                const err30 = { instancePath: instancePath + "/waterChemistry/chemistry/nitrite", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/properties/nitrite/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err30];
+                } else {
+                  vErrors.push(err30);
+                }
+                errors++;
+              }
+            }
+            if (data6.nitrate !== void 0) {
+              let data9 = data6.nitrate;
+              if (typeof data9 == "number" && isFinite(data9)) {
+                if (data9 < 0 || isNaN(data9)) {
+                  const err31 = { instancePath: instancePath + "/waterChemistry/chemistry/nitrate", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/properties/nitrate/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err31];
+                  } else {
+                    vErrors.push(err31);
+                  }
+                  errors++;
+                }
+              } else {
+                const err32 = { instancePath: instancePath + "/waterChemistry/chemistry/nitrate", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/properties/nitrate/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err32];
+                } else {
+                  vErrors.push(err32);
+                }
+                errors++;
+              }
+            }
+            if (data6.ph !== void 0) {
+              let data10 = data6.ph;
+              if (!(typeof data10 == "number" && isFinite(data10))) {
+                const err33 = { instancePath: instancePath + "/waterChemistry/chemistry/ph", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/properties/ph/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err33];
+                } else {
+                  vErrors.push(err33);
+                }
+                errors++;
+              }
+            }
+            if (data6.aobColony !== void 0) {
+              let data11 = data6.aobColony;
+              if (typeof data11 == "number" && isFinite(data11)) {
+                if (data11 < 0 || isNaN(data11)) {
+                  const err34 = { instancePath: instancePath + "/waterChemistry/chemistry/aobColony", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/properties/aobColony/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err34];
+                  } else {
+                    vErrors.push(err34);
+                  }
+                  errors++;
+                }
+              } else {
+                const err35 = { instancePath: instancePath + "/waterChemistry/chemistry/aobColony", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/properties/aobColony/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err35];
+                } else {
+                  vErrors.push(err35);
+                }
+                errors++;
+              }
+            }
+            if (data6.nobColony !== void 0) {
+              let data12 = data6.nobColony;
+              if (typeof data12 == "number" && isFinite(data12)) {
+                if (data12 < 0 || isNaN(data12)) {
+                  const err36 = { instancePath: instancePath + "/waterChemistry/chemistry/nobColony", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/properties/nobColony/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err36];
+                  } else {
+                    vErrors.push(err36);
+                  }
+                  errors++;
+                }
+              } else {
+                const err37 = { instancePath: instancePath + "/waterChemistry/chemistry/nobColony", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/properties/nobColony/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err37];
+                } else {
+                  vErrors.push(err37);
+                }
+                errors++;
+              }
+            }
+            if (data6.ageWeeks !== void 0) {
+              let data13 = data6.ageWeeks;
+              if (typeof data13 == "number" && isFinite(data13)) {
+                if (data13 < 0 || isNaN(data13)) {
+                  const err38 = { instancePath: instancePath + "/waterChemistry/chemistry/ageWeeks", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/properties/ageWeeks/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err38];
+                  } else {
+                    vErrors.push(err38);
+                  }
+                  errors++;
+                }
+              } else {
+                const err39 = { instancePath: instancePath + "/waterChemistry/chemistry/ageWeeks", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/properties/ageWeeks/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err39];
+                } else {
+                  vErrors.push(err39);
+                }
+                errors++;
+              }
+            }
+            if (data6.engineVersion !== void 0) {
+              let data14 = data6.engineVersion;
+              if (!(typeof data14 == "number" && (!(data14 % 1) && !isNaN(data14)) && isFinite(data14))) {
+                const err40 = { instancePath: instancePath + "/waterChemistry/chemistry/engineVersion", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/properties/engineVersion/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+                if (vErrors === null) {
+                  vErrors = [err40];
+                } else {
+                  vErrors.push(err40);
+                }
+                errors++;
+              }
+              if (typeof data14 == "number" && isFinite(data14)) {
+                if (data14 < 1 || isNaN(data14)) {
+                  const err41 = { instancePath: instancePath + "/waterChemistry/chemistry/engineVersion", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/properties/engineVersion/minimum", keyword: "minimum", params: { comparison: ">=", limit: 1 }, message: "must be >= 1" };
+                  if (vErrors === null) {
+                    vErrors = [err41];
+                  } else {
+                    vErrors.push(err41);
+                  }
+                  errors++;
+                }
+              }
+            }
+          } else {
+            const err42 = { instancePath: instancePath + "/waterChemistry/chemistry", schemaPath: "#/$defs/WaterChemistry/properties/chemistry/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            if (vErrors === null) {
+              vErrors = [err42];
+            } else {
+              vErrors.push(err42);
+            }
+            errors++;
+          }
+        }
+        if (data5.cycle !== void 0) {
+          let data15 = data5.cycle;
+          if (!(data15 === "uncycled" || data15 === "cycling" || data15 === "cycled")) {
+            const err43 = { instancePath: instancePath + "/waterChemistry/cycle", schemaPath: "#/$defs/WaterChemistry/properties/cycle/enum", keyword: "enum", params: { allowedValues: schema36.properties.cycle.enum }, message: "must be equal to one of the allowed values" };
+            if (vErrors === null) {
+              vErrors = [err43];
+            } else {
+              vErrors.push(err43);
+            }
+            errors++;
+          }
+        }
+        if (data5.algae !== void 0) {
+          let data16 = data5.algae;
+          if (data16 && typeof data16 == "object" && !Array.isArray(data16)) {
+            for (const key3 in data16) {
+              if (!(key3 === "green-spot" || key3 === "hair" || key3 === "black-beard" || key3 === "diatom")) {
+                const err44 = { instancePath: instancePath + "/waterChemistry/algae", schemaPath: "#/$defs/WaterChemistry/properties/algae/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key3 }, message: "must NOT have additional properties" };
+                if (vErrors === null) {
+                  vErrors = [err44];
+                } else {
+                  vErrors.push(err44);
+                }
+                errors++;
+              }
+            }
+            if (data16["green-spot"] !== void 0) {
+              let data17 = data16["green-spot"];
+              if (typeof data17 == "number" && isFinite(data17)) {
+                if (data17 < 0 || isNaN(data17)) {
+                  const err45 = { instancePath: instancePath + "/waterChemistry/algae/green-spot", schemaPath: "#/$defs/WaterChemistry/properties/algae/properties/green-spot/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err45];
+                  } else {
+                    vErrors.push(err45);
+                  }
+                  errors++;
+                }
+              } else {
+                const err46 = { instancePath: instancePath + "/waterChemistry/algae/green-spot", schemaPath: "#/$defs/WaterChemistry/properties/algae/properties/green-spot/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err46];
+                } else {
+                  vErrors.push(err46);
+                }
+                errors++;
+              }
+            }
+            if (data16.hair !== void 0) {
+              let data18 = data16.hair;
+              if (typeof data18 == "number" && isFinite(data18)) {
+                if (data18 < 0 || isNaN(data18)) {
+                  const err47 = { instancePath: instancePath + "/waterChemistry/algae/hair", schemaPath: "#/$defs/WaterChemistry/properties/algae/properties/hair/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err47];
+                  } else {
+                    vErrors.push(err47);
+                  }
+                  errors++;
+                }
+              } else {
+                const err48 = { instancePath: instancePath + "/waterChemistry/algae/hair", schemaPath: "#/$defs/WaterChemistry/properties/algae/properties/hair/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err48];
+                } else {
+                  vErrors.push(err48);
+                }
+                errors++;
+              }
+            }
+            if (data16["black-beard"] !== void 0) {
+              let data19 = data16["black-beard"];
+              if (typeof data19 == "number" && isFinite(data19)) {
+                if (data19 < 0 || isNaN(data19)) {
+                  const err49 = { instancePath: instancePath + "/waterChemistry/algae/black-beard", schemaPath: "#/$defs/WaterChemistry/properties/algae/properties/black-beard/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err49];
+                  } else {
+                    vErrors.push(err49);
+                  }
+                  errors++;
+                }
+              } else {
+                const err50 = { instancePath: instancePath + "/waterChemistry/algae/black-beard", schemaPath: "#/$defs/WaterChemistry/properties/algae/properties/black-beard/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err50];
+                } else {
+                  vErrors.push(err50);
+                }
+                errors++;
+              }
+            }
+            if (data16.diatom !== void 0) {
+              let data20 = data16.diatom;
+              if (typeof data20 == "number" && isFinite(data20)) {
+                if (data20 < 0 || isNaN(data20)) {
+                  const err51 = { instancePath: instancePath + "/waterChemistry/algae/diatom", schemaPath: "#/$defs/WaterChemistry/properties/algae/properties/diatom/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+                  if (vErrors === null) {
+                    vErrors = [err51];
+                  } else {
+                    vErrors.push(err51);
+                  }
+                  errors++;
+                }
+              } else {
+                const err52 = { instancePath: instancePath + "/waterChemistry/algae/diatom", schemaPath: "#/$defs/WaterChemistry/properties/algae/properties/diatom/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+                if (vErrors === null) {
+                  vErrors = [err52];
+                } else {
+                  vErrors.push(err52);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err53 = { instancePath: instancePath + "/waterChemistry/algae", schemaPath: "#/$defs/WaterChemistry/properties/algae/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            if (vErrors === null) {
+              vErrors = [err53];
+            } else {
+              vErrors.push(err53);
+            }
+            errors++;
           }
         }
       } else {
-        const err25 = { instancePath: instancePath + "/presetRef", schemaPath: "#/$defs/CatalogRef/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err54 = { instancePath: instancePath + "/waterChemistry", schemaPath: "#/$defs/WaterChemistry/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
-          vErrors = [err25];
+          vErrors = [err54];
         } else {
-          vErrors.push(err25);
+          vErrors.push(err54);
+        }
+        errors++;
+      }
+    }
+    if (data.presetRef !== void 0) {
+      let data21 = data.presetRef;
+      if (data21 && typeof data21 == "object" && !Array.isArray(data21)) {
+        if (data21.catalog === void 0) {
+          const err55 = { instancePath: instancePath + "/presetRef", schemaPath: "#/$defs/CatalogRef/required", keyword: "required", params: { missingProperty: "catalog" }, message: "must have required property 'catalog'" };
+          if (vErrors === null) {
+            vErrors = [err55];
+          } else {
+            vErrors.push(err55);
+          }
+          errors++;
+        }
+        if (data21.id === void 0) {
+          const err56 = { instancePath: instancePath + "/presetRef", schemaPath: "#/$defs/CatalogRef/required", keyword: "required", params: { missingProperty: "id" }, message: "must have required property 'id'" };
+          if (vErrors === null) {
+            vErrors = [err56];
+          } else {
+            vErrors.push(err56);
+          }
+          errors++;
+        }
+        if (data21.version === void 0) {
+          const err57 = { instancePath: instancePath + "/presetRef", schemaPath: "#/$defs/CatalogRef/required", keyword: "required", params: { missingProperty: "version" }, message: "must have required property 'version'" };
+          if (vErrors === null) {
+            vErrors = [err57];
+          } else {
+            vErrors.push(err57);
+          }
+          errors++;
+        }
+        for (const key4 in data21) {
+          if (!(key4 === "catalog" || key4 === "id" || key4 === "version")) {
+            const err58 = { instancePath: instancePath + "/presetRef", schemaPath: "#/$defs/CatalogRef/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key4 }, message: "must NOT have additional properties" };
+            if (vErrors === null) {
+              vErrors = [err58];
+            } else {
+              vErrors.push(err58);
+            }
+            errors++;
+          }
+        }
+        if (data21.catalog !== void 0) {
+          let data22 = data21.catalog;
+          if (typeof data22 === "string") {
+            if (func3(data22) < 1) {
+              const err59 = { instancePath: instancePath + "/presetRef/catalog", schemaPath: "#/$defs/CatalogRef/properties/catalog/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
+              if (vErrors === null) {
+                vErrors = [err59];
+              } else {
+                vErrors.push(err59);
+              }
+              errors++;
+            }
+          } else {
+            const err60 = { instancePath: instancePath + "/presetRef/catalog", schemaPath: "#/$defs/CatalogRef/properties/catalog/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+            if (vErrors === null) {
+              vErrors = [err60];
+            } else {
+              vErrors.push(err60);
+            }
+            errors++;
+          }
+        }
+        if (data21.id !== void 0) {
+          let data23 = data21.id;
+          if (typeof data23 === "string") {
+            if (func3(data23) < 1) {
+              const err61 = { instancePath: instancePath + "/presetRef/id", schemaPath: "#/$defs/CatalogRef/properties/id/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
+              if (vErrors === null) {
+                vErrors = [err61];
+              } else {
+                vErrors.push(err61);
+              }
+              errors++;
+            }
+          } else {
+            const err62 = { instancePath: instancePath + "/presetRef/id", schemaPath: "#/$defs/CatalogRef/properties/id/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+            if (vErrors === null) {
+              vErrors = [err62];
+            } else {
+              vErrors.push(err62);
+            }
+            errors++;
+          }
+        }
+        if (data21.version !== void 0) {
+          let data24 = data21.version;
+          if (!(typeof data24 == "number" && (!(data24 % 1) && !isNaN(data24)) && isFinite(data24))) {
+            const err63 = { instancePath: instancePath + "/presetRef/version", schemaPath: "#/$defs/CatalogRef/properties/version/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+            if (vErrors === null) {
+              vErrors = [err63];
+            } else {
+              vErrors.push(err63);
+            }
+            errors++;
+          }
+          if (typeof data24 == "number" && isFinite(data24)) {
+            if (data24 < 1 || isNaN(data24)) {
+              const err64 = { instancePath: instancePath + "/presetRef/version", schemaPath: "#/$defs/CatalogRef/properties/version/minimum", keyword: "minimum", params: { comparison: ">=", limit: 1 }, message: "must be >= 1" };
+              if (vErrors === null) {
+                vErrors = [err64];
+              } else {
+                vErrors.push(err64);
+              }
+              errors++;
+            }
+          }
+        }
+      } else {
+        const err65 = { instancePath: instancePath + "/presetRef", schemaPath: "#/$defs/CatalogRef/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        if (vErrors === null) {
+          vErrors = [err65];
+        } else {
+          vErrors.push(err65);
         }
         errors++;
       }
@@ -1587,11 +2017,11 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
       }
     }
   } else {
-    const err26 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+    const err66 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
     if (vErrors === null) {
-      vErrors = [err26];
+      vErrors = [err66];
     } else {
-      vErrors.push(err26);
+      vErrors.push(err66);
     }
     errors++;
   }
@@ -2085,8 +2515,8 @@ function validate29(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate29.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema48 = { "type": "object", "required": ["id", "name", "opacity", "visible", "locked", "objects"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "name": { "type": "string" }, "opacity": { "type": "number", "minimum": 0, "maximum": 1 }, "visible": { "type": "boolean" }, "locked": { "type": "boolean" }, "objects": { "type": "array", "items": { "$ref": "#/$defs/SceneObject" } }, "zone": { "enum": ["foreground", "midground", "background"] } } };
-var schema51 = { "type": "object", "required": ["kind", "id", "transform", "ref"], "additionalProperties": false, "properties": { "kind": { "const": "hardscape" }, "id": { "$ref": "#/$defs/Uuid" }, "transform": { "$ref": "#/$defs/Transform" }, "groupId": { "$ref": "#/$defs/Uuid" }, "note": { "type": "string" }, "ref": { "$ref": "#/$defs/CatalogRef" }, "category": { "enum": ["rock", "wood", "other"] } } };
+var schema49 = { "type": "object", "required": ["id", "name", "opacity", "visible", "locked", "objects"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "name": { "type": "string" }, "opacity": { "type": "number", "minimum": 0, "maximum": 1 }, "visible": { "type": "boolean" }, "locked": { "type": "boolean" }, "objects": { "type": "array", "items": { "$ref": "#/$defs/SceneObject" } }, "zone": { "enum": ["foreground", "midground", "background"] } } };
+var schema52 = { "type": "object", "required": ["kind", "id", "transform", "ref"], "additionalProperties": false, "properties": { "kind": { "const": "hardscape" }, "id": { "$ref": "#/$defs/Uuid" }, "transform": { "$ref": "#/$defs/Transform" }, "groupId": { "$ref": "#/$defs/Uuid" }, "note": { "type": "string" }, "ref": { "$ref": "#/$defs/CatalogRef" }, "category": { "enum": ["rock", "wood", "other"] } } };
 function validate36(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -2731,7 +3161,7 @@ function validate35(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.category !== void 0) {
       let data9 = data.category;
       if (!(data9 === "rock" || data9 === "wood" || data9 === "other")) {
-        const err22 = { instancePath: instancePath + "/category", schemaPath: "#/properties/category/enum", keyword: "enum", params: { allowedValues: schema51.properties.category.enum }, message: "must be equal to one of the allowed values" };
+        const err22 = { instancePath: instancePath + "/category", schemaPath: "#/properties/category/enum", keyword: "enum", params: { allowedValues: schema52.properties.category.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err22];
         } else {
@@ -2753,7 +3183,7 @@ function validate35(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate35.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema57 = { "type": "object", "required": ["kind", "id", "transform", "ref", "growth"], "additionalProperties": false, "properties": { "kind": { "const": "plant" }, "id": { "$ref": "#/$defs/Uuid" }, "transform": { "$ref": "#/$defs/Transform" }, "groupId": { "$ref": "#/$defs/Uuid" }, "note": { "type": "string" }, "ref": { "$ref": "#/$defs/CatalogRef" }, "zone": { "enum": ["foreground", "midground", "background"] }, "growth": { "type": "object", "required": ["ageWeeks", "vigor"], "additionalProperties": false, "properties": { "ageWeeks": { "type": "number", "minimum": 0 }, "vigor": { "type": "number", "exclusiveMinimum": 0 } } }, "scatter": { "type": "object", "required": ["polygon", "density"], "additionalProperties": false, "properties": { "polygon": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/Vec2" } }, "density": { "type": "number", "exclusiveMinimum": 0 }, "seed": { "type": "number" } } } } };
+var schema58 = { "type": "object", "required": ["kind", "id", "transform", "ref", "growth"], "additionalProperties": false, "properties": { "kind": { "const": "plant" }, "id": { "$ref": "#/$defs/Uuid" }, "transform": { "$ref": "#/$defs/Transform" }, "groupId": { "$ref": "#/$defs/Uuid" }, "note": { "type": "string" }, "ref": { "$ref": "#/$defs/CatalogRef" }, "zone": { "enum": ["foreground", "midground", "background"] }, "growth": { "type": "object", "required": ["ageWeeks", "vigor"], "additionalProperties": false, "properties": { "ageWeeks": { "type": "number", "minimum": 0 }, "vigor": { "type": "number", "exclusiveMinimum": 0 } } }, "scatter": { "type": "object", "required": ["polygon", "density"], "additionalProperties": false, "properties": { "polygon": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/Vec2" } }, "density": { "type": "number", "exclusiveMinimum": 0 }, "seed": { "type": "number" } } } } };
 function validate39(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -2811,7 +3241,7 @@ function validate39(data, { instancePath = "", parentData, parentDataProperty, r
       errors++;
     }
     for (const key0 in data) {
-      if (!func1.call(schema57.properties, key0)) {
+      if (!func1.call(schema58.properties, key0)) {
         const err5 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err5];
@@ -3014,7 +3444,7 @@ function validate39(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.zone !== void 0) {
       let data9 = data.zone;
       if (!(data9 === "foreground" || data9 === "midground" || data9 === "background")) {
-        const err23 = { instancePath: instancePath + "/zone", schemaPath: "#/properties/zone/enum", keyword: "enum", params: { allowedValues: schema57.properties.zone.enum }, message: "must be equal to one of the allowed values" };
+        const err23 = { instancePath: instancePath + "/zone", schemaPath: "#/properties/zone/enum", keyword: "enum", params: { allowedValues: schema58.properties.zone.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err23];
         } else {
@@ -3827,7 +4257,7 @@ function validate33(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.zone !== void 0) {
       let data7 = data.zone;
       if (!(data7 === "foreground" || data7 === "midground" || data7 === "background")) {
-        const err16 = { instancePath: instancePath + "/zone", schemaPath: "#/properties/zone/enum", keyword: "enum", params: { allowedValues: schema48.properties.zone.enum }, message: "must be equal to one of the allowed values" };
+        const err16 = { instancePath: instancePath + "/zone", schemaPath: "#/properties/zone/enum", keyword: "enum", params: { allowedValues: schema49.properties.zone.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err16];
         } else {
@@ -4312,7 +4742,7 @@ function validate49(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate49.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema73 = { "type": "object", "required": ["id", "createdAt", "provider", "request", "resultAsset"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "createdAt": { "type": "string", "format": "date-time" }, "provider": { "type": "object", "required": ["kind", "name"], "additionalProperties": false, "properties": { "kind": { "enum": ["local", "hosted"] }, "name": { "type": "string" } } }, "request": { "type": "object", "required": ["prompt"], "additionalProperties": false, "properties": { "prompt": { "type": "string" }, "seed": { "type": "number" }, "sourceRenderAssetId": { "$ref": "#/$defs/Uuid" }, "params": { "type": "object" } } }, "resultAsset": { "$ref": "#/$defs/AssetRef" } } };
+var schema74 = { "type": "object", "required": ["id", "createdAt", "provider", "request", "resultAsset"], "additionalProperties": false, "properties": { "id": { "$ref": "#/$defs/Uuid" }, "createdAt": { "type": "string", "format": "date-time" }, "provider": { "type": "object", "required": ["kind", "name"], "additionalProperties": false, "properties": { "kind": { "enum": ["local", "hosted"] }, "name": { "type": "string" } } }, "request": { "type": "object", "required": ["prompt"], "additionalProperties": false, "properties": { "prompt": { "type": "string" }, "seed": { "type": "number" }, "sourceRenderAssetId": { "$ref": "#/$defs/Uuid" }, "params": { "type": "object" } } }, "resultAsset": { "$ref": "#/$defs/AssetRef" } } };
 function validate51(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -4459,7 +4889,7 @@ function validate51(data, { instancePath = "", parentData, parentDataProperty, r
         if (data2.kind !== void 0) {
           let data3 = data2.kind;
           if (!(data3 === "local" || data3 === "hosted")) {
-            const err13 = { instancePath: instancePath + "/provider/kind", schemaPath: "#/properties/provider/properties/kind/enum", keyword: "enum", params: { allowedValues: schema73.properties.provider.properties.kind.enum }, message: "must be equal to one of the allowed values" };
+            const err13 = { instancePath: instancePath + "/provider/kind", schemaPath: "#/properties/provider/properties/kind/enum", keyword: "enum", params: { allowedValues: schema74.properties.provider.properties.kind.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err13];
             } else {

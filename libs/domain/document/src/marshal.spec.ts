@@ -34,6 +34,21 @@ describe('documentToScene', () => {
     expect('waterLevelMm' in scene.tank).toBe(false);
   });
 
+  it('carries tank.waterChemistry onto the scene verbatim when present (v4)', () => {
+    expect(EXAMPLE.tank.waterChemistry).toBeDefined(); // fixture authors a snapshot
+    const { scene } = documentToScene(EXAMPLE);
+    expect(scene.tank.waterChemistry).toEqual(EXAMPLE.tank.waterChemistry);
+  });
+
+  it('leaves tank.waterChemistry absent on the scene when the doc omits it (no defaulting)', () => {
+    const noChem = structuredClone(EXAMPLE);
+    delete noChem.tank.waterChemistry;
+    const { scene } = documentToScene(noChem);
+    // Absent must stay ABSENT — "no chemistry recorded" must never be
+    // materialised into an invented snapshot by the marshal.
+    expect('waterChemistry' in scene.tank).toBe(false);
+  });
+
   it('puts livestock on the scene (F7.1 promotion)', () => {
     const { scene } = documentToScene(EXAMPLE);
     expect(scene.livestock).toEqual(EXAMPLE.livestock);
@@ -139,6 +154,20 @@ describe('sceneToDocument', () => {
     const { waterLevelMm: _stripped, ...tankNoLevel } = scene.tank;
     const saved = sceneToDocument({ ...scene, tank: tankNoLevel }, envelope);
     expect('waterLevelMm' in saved.tank).toBe(false);
+  });
+
+  it('round-trips tank.waterChemistry: present stays present (lossless), absent stays absent', () => {
+    // Present → present, byte-for-byte (the canonical example authors a snapshot).
+    const { scene, envelope } = documentToScene(EXAMPLE);
+    expect(sceneToDocument(scene, envelope).tank.waterChemistry).toEqual(
+      EXAMPLE.tank.waterChemistry,
+    );
+
+    // Absent → absent: strip the field from the scene tank and assert the
+    // saved doc does NOT materialise an invented chemistry snapshot.
+    const { waterChemistry: _stripped, ...tankNoChem } = scene.tank;
+    const saved = sceneToDocument({ ...scene, tank: tankNoChem }, envelope);
+    expect('waterChemistry' in saved.tank).toBe(false);
   });
 
   it('saves livestock from the scene, not the envelope (F7.1 asymmetry)', () => {

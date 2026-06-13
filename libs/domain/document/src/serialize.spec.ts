@@ -79,25 +79,25 @@ describe('loadAquaDocument', () => {
   });
 
   it('runs migrations before validation', () => {
-    // EXAMPLE is at the current (v3) schemaVersion. Pretend a v4 reader is
-    // running by injecting a hypothetical v3 → v4 step and targeting v4.
+    // EXAMPLE is at the current (v4) schemaVersion. Pretend a v5 reader is
+    // running by injecting a hypothetical v4 → v5 step and targeting v5.
     // The current schema only constrains `schemaVersion: integer >= 1`, so
-    // a doc whose version was just bumped to 4 still validates — the test's
+    // a doc whose version was just bumped to 5 still validates — the test's
     // intent is "validation runs AFTER migration", not the specific shape.
     const currentVersionDoc = serializeAquaDocument(EXAMPLE);
     const stepUp: Migration = {
-      from: 3,
-      to: 4,
-      migrate: (d) => ({ ...(d as object), schemaVersion: 4 }),
+      from: 4,
+      to: 5,
+      migrate: (d) => ({ ...(d as object), schemaVersion: 5 }),
     };
     const result = loadAquaDocument(currentVersionDoc, {
       migrations: [stepUp],
-      targetVersion: 4,
+      targetVersion: 5,
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.migrationSteps).toEqual([{ from: 3, to: 4 }]);
-    expect((result.document as { schemaVersion: number }).schemaVersion).toBe(4);
+    expect(result.migrationSteps).toEqual([{ from: 4, to: 5 }]);
+    expect((result.document as { schemaVersion: number }).schemaVersion).toBe(5);
   });
 
   it('surfaces a migration-failed error when the chain has a gap', () => {

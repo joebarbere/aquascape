@@ -30,6 +30,7 @@ export type {
   Uuid,
   Vec2,
   Vec3,
+  WaterChemistry,
 } from './aqua-document';
 export { AQUA_CONTAINER, CURRENT_SCHEMA_VERSION } from './aqua-document';
 

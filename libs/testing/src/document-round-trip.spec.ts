@@ -77,21 +77,48 @@ describe('document-round-trip', () => {
     );
   });
 
-  it('property: a v2 document migrates to v3 without inventing tank.waterLevelMm', () => {
+  it('property: a v2 document migrates to v4 without inventing tank.waterLevelMm / waterChemistry', () => {
     fc.assert(
       fc.property(arbAquaDocument(), (doc) => {
         // Rewind an arbitrary current-version doc to a structurally-valid v2
-        // doc: strip the v3-only field and stamp the old version.
-        const { waterLevelMm: _stripped, ...tankNoLevel } = doc.tank;
-        const v2Doc = { ...doc, schemaVersion: 2, tank: tankNoLevel };
+        // doc: strip the v3-only (`waterLevelMm`) and v4-only
+        // (`waterChemistry`) fields and stamp the old version.
+        const {
+          waterLevelMm: _strippedLevel,
+          waterChemistry: _strippedChem,
+          ...tankV2
+        } = doc.tank;
+        const v2Doc = { ...doc, schemaVersion: 2, tank: tankV2 };
         const loaded = loadAquaDocument(serializeAquaDocument(v2Doc as AquaDocument));
         expect(loaded.ok).toBe(true);
         if (!loaded.ok) return;
-        expect(loaded.document.schemaVersion).toBe(3);
-        // Absent stays absent — the v2 → v3 step is a version-stamp
-        // pass-through and must NOT materialise the render-time default fill.
+        expect(loaded.document.schemaVersion).toBe(4);
+        // Absent stays absent through the whole v2 → v3 → v4 chain — each step
+        // is a version-stamp pass-through and must NOT materialise a default.
         expect('waterLevelMm' in loaded.document.tank).toBe(false);
+        expect('waterChemistry' in loaded.document.tank).toBe(false);
         expect({ ...loaded.document, schemaVersion: 2 }).toEqual(v2Doc);
+      }),
+      { numRuns: 50 },
+    );
+  });
+
+  it('property: a v3 document migrates to v4 without inventing tank.waterChemistry', () => {
+    fc.assert(
+      fc.property(arbAquaDocument(), (doc) => {
+        // Rewind an arbitrary current-version doc to a structurally-valid v3
+        // doc: strip only the v4-only `waterChemistry` field (the v3
+        // `waterLevelMm` is valid under v3 and may be present or absent).
+        const { waterChemistry: _stripped, ...tankV3 } = doc.tank;
+        const v3Doc = { ...doc, schemaVersion: 3, tank: tankV3 };
+        const loaded = loadAquaDocument(serializeAquaDocument(v3Doc as AquaDocument));
+        expect(loaded.ok).toBe(true);
+        if (!loaded.ok) return;
+        expect(loaded.document.schemaVersion).toBe(4);
+        // Absent stays absent — the v3 → v4 step is a version-stamp
+        // pass-through and must NOT invent a cycle history.
+        expect('waterChemistry' in loaded.document.tank).toBe(false);
+        expect({ ...loaded.document, schemaVersion: 3 }).toEqual(v3Doc);
       }),
       { numRuns: 50 },
     );

@@ -1,6 +1,6 @@
 {
   "format": "aquascape",
-  "schemaVersion": 4,
+  "schemaVersion": 3,
   "meta": {
     "id": "8f3b2c1a-4d5e-4a6b-9c8d-0e1f2a3b4c5d",
     "title": "Sprouting Harmony (example)",
@@ -19,20 +19,6 @@
     "depth": 220,
     "glassThickness": 5,
     "waterLevelMm": 190,
-    "waterChemistry": {
-      "chemistry": {
-        "ammonia": 0,
-        "nitrite": 0,
-        "nitrate": 18.4,
-        "ph": 7.1,
-        "aobColony": 2.6,
-        "nobColony": 2.1,
-        "ageWeeks": 6,
-        "engineVersion": 1
-      },
-      "cycle": "cycled",
-      "algae": { "diatom": 0.12 }
-    },
     "presetRef": { "catalog": "core", "id": "tank.ada-mini-m", "version": 1 },
     "style": {
       "frame": "rimless",

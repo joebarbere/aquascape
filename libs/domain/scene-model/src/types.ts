@@ -87,9 +87,67 @@ export interface Tank {
    * conversion over `width × depth × level`).
    */
   waterLevelMm?: Millimetres;
+  /**
+   * Persisted water-chemistry snapshot (Stage 13 F13.2 / ADR-0006). Mirrors
+   * the on-disk `Tank.waterChemistry` in `aqua-document.ts`: the persistable
+   * subset of `domain/water-sim`'s `WaterState` (`chemistry` block) plus the
+   * denormalized `cycle` stage and a per-type `algae` coverage block. Absent ⇒
+   * "no chemistry recorded". The live tick is owned by a runtime
+   * `WaterChemistryService`; only this snapshot round-trips through the
+   * document so a saved tank reloads mid-cycle. Marshaled verbatim on `tank`.
+   */
+  waterChemistry?: WaterChemistry;
   /** Optional reference to a known preset. */
   presetRef?: CatalogRef;
   style: TankStyle;
+}
+
+/**
+ * Persisted water-chemistry snapshot. Mirrors `WaterChemistry` in
+ * `@aquascape/domain/document` (`aqua-document.ts`) field-for-field — keep the
+ * two in lock-step. Plain serializable data only.
+ */
+export interface WaterChemistry {
+  /**
+   * The persistable subset of `water-sim`'s `WaterState`. Field-for-field
+   * mirror so the runtime service can lift it back into a `WaterState` and
+   * resume `simulateChemistry` exactly. Every field is a snapshot (none is
+   * recomputed — the model can't reconstruct colony capacities or the cycling
+   * clock from concentrations alone).
+   */
+  chemistry: {
+    /** Total ammonia as nitrogen, mg/L. */
+    ammonia: number;
+    /** Nitrite as nitrogen, mg/L. */
+    nitrite: number;
+    /** Nitrate as nitrogen, mg/L. */
+    nitrate: number;
+    /** Water pH. */
+    ph: number;
+    /** Ammonia-oxidiser colony capacity (dimensionless). */
+    aobColony: number;
+    /** Nitrite-oxidiser colony capacity (dimensionless). */
+    nobColony: number;
+    /** Total simulated weeks advanced — the cycling clock. */
+    ageWeeks: number;
+    /** `water-sim` rate-model engine version that produced this snapshot. */
+    engineVersion: number;
+  };
+  /**
+   * Denormalized tank-cycling stage (a pure function of `chemistry` via
+   * `water-sim`'s `cycleProgress`), persisted for offline display.
+   */
+  cycle: 'uncycled' | 'cycling' | 'cycled';
+  /**
+   * Per-type algae coverage scalars. Omit a type whose coverage is zero —
+   * absent reads as "none". Independent accumulated state, so a snapshot.
+   */
+  algae?: {
+    'green-spot'?: number;
+    hair?: number;
+    'black-beard'?: number;
+    diatom?: number;
+  };
 }
 
 export interface TankStyle {

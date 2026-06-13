@@ -10,6 +10,7 @@ export type {
   Scene,
   Tank,
   TankStyle,
+  WaterChemistry,
   Substrate,
   SubstrateRegion,
   Layer,
