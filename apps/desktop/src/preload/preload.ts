@@ -39,4 +39,45 @@ const ipc: IpcContract = {
   'export.png': (payload) => ipcRenderer.invoke('export.png', payload),
 };
 
-contextBridge.exposeInMainWorld('aquascape', { ipc });
+// Launch mode forwarded from the main process via
+// `webPreferences.additionalArguments` (see main.ts `createMainWindow`).
+// The sandbox can't `require` sibling modules, so the parse is inlined here
+// rather than imported from `../main/app-mode` — the canonical grammar lives
+// there (`MODE_ARG_PREFIX` + `readForwardedMode`) and is unit-tested. We
+// only forward the allowlisted values; anything unexpected degrades to
+// 'normal' so a malformed argv can't smuggle an arbitrary string into the
+// renderer's global.
+const MODE_ARG_PREFIX = '--aquascape-mode=';
+const VALID_MODES = ['normal', 'simulation'] as const;
+type AppMode = (typeof VALID_MODES)[number];
+function readMode(): AppMode {
+  for (const arg of process.argv) {
+    if (arg.startsWith(MODE_ARG_PREFIX)) {
+      const value = arg.slice(MODE_ARG_PREFIX.length);
+      if ((VALID_MODES as readonly string[]).includes(value)) {
+        return value as AppMode;
+      }
+    }
+  }
+  return 'normal';
+}
+
+// Runtime mode switches pushed from the main process's "Mode" application
+// menu. We expose a NARROW subscription, never raw `ipcRenderer` or the event
+// object: the callback receives only the validated mode string. The returned
+// thunk unsubscribes. Channel literal is duplicated from main.ts `MODE_CHANNEL`
+// (the sandbox can't share a const) — keep them in sync.
+const MODE_CHANNEL = 'app.mode.set';
+function onSetMode(callback: (mode: AppMode) => void): () => void {
+  const listener = (_event: unknown, mode: unknown): void => {
+    if (typeof mode === 'string' && (VALID_MODES as readonly string[]).includes(mode)) {
+      callback(mode as AppMode);
+    }
+  };
+  ipcRenderer.on(MODE_CHANNEL, listener);
+  return () => {
+    ipcRenderer.removeListener(MODE_CHANNEL, listener);
+  };
+}
+
+contextBridge.exposeInMainWorld('aquascape', { ipc, mode: readMode(), onSetMode });

@@ -405,6 +405,99 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     ).toBe(false);
   });
 
+  it('Esc in a browser tab exits demo mode (tries window.close, falls back to editor)', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer, sceneWithObject('a'));
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    // Stub window.close — the REAL jsdom close() puts the shared test window
+    // into a closed state and poisons every later test in the file. We assert
+    // it's attempted, then exercise the "browser refused" fallback.
+    const closeSpy = jest.spyOn(window, 'close').mockImplementation(() => undefined);
+    try {
+      const cmp = fixture.componentInstance;
+      cmp.simulationMode.set(true);
+      cmp.simulationScene.set(sceneWithObject('a'));
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('aquascape-simulation-hud')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('.app-shell.simulation-mode')).not.toBeNull();
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      fixture.detectChanges();
+
+      expect(closeSpy).toHaveBeenCalled();
+      expect(cmp.simulationMode()).toBe(false);
+      expect(fixture.nativeElement.querySelector('aquascape-simulation-hud')).toBeNull();
+      expect(fixture.nativeElement.querySelector('.app-shell.simulation-mode')).toBeNull();
+    } finally {
+      closeSpy.mockRestore();
+    }
+  });
+
+  it('Esc under Electron leaves the view to the main process (no in-renderer reveal)', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer, sceneWithObject('a'));
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    // Simulate the Electron preload bridge being present. The desktop main
+    // process quits on Esc, so the renderer must NOT mutate the view (which
+    // would just flash the editor before the app closes).
+    (window as unknown as { aquascape?: unknown }).aquascape = { ipc: {}, mode: 'simulation' };
+    try {
+      const cmp = fixture.componentInstance;
+      cmp.simulationMode.set(true);
+      cmp.simulationScene.set(sceneWithObject('a'));
+      fixture.detectChanges();
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      fixture.detectChanges();
+
+      // Still in demo mode in the renderer — main owns the quit.
+      expect(cmp.simulationMode()).toBe(true);
+      expect(fixture.nativeElement.querySelector('aquascape-simulation-hud')).not.toBeNull();
+    } finally {
+      delete (window as unknown as { aquascape?: unknown }).aquascape;
+    }
+  });
+
+  it('enters + leaves demo mode when the desktop Mode menu pushes a switch', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer, sceneWithObject('a'));
+
+    // Simulate the Electron bridge exposing the Mode-menu push channel.
+    let push: ((mode: 'normal' | 'simulation') => void) | null = null;
+    (window as unknown as { aquascape?: unknown }).aquascape = {
+      ipc: {},
+      onSetMode: (cb: (mode: 'normal' | 'simulation') => void) => {
+        push = cb;
+        return () => undefined;
+      },
+    };
+    try {
+      const fixture = TestBed.createComponent(AppComponent);
+      fixture.detectChanges();
+      const cmp = fixture.componentInstance;
+      expect(cmp.simulationMode()).toBe(false);
+      expect(push).not.toBeNull();
+
+      // Menu → Showcase Demo
+      push!('simulation');
+      fixture.detectChanges();
+      expect(cmp.simulationMode()).toBe(true);
+      expect(fixture.nativeElement.querySelector('aquascape-simulation-hud')).not.toBeNull();
+
+      // Menu → Normal Editor
+      push!('normal');
+      fixture.detectChanges();
+      expect(cmp.simulationMode()).toBe(false);
+      expect(fixture.nativeElement.querySelector('aquascape-simulation-hud')).toBeNull();
+    } finally {
+      delete (window as unknown as { aquascape?: unknown }).aquascape;
+    }
+  });
+
   it('pointerdown on empty space starts a marquee drag (overlay div appears)', () => {
     const renderer = new MockSceneRenderer();
     configure(renderer, sceneWithObject('a'));

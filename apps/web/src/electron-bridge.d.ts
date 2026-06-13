@@ -23,6 +23,20 @@ declare global {
         // runtime-detect approach is replaced or extended.
         readonly [channel: string]: (payload: unknown) => Promise<unknown>;
       };
+      /**
+       * Launch mode forwarded by the Electron shell (`aquascape --mode <mode>`).
+       * The renderer reads it via `resolveAppMode()` (see
+       * `apps/web/src/app/app-mode.ts`); a browser build sees `undefined` and
+       * falls back to the `?mode=` query param. Mirrors
+       * `apps/desktop/src/preload/global.d.ts`.
+       */
+      readonly mode?: 'normal' | 'simulation';
+      /**
+       * Subscribe to runtime mode switches from the desktop "Mode" menu. The
+       * callback gets the new mode; the returned thunk unsubscribes. Absent in
+       * a browser build. Mirrors `apps/desktop/src/preload/global.d.ts`.
+       */
+      readonly onSetMode?: (callback: (mode: 'normal' | 'simulation') => void) => () => void;
     };
   }
 }

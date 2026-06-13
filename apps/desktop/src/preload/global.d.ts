@@ -16,6 +16,18 @@ declare global {
   interface Window {
     readonly aquascape?: {
       readonly ipc: IpcContract;
+      /**
+       * Launch mode forwarded from the main process (`aquascape --mode <mode>`).
+       * `'simulation'` drives the borderless-fullscreen showcase; absent / `'normal'`
+       * is the full editor. See `apps/desktop/src/main/app-mode.ts`.
+       */
+      readonly mode?: 'normal' | 'simulation';
+      /**
+       * Subscribe to runtime mode switches pushed from the "Mode" application
+       * menu. The callback receives the validated mode; the returned thunk
+       * unsubscribes. Absent in a browser build.
+       */
+      readonly onSetMode?: (callback: (mode: 'normal' | 'simulation') => void) => () => void;
     };
   }
 }
