@@ -227,6 +227,8 @@ importers:
 
   libs/domain/stocking: {}
 
+  libs/features/decorations-tool: {}
+
   libs/features/editor-shell: {}
 
   libs/features/export: {}

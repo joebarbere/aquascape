@@ -151,11 +151,11 @@ demo on the README (follow-ups tracked in
 - **Catalog-driven PBR textures** — 9 deterministic, seamlessly-tiling
   texture families baked offline (`pnpm generate:textures`), applied
   triplanar in world space, opt-in via `RenderOptions.catalogTextureBaseUrl`.
-- **The render-target capability gate** — SSAO was attempted and _backed
-  out_ because it blanks the canvas under the SwiftShader headless path CI
-  uses; `getRenderTargetEffectsSupported()` now guards any future
-  multi-pass effect. The load-bearing lesson lives in
-  [`docs/caveats/e2e.md`](caveats/e2e.md).
+- **The render-target capability gate** — SSAO blanks the canvas under the
+  SwiftShader headless path CI uses, so `getRenderTargetEffectsSupported()`
+  guards any multi-pass effect. The load-bearing lesson lives in
+  [`docs/caveats/e2e.md`](caveats/e2e.md). (SSAO later shipped behind this
+  gate — see "SSAO on a real-GPU validation loop" below.)
 - **Adjustable water fill line** — `.aqua` v2 → v3 added optional
   `Tank.waterLevelMm`; the 3D water plane, 2D tint band, and the fish
   simulation's ceiling all read one source of truth
@@ -197,6 +197,28 @@ paths:
   bake — frightened fish genuinely shelter in the wreck.
 - **UI**: a Decorations palette (wreck / ruin / bones / structure chips,
   silhouette tiles, drag-to-place) in `libs/features/decorations-tool/`.
+
+### SSAO on a real-GPU validation loop (post-Stage 11)
+
+With the maintainer's AMD RX 7600 XT box, the **Bucket-0 validation-loop
+decision** was settled as **local GPU dev**: headless Chromium gets hardware
+WebGL via ANGLE-over-GL (Mesa/radeonsi), so the render-target effects that
+blank under SwiftShader can be _seen_ rendering. Two reusable harness scripts
+landed — `tools/demo/gl-probe.mjs` (confirm hardware GL) and
+`tools/demo/validate-3d.mjs` (screenshot the 3D canvas at a tunable camera).
+
+That unblocked **Bucket 1a — SSAO**, which shipped behind the capability gate:
+`RenderPass → SSAOPass → bloom → OutputPass` on hardware GL, the unchanged
+bloom-only chain on software WebGL (so the SwiftShader e2e never blanks). The
+load-bearing surprise was that three 0.184's `SSAOPass` _augments_ the read
+buffer (multiplies AO) rather than rendering its own beauty like older
+versions — so it sits AFTER `RenderPass`, not in place of it. Tuned on the GPU
+loop (`kernelRadius` 40 mm, contact darkening on ~2.3 % of pixels, substrate
+not re-crushed to black). **Bucket 1b — screen-space water-surface
+refraction — was deferred** (not blocked): the transmissive glass already
+supplies the dominant refraction read, so the extra render-target pre-pass is
+low value. See [`docs/caveats/renderer-3d.md`](caveats/renderer-3d.md) →
+"Screen-space ambient occlusion" and [`plans/3d-fidelity-followups.md`](../plans/3d-fidelity-followups.md).
 
 ## Document & catalog version history
 

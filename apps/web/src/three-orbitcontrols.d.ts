@@ -31,6 +31,10 @@ declare module 'three/examples/jsm/postprocessing/UnrealBloomPass' {
 declare module 'three/examples/jsm/postprocessing/OutputPass' {
   export * from 'three/examples/jsm/postprocessing/OutputPass.js';
 }
+// Bucket 1a (SSAO) — same shim for the SSAOPass addon.
+declare module 'three/examples/jsm/postprocessing/SSAOPass' {
+  export * from 'three/examples/jsm/postprocessing/SSAOPass.js';
+}
 
 // Decorations — same shim for GLTFLoader (decor model loading in
 // renderer-3d's ModelCache). Mapped to its `.js` file in

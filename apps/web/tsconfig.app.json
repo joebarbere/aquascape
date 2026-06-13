@@ -58,6 +58,9 @@
       "three/examples/jsm/postprocessing/OutputPass": [
         "node_modules/three/examples/jsm/postprocessing/OutputPass.js"
       ],
+      "three/examples/jsm/postprocessing/SSAOPass": [
+        "node_modules/three/examples/jsm/postprocessing/SSAOPass.js"
+      ],
       "three/examples/jsm/loaders/GLTFLoader": [
         "node_modules/three/examples/jsm/loaders/GLTFLoader.js"
       ]

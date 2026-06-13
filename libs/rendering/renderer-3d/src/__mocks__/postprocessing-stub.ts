@@ -39,3 +39,17 @@ export class OutputPass {
   constructor(..._args: any[]) {}
   dispose(): void {}
 }
+
+// Bucket 1a (SSAO) — same story. Only built behind the Bucket-0 capability
+// gate (false under the headless stub), so it's never instantiated here; the
+// stub merely has to be requireable + carry the tuning props the renderer sets.
+export class SSAOPass {
+  kernelRadius = 8;
+  minDistance = 0.005;
+  maxDistance = 0.1;
+  output = 0;
+  static readonly OUTPUT = { Default: 0, SSAO: 1, Blur: 2, Depth: 3, Normal: 4 };
+  constructor(..._args: any[]) {}
+  setSize(_w: number, _h: number): void {}
+  dispose(): void {}
+}
