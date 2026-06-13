@@ -16,41 +16,42 @@ flowchart TD
 
 ## Start by role
 
-| Role | Your path |
-| --- | --- |
-| **User / hobbyist** | [README feature list](../README.md#features) → run the app → [glossary](glossary.md) for any unfamiliar term |
-| **New contributor (any level)** | **[New-developer guide](guides/new-developer-guide.md)** — setup, guided tour, mental model, first contribution, paths per background |
-| **Feature developer** | [Architecture overview](architecture/overview.md) → the subsystem page for your area → its [caveat file](caveats/) **before** you edit |
-| **Reviewer / architect** | [Architecture overview](architecture/overview.md) → [ADRs](decisions/) → [`CLAUDE.md`](../CLAUDE.md) (invariants + Definition of Done) |
-| **Content author (no code)** | [Catalog](architecture/catalog.md) → [catalog caveats](caveats/catalog.md) (data-sourcing rules) |
-| **QA / test engineer** | [New-developer guide §testing](guides/new-developer-guide.md#7-testing--what-runs-where) → [e2e caveats](caveats/e2e.md) |
+| Role                            | Your path                                                                                                                              |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **User / hobbyist**             | [README feature list](../README.md#features) → run the app → [glossary](glossary.md) for any unfamiliar term                           |
+| **New contributor (any level)** | **[New-developer guide](guides/new-developer-guide.md)** — setup, guided tour, mental model, first contribution, paths per background  |
+| **Feature developer**           | [Architecture overview](architecture/overview.md) → the subsystem page for your area → its [caveat file](caveats/) **before** you edit |
+| **Reviewer / architect**        | [Architecture overview](architecture/overview.md) → [ADRs](decisions/) → [`CLAUDE.md`](../CLAUDE.md) (invariants + Definition of Done) |
+| **Content author (no code)**    | [Catalog](architecture/catalog.md) → [catalog caveats](caveats/catalog.md) (data-sourcing rules)                                       |
+| **QA / test engineer**          | [New-developer guide §testing](guides/new-developer-guide.md#7-testing--what-runs-where) → [e2e caveats](caveats/e2e.md)               |
 
 ## Architecture — how it works
 
 Start with the **[overview](architecture/overview.md)** (layer diagram,
 data flow, determinism); then go deep per subsystem:
 
-| Page | Covers |
-| --- | --- |
-| [Scene model & commands](architecture/scene-model-and-commands.md) | The in-memory model, the Command mutation pipeline, undo/redo |
-| [Document format](architecture/document-format.md) | The `.aqua` file: container, rules, versions, migrations, marshal |
-| [Rendering](architecture/rendering.md) | The `SceneRenderer` contract, the 2D editing canvas, the 3D view, the toggle |
-| [State management](architecture/state-management.md) | NgRx slices, the command effect, document lifecycle, autosave |
-| [Platform abstraction](architecture/platform-abstraction.md) | One codebase → web + Electron; the four services; Electron security |
-| [Catalog](architecture/catalog.md) | Content-as-data: manifests, schema, loader, textures |
-| [Livestock simulation](architecture/livestock-simulation.md) | The ECS world, behaviour systems, 30/60 Hz loop, determinism |
+| Page                                                               | Covers                                                                       |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| [Scene model & commands](architecture/scene-model-and-commands.md) | The in-memory model, the Command mutation pipeline, undo/redo                |
+| [Document format](architecture/document-format.md)                 | The `.aqua` file: container, rules, versions, migrations, marshal            |
+| [Rendering](architecture/rendering.md)                             | The `SceneRenderer` contract, the 2D editing canvas, the 3D view, the toggle |
+| [State management](architecture/state-management.md)               | NgRx slices, the command effect, document lifecycle, autosave                |
+| [Platform abstraction](architecture/platform-abstraction.md)       | One codebase → web + Electron; the four services; Electron security          |
+| [Catalog](architecture/catalog.md)                                 | Content-as-data: manifests, schema, loader, textures                         |
+| [Livestock simulation](architecture/livestock-simulation.md)       | The ECS world, behaviour systems, 30/60 Hz loop, determinism                 |
 
 ## Reference
 
-| Resource | What it's for |
-| --- | --- |
-| **[Glossary](glossary.md)** | The dictionary — hobby terms, code types, rendering and simulation vocabulary, tooling |
-| **[History](history.md)** | The stage-by-stage development record + document/catalog version history |
-| **[Caveats index](caveats/README.md)** | Load-bearing gotchas per area, each with a "Load this when…" trigger. **Read the matching file before changing an area.** |
-| **[Decisions (ADRs)](decisions/)** | Why Electron tooling, pnpm, Jest coverage, Nx Cloud deferral were decided the way they were |
-| **[The spec](../aquascape-development-plan.md)** | The original development plan — roadmap, feature traceability |
-| **[`plans/`](../plans/)** | Per-feature implementation plans, including the still-open ones |
-| **[`CLAUDE.md`](../CLAUDE.md)** | Working agreements: invariants, Definition of Done, dev commands, AI-assisted workflow |
+| Resource                                                                  | What it's for                                                                                                             |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **[Simulation mode & the launch-mode system](guides/simulation-mode.md)** | Launching the showcase, the HUDs, and the **`~` developer console** (full command reference)                              |
+| **[Glossary](glossary.md)**                                               | The dictionary — hobby terms, code types, rendering and simulation vocabulary, tooling                                    |
+| **[History](history.md)**                                                 | The stage-by-stage development record + document/catalog version history                                                  |
+| **[Caveats index](caveats/README.md)**                                    | Load-bearing gotchas per area, each with a "Load this when…" trigger. **Read the matching file before changing an area.** |
+| **[Decisions (ADRs)](decisions/)**                                        | Why Electron tooling, pnpm, Jest coverage, Nx Cloud deferral were decided the way they were                               |
+| **[The spec](../aquascape-development-plan.md)**                          | The original development plan — roadmap, feature traceability                                                             |
+| **[`plans/`](../plans/)**                                                 | Per-feature implementation plans, including the still-open ones                                                           |
+| **[`CLAUDE.md`](../CLAUDE.md)**                                           | Working agreements: invariants, Definition of Done, dev commands, AI-assisted workflow                                    |
 
 ## Visuals
 

@@ -220,14 +220,40 @@ supplies the dominant refraction read, so the extra render-target pre-pass is
 low value. See [`docs/caveats/renderer-3d.md`](caveats/renderer-3d.md) →
 "Screen-space ambient occlusion" and [`plans/3d-fidelity-followups.md`](../plans/3d-fidelity-followups.md).
 
+## Launch modes — showcase simulation mode
+
+Introduced a **launch-mode** concept selected by a CLI flag (`aquascape
+--mode simulation`; default `normal` is the full editor) plus a first mode, the
+**borderless-fullscreen showcase**. The Electron main process
+(`apps/desktop/src/main/app-mode.ts` `parseAppMode`) reads the flag,
+opens a `frame:false` + `fullscreen:true` window for `demo`, and forwards the
+mode to the sandboxed preload via `webPreferences.additionalArguments` (NOT a
+new IPC channel, and NOT by touching the security-asserted `buildWebPreferences`
+— the forwarding is merged at the `createMainWindow` call site). The preload
+re-exposes it as `window.aquascape.mode`; the renderer resolves it with
+`resolveAppMode()` (`apps/web/src/app/app-mode.ts`), which also honours a
+`?mode=simulation` URL query param so the showcase runs in a plain browser / e2e /
+`nx serve web` with no packaging. On `demo`, `AppComponent` loads a large
+deterministic `createShowcaseScene()` (a 1500 × 600 × 600 mm show tank — ~518 L
+— with 14 hardscape, ~80 plantings across five zoned layers, 5 decor, and ~108
+livestock individuals across four mid-water schooling shoals), forces the 3D
+view via a new hydration-locking `ViewModeService.forceMode('3d')` (so the
+persisted last-used-view read can't clobber it), hides all editor chrome via a
+`.simulation-mode` class on the shell, and mounts a corner **HUD**
+(`aquascape-simulation-hud`) listing the full tank spec — dimensions, volume (L + US
+gal), substrate, object counts, the livestock manifest with quantities, and the
+equipment list. Validated on the real-GPU Playwright loop (3D view, populated
+HUD, chrome gone). See
+[`docs/caveats/app-modes.md`](caveats/app-modes.md).
+
 ## Document & catalog version history
 
-| Version         | Change                                                                                                                                                                                                                                   |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.aqua` v1      | Initial locked format (Stage 0).                                                                                                                                                                                                         |
-| `.aqua` v2      | Optional `Layer.zone` ('foreground' \| 'midground' \| 'background') for 3D depth banding (Stage 10 follow-up).                                                                                                                           |
-| `.aqua` v3      | Optional `Tank.waterLevelMm` — the adjustable water fill line (post-Stage-11 fidelity work).                                                                                                                                             |
-| Catalog v1 → v2 | Pre-Stage-11 manifest evolution.                                                                                                                                                                                                         |
+| Version         | Change                                                                                                                                                                                                                                                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.aqua` v1      | Initial locked format (Stage 0).                                                                                                                                                                                                                                                                                                           |
+| `.aqua` v2      | Optional `Layer.zone` ('foreground' \| 'midground' \| 'background') for 3D depth banding (Stage 10 follow-up).                                                                                                                                                                                                                             |
+| `.aqua` v3      | Optional `Tank.waterLevelMm` — the adjustable water fill line (post-Stage-11 fidelity work).                                                                                                                                                                                                                                               |
+| Catalog v1 → v2 | Pre-Stage-11 manifest evolution.                                                                                                                                                                                                                                                                                                           |
 | Catalog v3      | Optional `LivestockEntry.behavior`, `HardscapeEntry.coverScore?`, `EquipmentEntry.flow?` / `airRateMl?` / `photoperiodHours?`, and `textures?` refs on substrate/hardscape/plant entries — all additive; older manifests load unchanged. The `decor` entry kind (GLB model refs) landed later as another additive oneOf branch — still v3. |
 
 Every format bump shipped with a pure `Migration` entry and a round-trip

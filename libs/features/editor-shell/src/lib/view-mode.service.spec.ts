@@ -164,6 +164,26 @@ describe('ViewModeService', () => {
     expect(setSpy).not.toHaveBeenCalled();
   });
 
+  it('forceMode sets the mode and pins it against a later hydrate', async () => {
+    // Persisted preference is '2d'; demo mode forces '3d'. Even though the
+    // async hydrate resolves AFTER the force, the lock must keep '3d'.
+    const { service } = configure({ [STORAGE_KEY_VIEW_MODE]: '2d' as ViewMode });
+    service.forceMode('3d');
+    expect(service.mode()).toBe('3d');
+    // Let the constructor's hydrate microtask resolve — must NOT clobber.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(service.mode()).toBe('3d');
+  });
+
+  it('forceMode wins even when the hydrate would have set a different mode', async () => {
+    const { service } = configure({ [STORAGE_KEY_VIEW_MODE]: 'fish-eye' as ViewMode });
+    service.forceMode('3d');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(service.mode()).toBe('3d');
+  });
+
   it('survives a storage.get() rejection', async () => {
     TestBed.configureTestingModule({
       providers: [

@@ -159,6 +159,16 @@ Every livestock entry in the document becomes visible, behaving fish in the 3D v
 - **Wall background** — a configurable surface behind the tank for room-context visualisation
 - **Geometric-A brand mark** rendered at every dock / favicon / install size
 
+### 🖥 Showcase simulation mode
+
+- **Launch profiles** selected by a command-line flag — `aquascape --mode simulation` (default is the full editor)
+- **`demo` mode** opens a **borderless, fullscreen** window straight into the 3D view, loads a large pre-built scene (a 1500 × 600 × 600 mm show tank — ~518 L — with hardscape, multi-layer planting, decor, and **100+ schooling fish** across four mid-water tetra/rasbora shoals), and strips all editor chrome
+- An **info HUD** (upper-right) shows a live clock, a **performance strip** (FPS / frame time / entity + bubble counts), and the full tank spec — dimensions, volume (L + US gal), substrate, object counts, the livestock manifest, and the equipment list
+- A **control HUD** (upper-left) tweaks the live scene — lighting + water-level sliders, per-species livestock steppers, add-random rock/wood/plant/decor, reset
+- A **Quake-style developer console** (press **`~`**, bottom-left) drives everything by command — `fish add cardinal 24`, `water 540`, `light dusk`, `item add rock`, `hud hide all`, `reset` — with command history (↑/↓) and Tab-completion. **Save your own demos** with `sim save <name>` / `sim load <name>` — persisted across restarts, so you can build a library of scenes. See the **[demo-mode guide](docs/guides/simulation-mode.md)**
+- On the desktop a native **Mode menu** switches between Normal Editor and Simulation at runtime; **Esc** exits (quits a kiosk launch, or returns to the editor)
+- Also reachable in any browser at **`/?mode=simulation`** (handy for kiosks, screenshots, and the dev server) — no desktop packaging required
+
 ---
 
 ## Platforms
@@ -179,6 +189,7 @@ corepack enable                              # one-time, picks up the pinned pnp
 pnpm install
 
 pnpm exec nx serve web                       # → http://localhost:4200
+#   …visit http://localhost:4200/?mode=simulation  # borderless showcase: 3D, populated tank, HUD
 pnpm exec nx serve desktop                   # web dev-server + Electron, in parallel
 pnpm exec nx build desktop                   # → dist/apps/desktop/{main,preload}/
 pnpm package:desktop                         # → dist/apps/desktop/installers/

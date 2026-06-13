@@ -49,6 +49,14 @@ export class ViewModeService {
   /** The active canvas mode. Defaults to `'2d'` on first load. */
   readonly mode = signal<ViewMode>('2d');
 
+  /**
+   * Set by {@link forceMode}. Once true, the async storage hydration below
+   * stops clobbering the mode — a host that forces a view (e.g. the demo
+   * launch mode forcing `'3d'`) must win the race against a possibly-slower
+   * persisted-preference read, regardless of arrival order.
+   */
+  private hydrationLocked = false;
+
   constructor() {
     // Prime from storage. Storage is async; the effect below will fire on
     // the resolved value WITHOUT writing it back (the firstRun-after-
@@ -58,6 +66,7 @@ export class ViewModeService {
     void this.storage
       .get<unknown>(STORAGE_KEY_VIEW_MODE)
       .then((value) => {
+        if (this.hydrationLocked) return;
         if (typeof value === 'string' && (VALID as readonly string[]).includes(value)) {
           this.mode.set(value as ViewMode);
         }
@@ -106,6 +115,20 @@ export class ViewModeService {
    */
   setMode(mode: ViewMode): void {
     if (this.mode() === mode) return;
+    this.mode.set(mode);
+  }
+
+  /**
+   * Force the mode and pin it against the persisted-preference hydration.
+   * Used by launch profiles that own the view (demo mode forces `'3d'`):
+   * the user's last-saved 2D/3D preference must not flip the showcase back
+   * after the async storage read resolves. Still persists via the effect
+   * like any other mode change, which is fine — re-entering the demo always
+   * forces again, and leaving it (a normal launch) honours storage normally
+   * because `hydrationLocked` is per-instance and demo launches start fresh.
+   */
+  forceMode(mode: ViewMode): void {
+    this.hydrationLocked = true;
     this.mode.set(mode);
   }
 }

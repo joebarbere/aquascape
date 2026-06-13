@@ -230,6 +230,33 @@ aquascape-root {
     var(--reexpand-width);
 }
 
+/* ── Showcase simulation mode (`--mode simulation` / `?mode=simulation`) ─────────────────────
+   A borderless, full-bleed presentation: strip ALL editor chrome (toolbar,
+   tool/layers panels, resize handles, drawer bar, floating viewport
+   controls) so only the 3D canvas + the corner HUD remain. The grid
+   collapses to a single canvas column spanning the whole shell. `simulation-mode`
+   is set by AppComponent when `resolveAppMode()` reports 'simulation'. */
+.app-shell.simulation-mode {
+  grid-template-rows: 1fr;
+}
+.app-shell.simulation-mode aquascape-editor-shell,
+.app-shell.simulation-mode .app-drawer-bar,
+.app-shell.simulation-mode .app-sidebar,
+.app-shell.simulation-mode .app-rail,
+.app-shell.simulation-mode .resize-handle,
+.app-shell.simulation-mode .reexpand-strip,
+.app-shell.simulation-mode .app-status,
+.app-shell.simulation-mode .app-zoom-control,
+.app-shell.simulation-mode .app-timeslider {
+  display: none !important;
+}
+.app-shell.simulation-mode .app-grid,
+.app-shell.simulation-mode.sidebar-collapsed .app-grid,
+.app-shell.simulation-mode.rail-collapsed .app-grid,
+.app-shell.simulation-mode.sidebar-collapsed.rail-collapsed .app-grid {
+  grid-template-columns: 1fr;
+}
+
 .app-sidebar,
 .app-rail {
   display: flex;

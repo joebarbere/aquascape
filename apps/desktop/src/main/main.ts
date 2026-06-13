@@ -17,8 +17,10 @@
 
 import * as path from 'node:path';
 
-import { app, BrowserWindow, ipcMain, nativeImage, session, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, session, shell } from 'electron';
 
+import { type AppMode, MODE_ARG_PREFIX, parseAppMode } from './app-mode';
+import { buildMenuTemplate } from './menu';
 import {
   createDialogBackend,
   createExportBackend,
@@ -36,6 +38,12 @@ import {
 import { buildWebPreferences } from './web-preferences';
 
 const DEV_SERVER_ENV = 'DEV_SERVER_URL';
+
+// Main → renderer push channel carrying a runtime mode switch (from the
+// "Mode" application menu). The preload re-inlines this literal in its
+// `onSetMode` subscription — keep the two in sync (the sandbox can't share a
+// const). See `apps/web/src/app/app.component.ts` for the renderer end.
+const MODE_CHANNEL = 'app.mode.set';
 
 /**
  * Swallow EPIPE on stdout / stderr.
@@ -113,9 +121,17 @@ function lockdownNavigation(win: BrowserWindow, devServerUrl: string | undefined
   });
 }
 
-function createMainWindow(): BrowserWindow {
+function createMainWindow(mode: AppMode): BrowserWindow {
   const preloadPath = resolvePreloadPath(__dirname);
-  const webPreferences = buildWebPreferences(preloadPath);
+  // The pure builder owns the (security-asserted) preference set; we layer
+  // the launch-mode forwarding on top WITHOUT touching it. `additionalArguments`
+  // is the canonical way to hand a value to a sandboxed preload — the strings
+  // land on the preload's own `process.argv` (it can't read ours), and the
+  // preload re-exposes the parsed mode to the renderer on `window.aquascape`.
+  const webPreferences = {
+    ...buildWebPreferences(preloadPath),
+    additionalArguments: [`${MODE_ARG_PREFIX}${mode}`],
+  };
 
   // Brand-mark icon — load the platform-native format (ICO on Windows,
   // ICNS on macOS, PNG on Linux + fallback). A read failure is non-fatal;
@@ -127,9 +143,18 @@ function createMainWindow(): BrowserWindow {
   // actually drives the visible brand at runtime there.
   const icon = nativeImage.createFromPath(resolvePlatformIconPath(__dirname, process.platform));
 
+  // Simulation mode is a borderless, fullscreen showcase: no window chrome, no
+  // menu bar, sized to fill the display. The default editor window keeps
+  // standard 1280×800 chrome. Both share the secure webPreferences + CSP +
+  // navigation lockdown below — the mode only changes the frame/size, never
+  // the security posture.
+  const modeWindowOptions =
+    mode === 'simulation'
+      ? ({ frame: false, fullscreen: true, autoHideMenuBar: true } as const)
+      : ({ width: 1280, height: 800 } as const);
+
   const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    ...modeWindowOptions,
     backgroundColor: '#000000',
     webPreferences,
     ...(icon.isEmpty() ? {} : { icon }),
@@ -149,7 +174,11 @@ function createMainWindow(): BrowserWindow {
     void win.loadFile(resolveIndexPath(__dirname));
   }
 
-  if (!app.isPackaged) {
+  // Auto-open DevTools in dev builds — but NEVER in simulation mode. The showcase
+  // is a clean, chrome-free presentation; a detached DevTools window (or the
+  // docked panel) would break that. Simulation mode is debuggable on demand via
+  // `--remote-debugging-port` if needed.
+  if (!app.isPackaged && mode !== 'simulation') {
     win.webContents.openDevTools({ mode: 'detach' });
   }
 
@@ -215,12 +244,67 @@ app
     // thunk to the backend.
     const storagePath = path.join(app.getPath('userData'), 'aquascape-storage.json');
 
+    // Launch mode from the CLI (`aquascape --mode simulation`). Parsed once and
+    // reused for the initial window + any macOS re-activation window so a
+    // demo-launched app re-opens as a demo window after all windows close.
+    const appMode = parseAppMode();
+
     // F1.4: the file picker / dialogs / storage / export channels need a
     // BrowserWindow to anchor native modals to. We pass a `getWindow()`
     // accessor instead of a window directly so the backends stay valid
     // across window create / close / reopen cycles.
-    let mainWindow: BrowserWindow | null = createMainWindow();
+    let mainWindow: BrowserWindow | null = createMainWindow(appMode);
     const getWindow = (): BrowserWindow | null => mainWindow;
+
+    // ── Runtime mode switching (the "Mode" application menu) ──────────────
+    //
+    // `appMode` is the LAUNCH mode (fixed — it decided the window's frame).
+    // `currentMode` tracks the live mode, flipped by the Mode menu. Switching
+    // pushes the new mode to the renderer (which loads the showcase / reveals
+    // the editor) and toggles fullscreen; the frame can't change after
+    // creation, so a menu-entered demo is fullscreen-but-framed (vs. the
+    // borderless `--mode simulation` launch).
+    let currentMode: AppMode = appMode;
+
+    const refreshMenu = (): void => {
+      Menu.setApplicationMenu(
+        Menu.buildFromTemplate(
+          buildMenuTemplate({
+            currentMode,
+            isMac: process.platform === 'darwin',
+            onSelectMode: switchMode,
+          }),
+        ),
+      );
+    };
+
+    function switchMode(mode: AppMode): void {
+      const win = getWindow();
+      if (win === null || mode === currentMode) return;
+      currentMode = mode;
+      win.webContents.send(MODE_CHANNEL, mode);
+      win.setFullScreen(mode === 'simulation');
+      refreshMenu();
+    }
+
+    // Esc handling lives in main so it works regardless of renderer state.
+    // In simulation mode: a window LAUNCHED as the kiosk (`--mode simulation`) quits the
+    // app (nothing to return to); a window that ENTERED demo via the menu
+    // switches back to the editor instead. Outside simulation mode Esc is the
+    // renderer's (selection-clear / drag-cancel) — we don't touch it.
+    const attachEscHandler = (win: BrowserWindow): void => {
+      win.webContents.on('before-input-event', (_event, input) => {
+        if (input.type !== 'keyDown' || input.key !== 'Escape') return;
+        if (currentMode !== 'simulation') return;
+        if (appMode === 'simulation') {
+          app.quit();
+        } else {
+          switchMode('normal');
+        }
+      });
+    };
+    attachEscHandler(mainWindow);
+    refreshMenu();
 
     registerIpcHandlers(ipcMain, {
       now: () => Date.now(),
@@ -259,7 +343,12 @@ app
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
-        mainWindow = createMainWindow();
+        // Re-open at the LAUNCH mode (a kiosk relaunch stays a kiosk). Reset
+        // the runtime mode to match, then re-wire Esc + refresh the menu.
+        currentMode = appMode;
+        mainWindow = createMainWindow(appMode);
+        attachEscHandler(mainWindow);
+        refreshMenu();
         mainWindow.on('closed', () => {
           mainWindow = null;
         });

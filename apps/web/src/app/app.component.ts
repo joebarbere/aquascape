@@ -139,9 +139,16 @@ import type {
 import { SceneActions, SelectionActions, selectScene, selectSelectedIds } from '@aquascape/state';
 import { Store } from '@ngrx/store';
 
+import { resolveAppMode } from './app-mode';
 import { BehaviorDebugOverlayComponent } from './behavior-debug-overlay.component';
 import { BehaviorDebugService } from './behavior-debug.service';
 import { attachDebugHook, detachDebugHook } from './debug-hook';
+import { SimulationConsoleComponent } from './simulation/simulation-console.component';
+import { SimulationControlsComponent } from './simulation/simulation-controls.component';
+import { SimulationHudComponent } from './simulation/simulation-hud.component';
+import { SimulationPerfService } from './simulation/simulation-perf.service';
+import { SimulationUiService } from './simulation/simulation-ui.service';
+import { createShowcaseScene } from './simulation/showcase-scene';
 import { defaultViewport } from './default-viewport';
 import { applyMoveDrag, applyRotateDrag, applyScaleDrag } from './drag-math';
 import { LivestockSimulationService } from './livestock-simulation.service';
@@ -202,6 +209,9 @@ type DragState =
     CompositionOverlaysComponent,
     DayNightControlComponent,
     DecorationsToolComponent,
+    SimulationConsoleComponent,
+    SimulationControlsComponent,
+    SimulationHudComponent,
     EditorShellComponent,
     EquipmentToolComponent,
     HardscapeToolComponent,
@@ -227,6 +237,7 @@ type DragState =
       [class.rail-collapsed]="railCollapsed()"
       [class.sidebar-open]="phoneSidebarOpen()"
       [class.rail-open]="phoneRailOpen()"
+      [class.simulation-mode]="simulationMode()"
     >
       <aquascape-editor-shell></aquascape-editor-shell>
 
@@ -441,6 +452,27 @@ type DragState =
           <div class="app-timeslider">
             <aquascape-time-slider></aquascape-time-slider>
           </div>
+          <!-- Showcase-demo HUDs — read-only tank spec (upper-right) + the
+               interactive scene controls (upper-left) + the tilde-toggled
+               console (bottom-left). Only mount in simulation launch mode; all read
+               the live store scene via simulationScene; visibility is driven by
+               simUi (the console's hud command). -->
+          @if (simulationMode()) {
+            @if (simUi.controlsVisible()) {
+              <aquascape-simulation-controls
+                [scene]="simulationScene()"
+              ></aquascape-simulation-controls>
+            }
+            @if (simUi.infoVisible()) {
+              <aquascape-simulation-hud
+                [scene]="simulationScene()"
+                [metrics]="simPerf.metrics()"
+                [showClock]="simUi.clockVisible()"
+                [showPerf]="simUi.perfVisible()"
+              ></aquascape-simulation-hud>
+            }
+            <aquascape-simulation-console></aquascape-simulation-console>
+          }
         </main>
 
         @if (!railCollapsed() && breakpoint() !== 'phone') {
@@ -807,6 +839,24 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Signal that flips to true when the scene has no objects in any layer. */
   readonly sceneIsEmpty = signal<boolean>(true);
 
+  /**
+   * Showcase-demo state. `simulationMode` gates the `.simulation-mode` chrome-hiding
+   * class + the HUD; `simulationScene` is the (static) scene the HUD describes.
+   * Both stay false/null in the normal editor. Set once in `ngOnInit` when
+   * `resolveAppMode()` reports `'simulation'`. See `docs/caveats/app-modes.md`.
+   */
+  readonly simulationMode = signal<boolean>(false);
+  readonly simulationScene = signal<Scene | null>(null);
+
+  /** Live performance sampler feeding the HUD's metrics strip (simulation only). */
+  readonly simPerf = inject(SimulationPerfService);
+
+  /** Simulation HUD/console visibility state (the console's `hud` command + `~`). */
+  readonly simUi = inject(SimulationUiService);
+
+  /** Unsubscribe thunk for the desktop "Mode" menu push channel (Electron only). */
+  private modeMenuCleanup: (() => void) | null = null;
+
   // ─── Shell layout state (Figma-style resizable + collapsible panels) ──
   //
   // Widths live as signals so the template can read `aria-valuenow`, but the
@@ -860,6 +910,76 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       livestockSim: this.livestockSim,
       viewMode: this.viewMode,
     });
+
+    this.maybeActivateSimulationMode();
+    this.subscribeToModeMenu();
+  }
+
+  /**
+   * Activate the showcase at launch (`aquascape --mode simulation` / `?mode=simulation`).
+   * No-op for a normal launch.
+   *
+   * Run here in `ngOnInit` — before `ngAfterViewInit` wires the store
+   * subscription — so the scene is in the store and the mode is pinned to
+   * `'3d'` by the time the first render fires; the subscription then paints
+   * the populated scene straight into the 3D canvas.
+   */
+  private maybeActivateSimulationMode(): void {
+    if (resolveAppMode() !== 'simulation') return;
+    this.enterSimulationMode();
+  }
+
+  /**
+   * Subscribe to runtime mode switches pushed from the desktop "Mode" menu
+   * (Electron only; the bridge's `onSetMode` is absent in a browser). The
+   * callback fires outside Angular's zone, so we re-enter via `ngZone.run`
+   * to schedule change detection for the chrome-hiding class + HUD.
+   */
+  private subscribeToModeMenu(): void {
+    const onSetMode =
+      typeof window !== 'undefined' ? (window as Window).aquascape?.onSetMode : undefined;
+    if (onSetMode === undefined) return;
+    this.modeMenuCleanup = onSetMode((mode) => {
+      this.ngZone.run(() => this.applyMode(mode));
+    });
+  }
+
+  /** Apply a mode chosen at runtime: enter the showcase, or return to editing. */
+  private applyMode(mode: 'normal' | 'simulation'): void {
+    if (mode === 'simulation') {
+      this.enterSimulationMode();
+    } else {
+      this.leaveSimulationToEditor();
+    }
+  }
+
+  /**
+   * Load the showcase scene, force the 3D view (winning the
+   * persisted-preference hydration race via `forceMode`), and flip the
+   * `simulationMode` signal so the template hides the editor chrome and mounts the
+   * corner HUD. Idempotent.
+   */
+  private enterSimulationMode(): void {
+    if (this.simulationMode()) return;
+    const scene = createShowcaseScene();
+    this.simulationScene.set(scene);
+    this.simulationMode.set(true);
+    this.simUi.resetLayout();
+    this.viewMode.forceMode('3d');
+    this.store.dispatch(SceneActions.setScene({ scene }));
+    this.simPerf.start();
+  }
+
+  /**
+   * Leave the showcase back to the editor: drop the chrome-hiding `.simulation-mode`
+   * class + the HUD. The loaded scene stays in the store, so the user lands in
+   * the editor looking at the tank they were just shown. Idempotent.
+   */
+  private leaveSimulationToEditor(): void {
+    if (!this.simulationMode()) return;
+    this.simulationMode.set(false);
+    this.simulationScene.set(null);
+    this.simPerf.stop();
   }
 
   ngAfterViewInit(): void {
@@ -884,6 +1004,13 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
           this.sceneIsEmpty.set(
             scene === null || scene.layers.every((l) => l.objects.length === 0),
           );
+          // Keep the simulation HUDs bound to the LIVE scene so edits made through
+          // the control HUD show up in the spec HUD + drive the 3D + sim. This
+          // subscription runs outside Angular's zone (for the imperative
+          // render), so re-enter for the signal write that the OnPush HUDs read.
+          if (this.simulationMode()) {
+            this.ngZone.run(() => this.simulationScene.set(scene));
+          }
           this.renderCurrent();
         });
 
@@ -1052,6 +1179,9 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     // it references — otherwise a stray e2e probe between destroy + the
     // next bootstrap would call into a disposed renderer / world.
     detachDebugHook();
+    this.modeMenuCleanup?.();
+    this.modeMenuCleanup = null;
+    this.simPerf.stop();
     this.teardown();
     this.cancelDrag(); // detach any in-flight document listeners
     this.detachHandleListeners();
@@ -1471,9 +1601,35 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.cursorPos.set(null);
   }
 
-  /** Esc clears selection OR cancels an in-flight drag. */
+  /**
+   * Quake-style console toggle. The `~`/backtick key (physical `Backquote`,
+   * layout-independent) opens/closes the simulation console. Handled here (not in
+   * the console component) so it works while the console is closed, and
+   * `preventDefault`ed so the key never types a backtick into the field.
+   * Simulation-mode only.
+   */
+  @HostListener('document:keydown', ['$event'])
+  onGlobalKeydown(event: KeyboardEvent): void {
+    if (event.code === 'Backquote' && this.simulationMode()) {
+      event.preventDefault();
+      this.simUi.toggleConsole();
+    }
+  }
+
+  /** Esc closes the console, else exits the simulation, else clears selection / drag. */
   @HostListener('document:keydown.escape')
   onEscape(): void {
+    // In the showcase, Esc first closes the console if it's open, otherwise
+    // it leaves the simulation — both dominate over selection/drag (which don't
+    // exist in simulation mode).
+    if (this.simulationMode() && this.simUi.consoleOpen()) {
+      this.simUi.closeConsole();
+      return;
+    }
+    if (this.simulationMode()) {
+      this.exitSimulationMode();
+      return;
+    }
     if (this.dragState !== null) {
       this.cancelDrag();
       // Re-render so the preview transform reverts to the store's state.
@@ -1481,6 +1637,35 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
     this.store.dispatch(SelectionActions.clearSelection());
+  }
+
+  /**
+   * Handle Esc while in the showcase:
+   *
+   *   - **Desktop (Electron):** the MAIN process owns Esc entirely (see
+   *     `apps/desktop/src/main/main.ts`) — it quits a `--mode simulation` kiosk or
+   *     switches a menu-entered simulation back to the editor (pushing `'normal'`
+   *     back through `onSetMode`). The renderer must NOT touch the view here,
+   *     or it would race / flash against the main-driven outcome. We detect
+   *     Electron via the preload bridge and bail.
+   *   - **Browser tab:** a page can't force-close a tab the user navigated
+   *     to, so we try `window.close()` (works for script-opened / kiosk
+   *     windows) and, when the browser refuses, fall back to revealing the
+   *     editor so the user isn't trapped in the chrome-free view.
+   */
+  private exitSimulationMode(): void {
+    if (!this.simulationMode()) return;
+
+    const isElectron = typeof window !== 'undefined' && (window as Window).aquascape !== undefined;
+    if (isElectron) return; // main process owns Esc (quit or switch-to-normal)
+
+    try {
+      window.close();
+    } catch {
+      /* browsers throw or no-op for non-script-opened windows — ignore */
+    }
+    // Fallback for browsers that ignored window.close(): reveal the editor.
+    this.leaveSimulationToEditor();
   }
 
   /**
