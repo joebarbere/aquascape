@@ -75,6 +75,12 @@ import {
   bubbleLifetimeSystem,
   bubbleSourceSpawnSystem,
 } from './bubble-system';
+import {
+  bubbleFluidStepSystem,
+  makeEmptyBubbleFluidState,
+  rebuildBubbleFluid,
+  type BubbleFluidState,
+} from './bubble-fluid';
 
 /** Fixed simulation time-step, in seconds. 30 Hz — matches the plan. */
 export const SIM_DT = 1 / 30;
@@ -296,6 +302,13 @@ export interface LivestockWorld {
   readonly __internals: LivestockWorldInternals;
   /** @internal — parallel-typed-array store read by the bubble systems. */
   readonly __bubbleSources: BubbleSourceStore;
+  /**
+   * @internal — per-source Stam fluid slices that advect rising bubbles
+   * (the "bubble fluid fidelity pass"). Mutated in place by
+   * `bubbleFluidStepSystem`; rebuilt by `registerBubbleSources` / tank
+   * resize. Read via `sampleBubbleFluid` in `bubbleLifetimeSystem`.
+   */
+  readonly __bubbleFluid: BubbleFluidState;
   /** Caller-supplied PRNG seed (typically `document.seed`). Frozen at creation. */
   readonly seed: number;
   /** Increments by 1 on every `step()` call. */
@@ -586,12 +599,18 @@ export function createLivestockWorld(
   // the spawn loop allocation-free in the hot path.
   const bubbleSources: BubbleSourceStore = makeEmptyBubbleSourceStore();
 
+  // Bubble fluid fidelity pass — per-source Stam slices that advect rising
+  // bubbles. Empty until `registerBubbleSources` builds slices to match the
+  // live source set. Quiescent + zero-allocation while no air-stone exists.
+  const bubbleFluid: BubbleFluidState = makeEmptyBubbleFluidState();
+
   // `tickCounter` and `seed` live on the world object so `tickPrng(world,…)`
   // can read them without a closure variable per tick.
   const world: LivestockWorld = {
     ecs,
     __internals: { pendingStartles },
     __bubbleSources: bubbleSources,
+    __bubbleFluid: bubbleFluid,
     seed: seed | 0,
     tickCounter: 0,
     paramStore,
@@ -733,6 +752,9 @@ export function createLivestockWorld(
         minZ: aabb.minZ,
         maxZ: aabb.maxZ,
       };
+      // The bubble fluid slices map slice rows onto the tank height, so a
+      // resize must rebuild them. No-op when no sources are registered.
+      if (bubbleSources.count > 0) rebuildBubbleFluid(this);
     },
 
     registerSpeciesBehavior(speciesId: number, behavior: ResolvedBehavior): number {
@@ -893,6 +915,11 @@ export function createLivestockWorld(
         bubbleSources.rateParticlesPerSec[i] =
           src.airRateMl > 0 ? (src.airRateMl / 60) * BUBBLE_SCALE : 0;
       }
+      // Rebuild the per-source fluid slices to match the new source layout.
+      // A fresh slice set (zero velocity field) is the deterministic starting
+      // point — two services built from the same scene see identical fluid
+      // state from tick 0.
+      rebuildBubbleFluid(this);
     },
 
     getBubbleParticleCount(): number {
@@ -948,6 +975,12 @@ export function createLivestockWorld(
       animationSystem(ecs, dt);
       foodSpriteLifetimeSystem(this, dt);
       bubbleSourceSpawnSystem(this, dt);
+      // Bubble fluid fidelity pass — advance the per-source Stam slices, then
+      // let bubbleLifetimeSystem advect each bubble by the just-updated field.
+      // Spawn runs first so a freshly-emitted bubble already has a position to
+      // sample from; the fluid step runs before lifetime so the field the
+      // bubble reads is current to this tick.
+      bubbleFluidStepSystem(this, dt);
       bubbleLifetimeSystem(this, dt);
       this.tickCounter += 1;
     },
@@ -1077,6 +1110,13 @@ export function createLivestockWorld(
       bubbleSources.rateParticlesPerSec = new Float32Array(0);
       bubbleSources.spawnAccumulator = new Float32Array(0);
       bubbleSources.spawnSequence = new Uint32Array(0);
+      // Drop the fluid slices — the next registerBubbleSources rebuilds them
+      // from the new source count.
+      bubbleFluid.slices = [];
+      bubbleFluid.centreX = new Float32Array(0);
+      bubbleFluid.baseY = new Float32Array(0);
+      bubbleFluid.rowSizeY = new Float32Array(0);
+      bubbleFluid.colSizeX = new Float32Array(0);
     },
   };
 

@@ -42,6 +42,11 @@
  */
 import { addComponent, addEntity, defineQuery, removeEntity } from 'bitecs';
 
+import {
+  BUBBLE_FLUID_DRIFT_MM_PER_S,
+  BUBBLE_FLUID_Z_FRACTION,
+  sampleBubbleFluid,
+} from './bubble-fluid';
 import { BubbleParticle, Position } from './components';
 import { tickPrng } from './prng';
 import type { LivestockWorld } from './world';
@@ -74,24 +79,42 @@ export const BUBBLE_WATERLINE_INSET_MM = 10;
 export const BUBBLE_HORIZONTAL_JITTER_MM = 8;
 
 /**
- * Helical wobble (fidelity pass). A rising air-stone bubble doesn't track a
- * straight line — it spirals as it sheds vortices. We model that with a
- * deterministic helical drift driven by the bubble's HEIGHT (not wall-clock),
- * so the path is a fixed spiral the bubble climbs: `x/z += A·{sin,cos}(k·y +
- * phase)·dt`, phase per-bubble from `spawnSeq`. Height-driven keeps it pure +
- * replay-stable (no time accumulator) and means two bubbles at the same height
- * with the same phase wobble identically. `BUBBLE_WOBBLE_VEL_MM_PER_S` is the
- * peak lateral speed; `BUBBLE_WOBBLE_WAVENUMBER` sets the spiral pitch.
+ * Helical wobble — the FALLBACK lateral drift, used only when no fluid slice
+ * is available for a bubble's source (e.g. unit tests that call
+ * `bubbleLifetimeSystem` directly without ever registering sources through
+ * the world, which builds the slices). A rising air-stone bubble doesn't track
+ * a straight line — it spirals as it sheds vortices. The helix models that with
+ * a deterministic drift driven by the bubble's HEIGHT (not wall-clock):
+ * `x/z += A·{sin,cos}(k·y + phase)·dt`, phase per-bubble from `spawnSeq`.
+ * Height-driven keeps it pure + replay-stable (no time accumulator).
  *
- * This is the lightweight wobble. The full Stam `BubbleStableFluids2D` slice
- * (`domain/fluid-sim`) — which would add genuine multi-stone column
- * interaction — stays available for a deeper pass; this delivers the visible
- * "bubbles spiral up" read at a fraction of the cost.
+ * The "bubble fluid fidelity pass" promoted the previously-unwired Stam
+ * `BubbleStableFluids2D` slice (`domain/fluid-sim`) to the PRIMARY drift: each
+ * registered source gets a per-source slice (`bubble-fluid.ts`) whose advected
+ * velocity field carries real asymmetric vortices + cross-plume interaction.
+ * When that field is live (the normal `world.step()` path), the helix is
+ * bypassed; the constants below remain as the slice-less fallback.
  */
 export const BUBBLE_WOBBLE_VEL_MM_PER_S = 28;
 export const BUBBLE_WOBBLE_WAVENUMBER = 0.045;
 /** Golden-ratio-ish phase stride so adjacent spawnSeqs don't wobble in lockstep. */
 const BUBBLE_WOBBLE_PHASE_STRIDE = 2.399963;
+
+/**
+ * Reusable scratch for the per-bubble fluid sample. Module-scoped + mutated in
+ * place so `bubbleLifetimeSystem` does zero allocation per bubble per tick
+ * (the F11.6 perf budget forbids hot-path allocation). The system is never
+ * re-entrant (single-threaded sim tick), so a shared scratch is safe.
+ */
+const fluidSampleScratch = { u: 0, v: 0 };
+
+/**
+ * Vertical modulation cap. The slice's vertical velocity nudges a bubble's
+ * rise so plumes accelerate/stall realistically, but we clamp the effect so a
+ * bubble can never stall completely or rocket — net motion stays clearly
+ * upward. Fraction of `velocityY` the fluid may add/subtract.
+ */
+const BUBBLE_FLUID_RISE_MOD_FRACTION = 0.35;
 
 /**
  * Conversion factor from `airRateMl` (mL/min) to spawn rate (particles/sec).
@@ -193,24 +216,55 @@ export function bubbleSourceSpawnSystem(world: LivestockWorld, dt: number): void
 export function bubbleLifetimeSystem(world: LivestockWorld, dt: number): void {
   const ecs = world.ecs;
   const waterY = world.tankAabb.maxY - BUBBLE_WATERLINE_INSET_MM;
+  // Whether the fluid coupling is live. When the world built slices (the
+  // normal world.step() path), bubbles advect on the real velocity field;
+  // when a test drives this system directly without registered sources the
+  // slice set is empty and bubbles fall back to the height-driven helix.
+  const fluidActive = world.__bubbleFluid.slices.length > 0;
   for (const eid of bubbleQuery(ecs)) {
+    const px = Position.x[eid] as number;
+    const py = Position.y[eid] as number;
+    const pz = Position.z[eid] as number;
     const vy = BubbleParticle.velocityY[eid] as number;
-    const nextY = (Position.y[eid] as number) + vy * dt;
+
+    // Vertical rise. With the fluid active, the slice's vertical velocity at
+    // the bubble's position lightly modulates the buoyant rise (clamped so it
+    // can't stall or rocket). Without it, the rise is the fixed buoyancy.
+    let riseY = vy;
+    if (fluidActive) {
+      sampleBubbleFluid(world, px, py, fluidSampleScratch);
+      const mod = fluidSampleScratch.v * BUBBLE_FLUID_DRIFT_MM_PER_S;
+      const cap = vy * BUBBLE_FLUID_RISE_MOD_FRACTION;
+      riseY = vy + (mod < -cap ? -cap : mod > cap ? cap : mod);
+    }
+    const nextY = py + riseY * dt;
     const nextLife = (BubbleParticle.lifetimeSec[eid] as number) - dt;
     if (nextY > waterY || nextLife <= 0) {
       removeEntity(ecs, eid);
+      continue;
+    }
+    Position.y[eid] = nextY;
+    BubbleParticle.lifetimeSec[eid] = nextLife;
+
+    if (fluidActive) {
+      // Lateral advection by the summed slice field. The slice resolves the
+      // X (lateral) component directly; Z gets a phase-shifted fraction of the
+      // same magnitude so a 2D slice still reads as a 3D, non-planar plume.
+      // `fluidSampleScratch.u` was filled by the rise sample above (same
+      // position) — reuse it, no second solve.
+      const driftX = fluidSampleScratch.u * BUBBLE_FLUID_DRIFT_MM_PER_S;
+      const phase = (BubbleParticle.spawnSeq[eid] as number) * BUBBLE_WOBBLE_PHASE_STRIDE;
+      Position.x[eid] = px + driftX * dt;
+      Position.z[eid] =
+        pz + driftX * BUBBLE_FLUID_Z_FRACTION * Math.cos(phase) * dt;
     } else {
-      Position.y[eid] = nextY;
-      BubbleParticle.lifetimeSec[eid] = nextLife;
-      // Helical wobble — deterministic spiral drift driven by height. Phase
+      // Fallback helix — deterministic spiral drift driven by height. Phase
       // is per-bubble from spawnSeq; X uses sin, Z uses cos so the path is a
       // circular helix rather than a planar zig-zag.
       const phase = (BubbleParticle.spawnSeq[eid] as number) * BUBBLE_WOBBLE_PHASE_STRIDE;
       const angle = BUBBLE_WOBBLE_WAVENUMBER * nextY + phase;
-      Position.x[eid] =
-        (Position.x[eid] as number) + BUBBLE_WOBBLE_VEL_MM_PER_S * Math.sin(angle) * dt;
-      Position.z[eid] =
-        (Position.z[eid] as number) + BUBBLE_WOBBLE_VEL_MM_PER_S * Math.cos(angle) * dt;
+      Position.x[eid] = px + BUBBLE_WOBBLE_VEL_MM_PER_S * Math.sin(angle) * dt;
+      Position.z[eid] = pz + BUBBLE_WOBBLE_VEL_MM_PER_S * Math.cos(angle) * dt;
     }
   }
 }

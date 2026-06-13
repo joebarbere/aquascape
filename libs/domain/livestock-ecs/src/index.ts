@@ -97,6 +97,16 @@ export {
   bubbleSourceSpawnSystem,
 } from './lib/bubble-system';
 
+// ─── Bubble fluid coupling (bubble fluid fidelity pass) ───────────────────
+export {
+  BUBBLE_FLUID_GRID,
+  BUBBLE_FLUID_HALF_WIDTH_MM,
+  bubbleFluidStepSystem,
+  rebuildBubbleFluid,
+  sampleBubbleFluid,
+  type BubbleFluidState,
+} from './lib/bubble-fluid';
+
 // ─── Deterministic PRNG ──────────────────────────────────────────────────
 export { tickPrng } from './lib/prng';
 

@@ -173,23 +173,51 @@ describe('bubbleLifetimeSystem — rise + despawn', () => {
     expect(yAfter - yBefore).toBeCloseTo(BUBBLE_DEFAULT_VELOCITY_Y_MM_PER_S * SIM_DT, 3);
   });
 
-  it('bubbles wobble horizontally as they rise (helical drift, fidelity pass)', () => {
+  it('bubbles drift horizontally as they rise (fluid advection, fidelity pass)', () => {
+    // Drives the full world.step() path so the per-source Stam fluid slice is
+    // stepped each tick (bubbleFluidStepSystem). The advected velocity field
+    // should push bubbles off a straight vertical line — the fidelity-pass
+    // replacement for the old height-driven helix.
     const w = createLivestockWorld(0, { tankAabb: TANK });
     w.registerBubbleSources([{ position: { x: 200, y: 20, z: 200 }, airRateMl: 800 }]);
-    bubbleSourceSpawnSystem(w, SIM_DT);
+    // Build a column.
+    for (let i = 0; i < 10; i++) w.step(SIM_DT);
     const eid = bubbleQuery(w.ecs)[0]!;
     const x0 = Position.x[eid] as number;
     const z0 = Position.z[eid] as number;
-    // Rise for a while; the helix should move X and/or Z off the spawn point.
     let maxDx = 0;
     let maxDz = 0;
     for (let i = 0; i < 40; i++) {
-      bubbleLifetimeSystem(w, SIM_DT);
+      w.step(SIM_DT);
       if (!bubbleQuery(w.ecs).includes(eid)) break; // popped at waterline
       maxDx = Math.max(maxDx, Math.abs((Position.x[eid] as number) - x0));
       maxDz = Math.max(maxDz, Math.abs((Position.z[eid] as number) - z0));
     }
     // The bubble drifted laterally (not a straight vertical line).
+    expect(maxDx + maxDz).toBeGreaterThan(1);
+  });
+
+  it('falls back to the helix drift when the system is driven without fluid slices', () => {
+    // Calling bubbleLifetimeSystem directly (without registered sources →
+    // no slices) exercises the slice-less fallback path. Spawn a bubble by
+    // hand-driving the spawn system after registering, then CLEAR sources so
+    // no fluid slice exists, and confirm the helix still drifts it.
+    const w = createLivestockWorld(0, { tankAabb: TANK });
+    w.registerBubbleSources([{ position: { x: 200, y: 20, z: 200 }, airRateMl: 800 }]);
+    bubbleSourceSpawnSystem(w, SIM_DT);
+    const eid = bubbleQuery(w.ecs)[0]!;
+    // Drop the sources → fluid slice set empties → helix fallback engages.
+    w.registerBubbleSources([]);
+    const x0 = Position.x[eid] as number;
+    const z0 = Position.z[eid] as number;
+    let maxDx = 0;
+    let maxDz = 0;
+    for (let i = 0; i < 40; i++) {
+      bubbleLifetimeSystem(w, SIM_DT);
+      if (!bubbleQuery(w.ecs).includes(eid)) break;
+      maxDx = Math.max(maxDx, Math.abs((Position.x[eid] as number) - x0));
+      maxDz = Math.max(maxDz, Math.abs((Position.z[eid] as number) - z0));
+    }
     expect(maxDx + maxDz).toBeGreaterThan(1);
   });
 
