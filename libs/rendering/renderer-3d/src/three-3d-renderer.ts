@@ -69,13 +69,15 @@ import {
   buildLivestockMeshes,
   type LivestockMeshBundle,
 } from '@aquascape/rendering/livestock-renderer-3d';
-import type {
-  HitResult,
-  HitTestOptions,
-  RenderOptions,
-  RenderSurface,
-  SceneRenderer,
-  Viewport,
+import {
+  NEUTRAL_DAY_NIGHT_LOOKUP,
+  type DayNightLookupValues,
+  type HitResult,
+  type HitTestOptions,
+  type RenderOptions,
+  type RenderSurface,
+  type SceneRenderer,
+  type Viewport,
 } from '@aquascape/rendering/renderer-api';
 import {
   ACESFilmicToneMapping,
@@ -273,6 +275,15 @@ const FISH_EYE_FORWARD_FRACTION = 0.35;
 /** Eye offset above the fish's body centre, as a fraction of body length. */
 const FISH_EYE_UP_FRACTION = 0.15;
 
+/**
+ * Flicker fix — per-frame easing factor for the caustic strength toward its
+ * target. 0.2 reaches ~visually-settled in ~12 frames (≈0.2 s at 60 fps) so a
+ * directional-level change fades rather than snaps, with no perceptible lag.
+ */
+const CAUSTIC_STRENGTH_LERP = 0.2;
+/** Below this absolute delta the caustic strength snaps to target (no shimmer). */
+const CAUSTIC_STRENGTH_EPSILON = 1e-3;
+
 /** Damping factor for orbit interactions. 0.08 reads smooth on mid-tier HW. */
 const ORBIT_DAMPING = 0.08;
 /** Minimum orbit distance as a fraction of tank depth. */
@@ -433,28 +444,45 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
   private currentDirectionalLight: DirectionalLight | null = null;
   private baseDirectionalIntensity = 1;
   /**
-   * Stage 11 F11.7 Wave 3 — the AmbientLight's authored colour (white).
-   * The cycle writes a tinted colour into the cached light on every
-   * render; on a render WITHOUT a `dayNightLookup`, we reset the ambient
-   * to white so a host that turns the cycle off mid-session sees the
-   * lighting return to its editorial default.
+   * Flicker fix — the SINGLE SOURCE OF TRUTH for day-night lighting. The
+   * latest lookup latched by `render()` (defaulting to the neutral / noon
+   * lookup when the host omits it). The RAF tick applies it ONCE PER FRAME
+   * (idempotent, no allocation, no rebuild) so lighting is decoupled from
+   * how many event-driven `render()` calls fire during an interaction —
+   * which previously let the cycle and the renderer defaults fight
+   * frame-to-frame and produced a visible brightness flicker while
+   * orbiting. `render()` no longer applies lighting directly; it only
+   * updates this cache + the build-time-only writes (plant emissive boost,
+   * which lands on the freshly-built plant group, and the equipment-light
+   * level). See `docs/caveats/renderer-3d.md` → "Lighting is applied once
+   * per frame from cached options".
    */
-  private static readonly DEFAULT_AMBIENT_COLOR = 0xffffff;
+  private dayNightLookup: DayNightLookupValues = NEUTRAL_DAY_NIGHT_LOOKUP;
+  /**
+   * Flicker fix — the current (smoothed) caustic-strength FACTOR actually
+   * written to the patched materials. Each frame `applyLightingFrame` eases
+   * it toward the latched lookup's `directionalIntensity` so a day-night
+   * scrub (or the per-render reset when the content group is rebuilt) fades
+   * the caustic shimmer in over a few frames instead of snapping. Defaults to
+   * 1 (full daylight). The factor multiplies `CAUSTIC_STRENGTH` inside
+   * `setCausticIntensity`.
+   */
+  private causticStrengthCurrent = 1;
   /**
    * The conceptual base of the scene background — also the `setClearColor`
    * value in `attach()` (the gradient backdrop covers the clear colour, but
    * an empty pre-render canvas still reads as "3D scene"). The backdrop's
    * mid-band gradient stop (`scene-builder/backdrop.ts`) is this same
    * `0x1a2030` tone so the default look stays in the pre-fidelity family.
+   *
+   * The neutral (cycle-off) ambient colour + backdrop tint live in
+   * `NEUTRAL_DAY_NIGHT_LOOKUP` (renderer-api): when the host omits
+   * `dayNightLookup`, `render()` latches that neutral lookup, so the
+   * single-source `applyLightingFrame` resets ambient to white + the
+   * backdrop to its untinted gradient via the same path as a live cycle —
+   * no separate reset constants required.
    */
   private static readonly DEFAULT_BACKGROUND_COLOR = 0x1a2030;
-  /**
-   * Fidelity follow-up (scenic backdrop) — the identity tint used for the
-   * no-`dayNightLookup` reset path. White = the backdrop gradient as
-   * authored; the day-night cycle darkens/tints it via
-   * `lookup.backgroundTint`.
-   */
-  private static readonly DEFAULT_BACKDROP_TINT = '#ffffff';
 
   /**
    * Fidelity pass — image-based-lighting environment. Built once on
@@ -470,7 +498,7 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
   /**
    * Fidelity follow-up (scenic backdrop) — the ONE cached gradient backdrop
    * texture assigned to `threeScene.background`. Built lazily on the first
-   * `applyDayNightLookup` run (i.e. the first `render()`); when the
+   * `applyLightingFrame` run (i.e. the first paint); when the
    * effective tint changes, the pixel data is rewritten IN PLACE +
    * `needsUpdate` (a few KB, per render, never per frame) instead of
    * re-allocating. `backdropTint` caches the last-applied tint so an
@@ -794,6 +822,16 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
         updatePlantSwayTime(this.currentPlantGroup, now / 1000);
       }
 
+      // Flicker fix — SINGLE-SOURCE the day-night lighting + caustic strength
+      // here, once per frame, from the cached lookup latched by render(). This
+      // is the load-bearing change: lighting is no longer re-applied per
+      // event-driven render() (which interleaved with these RAF paints and let
+      // the cycle + renderer defaults fight frame-to-frame). The write is
+      // idempotent + allocation-free, and the caustic strength eases toward its
+      // target so a directional-level change fades rather than snaps. `s` is
+      // the ThreeScene (the background tint write lands on it).
+      this.applyLightingFrame(s);
+
       // Fidelity pass (caustics) — advance the substrate + hardscape caustic
       // shader's time uniform off the same wall clock as the water + sway.
       if (this.causticMaterials.length > 0) {
@@ -914,20 +952,24 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     //     the attached-light set change; per-render the day-night level
     //     scales spot intensity + fixture glow in place (no rebuild).
     this.ensureEquipmentLights(scene, catalog, tScene);
-    this.equipmentLights?.setLevel(options.dayNightLookup?.directionalIntensity ?? 1);
+    // Equipment-light level is driven once per frame in `applyLightingFrame`
+    // (single-source the day-night-derived lighting), not here.
 
     // Fish-eye view — record the requested camera mode for the RAF tick.
     // The tick owns the actual camera writes (it has the interpolated
     // snapshot); render() just latches the request.
     this.cameraMode = options.cameraMode ?? 'orbit';
 
-    // 2a) Stage 11 F11.7 Wave 3 — day-night cycle. Mutate the cached
-    //     ambient colour + directional intensity + scene background +
-    //     plant emissive uniform IN PLACE (no rebuild). Each field is
-    //     independent; when the host omits `dayNightLookup`, we reset
-    //     to editorial defaults so a host that turns the cycle off
-    //     mid-session sees the rig return to noon.
-    this.applyDayNightLookup(options.dayNightLookup, tScene);
+    // 2a) Stage 11 F11.7 Wave 3 / flicker fix — day-night cycle. render() no
+    //     longer applies lighting directly; it LATCHES the lookup (defaulting
+    //     to the neutral / noon lookup when the host omits it — see the field
+    //     doc + `NEUTRAL_DAY_NIGHT_LOOKUP`) so the RAF tick is the single
+    //     writer of ambient colour + directional intensity + background tint +
+    //     caustic strength, applied once per frame. This decouples lighting
+    //     from the cadence of event-driven renders and kills the orbit
+    //     flicker. The synchronous paint at the end of render() still gets a
+    //     correct frame because we call `applyLightingFrame` right before it.
+    this.dayNightLookup = options.dayNightLookup ?? NEUTRAL_DAY_NIGHT_LOOKUP;
 
     // 3) Rebuild content group from scratch. Cheap (~ms) for typical
     //    scenes and keeps idempotency trivial — same input, same graph.
@@ -979,15 +1021,18 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     content.add(substrateGroup);
     content.add(hardscapeGroup);
     // Fidelity pass (caustics) — collect the patched substrate + hardscape
-    // materials so the RAF tick can advance their animation. Scale intensity
-    // by the day-night directional level so caustics fade out at night.
+    // materials so the RAF tick can advance their animation. Seed their
+    // strength from the CURRENT smoothed factor (not the raw target) so a
+    // content rebuild mid-fade doesn't pop the freshly-built materials to the
+    // target value — the tick continues easing all of them in lockstep from
+    // here. (Flicker fix: the tick is the single writer of caustic strength.)
     this.causticMaterials = [
       ...((substrateGroup.userData[CAUSTIC_MATERIALS_KEY] as MeshStandardMaterial[] | undefined) ??
         []),
       ...((hardscapeGroup.userData[CAUSTIC_MATERIALS_KEY] as MeshStandardMaterial[] | undefined) ??
         []),
     ];
-    setCausticIntensity(this.causticMaterials, options.dayNightLookup?.directionalIntensity ?? 1);
+    setCausticIntensity(this.causticMaterials, this.causticStrengthCurrent);
     // Decor — classic ornaments (treasure chest, galleon, skull…). GLB
     // models when the host supplied `catalogModelBaseUrl` (loaded through
     // the renderer-lifetime ModelCache, attach-in-place on arrival),
@@ -1002,10 +1047,8 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     content.add(decorGroup);
     this.decorCausticMaterials =
       (decorGroup.userData[CAUSTIC_MATERIALS_KEY] as MeshStandardMaterial[] | undefined) ?? [];
-    setCausticIntensity(
-      this.decorCausticMaterials,
-      options.dayNightLookup?.directionalIntensity ?? 1,
-    );
+    // Seed decor caustics from the current smoothed factor too (see above).
+    setCausticIntensity(this.decorCausticMaterials, this.causticStrengthCurrent);
     // Stage 11 F11.7 — retain a handle on the plant group so the RAF tick
     // can drive its sway materials' `uTime` uniform. The group itself is
     // rebuilt + GPU-disposed every render (no caching), but we always
@@ -1020,17 +1063,14 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     this.currentPlantGroup = plantGroup;
     content.add(plantGroup);
     // Stage 11 F11.7 Wave 3 — write the day-night `emissiveBoost` into the
-    // freshly-built plant group's sway-material uniforms. Per-render is
-    // sufficient — the boost lerps with the cycle phase, not per-frame —
-    // and doing it here (rather than every RAF tick) keeps the per-frame
-    // tick cheap. The default 0 written by `createPlantSwayMaterial`
-    // means a render without a `dayNightLookup` leaves plants at noon
-    // (no boost).
-    if (options.dayNightLookup !== undefined) {
-      updatePlantEmissiveBoost(plantGroup, options.dayNightLookup.emissiveBoost);
-    } else {
-      updatePlantEmissiveBoost(plantGroup, 0);
-    }
+    // freshly-built plant group's sway-material uniforms. Driven off the
+    // LATCHED lookup (neutral = 0 boost) so it tracks the same single source
+    // as the rest of the lighting. Per-render is sufficient — the boost lerps
+    // with the cycle phase, not per-frame — and keeping it here (rather than
+    // every RAF tick) keeps the per-frame tick cheap; the plant group is
+    // rebuilt every render anyway, so a fresh group always gets a correct
+    // boost before its first paint.
+    updatePlantEmissiveBoost(plantGroup, this.dayNightLookup.emissiveBoost);
 
     // Stage 11 F11.7 — animated water surface. Always present in 3D
     // (no opt-in flag in v1). Cached against the tank's WxHxD tag — same
@@ -1041,11 +1081,12 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     this.ensureWaterMeshForTank(scene);
     if (this.waterMesh !== null) {
       content.add(this.waterMesh.mesh);
-      // Fidelity follow-up (water caustics) — scale the surface caustic
-      // shimmer by the same day-night directional level the substrate +
-      // hardscape caustics use (`setCausticIntensity` above), so the
-      // water's bright rim shimmer fades out at night in lockstep.
-      this.waterMesh.setCausticStrength(options.dayNightLookup?.directionalIntensity ?? 1);
+      // Fidelity follow-up (water caustics) — the surface caustic shimmer
+      // tracks the same smoothed day-night caustic factor as the substrate +
+      // hardscape caustics. Seed from the current smoothed value here; the RAF
+      // tick (`applyLightingFrame`) is the single writer that eases it toward
+      // the target, so the water's bright rim shimmer fades in lockstep.
+      this.waterMesh.setCausticStrength(this.causticStrengthCurrent);
     }
 
     // Stage 11 F11.1 — livestock InstancedMesh bundle. The world is owned
@@ -1092,9 +1133,11 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       depth: scene.tank.depth,
     };
 
-    // 4) Paint one frame synchronously so render() has a visible effect
-    //    even when no animation tick is running (Node tests, headless
-    //    smoke). The animation tick will keep painting after this.
+    // 4) Apply the latched lighting once synchronously, then paint one frame
+    //    so render() has a visible effect even when no animation tick is
+    //    running (Node tests, headless smoke). The RAF tick re-applies
+    //    lighting every frame after this — idempotent, so the two paths agree.
+    this.applyLightingFrame(tScene);
     const c = this.camera;
     if (c !== null) this.paint(r, tScene, c);
   }
@@ -1223,51 +1266,71 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
   }
 
   /**
-   * Stage 11 F11.7 Wave 3 — apply the day-night `DayNightLookup` to the
-   * cached lights + scene background. **Mutation-only**: each field is a
-   * cheap in-place write (Color.set + intensity = float + an in-place
-   * backdrop-texture rewrite, only when the tint actually changed), no
-   * Three.js object allocation per render in the steady state.
+   * **Flicker fix — the single source of truth for day-night lighting.**
+   * Applies the cached `this.dayNightLookup` to the cached lights + scene
+   * background + every caustic-strength consumer, ONCE PER FRAME from the RAF
+   * tick (and once synchronously at the end of `render()` for the no-RAF
+   * path). Idempotent + allocation-free in the steady state: a Color.set +
+   * an intensity float write + an in-place backdrop-tint rewrite (only when
+   * the tint actually changed) + the caustic-strength ease.
    *
-   * The background is the cached gradient backdrop texture (fidelity
-   * follow-up — see `applyBackdropTint`), tinted by `lookup.backgroundTint`
-   * rather than a flat `Color`.
+   * Why one writer: previously `render()` applied lighting directly, but the
+   * RAF tick painted continuously in between event-driven renders. When the
+   * host dropped `dayNightLookup` on some interaction frames (or a content
+   * rebuild reset caustic strength), the cycle values and the renderer
+   * defaults alternated frame-to-frame and the user saw a brightness flicker
+   * while orbiting. Now `render()` only LATCHES the lookup; this method —
+   * called every frame — is the sole writer, so the result is stable
+   * regardless of how many renders fire during an interaction.
    *
-   * When `lookup` is undefined, every field is reset to its editorial
-   * default (ambient = white, directional = the captured `baseDirectional
-   * Intensity`, backdrop = the untinted `DEFAULT_BACKDROP_TINT` gradient).
-   * This means a host that toggles the day-night UI off mid-session sees
-   * the lighting snap back to the default look without needing a re-render
-   * with different inputs.
+   * The background is the cached gradient backdrop texture (tinted by
+   * `backgroundTint`). The caustic strength EASES toward
+   * `causticStrengthTarget` (the directional intensity) so a day-night scrub
+   * or a content-rebuild reset fades in over a few frames rather than
+   * snapping; once within `CAUSTIC_STRENGTH_EPSILON` it locks to the target
+   * (no perpetual shimmer / wasted writes).
    *
    * Note on directional COLOUR: the sun is white in v1. The cycle's
-   * warm/cool tint rides on the ambient channel alone — adding the sun
-   * to the gradient table would make midnight bluer than it needs to be
-   * and double-count the temperature shift the user perceives. If a
-   * future cycle stage wants a coloured sun, this is the wiring spot.
+   * warm/cool tint rides on the ambient channel alone (adding the sun to the
+   * gradient table would double-count the temperature shift). If a future
+   * cycle stage wants a coloured sun, this is the wiring spot.
    */
-  private applyDayNightLookup(
-    lookup: RenderOptions['dayNightLookup'] | undefined,
-    tScene: ThreeScene,
-  ): void {
-    if (lookup === undefined) {
-      if (this.currentAmbientLight !== null) {
-        this.currentAmbientLight.color.set(Three3DRenderer.DEFAULT_AMBIENT_COLOR);
-      }
-      if (this.currentDirectionalLight !== null) {
-        this.currentDirectionalLight.intensity = this.baseDirectionalIntensity;
-      }
-      this.applyBackdropTint(Three3DRenderer.DEFAULT_BACKDROP_TINT, tScene);
-      return;
-    }
+  private applyLightingFrame(tScene: ThreeScene): void {
+    const lookup = this.dayNightLookup;
+    const directional = lookup.directionalIntensity;
+    // Direct (non-eased) lighting writes — ambient colour, directional key
+    // intensity, background tint, and the overhead equipment-light level.
+    // These are the day-night cycle's "this is the light right now" values;
+    // they're written straight from the latched lookup so a scrub tracks the
+    // slider exactly. The flicker came from these being applied on SOME
+    // frames and reset on others, not from snapping per se — single-sourcing
+    // them here (one writer, every frame) is the fix.
     if (this.currentAmbientLight !== null) {
       this.currentAmbientLight.color.set(lookup.ambientColor);
     }
     if (this.currentDirectionalLight !== null) {
-      this.currentDirectionalLight.intensity =
-        this.baseDirectionalIntensity * lookup.directionalIntensity;
+      this.currentDirectionalLight.intensity = this.baseDirectionalIntensity * directional;
     }
     this.applyBackdropTint(lookup.backgroundTint, tScene);
+    this.equipmentLights?.setLevel(directional);
+
+    // Caustic strength — the ONE value that eases (the plan's step 3). It
+    // tracks `directional` as its target but lerps toward it so a day-night
+    // scrub (or the per-render reset when the content group is rebuilt and
+    // freshly-patched materials re-seed) fades the dancing-light shimmer in
+    // over a few frames instead of snapping. Once within epsilon it locks to
+    // the target so there's no perpetual sub-visible churn.
+    if (Math.abs(this.causticStrengthCurrent - directional) <= CAUSTIC_STRENGTH_EPSILON) {
+      this.causticStrengthCurrent = directional;
+    } else {
+      this.causticStrengthCurrent +=
+        (directional - this.causticStrengthCurrent) * CAUSTIC_STRENGTH_LERP;
+    }
+    const factor = this.causticStrengthCurrent;
+    if (this.causticMaterials.length > 0) setCausticIntensity(this.causticMaterials, factor);
+    if (this.decorCausticMaterials.length > 0)
+      setCausticIntensity(this.decorCausticMaterials, factor);
+    this.waterMesh?.setCausticStrength(factor);
   }
 
   /**
@@ -1275,10 +1338,11 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    * is the cached gradient backdrop texture, tinted by `tint`. One texture
    * for the renderer's lifetime: the first call builds it; subsequent
    * calls with a CHANGED tint rewrite its pixel data in place (`updateBackdropTint`
-   * — a few KB + `needsUpdate`, per render, never per frame); an unchanged
-   * tint is one string compare. Runs in `render()` via
-   * `applyDayNightLookup`, so it is a pure function of `RenderOptions` —
-   * idempotency holds.
+   * — a few KB + `needsUpdate`). Called every frame from `applyLightingFrame`,
+   * but the `backdropTint !== tint` guard means the rewrite still only fires
+   * when the tint actually changes (a day-night scrub) — an unchanged tint
+   * costs one string compare per frame. Pure function of the latched lookup,
+   * so idempotency holds.
    *
    * Deliberately NOT behind the `instanceof WebGLRenderer` guard: a
    * `DataTexture` needs no GL context, so the headless unit-stub path gets
@@ -1728,11 +1792,16 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     this.cameraMode = 'orbit';
     this.fishEyeWasActive = false;
     // Stage 11 F11.7 Wave 3 — drop cached light refs so a stale
-    // `applyDayNightLookup` after dispose can't reach into disposed
+    // `applyLightingFrame` after dispose can't reach into disposed
     // resources. Reassigned next time `ensureLightingForTank` runs.
     this.currentAmbientLight = null;
     this.currentDirectionalLight = null;
     this.baseDirectionalIntensity = 1;
+    // Flicker fix — reset the latched lookup + caustic-strength easing so a
+    // fresh attach starts from neutral daylight (no carried-over tint /
+    // half-faded caustics from the previous session).
+    this.dayNightLookup = NEUTRAL_DAY_NIGHT_LOOKUP;
+    this.causticStrengthCurrent = 1;
 
     // Fidelity follow-up (scenic backdrop) — release the cached backdrop
     // texture. Detach from the scene first so nothing samples a disposed

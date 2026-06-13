@@ -224,7 +224,6 @@ Everything above is shipped. Remaining work, roughly in priority order:
 
 Planned follow-ons to [simulation mode](docs/guides/simulation-mode.md); full briefs live under [`plans/`](plans/) (indexed in [`plans/README.md`](plans/README.md)).
 
-- [ ] **Fix — 3D light flicker** — kill the brightness flicker while orbiting; single-source the day-night/caustic lighting in the RAF tick. See [`plans/fix-3d-light-flicker.md`](plans/fix-3d-light-flicker.md).
 - [ ] **Simulation debugger** — a `debugger` console command + 3D dev overlay (flow field / SDF / AABBs / entity inspector / system timings). See [`plans/simulation-debugger.md`](plans/simulation-debugger.md).
 - [ ] **Aquarium husbandry** — `domain/water-sim` nitrogen cycle, water quality, cycling, water testing, water changes, algae types. ⚑ [ADR-0006](docs/decisions/0006-water-sim-lib-and-chemistry-state.md). See [`plans/stage-13-aquarium-husbandry.md`](plans/stage-13-aquarium-husbandry.md).
 - [ ] **Fish vitality & feeding** — food types + animated drops; fish health + hunger surfaced as a HUD + click-to-inspect. See [`plans/stage-14-fish-vitality-feeding.md`](plans/stage-14-fish-vitality-feeding.md).
