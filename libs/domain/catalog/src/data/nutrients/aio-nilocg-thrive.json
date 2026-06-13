@@ -1,0 +1,20 @@
+{
+  "catalog": "core",
+  "id": "nutrient.aio.nilocg-thrive",
+  "version": 1,
+  "name": "NilocG Thrive All-in-One",
+  "kind": "nutrient",
+  "category": "all-in-one",
+  "brand": "NilocG",
+  "form": "liquid",
+  "description": "Comprehensive macro+micro all-in-one for high-tech tanks. Manufacturer-disclosed per-dose figures: 1 pump (2 ml) per 10 US gal (~37.85 L) adds ~6 ppm NO3, ~1.1 ppm PO4, ~5 ppm K, and ~0.25 ppm Fe.",
+  "tags": ["all-in-one", "macro", "micro", "npk"],
+  "dose": { "amount": 2, "unit": "ml", "perLitres": 37.85 },
+  "contributes": { "no3": 6, "po4": 1.1, "k": 5, "fe": 0.25 },
+  "disclosed": true,
+  "affects": ["no3", "po4", "k", "fe", "traces"],
+  "source": "https://nilocg.com/products/thrive-all-in-one-aquarium-fertilizer",
+  "color": "#2f6f43",
+  "shrimpSafe": true,
+  "notes": "Targets the EI nutrient window with one bottle. 'Thrive+' and 'Thrive C' variants use different per-dose ratios — this entry is the original Thrive."
+}

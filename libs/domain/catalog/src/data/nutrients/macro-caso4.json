@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "nutrient.macro.caso4",
+  "version": 1,
+  "name": "Calcium Sulphate (CaSO4·2H2O, Gypsum)",
+  "kind": "nutrient",
+  "category": "macro-salt",
+  "brand": "DIY dry salt",
+  "form": "dry",
+  "formula": "CaSO4·2H2O",
+  "description": "Calcium source (gypsum) that raises GH without raising KH. Sparingly soluble: CaSO4·2H2O is ~23.3% Ca by mass, so 2 g in 100 L adds ~4.7 ppm Ca (disclosed stoichiometry). The associated GH rise is small (~0.65 dGH) and stated qualitatively via `affects` rather than overstated here.",
+  "tags": ["macro", "calcium", "gypsum", "gh", "dry-salt"],
+  "dose": { "amount": 2.0, "unit": "g", "perLitres": 100 },
+  "contributes": { "ca": 4.66 },
+  "disclosed": true,
+  "affects": ["gh", "traces"],
+  "source": "https://www.2hraquarist.com/blogs/fertilize-planted-tank/mixing-dry-aquarium-fertilisers",
+  "color": "#f0eee8",
+  "shrimpSafe": true,
+  "notes": "Dissolve slowly / pre-mix — gypsum is only sparingly soluble. Pairs with MgSO4 to build GH in soft / RO water without touching KH."
+}

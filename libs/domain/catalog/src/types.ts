@@ -45,7 +45,8 @@ export type CatalogKind =
   | 'plant'
   | 'equipment'
   | 'livestock'
-  | 'decor';
+  | 'decor'
+  | 'nutrient';
 
 /**
  * Optional photorealistic texture maps (Bucket 2 of the 3D fidelity plan,
@@ -514,6 +515,168 @@ export interface DecorEntry extends CatalogEntryBase {
   model: string;
 }
 
+// ─── Nutrient (Nutrients & additives + dosing, F-A) ───────────────────────
+
+/**
+ * The coarse classification of a dosing product. Drives the future Dose-tool
+ * picker filter chips and the `DoseNutrient` Command's category-default delta
+ * (for proprietary products that don't disclose per-dose ppm).
+ *
+ * - `macro-salt`    — single-axis macro nutrient sources: dry fertiliser salts
+ *                     (KNO3, KH2PO4, K2SO4, MgSO4, CaSO4) and the equivalent
+ *                     single-macro liquid supplements (Flourish Nitrogen /
+ *                     Phosphorus / Potassium). `form` disambiguates dry vs.
+ *                     liquid.
+ * - `micro-trace`   — chelated trace-element / iron mixes (CSM+B, Fe-DTPA,
+ *                     Flourish Comprehensive / Trace / Iron).
+ * - `all-in-one`    — combined macro+micro liquids (APT Complete, Thrive, …).
+ * - `liquid-carbon` — glutaraldehyde-style carbon sources (Flourish Excel).
+ * - `conditioner`   — dechlorinator / ammonia-detox water conditioners (Prime).
+ * - `remineralizer` — GH/mineral builders for soft/RO water (Equilibrium, GH+).
+ * - `buffer`        — KH/pH buffers (Alkaline Buffer, Acid Buffer).
+ * - `bacteria`      — nitrifying-bacteria cycling seeds (Stability).
+ */
+export type NutrientCategory =
+  | 'macro-salt'
+  | 'micro-trace'
+  | 'all-in-one'
+  | 'liquid-carbon'
+  | 'conditioner'
+  | 'remineralizer'
+  | 'buffer'
+  | 'bacteria';
+
+/**
+ * The water-chemistry / husbandry parameters a dosing product moves. Used as a
+ * qualitative descriptor on EVERY nutrient entry (disclosed or not) and, for
+ * the future Dose tool, to drive which Stage 13 `Tank.waterChemistry` readouts
+ * highlight after a dose. A proprietary product that doesn't publish per-dose
+ * ppm still declares an honest `affects` list.
+ *
+ * - `no3` / `po4` / `k` / `fe` / `traces` — the planted-tank nutrient axes.
+ * - `gh` / `kh` — general / carbonate hardness (remineralizers + buffers).
+ * - `ph` — buffers that move pH up or down.
+ * - `ammoniaDetox` — binds/detoxifies ammonia (Prime).
+ * - `carbon` — supplies an organic carbon source (liquid carbon).
+ * - `bacteriaSeed` — introduces nitrifying bacteria (cycling products).
+ * - `dechlorinate` — removes chlorine / chloramine (conditioners).
+ */
+export type NutrientEffect =
+  | 'no3'
+  | 'po4'
+  | 'k'
+  | 'fe'
+  | 'traces'
+  | 'gh'
+  | 'kh'
+  | 'ph'
+  | 'ammoniaDetox'
+  | 'carbon'
+  | 'bacteriaSeed'
+  | 'dechlorinate';
+
+/**
+ * Per-dose parameter contributions, in the canonical hobby units: ppm for the
+ * nutrient axes (`no3` / `po4` / `k` / `fe` / `mg` / `ca`), and degrees of
+ * general/carbonate hardness (dGH / dKH) for `gh` / `kh`. The values are stated
+ * for one representative `dose` (see `NutrientEntry.dose`); the `DoseNutrient`
+ * Command scales them linearly by the user's chosen amount.
+ *
+ * **Honesty rule:** populate this block ONLY for products whose per-dose deltas
+ * are publicly disclosed (dry salts with known stoichiometry, all-in-ones that
+ * publish their NPK breakdown). For proprietary liquids that don't publish
+ * per-dose ppm, set `disclosed: false` and OMIT this block — never fabricate
+ * numbers. Every field is optional so a product can disclose a subset.
+ */
+export interface NutrientContributions {
+  /** Nitrate (NO3) added, in ppm, per representative dose. */
+  no3?: number;
+  /** Phosphate (PO4) added, in ppm, per representative dose. */
+  po4?: number;
+  /** Potassium (K) added, in ppm, per representative dose. */
+  k?: number;
+  /** Iron (Fe) added, in ppm, per representative dose. */
+  fe?: number;
+  /** Magnesium (Mg) added, in ppm, per representative dose. */
+  mg?: number;
+  /** Calcium (Ca) added, in ppm, per representative dose. */
+  ca?: number;
+  /** General hardness raised, in degrees (dGH), per representative dose. */
+  gh?: number;
+  /** Carbonate hardness raised, in degrees (dKH), per representative dose. */
+  kh?: number;
+}
+
+/**
+ * A real-world aquarium nutrient / additive the user can dose in simulation
+ * mode — dry fertiliser salts, all-in-one liquids, liquid carbon, water
+ * conditioners, remineralizers, buffers, and bacteria cycling products.
+ *
+ * The nutrient catalog is the data layer for the "Nutrients & additives +
+ * dosing" feature (F-A). The downstream `DoseNutrient` Command (F-B) resolves
+ * an entry by `CatalogRef` and computes a `Tank.waterChemistry` delta —
+ * scaling `contributes` linearly by amount for disclosed products, or applying
+ * a category-default nudge for proprietary ones.
+ *
+ * **Honesty contract (carried from the plan into `docs/caveats/catalog.md`):**
+ * - `disclosed: true` ⇒ the per-dose ppm/dGH values in `contributes` come from
+ *   a public source (cited in `source`): dry-salt stoichiometry or a
+ *   manufacturer's published NPK breakdown.
+ * - `disclosed: false` ⇒ a proprietary product that doesn't publish per-dose
+ *   values. The entry OMITS `contributes` and relies on the qualitative
+ *   `affects` list only. Fabricating ppm for these products is forbidden.
+ *
+ * - `dose` is the representative dose the `contributes` figures are stated for
+ *   (e.g. `{ amount: 5, unit: 'ml', perLitres: 100 }` = "5 ml per 100 L").
+ * - `form` is `'dry'` (weighed salts) or `'liquid'` (bottled solutions).
+ * - `formula` is the chemical formula for dry salts (e.g. `KNO3`), omitted for
+ *   proprietary liquids.
+ * - `color` is a UI swatch for the catalog browser / Dose picker — NOT a
+ *   rendered scene colour (nutrients never paint into the canvas).
+ * - `shrimpSafe` flags products safe for shrimp tanks (liquid carbon and some
+ *   trace mixes are notoriously not). Optional — absent = unspecified.
+ */
+export interface NutrientEntry extends CatalogEntryBase {
+  kind: 'nutrient';
+  /** Coarse classification — drives the Dose picker filter + default delta. */
+  category: NutrientCategory;
+  /** Manufacturer / brand (e.g. "Seachem", "2Hr Aquarist", "DIY dry salt"). */
+  brand: string;
+  /** Physical form: weighed dry salts vs. bottled liquid. */
+  form: 'dry' | 'liquid';
+  /** The representative dose the `contributes` figures are stated for. */
+  dose: {
+    /** Amount of product per `perLitres` of tank water. */
+    amount: number;
+    /** Unit of `amount` — grams (dry) or millilitres (liquid). */
+    unit: 'g' | 'ml';
+    /** Tank-water volume the dose is stated against, in litres. */
+    perLitres: number;
+  };
+  /**
+   * Per-dose parameter contributions — ONLY when `disclosed: true`. Omitted for
+   * proprietary products (see `disclosed`). Never fabricate these values.
+   */
+  contributes?: NutrientContributions;
+  /**
+   * Whether the per-dose `contributes` figures are publicly disclosed. `false`
+   * marks a proprietary product whose entry carries qualitative `affects` only.
+   */
+  disclosed: boolean;
+  /** Honest qualitative list of which parameters this product moves. */
+  affects: NutrientEffect[];
+  /** Chemical formula for dry salts (e.g. "KNO3"). Omitted for liquids. */
+  formula?: string;
+  /** Citation URL for the disclosed values / product page. */
+  source?: string;
+  /** UI swatch for the catalog browser / Dose picker. NOT a scene colour. */
+  color: HexColor;
+  /** True when the product is safe for shrimp tanks. Absent = unspecified. */
+  shrimpSafe?: boolean;
+  /** Free-form caveats (e.g. "overdosing melts Vallisneria / mosses"). */
+  notes?: string;
+}
+
 // ─── Placeholders for later stages ────────────────────────────────────────
 //
 // Each future kind adds a branch here AND a matching schema branch. Until
@@ -526,7 +689,8 @@ export type CatalogEntry =
   | PlantEntry
   | LivestockEntry
   | EquipmentEntry
-  | DecorEntry;
+  | DecorEntry
+  | NutrientEntry;
 
 /**
  * Lookup table built from a validated catalog: `(catalog, id) -> entry`.

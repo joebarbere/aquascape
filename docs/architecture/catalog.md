@@ -21,6 +21,7 @@ flowchart TD
         P[plant ×28]
         L[livestock ×24]
         E[equipment ×12]
+        N[nutrient ×30]
     end
     manifests --> V["validateCatalogEntry (AJV)<br/>one JSON Schema, oneOf per kind<br/>schemaVersion 3"]
     V --> LD["loadCatalog(entries)"]
@@ -29,7 +30,7 @@ flowchart TD
     CC --> R2D[renderer-2d] & R3D[renderer-3d] & STK[stocking rules] & SIM[livestock simulation] & UI[palette browsers]
 ```
 
-`CatalogEntry` is a discriminated union over the six kinds. What each kind
+`CatalogEntry` is a discriminated union over the seven kinds. What each kind
 carries (beyond id/name/description/tags):
 
 | Kind | Notable fields |
@@ -40,6 +41,7 @@ carries (beyond id/name/description/tags):
 | `plant` | zone (foreground/midground/background), silhouette, growth params (`weeksToMature`, `sizeAtZero`), carpet density, `textures?` |
 | `livestock` | group, size, water params (`temperatureRange`, `pHRange`), `bioloadClass`, temperament, `schoolingMin`, `predator?`, `behavior?` (schooling / depth / animation / territory / nipping / fear overrides) |
 | `equipment` | category (filter/heater/light/CO2), settings, `flow?` (outflow/intake for the flow field), `airRateMl?` (bubble source), `photoperiodHours?` |
+| `nutrient` | category (macro-salt / micro-trace / all-in-one / liquid-carbon / conditioner / remineralizer / buffer / bacteria), `brand`, `form` (dry/liquid), representative `dose`, `affects[]` (qualitative), `contributes?` (per-dose ppm/dGH — **disclosed products only**), `disclosed`, `formula?`, `source?`, swatch `color`, `shrimpSafe?` |
 
 Tank presets are a separate typed list (`tank-presets.ts`), each with a
 documented real-world source — **no fabricated dimensions**.

@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.aio.dennerle-s7",
+  "version": 1,
+  "name": "Dennerle S7 VitaMix",
+  "kind": "nutrient",
+  "category": "all-in-one",
+  "brand": "Dennerle",
+  "form": "liquid",
+  "description": "Complete micronutrient + vitamin complex (iron, manganese, trace elements; nitrate/phosphate-free). Dennerle does not publish per-dose ppm, so values are NOT disclosed — qualitative `affects` only.",
+  "tags": ["micro", "trace", "iron", "vitamins"],
+  "dose": { "amount": 4, "unit": "ml", "perLitres": 100 },
+  "disclosed": false,
+  "affects": ["fe", "traces"],
+  "source": "https://www.dennerle.com/en/products/s7-vitamix",
+  "color": "#7a8f2f",
+  "shrimpSafe": true,
+  "notes": "Weekly label dose ~4 ml per 100 L (plus the daily 'E15 ElementsDay' partner). Supplies micros only — pair with a macro source. Proprietary blend."
+}

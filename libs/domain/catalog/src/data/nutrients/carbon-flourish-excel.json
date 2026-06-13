@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.carbon.flourish-excel",
+  "version": 1,
+  "name": "Seachem Flourish Excel",
+  "kind": "nutrient",
+  "category": "liquid-carbon",
+  "brand": "Seachem",
+  "form": "liquid",
+  "description": "Liquid organic-carbon source (polycycloglutaracetal) — a CO2 alternative for low-tech tanks. Supplies bioavailable carbon, not a measurable water-chemistry ppm, so `contributes` is intentionally absent.",
+  "tags": ["liquid-carbon", "carbon", "co2-alternative", "seachem"],
+  "dose": { "amount": 5, "unit": "ml", "perLitres": 200 },
+  "disclosed": false,
+  "affects": ["carbon"],
+  "source": "https://www.seachem.com/flourish-excel.php",
+  "color": "#8fae9a",
+  "shrimpSafe": false,
+  "notes": "Sensitive-plant caveat: overdosing (or any dose at all, for some) can melt Vallisneria, mosses, Anacharis, and harm some shrimp/invertebrates. Start well below the label dose."
+}

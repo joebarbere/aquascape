@@ -1670,6 +1670,211 @@ describe('validateCatalogEntry (textures — 3D-fidelity Bucket 2, additive, no 
   });
 });
 
+describe('validateCatalogEntry (nutrient — Nutrients & additives + dosing, F-A)', () => {
+  const validDisclosed = {
+    catalog: 'core',
+    id: 'nutrient.macro.kno3',
+    version: 1,
+    name: 'Potassium Nitrate (KNO3)',
+    kind: 'nutrient',
+    category: 'macro-salt',
+    brand: 'DIY dry salt',
+    form: 'dry',
+    formula: 'KNO3',
+    dose: { amount: 0.3, unit: 'g', perLitres: 37.85 },
+    contributes: { no3: 4.84, k: 3.1 },
+    disclosed: true,
+    affects: ['no3', 'k'],
+    source: 'https://rotalabutterfly.com/rex-grigg/dosing.htm',
+    color: '#e8e4d8',
+    shrimpSafe: true,
+  };
+
+  const validProprietary = {
+    catalog: 'core',
+    id: 'nutrient.aio.easy-green',
+    version: 1,
+    name: 'Easy Green',
+    kind: 'nutrient',
+    category: 'all-in-one',
+    brand: 'Aquarium Co-Op',
+    form: 'liquid',
+    dose: { amount: 1, unit: 'ml', perLitres: 37.85 },
+    disclosed: false,
+    affects: ['no3', 'po4', 'k', 'fe', 'traces'],
+    color: '#4f9a5e',
+  };
+
+  it('accepts a well-formed disclosed (dry-salt) nutrient entry', () => {
+    expect(validateCatalogEntry(validDisclosed)).toEqual({ ok: true });
+  });
+
+  it('accepts a well-formed proprietary (no-contributes) nutrient entry', () => {
+    expect(validateCatalogEntry(validProprietary)).toEqual({ ok: true });
+  });
+
+  it('accepts every category enum value', () => {
+    for (const category of [
+      'macro-salt',
+      'micro-trace',
+      'all-in-one',
+      'liquid-carbon',
+      'conditioner',
+      'remineralizer',
+      'buffer',
+      'bacteria',
+    ]) {
+      expect(validateCatalogEntry({ ...validProprietary, category }).ok).toBe(true);
+    }
+  });
+
+  it('accepts every affects enum value', () => {
+    for (const effect of [
+      'no3',
+      'po4',
+      'k',
+      'fe',
+      'traces',
+      'gh',
+      'kh',
+      'ph',
+      'ammoniaDetox',
+      'carbon',
+      'bacteriaSeed',
+      'dechlorinate',
+    ]) {
+      expect(validateCatalogEntry({ ...validProprietary, affects: [effect] }).ok).toBe(true);
+    }
+  });
+
+  it('accepts a full contributes block (all eight axes)', () => {
+    expect(
+      validateCatalogEntry({
+        ...validDisclosed,
+        contributes: { no3: 5, po4: 1, k: 4, fe: 0.1, mg: 0.4, ca: 4, gh: 3, kh: 1 },
+      }).ok,
+    ).toBe(true);
+  });
+
+  // ─── required fields ──────────────────────────────────────────────────────
+  it('rejects a missing category', () => {
+    const { category: _c, ...rest } = validProprietary;
+    expect(validateCatalogEntry(rest).ok).toBe(false);
+  });
+
+  it('rejects a missing brand', () => {
+    const { brand: _b, ...rest } = validProprietary;
+    expect(validateCatalogEntry(rest).ok).toBe(false);
+  });
+
+  it('rejects a missing form', () => {
+    const { form: _f, ...rest } = validProprietary;
+    expect(validateCatalogEntry(rest).ok).toBe(false);
+  });
+
+  it('rejects a missing dose', () => {
+    const { dose: _d, ...rest } = validProprietary;
+    expect(validateCatalogEntry(rest).ok).toBe(false);
+  });
+
+  it('rejects a missing disclosed flag', () => {
+    const { disclosed: _d, ...rest } = validProprietary;
+    expect(validateCatalogEntry(rest).ok).toBe(false);
+  });
+
+  it('rejects a missing affects list', () => {
+    const { affects: _a, ...rest } = validProprietary;
+    expect(validateCatalogEntry(rest).ok).toBe(false);
+  });
+
+  it('rejects an empty affects array (minItems 1)', () => {
+    expect(validateCatalogEntry({ ...validProprietary, affects: [] }).ok).toBe(false);
+  });
+
+  it('rejects a missing color', () => {
+    const { color: _c, ...rest } = validProprietary;
+    expect(validateCatalogEntry(rest).ok).toBe(false);
+  });
+
+  // ─── enum + value guards ──────────────────────────────────────────────────
+  it('rejects an unknown category enum value', () => {
+    expect(validateCatalogEntry({ ...validProprietary, category: 'root-tab' }).ok).toBe(false);
+  });
+
+  it('rejects an unknown affects enum value', () => {
+    expect(validateCatalogEntry({ ...validProprietary, affects: ['silicate'] }).ok).toBe(false);
+  });
+
+  it('rejects an unknown form enum value', () => {
+    expect(validateCatalogEntry({ ...validProprietary, form: 'gel' }).ok).toBe(false);
+  });
+
+  it('rejects an unknown dose.unit enum value', () => {
+    expect(
+      validateCatalogEntry({ ...validProprietary, dose: { amount: 1, unit: 'tsp', perLitres: 40 } })
+        .ok,
+    ).toBe(false);
+  });
+
+  it('rejects a zero / negative dose.amount (exclusiveMinimum 0)', () => {
+    expect(
+      validateCatalogEntry({ ...validProprietary, dose: { amount: 0, unit: 'ml', perLitres: 40 } })
+        .ok,
+    ).toBe(false);
+  });
+
+  it('rejects a zero / negative dose.perLitres', () => {
+    expect(
+      validateCatalogEntry({ ...validProprietary, dose: { amount: 1, unit: 'ml', perLitres: 0 } })
+        .ok,
+    ).toBe(false);
+  });
+
+  it('rejects a missing axis inside dose', () => {
+    expect(validateCatalogEntry({ ...validProprietary, dose: { amount: 1, unit: 'ml' } }).ok).toBe(
+      false,
+    );
+  });
+
+  it('rejects extra keys inside dose (additionalProperties: false)', () => {
+    expect(
+      validateCatalogEntry({
+        ...validProprietary,
+        dose: { amount: 1, unit: 'ml', perLitres: 40, frequency: 'weekly' },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects a negative contributes value', () => {
+    expect(validateCatalogEntry({ ...validDisclosed, contributes: { no3: -1 } }).ok).toBe(false);
+  });
+
+  it('rejects a typo inside contributes (additionalProperties: false)', () => {
+    expect(
+      validateCatalogEntry({
+        ...validDisclosed,
+        // typo: should be no3
+        contributes: { n03: 4.84 },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects a non-boolean disclosed flag', () => {
+    expect(validateCatalogEntry({ ...validProprietary, disclosed: 'yes' }).ok).toBe(false);
+  });
+
+  it('rejects extraneous top-level properties (additionalProperties: false)', () => {
+    expect(validateCatalogEntry({ ...validProprietary, surprise: true }).ok).toBe(false);
+  });
+
+  it('surfaces the offending path on a bad contributes value', () => {
+    const result = validateCatalogEntry({ ...validDisclosed, contributes: { fe: -0.1 } });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((e) => e.path.includes('contributes'))).toBe(true);
+  });
+});
+
 describe('formatError (defensive fallbacks)', () => {
   it('falls back to "invalid" when an AJV error lacks a message field', () => {
     const out = formatError({

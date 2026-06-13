@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.carbon.api-co2-booster",
+  "version": 1,
+  "name": "API CO2 Booster",
+  "kind": "nutrient",
+  "category": "liquid-carbon",
+  "brand": "API",
+  "form": "liquid",
+  "description": "Liquid carbon source (glutaraldehyde-family) marketed as a CO2 supplement for low-tech planted tanks. Supplies bioavailable carbon, not a measurable ppm, so `contributes` is intentionally absent.",
+  "tags": ["liquid-carbon", "carbon", "co2-alternative"],
+  "dose": { "amount": 5, "unit": "ml", "perLitres": 95 },
+  "disclosed": false,
+  "affects": ["carbon"],
+  "source": "https://www.apifishcare.com/product/co2-booster",
+  "color": "#7fa68c",
+  "shrimpSafe": false,
+  "notes": "Same sensitive-plant + invertebrate caveats as other liquid carbons — Vallisneria and mosses can melt. Label dose ~1 ml per 95 L (5 ml per ~25 US gal)."
+}

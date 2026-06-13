@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.aio.ada-green-brighty-all",
+  "version": 1,
+  "name": "ADA Green Brighty Mineral",
+  "kind": "nutrient",
+  "category": "all-in-one",
+  "brand": "ADA",
+  "form": "liquid",
+  "description": "Aqua Design Amano supplement supplying potassium + trace minerals for the Nature Aquarium dosing system. ADA does not publish per-dose ppm, so values are NOT disclosed — qualitative `affects` only.",
+  "tags": ["all-in-one", "trace", "potassium", "ada"],
+  "dose": { "amount": 1, "unit": "ml", "perLitres": 20 },
+  "disclosed": false,
+  "affects": ["k", "fe", "traces"],
+  "source": "https://www.adana.co.jp/en/contents/products/substrate_additive/index.html",
+  "color": "#6f9a3a",
+  "shrimpSafe": true,
+  "notes": "Part of ADA's multi-bottle system (Mineral / Nitrogen / K). Label dose ~1 push per 20 L. Proprietary blend — per-dose ppm not published."
+}

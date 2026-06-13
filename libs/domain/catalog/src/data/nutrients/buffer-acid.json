@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.buffer.seachem-acid-buffer",
+  "version": 1,
+  "name": "Seachem Acid Buffer",
+  "kind": "nutrient",
+  "category": "buffer",
+  "brand": "Seachem",
+  "form": "dry",
+  "description": "Non-phosphate buffer that lowers pH and converts carbonate hardness toward CO2 (a carbon source for plants). Dosed to a target pH alongside Alkaline Buffer, so a fixed per-gram delta is NOT disclosed.",
+  "tags": ["buffer", "ph", "acid", "seachem"],
+  "dose": { "amount": 1, "unit": "g", "perLitres": 80 },
+  "disclosed": false,
+  "affects": ["ph", "kh"],
+  "source": "https://www.seachem.com/acid-buffer.php",
+  "color": "#e6d4cf",
+  "shrimpSafe": true,
+  "notes": "Lowers pH by consuming KH (releasing CO2). Pair with Alkaline Buffer to hold a stable setpoint; using Acid Buffer alone can crash pH in low-KH water."
+}

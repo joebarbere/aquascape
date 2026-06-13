@@ -15,20 +15,22 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     expect(coreCatalog.entries.length).toBe(CORE_CATALOG_MANIFESTS.length);
   });
 
-  it('ships substrate (Stage 2), hardscape (Stage 3), plant (Stage 4), livestock (Stage 7 F7.1), equipment (Stage 7 F7.3), and decor kinds', () => {
+  it('ships substrate (Stage 2), hardscape (Stage 3), plant (Stage 4), livestock (Stage 7 F7.1), equipment (Stage 7 F7.3), decor, and nutrient kinds', () => {
     expect(coreCatalog.byKind('substrate').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('hardscape').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('plant').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('livestock').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('equipment').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('decor').length).toBeGreaterThan(0);
+    expect(coreCatalog.byKind('nutrient').length).toBeGreaterThan(0);
     expect(
       coreCatalog.byKind('substrate').length +
         coreCatalog.byKind('hardscape').length +
         coreCatalog.byKind('plant').length +
         coreCatalog.byKind('livestock').length +
         coreCatalog.byKind('equipment').length +
-        coreCatalog.byKind('decor').length,
+        coreCatalog.byKind('decor').length +
+        coreCatalog.byKind('nutrient').length,
     ).toBe(coreCatalog.entries.length);
   });
 
@@ -408,6 +410,96 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     expect(castle?.kind).toBe('decor');
     expect(skull?.kind).toBe('decor');
     expect(moai?.kind).toBe('decor');
+  });
+
+  it('ships exactly the 30 seeded nutrients across the 8 categories (F-A)', () => {
+    const nutrients = coreCatalog.byKind('nutrient');
+    expect(nutrients.length).toBe(30);
+    const categories = nutrients.reduce<Record<string, number>>((acc, entry) => {
+      acc[entry.category] = (acc[entry.category] ?? 0) + 1;
+      return acc;
+    }, {});
+    expect(categories).toEqual({
+      'macro-salt': 8,
+      'micro-trace': 5,
+      'all-in-one': 6,
+      'liquid-carbon': 2,
+      conditioner: 2,
+      bacteria: 2,
+      remineralizer: 3,
+      buffer: 2,
+    });
+  });
+
+  it('every nutrient entry carries an sRGB swatch, a non-empty affects list, and a positive dose', () => {
+    for (const entry of coreCatalog.byKind('nutrient')) {
+      expect(entry.color).toMatch(/^#[0-9a-fA-F]{6}$/);
+      expect(entry.affects.length).toBeGreaterThan(0);
+      expect(entry.dose.amount).toBeGreaterThan(0);
+      expect(entry.dose.perLitres).toBeGreaterThan(0);
+      expect(['g', 'ml']).toContain(entry.dose.unit);
+    }
+  });
+
+  it('honesty contract: disclosed nutrients carry contributes + a source; proprietary ones omit contributes', () => {
+    for (const entry of coreCatalog.byKind('nutrient')) {
+      if (entry.disclosed) {
+        // Disclosed ⇒ honest per-dose numbers + a citation.
+        expect(entry.contributes).toBeDefined();
+        expect(Object.keys(entry.contributes ?? {}).length).toBeGreaterThan(0);
+        expect(typeof entry.source).toBe('string');
+        expect(entry.source && entry.source.length).toBeGreaterThan(0);
+      } else {
+        // Proprietary ⇒ never fabricate ppm. contributes must be absent.
+        expect(entry.contributes).toBeUndefined();
+      }
+    }
+  });
+
+  it('the KNO3 dry-salt entry is reachable with its disclosed EI stoichiometry', () => {
+    const entry = coreCatalog.get({ catalog: 'core', id: 'nutrient.macro.kno3' });
+    expect(entry).not.toBeNull();
+    expect(entry?.kind).toBe('nutrient');
+    if (entry?.kind !== 'nutrient') return;
+    expect(entry.category).toBe('macro-salt');
+    expect(entry.form).toBe('dry');
+    expect(entry.formula).toBe('KNO3');
+    expect(entry.disclosed).toBe(true);
+    expect(entry.contributes).toEqual({ no3: 4.84, k: 3.1 });
+  });
+
+  it('the proprietary Flourish Comprehensive entry omits contributes and lists qualitative affects', () => {
+    const entry = coreCatalog.get({
+      catalog: 'core',
+      id: 'nutrient.micro.flourish-comprehensive',
+    });
+    expect(entry).not.toBeNull();
+    if (entry?.kind !== 'nutrient') return;
+    expect(entry.disclosed).toBe(false);
+    expect(entry.contributes).toBeUndefined();
+    expect(entry.affects).toEqual(expect.arrayContaining(['fe', 'traces']));
+  });
+
+  it('the Seachem Equilibrium remineralizer discloses its +3 dGH GH delta', () => {
+    const entry = coreCatalog.get({
+      catalog: 'core',
+      id: 'nutrient.remin.seachem-equilibrium',
+    });
+    expect(entry).not.toBeNull();
+    if (entry?.kind !== 'nutrient') return;
+    expect(entry.category).toBe('remineralizer');
+    expect(entry.disclosed).toBe(true);
+    expect(entry.contributes?.gh).toBe(3);
+    expect(entry.dose).toEqual({ amount: 16, unit: 'g', perLitres: 80 });
+  });
+
+  it('liquid carbon entries flag the sensitive-plant caveat via shrimpSafe:false + carbon affect', () => {
+    const carbon = coreCatalog.byKind('nutrient').filter((e) => e.category === 'liquid-carbon');
+    expect(carbon.length).toBeGreaterThan(0);
+    for (const entry of carbon) {
+      expect(entry.affects).toContain('carbon');
+      expect(entry.shrimpSafe).toBe(false);
+    }
   });
 
   it('only a small handful of equipment entries declare flow / airRateMl (defaults still exercise the absent-block path)', () => {

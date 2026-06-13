@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.micro.flourish-comprehensive",
+  "version": 1,
+  "name": "Seachem Flourish (Comprehensive)",
+  "kind": "nutrient",
+  "category": "micro-trace",
+  "brand": "Seachem",
+  "form": "liquid",
+  "description": "Comprehensive trace-element + micronutrient supplement (iron, manganese, and other micros; not a primary macro source). Seachem publishes a guaranteed analysis but not a per-dose ppm, so values are NOT disclosed — qualitative `affects` only.",
+  "tags": ["micro", "trace", "iron", "seachem"],
+  "dose": { "amount": 5, "unit": "ml", "perLitres": 250 },
+  "disclosed": false,
+  "affects": ["fe", "traces"],
+  "source": "https://www.seachem.com/flourish.php",
+  "color": "#3f7d5c",
+  "shrimpSafe": true,
+  "notes": "Label dose ~5 ml per 250 L twice weekly. A micro/trace product despite the name 'Comprehensive' — supply macros separately."
+}

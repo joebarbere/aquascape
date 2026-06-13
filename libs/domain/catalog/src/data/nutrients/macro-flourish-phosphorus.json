@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.macro.flourish-phosphorus",
+  "version": 1,
+  "name": "Seachem Flourish Phosphorus",
+  "kind": "nutrient",
+  "category": "macro-salt",
+  "brand": "Seachem",
+  "form": "liquid",
+  "description": "Liquid phosphate (PO4) supplement. Seachem does not publish a per-dose ppm, so values are NOT disclosed — qualitative `affects` only.",
+  "tags": ["macro", "phosphate", "seachem"],
+  "dose": { "amount": 5, "unit": "ml", "perLitres": 80 },
+  "disclosed": false,
+  "affects": ["po4"],
+  "source": "https://www.seachem.com/flourish-phosphorus.php",
+  "color": "#4f6da0",
+  "shrimpSafe": true,
+  "notes": "Label dose ~5 ml per 80 L twice weekly. Use to correct a phosphate limit when nitrate is already adequate."
+}

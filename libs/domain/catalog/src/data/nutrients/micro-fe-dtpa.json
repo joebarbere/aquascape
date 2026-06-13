@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "nutrient.micro.fe-dtpa",
+  "version": 1,
+  "name": "Iron DTPA 11% Chelate",
+  "kind": "nutrient",
+  "category": "micro-trace",
+  "brand": "DIY dry salt",
+  "form": "dry",
+  "formula": "Fe-DTPA",
+  "description": "Standalone DTPA-chelated iron supplement, stable to higher pH than EDTA. At 11% Fe by mass, 0.1 g in 100 L adds ~0.11 ppm Fe (disclosed stoichiometry).",
+  "tags": ["micro", "iron", "dtpa", "chelate", "dry-salt"],
+  "dose": { "amount": 0.1, "unit": "g", "perLitres": 100 },
+  "contributes": { "fe": 0.11 },
+  "disclosed": true,
+  "affects": ["fe"],
+  "source": "https://www.2hraquarist.com/blogs/fertilize-planted-tank/mixing-dry-aquarium-fertilisers",
+  "color": "#b5832f",
+  "shrimpSafe": true,
+  "notes": "DTPA keeps iron available up to ~pH 7.5 (vs EDTA's ~pH 6.5). Use to top up Fe in harder / higher-pH tanks."
+}

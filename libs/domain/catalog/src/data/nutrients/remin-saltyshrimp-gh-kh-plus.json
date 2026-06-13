@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.remin.saltyshrimp-gh-kh-plus",
+  "version": 1,
+  "name": "SaltyShrimp Shrimp Mineral GH/KH+",
+  "kind": "nutrient",
+  "category": "remineralizer",
+  "brand": "SaltyShrimp",
+  "form": "dry",
+  "description": "Remineralizer for hard-water (Neocaridina) shrimp tanks — raises GH and KH together at a published ~dGH:KH ratio of 1.0:0.5. Dosed to a target hardness rather than a fixed per-gram ppm, so values are NOT disclosed.",
+  "tags": ["remineralizer", "gh", "kh", "shrimp", "neocaridina"],
+  "dose": { "amount": 0.16, "unit": "g", "perLitres": 1 },
+  "disclosed": false,
+  "affects": ["gh", "kh"],
+  "source": "https://www.garnelenhaus.com/en/SaltyShrimp-Shrimp-Mineral-GH-KH",
+  "color": "#dad8cc",
+  "shrimpSafe": true,
+  "notes": "Raises GH and KH at ~1.0:0.5 (so KH rises about half as fast as GH). Dose to a target with a GH/KH test — community guidance ~0.13-0.18 g/L for 6-8 dGH."
+}
