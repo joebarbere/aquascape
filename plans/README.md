@@ -137,3 +137,17 @@ Plan §"Stage <N>" F<X.Y>; <relevant architecture sections>.
 ### Cross-cutting
 
 - **Stage 12 — Release pipeline** ([plan](stage-12-release-pipeline.md)) — first release cuts `v0.1.0`; version scheme covers the full pre-v1 / v1.0 / post-v1 progression. Lands when we're ready to ship signed installers; the plan-as-spec is already locked.
+
+### Simulation & gameplay (post-simulation-mode)
+
+A dependency-ordered wave building on simulation mode (the borderless 3D showcase + HUDs + `~` console). Do the bug fix + debugger first; Stage 13 is the foundation; 14 → 15 → 16 build on it.
+
+- **Fix — 3D light flicker** ([plan](fix-3d-light-flicker.md)) — kill the brightness flicker while orbiting; single-source the day-night/caustic lighting in the RAF tick.
+- **Simulation debugger** ([plan](simulation-debugger.md)) — a `debugger` console command + 3D dev overlay (flow field / SDF / AABBs / entity inspector / system timings). Force-multiplier for the stages below.
+- **Stage 13 — Aquarium husbandry** ([plan](stage-13-aquarium-husbandry.md)) — `domain/water-sim` nitrogen cycle, water quality, cycling, water testing, water changes, algae types. ⚑ [ADR-0006](../docs/decisions/0006-water-sim-lib-and-chemistry-state.md). _Foundation._
+- **Stage 14 — Fish vitality & feeding** ([plan](stage-14-fish-vitality-feeding.md)) — food types + animated drops; fish health (hearts) + hunger, surfaced as a HUD + click-to-inspect. _Builds on 13._
+- **Stage 15 — Simulation action HUD** ([plan](stage-15-husbandry-interactions.md)) — a bottom-center tool HUD: feeding (place the drop) + a multi-step water change (place/move a siphon, siphon out → in). Builds the reusable `SiphonTool`. _Builds on 13 + 14._
+- **Stage 16 — Game modes** ([plan](stage-16-game-modes.md)) — `--mode game:<submode>` survival / feeding / predator / cleaner; fish-eye, player-controlled. ⚑ [ADR-0007](../docs/decisions/0007-game-mode-cli-grammar.md). _Capstone; cleaner reuses Stage 15's siphon._
+- **Performance + ANGLE attribute budget** ([plan](perf-and-angle-budget.md)) — reclaim the livestock shader's 16/16 vertex-attribute ceiling (drop the dead `instanceMatrix`, pack scalars → 10/16) and a render-side perf pass (render-on-demand, quality tiers, lazy-load the 3D stack). _Part A unblocks Stage 14's per-fish vitality data._
+- **Game-controller support** ([plan](game-controller-support.md)) — broad gamepad support (W3C Standard mapping + fallback): orbit/zoom the 3D camera, move the player fish in game modes, basic UI. _Enables Stage 16 player control._
+- **Nutrients & additives + dosing** ([plan](nutrients-additives-and-dosing.md)) — a `nutrient` catalog kind of ~25–30 real products (honest chemical values + sources), a `DoseNutrient` command, a **Dose** action-HUD button, and a `dose` console command. _Builds on Stage 13 (water chemistry) + Stage 15 (action HUD)._
