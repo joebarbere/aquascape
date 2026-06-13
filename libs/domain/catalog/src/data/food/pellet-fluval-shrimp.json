@@ -1,0 +1,16 @@
+{
+  "catalog": "core",
+  "id": "food.pellet.fluval-shrimp",
+  "version": 1,
+  "name": "Fluval Bug Bites Shrimp Formula",
+  "kind": "food",
+  "type": "pellet",
+  "brand": "Fluval",
+  "description": "Small sinking granules for dwarf shrimp + nano bottom feeders. Manufacturer guaranteed-analysis crude protein minimum is 40%. wasteFactor (0.22) is MODELLED — small granules grazed by shrimp tend to be picked clean, so the low end of the pellet band.",
+  "tags": ["food", "pellet", "shrimp", "nano", "insect-meal"],
+  "proteinPct": 40,
+  "wasteFactor": 0.22,
+  "color": "#7a4a2e",
+  "source": "https://fluvalaquatics.com/us/product/16972-bug-bites-shrimp-formula/",
+  "notes": "Sinking granules for shrimp tanks. Shrimp graze slowly and thoroughly, so well-stocked tanks leave little waste."
+}

@@ -46,7 +46,10 @@ export type CatalogKind =
   | 'equipment'
   | 'livestock'
   | 'decor'
-  | 'nutrient';
+  | 'nutrient'
+  | 'food'
+  | 'algae'
+  | 'water-test-kit';
 
 /**
  * Optional photorealistic texture maps (Bucket 2 of the 3D fidelity plan,
@@ -677,6 +680,258 @@ export interface NutrientEntry extends CatalogEntryBase {
   notes?: string;
 }
 
+// ─── Food (Stage 13 F13.4 — husbandry sim) ────────────────────────────────
+
+/**
+ * The physical form of a fish food. Drives where the food enters the water
+ * column (and so which fish feeding-category targets it — Stage 14) and the
+ * default `wasteFactor` band:
+ *
+ * - `flake`  — floats then slowly sinks; surface + midwater feeders. The
+ *              messiest form — light flakes drift into the substrate and
+ *              decay, so flakes carry the highest default waste.
+ * - `pellet` — sinking or slow-sinking granules; midwater + bottom feeders.
+ *              More contained than flakes — less spreads uneaten.
+ * - `wafer`  — dense sinking discs for bottom-dwelling grazers (plecos,
+ *              cories, shrimp). Stays put on the substrate; cleanest when
+ *              grazed promptly, but a heavy single-source nutrient load if
+ *              left.
+ * - `live`   — live or frozen whole foods (brine shrimp, bloodworms,
+ *              daphnia). Eagerly eaten with little waste when fed to
+ *              appetite; the `live` label covers frozen too (the husbandry
+ *              model treats them identically as low-waste whole foods).
+ */
+export type FoodType = 'flake' | 'pellet' | 'wafer' | 'live';
+
+/**
+ * A fish food the user can feed in simulation mode. Stage 13 F13.4 ships the
+ * catalog data; Stage 14 wires feeding → waste → the nitrogen-cycle source
+ * term in `domain/water-sim`.
+ *
+ * The honesty split mirrors the nutrient kind:
+ * - `proteinPct` is the manufacturer's published guaranteed-analysis crude
+ *   protein minimum (cited in `source`) when known — a real figure, not
+ *   modelled. Omitted when a vendor doesn't publish it rather than guessed.
+ * - `wasteFactor` is a DERIVED, MODELLED coefficient (see its doc) — it is
+ *   NOT a measured value. The catalog labels it as approximate; the UI should
+ *   surface it as a modelled husbandry coefficient, not a product spec.
+ *
+ * - `type` drives the F14 feeding-target routing (surface flake vs. substrate
+ *   wafer) and the default waste band.
+ * - `brand` is the manufacturer / product family (e.g. "Tetra", "Hikari").
+ * - `color` is a UI swatch for the catalog browser / feed picker — NOT a
+ *   rendered scene colour (food sprites in the 3D sim are handled by the ECS
+ *   feeding system, not this swatch).
+ */
+export interface FoodEntry extends CatalogEntryBase {
+  kind: 'food';
+  /** Physical form — drives feeding-target routing + the default waste band. */
+  type: FoodType;
+  /** Manufacturer / product family (e.g. "Tetra", "Hikari", "DIY / frozen"). */
+  brand: string;
+  /**
+   * Published guaranteed-analysis crude protein minimum, as a percentage
+   * `[0, 100]`. A real cited figure (see `source`) when known; OMITTED when
+   * the vendor doesn't publish it (never guessed). Higher-protein foods drive
+   * a higher nitrogen load per unit fed in the Stage 14 waste model.
+   */
+  proteinPct?: number;
+  /**
+   * MODELLED waste coefficient in `[0, 1]` — the fraction of a feeding that
+   * ends up as an ammonia / detritus source rather than fish biomass
+   * (uneaten food + undigested matter that decays in the water/substrate).
+   * Stage 14's husbandry model multiplies the feeding amount by this to get
+   * the nitrogen-cycle source term.
+   *
+   * This is a DERIVED hobby-consensus coefficient, NOT a measured value:
+   * flakes (messy, drift into substrate) sit high (~0.4), pellets mid
+   * (~0.25), wafers a touch higher when over-fed (~0.3), live/frozen foods
+   * lowest when fed to appetite (~0.15). Surface the value as "modelled" in
+   * the UI; do not present it as a product spec.
+   */
+  wasteFactor: number;
+  /** UI swatch for the catalog browser / feed picker. NOT a scene colour. */
+  color: HexColor;
+  /** Citation URL for the published `proteinPct` / product page. */
+  source?: string;
+  /** Free-form caveats (e.g. "overfeeding spikes ammonia — feed to appetite"). */
+  notes?: string;
+}
+
+// ─── Algae (Stage 13 F13.4 — husbandry sim) ───────────────────────────────
+
+/**
+ * The algae taxon, as a husbandry-relevant type. These four values MUST stay
+ * in lock-step with `AlgaeType` in `@aquascape/domain/water-sim`
+ * (`libs/domain/water-sim/src/algae.ts`) — Stage 13 F13.6 connects the two so
+ * the catalog row's `type` keys directly into the growth model's per-type
+ * profile. Adding a fifth algae type means editing both places together.
+ *
+ * - `green-spot`  — hard green dots on glass + slow leaves; bright light,
+ *                   low phosphate.
+ * - `hair`        — long green strands riding excess nutrients under long,
+ *                   bright photoperiods.
+ * - `black-beard` — dark red/black tufts (a red alga) on hardscape + slow
+ *                   plant edges; strong flow + unstable CO2.
+ * - `diatom`      — brown dusty film in new tanks; low light + silicate,
+ *                   suppressed by flow.
+ */
+export type AlgaeType = 'green-spot' | 'hair' | 'black-beard' | 'diatom';
+
+/**
+ * A grazer that controls a given algae type. Coarse buckets matching the
+ * common cleanup-crew options the stocking + cleaner game modes care about —
+ * NOT a per-species reference (a species-level "who eats what" matrix lives in
+ * the livestock data / F13.6 grazing rules).
+ *
+ * - `oto`          — Otocinclus (diatom + soft green-film specialists).
+ * - `shrimp`       — Amano / Neocaridina (soft hair + biofilm).
+ * - `nerite-snail` — Nerite snails (green-spot + film off glass + hardscape).
+ * - `siamese-algae-eater` — SAE — one of the few fish that reliably eats
+ *                   black-beard algae.
+ * - `pleco`        — bristlenose / common plecos (broad green + film grazers).
+ * - `nobody`       — no common grazer reliably controls it (manual removal /
+ *                   husbandry only — e.g. mature black-beard, hard green-spot).
+ */
+export type AlgaeGrazer =
+  | 'oto'
+  | 'shrimp'
+  | 'nerite-snail'
+  | 'siamese-algae-eater'
+  | 'pleco'
+  | 'nobody';
+
+/**
+ * An algae type as a catalog entry — biology, not a product. Stage 13 F13.4
+ * ships the data describing each type's husbandry niche; F13.6 wires the
+ * `type` into the `domain/water-sim` `algaeGrowth` model and the ECS
+ * `Hardscape.algaeScore` so grazers + the cleaner game mode can target
+ * specific types.
+ *
+ * Every numeric coefficient here is a LABELLED MODELLED APPROXIMATION tuned to
+ * give each type a recognisable niche — they are not measured biological
+ * growth rates (the same honesty stance the `water-sim` `algae.ts` profiles
+ * take). The qualitative niche (which conditions favour the type, which
+ * grazers eat it) is honest hobby consensus.
+ *
+ * - `type` keys into the F13.6 growth model — MUST match `water-sim`'s
+ *   `AlgaeType` (see the type doc above).
+ * - `growthRate` is a relative modelled coefficient in `(0, 1]` (1 = the
+ *   fastest-spreading type in the set). It is a tuning weight, not a rate in
+ *   physical units.
+ * - `lightDependence` is `[0, 1]` — how strongly the type's growth tracks
+ *   light (1 = bright-light driven like green-spot/hair; low = shade-tolerant
+ *   like diatom/black-beard).
+ * - `grazers` is the honest list of cleanup-crew options that control the
+ *   type. `['nobody']` means no common grazer reliably eats it.
+ * - `color` is the rendered tint the 3D `algaeScore` overlay + the catalog
+ *   browser use to colour the type (unlike most kinds, this swatch IS a
+ *   render hint — algae paints onto surfaces).
+ */
+export interface AlgaeEntry extends CatalogEntryBase {
+  kind: 'algae';
+  /** Algae taxon — MUST match `water-sim`'s `AlgaeType` (F13.6 wiring). */
+  type: AlgaeType;
+  /**
+   * Relative modelled growth coefficient in `(0, 1]` (1 = fastest in the set).
+   * A tuning weight, NOT a measured rate. Labelled approximate.
+   */
+  growthRate: number;
+  /**
+   * How strongly growth tracks light, `[0, 1]` (1 = bright-light driven).
+   * Modelled approximation.
+   */
+  lightDependence: number;
+  /** Honest cleanup-crew options that control this type. `['nobody']` = none. */
+  grazers: AlgaeGrazer[];
+  /** Rendered tint for the algaeScore overlay + catalog browser (a render hint). */
+  color: HexColor;
+  /** Free-form husbandry notes (cause + cure consensus). */
+  notes?: string;
+}
+
+// ─── Water test kit (Stage 13 F13.4 — husbandry sim) ──────────────────────
+
+/**
+ * A water parameter a test kit can read. These are the husbandry axes the
+ * Stage 13 `Tank.waterChemistry` snapshot tracks — the test-kit UI (F13.5)
+ * surfaces a colour-chart readout per parameter the attached kit covers.
+ *
+ * - `ammonia` / `nitrite` / `nitrate` — the nitrogen-cycle trio.
+ * - `ph` — acidity.
+ * - `kh` / `gh` — carbonate / general hardness.
+ * - `phosphate` — PO4 (algae + planted-tank dosing).
+ * - `co2` — dissolved CO2 (usually inferred from pH + KH via a drop checker).
+ */
+export type WaterParameter =
+  | 'ammonia'
+  | 'nitrite'
+  | 'nitrate'
+  | 'ph'
+  | 'kh'
+  | 'gh'
+  | 'phosphate'
+  | 'co2';
+
+/**
+ * The readable range a kit reports for one `WaterParameter`. The kit reads
+ * `parameter` between `min` and `max` in `unit`; values outside clamp to the
+ * nearest bound on the colour chart (the classic API behaviour — anything
+ * past the top swatch reads as the top swatch).
+ *
+ * - `min` / `max` are the chart's first + last swatch values (advisory: the
+ *   manifest author owes `min < max`; JSON Schema can't compare cross-field).
+ * - `unit` is the reporting unit — `'ppm'` (mg/L) for the nutrient axes,
+ *   `'dKH'` / `'dGH'` for hardness, `'pH'` for the pH scale (unitless), and
+ *   the catch-all `'other'` for anything else.
+ */
+export interface WaterTestReading {
+  /** Which water parameter this swatch series reads. */
+  parameter: WaterParameter;
+  /** First swatch value on the colour chart. */
+  min: number;
+  /** Last swatch value — readings above clamp to this (advisory: min < max). */
+  max: number;
+  /** Reporting unit for `min` / `max`. */
+  unit: 'ppm' | 'dKH' | 'dGH' | 'pH' | 'other';
+}
+
+/**
+ * A real-world water test kit — a liquid master kit, a single-parameter kit,
+ * or a strip set. Stage 13 F13.4 ships the catalog data describing which
+ * parameters each kit reads + their readable ranges; F13.5 surfaces a readout
+ * keyed off these against the live `Tank.waterChemistry` snapshot.
+ *
+ * - `brand` is the manufacturer (e.g. "API", "Salifert", "JBL").
+ * - `method` is the assay format — drives the UI affordance: `'liquid'`
+ *   (titration / reagent drops + colour chart), `'strip'` (dip strip), or
+ *   `'drop-checker'` (the continuous CO2 indicator).
+ * - `reads` is the per-parameter readable-range list — the heart of the
+ *   entry. At least one reading; a master kit lists several.
+ * - `color` is a UI swatch for the catalog browser / kit picker — NOT a
+ *   rendered scene colour.
+ *
+ * All ranges come from published product specs / instruction sheets (cited in
+ * `source`) — no fabricated ranges. When a manufacturer doesn't publish a
+ * parameter's exact top swatch, prefer omitting the kit's coverage of that
+ * parameter over inventing a bound.
+ */
+export interface WaterTestKitEntry extends CatalogEntryBase {
+  kind: 'water-test-kit';
+  /** Manufacturer / brand (e.g. "API", "Salifert", "JBL", "Seachem"). */
+  brand: string;
+  /** Assay format — drives the readout UI affordance. */
+  method: 'liquid' | 'strip' | 'drop-checker';
+  /** Per-parameter readable ranges. At least one; master kits list several. */
+  reads: WaterTestReading[];
+  /** UI swatch for the catalog browser / kit picker. NOT a scene colour. */
+  color: HexColor;
+  /** Citation URL for the published ranges / product page. */
+  source?: string;
+  /** Free-form caveats (e.g. "shake bottle #2 vigorously to avoid false zero"). */
+  notes?: string;
+}
+
 // ─── Placeholders for later stages ────────────────────────────────────────
 //
 // Each future kind adds a branch here AND a matching schema branch. Until
@@ -690,7 +945,10 @@ export type CatalogEntry =
   | LivestockEntry
   | EquipmentEntry
   | DecorEntry
-  | NutrientEntry;
+  | NutrientEntry
+  | FoodEntry
+  | AlgaeEntry
+  | WaterTestKitEntry;
 
 /**
  * Lookup table built from a validated catalog: `(catalog, id) -> entry`.

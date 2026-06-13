@@ -1,0 +1,16 @@
+{
+  "catalog": "core",
+  "id": "food.pellet.hikari-micro",
+  "version": 1,
+  "name": "Hikari Micro Pellets",
+  "kind": "food",
+  "type": "pellet",
+  "brand": "Hikari",
+  "description": "Slow-sinking micro pellets for small-mouthed community fish. Manufacturer guaranteed-analysis crude protein minimum is 48%. wasteFactor (0.25) is MODELLED — pellets are more contained than flakes (less drifts uneaten), so a lower default waste band.",
+  "tags": ["food", "pellet", "micro", "community"],
+  "proteinPct": 48,
+  "wasteFactor": 0.25,
+  "color": "#a35a2c",
+  "source": "https://www.hikariusa.com/products/micro-pellets/",
+  "notes": "Midwater + small surface feeders. Pellets stay intact longer than flakes, so uneaten food is easier to siphon before it decays."
+}

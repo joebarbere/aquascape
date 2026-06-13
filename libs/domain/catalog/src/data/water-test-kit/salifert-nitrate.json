@@ -1,0 +1,15 @@
+{
+  "catalog": "core",
+  "id": "water-test-kit.salifert.nitrate",
+  "version": 1,
+  "name": "Salifert Nitrate Profi-Test",
+  "kind": "water-test-kit",
+  "brand": "Salifert",
+  "method": "liquid",
+  "description": "Reagent nitrate kit with a low and a medium range. Published ranges: low 0.2–10 mg/L NO3, medium 2–100 mg/L NO3. Modelled here as a single 0.2–100 ppm reading spanning both scales (the kit picks the scale by dilution). Free of amine interference; ~60 tests per kit.",
+  "tags": ["test-kit", "liquid", "nitrate", "reef", "freshwater"],
+  "reads": [{ "parameter": "nitrate", "min": 0.2, "max": 100, "unit": "ppm" }],
+  "color": "#c25a8a",
+  "source": "https://www.aquariumspecialty.com/salifert-nitrate-test-kit.html",
+  "notes": "The kit ships two range cards (0.2–10 and 2–100); the entry spans both. The freshwater and marine versions differ only in the colour card."
+}

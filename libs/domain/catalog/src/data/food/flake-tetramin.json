@@ -1,0 +1,16 @@
+{
+  "catalog": "core",
+  "id": "food.flake.tetramin",
+  "version": 1,
+  "name": "TetraMin Tropical Flakes",
+  "kind": "food",
+  "type": "flake",
+  "brand": "Tetra",
+  "description": "The classic staple tropical flake. Manufacturer guaranteed-analysis crude protein minimum is 46%. wasteFactor (0.4) is a MODELLED hobby-consensus coefficient, not a product spec — light flakes drift into the substrate and decay, so flakes carry the highest default waste of the four forms.",
+  "tags": ["food", "flake", "staple", "community", "tropical"],
+  "proteinPct": 46,
+  "wasteFactor": 0.4,
+  "color": "#c97f3a",
+  "source": "https://www.tetra-fish.com/products/fish-food/tetramin-tropical-flakes.aspx",
+  "notes": "Surface + midwater feeders. Feed only what's eaten in a few minutes — uneaten flakes are the classic ammonia source in a new tank."
+}

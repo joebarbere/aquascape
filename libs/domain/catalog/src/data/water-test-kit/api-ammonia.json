@@ -1,0 +1,15 @@
+{
+  "catalog": "core",
+  "id": "water-test-kit.api.ammonia",
+  "version": 1,
+  "name": "API Ammonia Test Kit",
+  "kind": "water-test-kit",
+  "brand": "API",
+  "method": "liquid",
+  "description": "Single-parameter salicylate ammonia kit reading total ammonia (NH3 + NH4+) from 0 to 8 ppm against a colour card. The standalone version of the master kit's ammonia test.",
+  "tags": ["test-kit", "liquid", "ammonia", "cycling"],
+  "reads": [{ "parameter": "ammonia", "min": 0, "max": 8, "unit": "ppm" }],
+  "color": "#3f8f5a",
+  "source": "https://apifishcare.com/product/ammonia-test-kit",
+  "notes": "The most useful single test during a fish-in cycle. Reads TOTAL ammonia; the toxic free-NH3 fraction depends on pH + temperature."
+}

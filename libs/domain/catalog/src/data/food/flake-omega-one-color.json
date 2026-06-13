@@ -1,0 +1,16 @@
+{
+  "catalog": "core",
+  "id": "food.flake.omega-one-color",
+  "version": 1,
+  "name": "Omega One Freshwater Flakes",
+  "kind": "food",
+  "type": "flake",
+  "brand": "Omega One",
+  "description": "Whole-fish-meal freshwater flake. Manufacturer guaranteed-analysis crude protein minimum is 42%. wasteFactor (0.38) is MODELLED — whole-seafood flakes are reputed to dissolve less and cloud water less than fillers-heavy flakes, so a touch below the TetraMin default; still a flake, so high.",
+  "tags": ["food", "flake", "community", "color-enhancing"],
+  "proteinPct": 42,
+  "wasteFactor": 0.38,
+  "color": "#d4622e",
+  "source": "https://omegasea.net/products/freshwater-flakes/",
+  "notes": "Insoluble-protein binding is the marketing claim behind the slightly lower modelled waste; treat the figure as approximate."
+}

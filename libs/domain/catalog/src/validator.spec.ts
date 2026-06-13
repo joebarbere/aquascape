@@ -1875,6 +1875,308 @@ describe('validateCatalogEntry (nutrient — Nutrients & additives + dosing, F-A
   });
 });
 
+describe('validateCatalogEntry (food — Stage 13 F13.4 husbandry sim)', () => {
+  const validFood = {
+    catalog: 'core',
+    id: 'food.flake.test',
+    version: 1,
+    name: 'Test flake',
+    kind: 'food',
+    type: 'flake',
+    brand: 'Tetra',
+    proteinPct: 46,
+    wasteFactor: 0.4,
+    color: '#c97f3a',
+    source: 'https://example.com',
+  };
+
+  // A whole live food with no published protein label (proteinPct omitted).
+  const validLiveFood = {
+    catalog: 'core',
+    id: 'food.live.test',
+    version: 1,
+    name: 'Test live food',
+    kind: 'food',
+    type: 'live',
+    brand: 'DIY / frozen',
+    wasteFactor: 0.15,
+    color: '#a3242b',
+  };
+
+  it('accepts a well-formed food entry with a published proteinPct', () => {
+    expect(validateCatalogEntry(validFood)).toEqual({ ok: true });
+  });
+
+  it('accepts a live food entry with proteinPct omitted (no standardized label)', () => {
+    expect(validateCatalogEntry(validLiveFood)).toEqual({ ok: true });
+  });
+
+  it('accepts every food type enum value', () => {
+    for (const type of ['flake', 'pellet', 'wafer', 'live']) {
+      expect(validateCatalogEntry({ ...validFood, type }).ok).toBe(true);
+    }
+  });
+
+  it('rejects an unknown food type enum value', () => {
+    expect(validateCatalogEntry({ ...validFood, type: 'gel' }).ok).toBe(false);
+  });
+
+  it('rejects a missing type', () => {
+    const { type: _t, ...rest } = validFood;
+    expect(validateCatalogEntry(rest).ok).toBe(false);
+  });
+
+  it('rejects a missing brand', () => {
+    const { brand: _b, ...rest } = validFood;
+    expect(validateCatalogEntry(rest).ok).toBe(false);
+  });
+
+  it('rejects a missing wasteFactor (required source term for Stage 14)', () => {
+    const { wasteFactor: _w, ...rest } = validFood;
+    expect(validateCatalogEntry(rest).ok).toBe(false);
+  });
+
+  it('rejects a missing color', () => {
+    const { color: _c, ...rest } = validFood;
+    expect(validateCatalogEntry(rest).ok).toBe(false);
+  });
+
+  it('rejects a wasteFactor outside [0, 1]', () => {
+    expect(validateCatalogEntry({ ...validFood, wasteFactor: -0.1 }).ok).toBe(false);
+    expect(validateCatalogEntry({ ...validFood, wasteFactor: 1.5 }).ok).toBe(false);
+  });
+
+  it('accepts wasteFactor at both bounds (0 and 1)', () => {
+    expect(validateCatalogEntry({ ...validFood, wasteFactor: 0 }).ok).toBe(true);
+    expect(validateCatalogEntry({ ...validFood, wasteFactor: 1 }).ok).toBe(true);
+  });
+
+  it('rejects a proteinPct outside [0, 100]', () => {
+    expect(validateCatalogEntry({ ...validFood, proteinPct: -1 }).ok).toBe(false);
+    expect(validateCatalogEntry({ ...validFood, proteinPct: 101 }).ok).toBe(false);
+  });
+
+  it('rejects extraneous properties (additionalProperties: false)', () => {
+    expect(validateCatalogEntry({ ...validFood, surprise: true }).ok).toBe(false);
+  });
+
+  it('surfaces the offending path on a bad wasteFactor', () => {
+    const result = validateCatalogEntry({ ...validFood, wasteFactor: 2 });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((e) => e.path.includes('wasteFactor'))).toBe(true);
+  });
+});
+
+describe('validateCatalogEntry (algae — Stage 13 F13.4 husbandry sim)', () => {
+  const validAlgae = {
+    catalog: 'core',
+    id: 'algae.test',
+    version: 1,
+    name: 'Test algae',
+    kind: 'algae',
+    type: 'hair',
+    growthRate: 0.85,
+    lightDependence: 0.85,
+    grazers: ['shrimp', 'siamese-algae-eater'],
+    color: '#6fae45',
+  };
+
+  it('accepts a well-formed algae entry', () => {
+    expect(validateCatalogEntry(validAlgae)).toEqual({ ok: true });
+  });
+
+  it('accepts every algae type enum value (must match water-sim AlgaeType)', () => {
+    for (const type of ['green-spot', 'hair', 'black-beard', 'diatom']) {
+      expect(validateCatalogEntry({ ...validAlgae, type }).ok).toBe(true);
+    }
+  });
+
+  it('rejects an unknown algae type enum value', () => {
+    expect(validateCatalogEntry({ ...validAlgae, type: 'staghorn' }).ok).toBe(false);
+  });
+
+  it('accepts every grazer enum value', () => {
+    for (const grazer of [
+      'oto',
+      'shrimp',
+      'nerite-snail',
+      'siamese-algae-eater',
+      'pleco',
+      'nobody',
+    ]) {
+      expect(validateCatalogEntry({ ...validAlgae, grazers: [grazer] }).ok).toBe(true);
+    }
+  });
+
+  it('rejects an unknown grazer enum value', () => {
+    expect(validateCatalogEntry({ ...validAlgae, grazers: ['hippo'] }).ok).toBe(false);
+  });
+
+  it('rejects an empty grazers array (minItems 1)', () => {
+    expect(validateCatalogEntry({ ...validAlgae, grazers: [] }).ok).toBe(false);
+  });
+
+  it('rejects a growthRate of 0 (exclusiveMinimum 0) or above 1', () => {
+    expect(validateCatalogEntry({ ...validAlgae, growthRate: 0 }).ok).toBe(false);
+    expect(validateCatalogEntry({ ...validAlgae, growthRate: 1.2 }).ok).toBe(false);
+  });
+
+  it('accepts growthRate = 1 (the fastest-in-set bound)', () => {
+    expect(validateCatalogEntry({ ...validAlgae, growthRate: 1 }).ok).toBe(true);
+  });
+
+  it('rejects a lightDependence outside [0, 1]', () => {
+    expect(validateCatalogEntry({ ...validAlgae, lightDependence: -0.1 }).ok).toBe(false);
+    expect(validateCatalogEntry({ ...validAlgae, lightDependence: 1.5 }).ok).toBe(false);
+  });
+
+  it('accepts lightDependence = 0 (shade-tolerant extreme)', () => {
+    expect(validateCatalogEntry({ ...validAlgae, lightDependence: 0 }).ok).toBe(true);
+  });
+
+  it('rejects a missing required field (type / growthRate / grazers / color)', () => {
+    for (const key of ['type', 'growthRate', 'lightDependence', 'grazers', 'color']) {
+      const rest = { ...validAlgae };
+      delete (rest as Record<string, unknown>)[key];
+      expect(validateCatalogEntry(rest).ok).toBe(false);
+    }
+  });
+
+  it('rejects extraneous properties (additionalProperties: false)', () => {
+    expect(validateCatalogEntry({ ...validAlgae, surprise: true }).ok).toBe(false);
+  });
+});
+
+describe('validateCatalogEntry (water-test-kit — Stage 13 F13.4 husbandry sim)', () => {
+  const validKit = {
+    catalog: 'core',
+    id: 'water-test-kit.test',
+    version: 1,
+    name: 'Test kit',
+    kind: 'water-test-kit',
+    brand: 'API',
+    method: 'liquid',
+    reads: [
+      { parameter: 'ammonia', min: 0, max: 8, unit: 'ppm' },
+      { parameter: 'nitrate', min: 0, max: 160, unit: 'ppm' },
+    ],
+    color: '#2f6fb0',
+    source: 'https://example.com',
+  };
+
+  it('accepts a well-formed water-test-kit entry', () => {
+    expect(validateCatalogEntry(validKit)).toEqual({ ok: true });
+  });
+
+  it('accepts every method enum value', () => {
+    for (const method of ['liquid', 'strip', 'drop-checker']) {
+      expect(validateCatalogEntry({ ...validKit, method }).ok).toBe(true);
+    }
+  });
+
+  it('rejects an unknown method enum value', () => {
+    expect(validateCatalogEntry({ ...validKit, method: 'refractometer' }).ok).toBe(false);
+  });
+
+  it('accepts every water parameter enum value', () => {
+    for (const parameter of [
+      'ammonia',
+      'nitrite',
+      'nitrate',
+      'ph',
+      'kh',
+      'gh',
+      'phosphate',
+      'co2',
+    ]) {
+      expect(
+        validateCatalogEntry({
+          ...validKit,
+          reads: [{ parameter, min: 0, max: 10, unit: 'ppm' }],
+        }).ok,
+      ).toBe(true);
+    }
+  });
+
+  it('rejects an unknown parameter enum value inside a reading', () => {
+    expect(
+      validateCatalogEntry({
+        ...validKit,
+        reads: [{ parameter: 'silicate', min: 0, max: 10, unit: 'ppm' }],
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('accepts every reading unit enum value', () => {
+    for (const unit of ['ppm', 'dKH', 'dGH', 'pH', 'other']) {
+      expect(
+        validateCatalogEntry({
+          ...validKit,
+          reads: [{ parameter: 'ph', min: 6, max: 8, unit }],
+        }).ok,
+      ).toBe(true);
+    }
+  });
+
+  it('rejects an unknown reading unit enum value', () => {
+    expect(
+      validateCatalogEntry({
+        ...validKit,
+        reads: [{ parameter: 'nitrate', min: 0, max: 160, unit: 'mg-per-litre' }],
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects an empty reads array (minItems 1)', () => {
+    expect(validateCatalogEntry({ ...validKit, reads: [] }).ok).toBe(false);
+  });
+
+  it('rejects a reading missing a required field', () => {
+    for (const key of ['parameter', 'min', 'max', 'unit']) {
+      const reading: Record<string, unknown> = {
+        parameter: 'nitrate',
+        min: 0,
+        max: 160,
+        unit: 'ppm',
+      };
+      delete reading[key];
+      expect(validateCatalogEntry({ ...validKit, reads: [reading] }).ok).toBe(false);
+    }
+  });
+
+  it('rejects extra keys inside a reading (additionalProperties: false)', () => {
+    expect(
+      validateCatalogEntry({
+        ...validKit,
+        reads: [{ parameter: 'nitrate', min: 0, max: 160, unit: 'ppm', accuracy: 5 }],
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects a missing required top-level field (brand / method / reads / color)', () => {
+    for (const key of ['brand', 'method', 'reads', 'color']) {
+      const rest = { ...validKit };
+      delete (rest as Record<string, unknown>)[key];
+      expect(validateCatalogEntry(rest).ok).toBe(false);
+    }
+  });
+
+  it('rejects extraneous top-level properties (additionalProperties: false)', () => {
+    expect(validateCatalogEntry({ ...validKit, surprise: true }).ok).toBe(false);
+  });
+
+  it('surfaces the offending path on a bad reading unit', () => {
+    const result = validateCatalogEntry({
+      ...validKit,
+      reads: [{ parameter: 'nitrate', min: 0, max: 160, unit: 'bad' }],
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((e) => e.path.includes('reads'))).toBe(true);
+  });
+});
+
 describe('formatError (defensive fallbacks)', () => {
   it('falls back to "invalid" when an AJV error lacks a message field', () => {
     const out = formatError({

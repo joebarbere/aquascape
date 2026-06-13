@@ -1,0 +1,23 @@
+{
+  "catalog": "core",
+  "id": "water-test-kit.jbl.testlab",
+  "version": 1,
+  "name": "JBL TestLab Comparator Set",
+  "kind": "water-test-kit",
+  "brand": "JBL",
+  "method": "liquid",
+  "description": "Comprehensive reagent comparator covering the planted-tank parameter set. Published ranges include pH 3.0–10.0, KH 0–20 dKH, GH 0.6–16.8 dGH (titration), ammonium, nitrite, nitrate, phosphate, CO2 (calculated from pH + KH), Fe and more. The subset modelled here is the husbandry-relevant core.",
+  "tags": ["test-kit", "liquid", "comparator", "planted", "ph", "kh", "gh", "phosphate"],
+  "reads": [
+    { "parameter": "ph", "min": 3.0, "max": 10.0, "unit": "pH" },
+    { "parameter": "kh", "min": 0, "max": 20, "unit": "dKH" },
+    { "parameter": "gh", "min": 0.6, "max": 16.8, "unit": "dGH" },
+    { "parameter": "ammonia", "min": 0, "max": 6, "unit": "ppm" },
+    { "parameter": "nitrite", "min": 0, "max": 1, "unit": "ppm" },
+    { "parameter": "nitrate", "min": 0, "max": 240, "unit": "ppm" },
+    { "parameter": "phosphate", "min": 0, "max": 1.8, "unit": "ppm" }
+  ],
+  "color": "#1f9e8a",
+  "source": "https://www.jbl.de/en/products/detail/4961/jbl-testlab",
+  "notes": "The full comparator covers more parameters than the subset listed; ranges shown are the published comparator scales for the husbandry-core parameters. GH/KH are drop-count titrations rather than colour swatches."
+}

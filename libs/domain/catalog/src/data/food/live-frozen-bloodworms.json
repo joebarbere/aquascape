@@ -1,0 +1,14 @@
+{
+  "catalog": "core",
+  "id": "food.live.frozen-bloodworms",
+  "version": 1,
+  "name": "Frozen Bloodworms",
+  "kind": "food",
+  "type": "live",
+  "brand": "DIY / frozen",
+  "description": "Whole frozen chironomid (midge) larvae — a generic frozen-food archetype, not a single brand. proteinPct is omitted: as a frozen whole food it carries no standardized guaranteed-analysis crude-protein label, and inventing one would violate the honesty contract. wasteFactor (0.15) is MODELLED — whole foods are eagerly eaten with little waste when fed to appetite.",
+  "tags": ["food", "live", "frozen", "treat", "carnivore"],
+  "wasteFactor": 0.15,
+  "color": "#a3242b",
+  "notes": "Frozen and live foods share one model bucket (whole, low-waste). High moisture and no published protein figure — feed sparingly as a treat; thawed leftovers foul quickly so net out the excess."
+}

@@ -1,0 +1,16 @@
+{
+  "catalog": "core",
+  "id": "food.pellet.fluval-bug-bites",
+  "version": 1,
+  "name": "Fluval Bug Bites Tropical",
+  "kind": "food",
+  "type": "pellet",
+  "brand": "Fluval",
+  "description": "Black-soldier-fly-larvae-based granules. Manufacturer guaranteed-analysis crude protein minimum is 40%. wasteFactor (0.25) is MODELLED — standard pellet band; insect-meal base digests well, so kept at the pellet default rather than lower.",
+  "tags": ["food", "pellet", "insect-meal", "community"],
+  "proteinPct": 40,
+  "wasteFactor": 0.25,
+  "color": "#8a5a36",
+  "source": "https://fluvalaquatics.com/us/product/16970-bug-bites-tropical-formula-small-to-medium-fish/",
+  "notes": "Insect-protein base appeals to fussy eaters. Midwater feeders; granules sink slowly."
+}

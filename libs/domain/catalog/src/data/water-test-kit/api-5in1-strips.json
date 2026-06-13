@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "water-test-kit.api.5in1-strips",
+  "version": 1,
+  "name": "API 5-in-1 Test Strips",
+  "kind": "water-test-kit",
+  "brand": "API",
+  "method": "strip",
+  "description": "Dip strips reading five parameters at once against printed pads. Published top-end ranges: nitrate 0–200 ppm, nitrite 0–10 ppm, total hardness (GH) 0–425 ppm CaCO3 (≈ 0–25 dGH), carbonate hardness (KH) 0–300 ppm (≈ 0–17 dKH), pH 6.4–9.0. Hardness pads are modelled in dGH/dKH from the published CaCO3 scale.",
+  "tags": ["test-kit", "strip", "5-in-1", "nitrate", "nitrite", "gh", "kh", "ph"],
+  "reads": [
+    { "parameter": "nitrate", "min": 0, "max": 200, "unit": "ppm" },
+    { "parameter": "nitrite", "min": 0, "max": 10, "unit": "ppm" },
+    { "parameter": "gh", "min": 0, "max": 25, "unit": "dGH" },
+    { "parameter": "kh", "min": 0, "max": 17, "unit": "dKH" },
+    { "parameter": "ph", "min": 6.4, "max": 9.0, "unit": "pH" }
+  ],
+  "color": "#d8a23a",
+  "source": "https://apifishcare.com/product/5-in-1-test-strips",
+  "notes": "Fast but coarser than reagent kits — strips read no ammonia. GH/KH bounds are converted from the published ppm-CaCO3 scale (1 dGH ≈ 17.9 ppm CaCO3)."
+}
