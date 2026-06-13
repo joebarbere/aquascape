@@ -19,6 +19,8 @@ export type {
   HardscapeObject,
   PlantObject,
   DecorObject,
+  DoseEvent,
+  DoseDeltas,
   CatalogRef,
   AssetRef,
   ObjectId,
@@ -50,6 +52,9 @@ export {
   selectLivestockById,
   selectEquipment,
   selectEquipmentById,
+  selectDoseLog,
+  selectDoseEventById,
+  nextDoseSeq,
   effectiveWaterLevelMm,
   DEFAULT_WATER_GAP_BELOW_RIM_MM,
 } from './selectors';
@@ -158,6 +163,20 @@ export {
   setEquipmentNote,
   updateEquipmentSettings,
 } from './equipment-commands';
+
+// ─── Nutrient dosing commands (Nutrients & additives + dosing, F-B) ────────
+export type {
+  DoseNutrientCommand,
+  RemoveDoseEventCommand,
+  NutrientCommand,
+  ResolvedNutrient,
+} from './nutrient-commands';
+
+export {
+  doseNutrient,
+  removeDoseEvent,
+  computeDoseDeltas,
+} from './nutrient-commands';
 
 // ─── History ──────────────────────────────────────────────────────────────
 export { createHistory } from './history';

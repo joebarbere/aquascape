@@ -7,6 +7,7 @@
  */
 
 import type {
+  DoseEvent,
   EquipmentEntry,
   Layer,
   LayerId,
@@ -123,6 +124,44 @@ export function selectEquipmentById(scene: Scene, id: Uuid): EquipmentEntry | nu
     if (entry.id === id) return entry;
   }
   return null;
+}
+
+// ─── Dosing (Nutrients & additives + dosing, F-B) ─────────────────────────
+
+/**
+ * Return the scene's dose-event log (runtime-only; chemistry deferred to
+ * Stage 13). Returns an empty array when `scene.doseLog` is undefined so
+ * callers don't need to guard. The returned array is the same reference held
+ * by the scene when present — do not mutate it.
+ */
+export function selectDoseLog(scene: Scene): readonly DoseEvent[] {
+  return scene.doseLog ?? [];
+}
+
+/** Find a dose event by id. O(n). Returns `null` if missing. */
+export function selectDoseEventById(scene: Scene, id: Uuid): DoseEvent | null {
+  const list = scene.doseLog;
+  if (list === undefined) return null;
+  for (const event of list) {
+    if (event.id === id) return event;
+  }
+  return null;
+}
+
+/**
+ * The next monotonic dose sequence number for the scene: `1 + max(seq)` over
+ * the existing log, or `0` for an empty / absent log. The `doseNutrient`
+ * factory caller passes this as the event `seq` so the log stays in a stable
+ * total order independent of array index.
+ */
+export function nextDoseSeq(scene: Scene): number {
+  const list = scene.doseLog;
+  if (list === undefined || list.length === 0) return 0;
+  let max = -1;
+  for (const event of list) {
+    if (event.seq > max) max = event.seq;
+  }
+  return max + 1;
 }
 
 // ─── Water level ──────────────────────────────────────────────────────────

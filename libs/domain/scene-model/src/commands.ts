@@ -40,6 +40,11 @@ import {
   invertLivestockCommand,
   type LivestockCommand,
 } from './livestock-commands';
+import {
+  applyNutrientCommand,
+  invertNutrientCommand,
+  type NutrientCommand,
+} from './nutrient-commands';
 import { getLayerById, getObjectWithLayer } from './selectors';
 import {
   applySubstrateCommand,
@@ -480,6 +485,7 @@ export type Command =
   | SubstrateCommand
   | LivestockCommand
   | EquipmentCommand
+  | NutrientCommand
   | CompositeCommand;
 
 // ─── Internal helpers ─────────────────────────────────────────────────────
@@ -1074,6 +1080,14 @@ export function applyCommand(scene: Scene, command: Command): CommandResult {
       return applyEquipmentCommand(scene, command);
     }
 
+    case 'DoseNutrient':
+    case 'RemoveDoseEvent': {
+      // Dosing isn't object-scoped (a DoseEvent belongs to no layer), so the
+      // locked-layer guard doesn't apply. Delegate to the nutrient-commands
+      // module. F-B — runtime-only; chemistry effect deferred to Stage 13.
+      return applyNutrientCommand(scene, command);
+    }
+
     case 'Composite': {
       let current = scene;
       for (const child of command.children) {
@@ -1346,6 +1360,11 @@ export function invertCommand(scene: Scene, command: Command): Command {
     case 'SetEquipmentNote':
     case 'UpdateEquipmentSettings': {
       return invertEquipmentCommand(scene, command);
+    }
+
+    case 'DoseNutrient':
+    case 'RemoveDoseEvent': {
+      return invertNutrientCommand(scene, command);
     }
 
     case 'Composite': {
