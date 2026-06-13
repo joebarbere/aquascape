@@ -26,8 +26,11 @@ import { SceneActions, selectScene } from '@aquascape/state';
 import {
   addRandomItem,
   addSpecies,
+  doseNutrientOp,
+  matchNutrient,
   matchSpecies,
   NAME_BY_ID,
+  NUTRIENT_ENTRIES,
   uuid,
   type ItemKind,
 } from './simulation-scene-ops';
@@ -108,6 +111,24 @@ export class SimulationConsoleService {
   complete(prefix: string): string[] {
     const p = prefix.trim().toLowerCase();
     return this.commands.map((c) => c.name).filter((n) => n.startsWith(p));
+  }
+
+  /**
+   * Argument completions for `command` given the already-typed `args` (the Tab
+   * key, when past the command name). Currently only `dose` completes its first
+   * argument — over nutrient ids + names — so `dose easy` → the matching
+   * product. Returns lower-cased completion tokens; an empty list = no help.
+   */
+  completeArgs(command: string, args: string[]): string[] {
+    if (command === 'dose' && args.length <= 1) {
+      const prefix = (args[0] ?? '').toLowerCase();
+      const pool = ['list', ...NUTRIENT_ENTRIES.flatMap((e) => [e.id, e.name])];
+      return pool
+        .map((s) => s.toLowerCase())
+        .filter((s) => s.startsWith(prefix))
+        .filter((s, i, a) => a.indexOf(s) === i);
+    }
+    return [];
   }
 
   private dispatch(command: Command): void {
@@ -226,6 +247,12 @@ export class SimulationConsoleService {
           if (object === null) return [err(`No ${args[1]} available in the catalog.`)];
           return [out(`added ${args[1]}: ${NAME_BY_ID.get(object.ref.id) ?? object.ref.id}`)];
         },
+      },
+      {
+        name: 'dose',
+        summary: 'Dose a nutrient / additive (recorded only)',
+        usage: 'dose list | dose <product> [amount]',
+        run: (args) => this.doseCommand(args),
       },
       {
         name: 'reset',
@@ -362,5 +389,62 @@ export class SimulationConsoleService {
         'usage: fish list | fish add <species> [qty] | fish remove <species> | fish set <species> <qty>',
       ),
     ];
+  }
+
+  /**
+   * `dose` — record a nutrient/additive dose through the `DoseNutrient` command.
+   *
+   *   dose list                  → list every catalog nutrient
+   *   dose <product> [amount]    → dose `amount` (the product's representative
+   *                                dose if omitted). `<product>` is fuzzy (id or
+   *                                name fragment). `amount` may carry a unit
+   *                                suffix (`2ml`, `0.6g`); the unit is otherwise
+   *                                taken from the product's `dose.unit`.
+   *
+   * Chemistry is recorded-only — the dose appends to `scene.doseLog`; the actual
+   * water-chemistry effect is deferred pending `domain/water-sim`.
+   */
+  private doseCommand(args: string[]): ConsoleLine[] {
+    const sub = (args[0] ?? '').toLowerCase();
+    if (sub === '' || sub === 'help') {
+      return [err('usage: dose list | dose <product> [amount]')];
+    }
+
+    if (sub === 'list') {
+      return [
+        out('nutrients:'),
+        ...NUTRIENT_ENTRIES.map((e) =>
+          out(`  ${e.name} — ${e.category} (${e.dose.amount}${e.dose.unit}/dose)`),
+        ),
+      ];
+    }
+
+    const scene = this.sceneSig();
+    if (scene === null) return [err('No scene loaded.')];
+
+    const match = matchNutrient(sub);
+    if (match.status === 'none') return [err(`no nutrient matches "${sub}"`)];
+    if (match.status === 'ambiguous') {
+      return [err(`"${sub}" is ambiguous:`), ...match.candidates.map((c) => out(`  ${c}`))];
+    }
+
+    const entry = NUTRIENT_ENTRIES.find((e) => e.id === match.id);
+    if (entry === undefined) return [err(`no nutrient matches "${sub}"`)];
+
+    // Amount token (optional): `2`, `2ml`, `0.6g`. Default = representative dose.
+    const amountToken = args[1];
+    let amount = entry.dose.amount;
+    if (amountToken !== undefined) {
+      const m = /^(\d+(?:\.\d+)?)(ml|g)?$/i.exec(amountToken.trim());
+      if (m === null) return [err('amount must be a positive number (optionally with g/ml)')];
+      amount = Number(m[1]);
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return [err('amount must be a positive number')];
+    }
+
+    const dosed = doseNutrientOp(this.store, scene, entry.id, amount, uuid);
+    if (dosed === null) return [err('amount must be a positive number')];
+    return [out(`dosed ${amount} ${entry.dose.unit} of ${entry.name} (recorded only)`)];
   }
 }

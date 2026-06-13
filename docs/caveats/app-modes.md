@@ -132,6 +132,18 @@ aquascape --mode simulation            apps/desktop/src/main/app-mode.ts   parse
   service reads the live scene via `store.selectSignal(selectScene)` — note
   `MockStore.overrideSelector` DOES feed `selectSignal` in tests (NgRx 18).
 
+- **Dosing (the Dose HUD group + `dose` verb) is recorded-only.** Both surfaces
+  go through `doseNutrientOp(store, scene, id, amount, makeId, unit?)` in
+  `simulation-scene-ops.ts`, which resolves the catalog `NutrientEntry`
+  (structurally a `ResolvedNutrient`), calls the scene-model `doseNutrient(...)`
+  factory, assigns `seq` via `nextDoseSeq(scene)`, and dispatches `DoseNutrient`.
+  **No water chemistry is applied** — the command appends a `DoseEvent` to
+  `scene.doseLog` (deferred pending `domain/water-sim` / Stage 13). The `dose`
+  verb's amount token may carry a unit suffix (`2ml`, `0.6g`) and Tab-completes
+  over nutrient ids/names via `SimulationConsoleService.completeArgs('dose', …)`
+  — the console component's `autocomplete()` delegates past-the-first-token Tab
+  presses there (only `dose` argument-completes today).
+
 - **`noUncheckedIndexedAccess` is on for the web BUILD but lenient under Jest.**
   Array/record index access in the console + ops (`tokens[0]`, `hits[0]`,
   `PHASE_WORDS[token]`, history) is `T | undefined` — guard it (`const x =

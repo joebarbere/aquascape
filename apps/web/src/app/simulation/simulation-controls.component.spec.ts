@@ -129,4 +129,57 @@ describe('SimulationControlsComponent', () => {
       .find((a) => a.type === SceneActions.setScene.type);
     expect(setScene?.scene).toBeDefined();
   });
+
+  describe('Dose group', () => {
+    it('renders a nutrient picker with category filter + accessible swatch', () => {
+      const { fixture } = setup();
+      const root = fixture.nativeElement as HTMLElement;
+      expect(root.textContent).toContain('Dose nutrient');
+      const pick = root.querySelector('select[aria-label="Nutrient to dose"]');
+      expect(pick?.querySelectorAll('option').length).toBeGreaterThan(0);
+      expect(root.querySelector('select[aria-label="Filter nutrients by category"]')).toBeTruthy();
+      // The swatch is decorative (aria-hidden) so it doesn't pollute the a11y tree.
+      expect(root.querySelector('.sim-controls__swatch')?.getAttribute('aria-hidden')).toBe('true');
+    });
+
+    it('dose dispatches a DoseNutrient command for the selected nutrient', () => {
+      const { cmp, dispatch } = setup();
+      cmp.onDoseSelect('nutrient.aio.easy-green');
+      cmp.onDoseAmount('2');
+      cmp.dose();
+      const command = lastCommand(dispatch);
+      expect(command?.kind).toBe('DoseNutrient');
+      const event = (command as { event: { ref: { id: string }; amount: number } }).event;
+      expect(event.ref.id).toBe('nutrient.aio.easy-green');
+      expect(event.amount).toBe(2);
+    });
+
+    it('selecting a nutrient defaults the amount to its representative dose', () => {
+      const { cmp } = setup();
+      cmp.onDoseSelect('nutrient.macro.kno3');
+      expect(cmp.doseAmount()).toBe(0.3);
+    });
+
+    it('filtering by category narrows the picker + re-snaps the selection', () => {
+      const { cmp } = setup();
+      cmp.onDoseFilter('macro-salt');
+      expect(cmp.filteredNutrients().every((o) => o.category === 'macro-salt')).toBe(true);
+      expect(cmp.selectedNutrient()?.category).toBe('macro-salt');
+    });
+
+    it('a non-positive amount reports an error instead of dosing', () => {
+      const { cmp, dispatch } = setup();
+      cmp.onDoseAmount('0');
+      cmp.dose();
+      expect(lastCommand(dispatch)).toBeNull();
+      expect(cmp.doseStatus()).toContain('positive');
+    });
+
+    it('surfaces a confirmation status after a successful dose', () => {
+      const { cmp } = setup();
+      cmp.onDoseSelect('nutrient.aio.easy-green');
+      cmp.dose();
+      expect(cmp.doseStatus()).toContain('recorded only');
+    });
+  });
 });

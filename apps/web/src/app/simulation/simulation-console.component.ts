@@ -234,15 +234,29 @@ export class SimulationConsoleComponent implements AfterViewInit {
     });
   }
 
-  /** Tab-complete the command name (only the first token). */
+  /**
+   * Tab-complete: the command name on the first token; otherwise delegate to the
+   * service's argument completer (e.g. `dose easy` → the matching nutrient).
+   */
   private autocomplete(): void {
     const current = this.input();
     const tokens = current.split(/\s+/);
-    if (tokens.length > 1) return;
-    const matches = this.console.complete(tokens[0] ?? '');
-    const only = matches.length === 1 ? matches[0] : undefined;
-    if (only !== undefined) {
-      this.input.set(`${only} `);
+    if (tokens.length <= 1) {
+      const matches = this.console.complete(tokens[0] ?? '');
+      this.applyCompletions(matches, () => `${matches[0]} `);
+      return;
+    }
+    const name = (tokens[0] ?? '').toLowerCase();
+    const args = tokens.slice(1);
+    const matches = this.console.completeArgs(name, args);
+    const head = tokens.slice(0, -1).join(' ');
+    this.applyCompletions(matches, () => `${head} ${matches[0]} `);
+  }
+
+  /** Single match → fill via `fill()`; several → list them; none → nothing. */
+  private applyCompletions(matches: string[], fill: () => string): void {
+    if (matches.length === 1) {
+      this.input.set(fill());
     } else if (matches.length > 1) {
       this.lines.update((l) => [...l, { kind: 'out', text: matches.join('   ') }]);
     }

@@ -192,5 +192,72 @@ describe('SimulationConsoleService.execute', () => {
     const { svc } = setup();
     expect(svc.complete('f')).toContain('fish');
     expect(svc.complete('s')).toEqual(expect.arrayContaining(['sim']));
+    expect(svc.complete('d')).toContain('dose');
+  });
+
+  describe('dose', () => {
+    it('dose list lists nutrients', async () => {
+      const { svc } = setup();
+      const out = await svc.execute('dose list');
+      expect(out[0].text).toContain('nutrients:');
+      expect(text(out)).toContain('Easy Green');
+    });
+
+    it('dose <fuzzy product> dispatches DoseNutrient', async () => {
+      const { svc, dispatch } = setup();
+      const out = await svc.execute('dose easy-green');
+      const command = lastCommand(dispatch);
+      expect(command?.kind).toBe('DoseNutrient');
+      expect((command as { event: { ref: { id: string } } }).event.ref.id).toBe(
+        'nutrient.aio.easy-green',
+      );
+      expect(text(out)).toContain('dosed');
+    });
+
+    it('dose <product> <amount> doses the given amount', async () => {
+      const { svc, dispatch } = setup();
+      await svc.execute('dose kno3 0.6');
+      const event = (lastCommand(dispatch) as { event: { amount: number } }).event;
+      expect(event.amount).toBe(0.6);
+    });
+
+    it('dose <product> accepts a unit suffix', async () => {
+      const { svc, dispatch } = setup();
+      await svc.execute('dose easy-green 2ml');
+      const event = (lastCommand(dispatch) as { event: { amount: number; unit: string } }).event;
+      expect(event.amount).toBe(2);
+      expect(event.unit).toBe('ml');
+    });
+
+    it('dose rejects an unknown product', async () => {
+      const { svc, dispatch } = setup();
+      const out = await svc.execute('dose nope-nutrient');
+      expect(out[0].kind).toBe('err');
+      expect(out[0].text).toContain('no nutrient matches');
+      expect(lastCommand(dispatch)).toBeUndefined();
+    });
+
+    it('dose rejects a non-positive amount', async () => {
+      const { svc, dispatch } = setup();
+      const out = await svc.execute('dose easy-green 0');
+      expect(out[0].kind).toBe('err');
+      expect(lastCommand(dispatch)).toBeUndefined();
+    });
+
+    it('dose rejects a malformed amount', async () => {
+      const { svc } = setup();
+      const out = await svc.execute('dose easy-green abc');
+      expect(out[0].kind).toBe('err');
+    });
+
+    it('completeArgs Tab-completes nutrient ids/names + list', () => {
+      const { svc } = setup();
+      expect(svc.completeArgs('dose', ['li'])).toContain('list');
+      expect(svc.completeArgs('dose', ['nutrient.aio'])).toEqual(
+        expect.arrayContaining(['nutrient.aio.easy-green']),
+      );
+      // Other commands don't argument-complete.
+      expect(svc.completeArgs('fish', ['ne'])).toEqual([]);
+    });
   });
 });

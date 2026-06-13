@@ -2,7 +2,14 @@ import { coreCatalog } from '@aquascape/domain/catalog';
 import { setIdFactory } from '@aquascape/domain/scene-model';
 import type { Store } from '@ngrx/store';
 
-import { addRandomItem, addSpecies, buildRandomObject, matchSpecies } from './simulation-scene-ops';
+import {
+  addRandomItem,
+  addSpecies,
+  buildRandomObject,
+  doseNutrientOp,
+  matchNutrient,
+  matchSpecies,
+} from './simulation-scene-ops';
 import { createShowcaseScene } from './showcase-scene';
 
 const LIVESTOCK_IDS = coreCatalog.byKind('livestock').map((e) => e.id);
@@ -80,5 +87,71 @@ describe('scene ops (object building)', () => {
       ref: { id: 'livestock.fish.betta-splendens' },
       quantity: 3,
     });
+  });
+});
+
+describe('matchNutrient', () => {
+  it('fuzzy-resolves a nutrient by trailing token', () => {
+    expect(matchNutrient('easy-green')).toMatchObject({
+      status: 'found',
+      id: 'nutrient.aio.easy-green',
+    });
+  });
+
+  it('reports none for an unknown token', () => {
+    expect(matchNutrient('zzzznope').status).toBe('none');
+  });
+});
+
+describe('doseNutrientOp', () => {
+  it('dispatches a DoseNutrient command with computed deltas for a disclosed product', () => {
+    const dispatch = jest.fn();
+    const store = { dispatch } as unknown as Store;
+    // KNO3 discloses +4.84 ppm NO3 per 0.3 g; 0.6 g ⇒ +9.68 NO3.
+    const entry = doseNutrientOp(
+      store,
+      createShowcaseScene(),
+      'nutrient.macro.kno3',
+      0.6,
+      () => 'dose-id-0',
+    );
+    expect(entry?.id).toBe('nutrient.macro.kno3');
+    const command = dispatch.mock.calls.at(-1)?.[0].command;
+    expect(command.kind).toBe('DoseNutrient');
+    expect(command.event).toMatchObject({
+      id: 'dose-id-0',
+      seq: 0,
+      ref: { id: 'nutrient.macro.kno3' },
+      amount: 0.6,
+      unit: 'g',
+      disclosed: true,
+    });
+    expect(command.event.deltas.no3).toBeCloseTo(9.68, 2);
+  });
+
+  it('omits deltas for a proprietary product but keeps affects', () => {
+    const dispatch = jest.fn();
+    const store = { dispatch } as unknown as Store;
+    doseNutrientOp(store, createShowcaseScene(), 'nutrient.aio.easy-green', 2, () => 'dose-id-1');
+    const event = dispatch.mock.calls.at(-1)?.[0].command.event;
+    expect(event.disclosed).toBe(false);
+    expect(event.deltas).toBeUndefined();
+    expect(event.affects.length).toBeGreaterThan(0);
+  });
+
+  it('returns null + dispatches nothing for an unknown id', () => {
+    const dispatch = jest.fn();
+    const store = { dispatch } as unknown as Store;
+    expect(doseNutrientOp(store, createShowcaseScene(), 'nope', 1, () => 'x')).toBeNull();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('returns null + dispatches nothing for a non-positive amount', () => {
+    const dispatch = jest.fn();
+    const store = { dispatch } as unknown as Store;
+    expect(
+      doseNutrientOp(store, createShowcaseScene(), 'nutrient.macro.kno3', 0, () => 'x'),
+    ).toBeNull();
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });
