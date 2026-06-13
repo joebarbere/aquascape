@@ -1,0 +1,20 @@
+{
+  "catalog": "core",
+  "id": "nutrient.aio.apt-complete",
+  "version": 1,
+  "name": "2Hr Aquarist APT Complete",
+  "kind": "nutrient",
+  "category": "all-in-one",
+  "brand": "2Hr Aquarist",
+  "form": "liquid",
+  "description": "Comprehensive macro+micro all-in-one. Manufacturer-disclosed per-dose figures: 5 ml per 100 L adds 4 ppm K, 1.5 ppm N, 0.7 ppm PO4, 0.4 ppm Mg, and 0.03 ppm Fe (plus trace B/Cu/Mn/Mo/Zn). The `no3` value below is the published 1.5 ppm elemental N converted to NO3-equivalent (×4.43 ≈ 6.64 ppm NO3) so the field stays honestly in nitrate units.",
+  "tags": ["all-in-one", "macro", "micro", "npk"],
+  "dose": { "amount": 5, "unit": "ml", "perLitres": 100 },
+  "contributes": { "k": 4, "no3": 6.64, "po4": 0.7, "mg": 0.4, "fe": 0.03 },
+  "disclosed": true,
+  "affects": ["no3", "po4", "k", "fe", "traces"],
+  "source": "https://www.2hraquarist.com/products/aptc",
+  "color": "#3b7f4f",
+  "shrimpSafe": true,
+  "notes": "Published N is 1.5 ppm elemental nitrogen; stored as 6.64 ppm NO3-equivalent. 10x more potent than conventional ferts — dose by the label, not by eye."
+}

@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.buffer.seachem-alkaline-buffer",
+  "version": 1,
+  "name": "Seachem Alkaline Buffer",
+  "kind": "nutrient",
+  "category": "buffer",
+  "brand": "Seachem",
+  "form": "dry",
+  "description": "Non-phosphate carbonate buffer that raises KH and pH toward the alkaline range. Manufacturer dosing is tuned to a target pH (and pairs with Acid Buffer to hit a setpoint), so a fixed per-gram delta is NOT disclosed.",
+  "tags": ["buffer", "kh", "ph", "alkaline", "seachem"],
+  "dose": { "amount": 1, "unit": "g", "perLitres": 80 },
+  "disclosed": false,
+  "affects": ["kh", "ph"],
+  "source": "https://www.seachem.com/alkaline-buffer.php",
+  "color": "#cfe0e6",
+  "shrimpSafe": true,
+  "notes": "Use with Acid Buffer to dial a precise pH; the two together set the buffering window. Raises KH — not for soft-water (Caridina) tanks."
+}

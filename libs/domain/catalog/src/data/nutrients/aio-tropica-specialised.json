@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.aio.tropica-specialised",
+  "version": 1,
+  "name": "Tropica Specialised Nutrition",
+  "kind": "nutrient",
+  "category": "all-in-one",
+  "brand": "Tropica",
+  "form": "liquid",
+  "description": "Macro+micro all-in-one for actively-growing high-light tanks (contains N + P). Tropica does not publish a full per-dose ppm breakdown, so values are NOT disclosed — qualitative `affects` only.",
+  "tags": ["all-in-one", "macro", "micro"],
+  "dose": { "amount": 6, "unit": "ml", "perLitres": 200 },
+  "disclosed": false,
+  "affects": ["no3", "po4", "k", "fe", "traces"],
+  "source": "https://tropica.com/en/plant-care/fertilisation/tropica-specialised-nutrition/",
+  "color": "#5a8f3e",
+  "shrimpSafe": true,
+  "notes": "Label dose ~6 ml per 200 L weekly. Use the 'Premium' (N/P-free) variant instead when nitrate/phosphate are supplied by stocking."
+}

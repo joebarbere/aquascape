@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.macro.flourish-potassium",
+  "version": 1,
+  "name": "Seachem Flourish Potassium",
+  "kind": "nutrient",
+  "category": "macro-salt",
+  "brand": "Seachem",
+  "form": "liquid",
+  "description": "Liquid potassium supplement (potassium sulphate solution). Seachem does not publish a per-dose ppm, so values are NOT disclosed — qualitative `affects` only.",
+  "tags": ["macro", "potassium", "seachem"],
+  "dose": { "amount": 5, "unit": "ml", "perLitres": 125 },
+  "disclosed": false,
+  "affects": ["k"],
+  "source": "https://www.seachem.com/flourish-potassium.php",
+  "color": "#7a6da0",
+  "shrimpSafe": true,
+  "notes": "Label dose ~5 ml per 125 L. Potassium is the macro most often limiting in fish-fed tanks (food supplies N + P but little K)."
+}

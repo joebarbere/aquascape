@@ -139,6 +139,47 @@ import decorMoai from './data/decor/decor-moai.json';
 import decorSkull from './data/decor/decor-skull.json';
 import decorSunkenGalleon from './data/decor/decor-sunken-galleon.json';
 import decorTreasureChest from './data/decor/decor-treasure-chest.json';
+// Nutrients & additives + dosing (F-A) — dry salts / all-in-one liquids /
+// liquid carbon / conditioners / remineralizers / buffers / bacteria.
+// Macro salts (disclosed EI stoichiometry)
+import nutrientMacroKno3 from './data/nutrients/macro-kno3.json';
+import nutrientMacroKh2po4 from './data/nutrients/macro-kh2po4.json';
+import nutrientMacroK2so4 from './data/nutrients/macro-k2so4.json';
+import nutrientMacroMgso4 from './data/nutrients/macro-mgso4.json';
+import nutrientMacroCaso4 from './data/nutrients/macro-caso4.json';
+// Macro liquids (Seachem Flourish single-macro line — proprietary)
+import nutrientMacroFlourishNitrogen from './data/nutrients/macro-flourish-nitrogen.json';
+import nutrientMacroFlourishPhosphorus from './data/nutrients/macro-flourish-phosphorus.json';
+import nutrientMacroFlourishPotassium from './data/nutrients/macro-flourish-potassium.json';
+// Micro / trace
+import nutrientMicroCsmb from './data/nutrients/micro-csmb.json';
+import nutrientMicroFeDtpa from './data/nutrients/micro-fe-dtpa.json';
+import nutrientMicroFlourishComprehensive from './data/nutrients/micro-flourish-comprehensive.json';
+import nutrientMicroFlourishTrace from './data/nutrients/micro-flourish-trace.json';
+import nutrientMicroFlourishIron from './data/nutrients/micro-flourish-iron.json';
+// All-in-one liquids
+import nutrientAioAptComplete from './data/nutrients/aio-apt-complete.json';
+import nutrientAioNilocgThrive from './data/nutrients/aio-nilocg-thrive.json';
+import nutrientAioEasyGreen from './data/nutrients/aio-easy-green.json';
+import nutrientAioTropicaSpecialised from './data/nutrients/aio-tropica-specialised.json';
+import nutrientAioAdaGreenBrighty from './data/nutrients/aio-ada-green-brighty.json';
+import nutrientAioDennerleS7 from './data/nutrients/aio-dennerle-s7.json';
+// Liquid carbon
+import nutrientCarbonFlourishExcel from './data/nutrients/carbon-flourish-excel.json';
+import nutrientCarbonApiCo2Booster from './data/nutrients/carbon-api-co2-booster.json';
+// Conditioners
+import nutrientConditionerPrime from './data/nutrients/conditioner-prime.json';
+import nutrientConditionerApiTapWater from './data/nutrients/conditioner-api-tap-water.json';
+// Bacteria / cycling
+import nutrientBacteriaStability from './data/nutrients/bacteria-stability.json';
+import nutrientBacteriaTetraSafestart from './data/nutrients/bacteria-tetra-safestart.json';
+// Remineralizers
+import nutrientReminEquilibrium from './data/nutrients/remin-equilibrium.json';
+import nutrientReminSaltyshrimpGhPlus from './data/nutrients/remin-saltyshrimp-gh-plus.json';
+import nutrientReminSaltyshrimpGhKhPlus from './data/nutrients/remin-saltyshrimp-gh-kh-plus.json';
+// Buffers
+import nutrientBufferAlkaline from './data/nutrients/buffer-alkaline.json';
+import nutrientBufferAcid from './data/nutrients/buffer-acid.json';
 import { loadCatalog, type CatalogLoadResult } from './loader';
 
 /** Raw manifest array — exposed so tests + tools can re-load it deliberately. */
@@ -268,6 +309,46 @@ export const CORE_CATALOG_MANIFESTS: readonly unknown[] = [
   decorSkull,
   // Structures
   decorCastle,
+  // Nutrients & additives + dosing (F-A) — 30 real products across 8 categories
+  // Macro salts (disclosed EI stoichiometry)
+  nutrientMacroKno3,
+  nutrientMacroKh2po4,
+  nutrientMacroK2so4,
+  nutrientMacroMgso4,
+  nutrientMacroCaso4,
+  // Macro liquids (proprietary Seachem Flourish single-macro line)
+  nutrientMacroFlourishNitrogen,
+  nutrientMacroFlourishPhosphorus,
+  nutrientMacroFlourishPotassium,
+  // Micro / trace
+  nutrientMicroCsmb,
+  nutrientMicroFeDtpa,
+  nutrientMicroFlourishComprehensive,
+  nutrientMicroFlourishTrace,
+  nutrientMicroFlourishIron,
+  // All-in-one liquids
+  nutrientAioAptComplete,
+  nutrientAioNilocgThrive,
+  nutrientAioEasyGreen,
+  nutrientAioTropicaSpecialised,
+  nutrientAioAdaGreenBrighty,
+  nutrientAioDennerleS7,
+  // Liquid carbon
+  nutrientCarbonFlourishExcel,
+  nutrientCarbonApiCo2Booster,
+  // Conditioners
+  nutrientConditionerPrime,
+  nutrientConditionerApiTapWater,
+  // Bacteria / cycling
+  nutrientBacteriaStability,
+  nutrientBacteriaTetraSafestart,
+  // Remineralizers
+  nutrientReminEquilibrium,
+  nutrientReminSaltyshrimpGhPlus,
+  nutrientReminSaltyshrimpGhKhPlus,
+  // Buffers
+  nutrientBufferAlkaline,
+  nutrientBufferAcid,
 ];
 
 /**

@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.conditioner.api-tap-water-conditioner",
+  "version": 1,
+  "name": "API Tap Water Conditioner",
+  "kind": "nutrient",
+  "category": "conditioner",
+  "brand": "API",
+  "form": "liquid",
+  "description": "Highly-concentrated dechlorinator that neutralises chlorine and breaks the chloramine bond. A husbandry safety additive, not a fertiliser — no nutrient `contributes`.",
+  "tags": ["conditioner", "dechlorinate"],
+  "dose": { "amount": 1, "unit": "ml", "perLitres": 240 },
+  "disclosed": false,
+  "affects": ["dechlorinate"],
+  "source": "https://www.apifishcare.com/product/tap-water-conditioner",
+  "color": "#c2b24a",
+  "shrimpSafe": true,
+  "notes": "Very concentrated — label dose ~1 ml per ~240 L (1 ml treats ~60 US gal). Does not detoxify ammonia the way Prime does; pure dechlorinator."
+}

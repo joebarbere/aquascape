@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.bacteria.seachem-stability",
+  "version": 1,
+  "name": "Seachem Stability",
+  "kind": "nutrient",
+  "category": "bacteria",
+  "brand": "Seachem",
+  "form": "liquid",
+  "description": "Live nitrifying + heterotrophic bacteria blend for cycling a new tank and preventing 'new-tank syndrome'. Seeds the biofilter — no water-chemistry `contributes`.",
+  "tags": ["bacteria", "cycling", "biofilter", "seachem"],
+  "dose": { "amount": 5, "unit": "ml", "perLitres": 40 },
+  "disclosed": false,
+  "affects": ["bacteriaSeed"],
+  "source": "https://www.seachem.com/stability.php",
+  "color": "#b0a98f",
+  "shrimpSafe": true,
+  "notes": "Label dose ~5 ml per 40 L daily for the first week. Speeds the nitrogen cycle but does not replace it — still test for ammonia/nitrite before stocking heavily."
+}

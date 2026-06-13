@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "nutrient.macro.kh2po4",
+  "version": 1,
+  "name": "Monopotassium Phosphate (KH2PO4)",
+  "kind": "nutrient",
+  "category": "macro-salt",
+  "brand": "DIY dry salt",
+  "form": "dry",
+  "formula": "KH2PO4",
+  "description": "The macro phosphate source for Estimative Index dosing. Disclosed stoichiometry: 0.1 g in 10 US gal (~37.85 L) raises PO4 by ~1.84 ppm (with a small K contribution).",
+  "tags": ["macro", "phosphate", "potassium", "EI", "dry-salt"],
+  "dose": { "amount": 0.1, "unit": "g", "perLitres": 37.85 },
+  "contributes": { "po4": 1.84, "k": 0.77 },
+  "disclosed": true,
+  "affects": ["po4", "k"],
+  "source": "https://rotalabutterfly.com/rex-grigg/dosing.htm",
+  "color": "#dfe6ea",
+  "shrimpSafe": true,
+  "notes": "Phosphate source for high-tech planted tanks. Overdosing phosphate alone rarely harms plants but can fuel algae if light/CO2 are unbalanced."
+}

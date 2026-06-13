@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.conditioner.seachem-prime",
+  "version": 1,
+  "name": "Seachem Prime",
+  "kind": "nutrient",
+  "category": "conditioner",
+  "brand": "Seachem",
+  "form": "liquid",
+  "description": "Concentrated water conditioner: removes chlorine + chloramine and temporarily detoxifies ammonia, nitrite, and nitrate. A husbandry safety additive, not a fertiliser — no nutrient `contributes`.",
+  "tags": ["conditioner", "dechlorinate", "ammonia", "seachem"],
+  "dose": { "amount": 5, "unit": "ml", "perLitres": 200 },
+  "disclosed": false,
+  "affects": ["dechlorinate", "ammoniaDetox"],
+  "source": "https://www.seachem.com/prime.php",
+  "color": "#caa84a",
+  "shrimpSafe": true,
+  "notes": "Label dose ~5 ml (1 capful) per 200 L at water change. Ammonia detox is temporary (~24-48 h) — it converts ammonia to a non-toxic, still bio-available form."
+}

@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "nutrient.macro.k2so4",
+  "version": 1,
+  "name": "Potassium Sulphate (K2SO4)",
+  "kind": "nutrient",
+  "category": "macro-salt",
+  "brand": "DIY dry salt",
+  "form": "dry",
+  "formula": "K2SO4",
+  "description": "Standalone potassium source — adds K without nitrate or phosphate. Disclosed stoichiometry: 1.0 g in 10 US gal (~37.85 L) raises K by ~11.82 ppm.",
+  "tags": ["macro", "potassium", "EI", "dry-salt"],
+  "dose": { "amount": 1.0, "unit": "g", "perLitres": 37.85 },
+  "contributes": { "k": 11.82 },
+  "disclosed": true,
+  "affects": ["k"],
+  "source": "https://rotalabutterfly.com/rex-grigg/dosing.htm",
+  "color": "#eceae2",
+  "shrimpSafe": true,
+  "notes": "Used to top up potassium when KNO3 + KH2PO4 don't supply enough K on their own."
+}

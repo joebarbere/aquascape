@@ -1,0 +1,20 @@
+{
+  "catalog": "core",
+  "id": "nutrient.remin.seachem-equilibrium",
+  "version": 1,
+  "name": "Seachem Equilibrium",
+  "kind": "nutrient",
+  "category": "remineralizer",
+  "brand": "Seachem",
+  "form": "dry",
+  "description": "GH / mineral builder for soft or RO water — adds K, Ca, and Mg without sodium or chloride. Manufacturer-disclosed: 16 g in 80 L raises GH by 3 dGH (1 meq/L). Guaranteed analysis: 23% K2O, 8.06% Ca, 2.41% Mg.",
+  "tags": ["remineralizer", "gh", "potassium", "calcium", "magnesium", "seachem"],
+  "dose": { "amount": 16, "unit": "g", "perLitres": 80 },
+  "contributes": { "gh": 3 },
+  "disclosed": true,
+  "affects": ["gh", "k", "traces"],
+  "source": "https://www.seachem.com/equilibrium.php",
+  "color": "#dfe4d8",
+  "shrimpSafe": true,
+  "notes": "Raises GH only (not KH). The Ca:Mg ratio (~3.3:1) suits most planted tanks. Contributes potassium, so factor it into a K-dosing plan."
+}

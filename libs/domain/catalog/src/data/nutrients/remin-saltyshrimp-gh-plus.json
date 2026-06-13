@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.remin.saltyshrimp-bee-gh-plus",
+  "version": 1,
+  "name": "SaltyShrimp Bee Shrimp Mineral GH+",
+  "kind": "nutrient",
+  "category": "remineralizer",
+  "brand": "SaltyShrimp",
+  "form": "dry",
+  "description": "Remineralizer for soft-water (Caridina / bee) shrimp tanks — raises GH while leaving KH near zero, for the soft acidic water bee shrimp need. The per-gram dGH is dialled to a target GH rather than published as a fixed delta, so values are NOT disclosed.",
+  "tags": ["remineralizer", "gh", "shrimp", "caridina"],
+  "dose": { "amount": 0.15, "unit": "g", "perLitres": 1 },
+  "disclosed": false,
+  "affects": ["gh"],
+  "source": "https://www.garnelenhaus.com/en/SaltyShrimp-Bee-Shrimp-Mineral-GH",
+  "color": "#e0ded4",
+  "shrimpSafe": true,
+  "notes": "Dose to a target GH with a TDS / GH test (community guidance ~0.15-0.2 g/L for 5-6 dGH); the manufacturer specifies a target rather than a fixed per-gram ppm. Raises GH only — pairs with active soil for Caridina."
+}

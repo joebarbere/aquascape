@@ -2,14 +2,15 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aquascape.dev/schemas/catalog-entry-v3.json",
   "title": "CatalogEntry",
-  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 + 7 F7.3 ship `substrate` + `hardscape` + `plant` + `livestock` + `equipment`. Future stages add tank under the same oneOf. Manifest schemaVersion 3 (Stage 11 F11.2) adds the optional `behavior` block on `LivestockEntry`; v2 manifests load unchanged because every behavior subfield is optional + additive (`resolveBehavior()` falls back to per-group presets when the block is absent). Stage 11 F11.3 extends the same v3 schema additively with `behavior.territory` / `nipping` / `fear` on livestock and `coverScore` on hardscape — no manifest version bump. Stage 11 F11.4 extends the same v3 schema additively with `behavior.feeding` / `curiosity` on livestock — no manifest version bump. Stage 11 F11.5 extends the same v3 schema additively with `flow` (filter / pump outflow + intake + flowRate) and `airRateMl` (air-stone bubble volumetric rate) on equipment — no manifest version bump. Stage 11 F11.7 extends the same v3 schema additively with `photoperiodHours` on equipment (lighting only) — no manifest version bump. The 3D-fidelity Bucket 2 pass extends the same v3 schema additively with the optional `textures` block (albedo / normal / roughness PNG refs) on substrate + hardscape + plant — no manifest version bump; livestock is deliberately excluded (per-species textures fight the per-archetype InstancedMesh batching). The overhead-equipment-lighting pass extends the same v3 schema additively with the optional `light` block (lumens / colorTempK / beamAngleDeg / fixtureLengthMm) on equipment (lighting only) — no manifest version bump. The decor pass adds a sixth oneOf branch `DecorEntry` (GLB-modelled classic aquarium ornaments referencing a `.glb` file under the catalog model root) — purely additive, manifest schemaVersion stays at 3; pre-decor readers surface a per-entry validation error for the unknown kind (the loader never silently drops it).",
+  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 + 7 F7.3 ship `substrate` + `hardscape` + `plant` + `livestock` + `equipment`. Future stages add tank under the same oneOf. Manifest schemaVersion 3 (Stage 11 F11.2) adds the optional `behavior` block on `LivestockEntry`; v2 manifests load unchanged because every behavior subfield is optional + additive (`resolveBehavior()` falls back to per-group presets when the block is absent). Stage 11 F11.3 extends the same v3 schema additively with `behavior.territory` / `nipping` / `fear` on livestock and `coverScore` on hardscape — no manifest version bump. Stage 11 F11.4 extends the same v3 schema additively with `behavior.feeding` / `curiosity` on livestock — no manifest version bump. Stage 11 F11.5 extends the same v3 schema additively with `flow` (filter / pump outflow + intake + flowRate) and `airRateMl` (air-stone bubble volumetric rate) on equipment — no manifest version bump. Stage 11 F11.7 extends the same v3 schema additively with `photoperiodHours` on equipment (lighting only) — no manifest version bump. The 3D-fidelity Bucket 2 pass extends the same v3 schema additively with the optional `textures` block (albedo / normal / roughness PNG refs) on substrate + hardscape + plant — no manifest version bump; livestock is deliberately excluded (per-species textures fight the per-archetype InstancedMesh batching). The overhead-equipment-lighting pass extends the same v3 schema additively with the optional `light` block (lumens / colorTempK / beamAngleDeg / fixtureLengthMm) on equipment (lighting only) — no manifest version bump. The decor pass adds a sixth oneOf branch `DecorEntry` (GLB-modelled classic aquarium ornaments referencing a `.glb` file under the catalog model root) — purely additive, manifest schemaVersion stays at 3; pre-decor readers surface a per-entry validation error for the unknown kind (the loader never silently drops it). The Nutrients & additives + dosing feature (F-A) adds a seventh oneOf branch `NutrientEntry` (real-world dry salts / all-in-one liquids / liquid carbon / conditioners / remineralizers / buffers / bacteria) — purely additive, manifest schemaVersion stays at 3. Disclosed products carry honest per-dose ppm/dGH in `contributes`; proprietary products set `disclosed: false`, omit `contributes`, and rely on the qualitative `affects` list (fabricating proprietary ppm is forbidden).",
   "oneOf": [
     { "$ref": "#/$defs/SubstrateEntry" },
     { "$ref": "#/$defs/HardscapeEntry" },
     { "$ref": "#/$defs/PlantEntry" },
     { "$ref": "#/$defs/LivestockEntry" },
     { "$ref": "#/$defs/EquipmentEntry" },
-    { "$ref": "#/$defs/DecorEntry" }
+    { "$ref": "#/$defs/DecorEntry" },
+    { "$ref": "#/$defs/NutrientEntry" }
   ],
   "$defs": {
     "HexColor": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" },
@@ -698,6 +699,117 @@
               "description": "Physical fixture length along the tank's width axis, in mm. Sizes the 3D renderer's fixture mesh."
             }
           }
+        }
+      }
+    },
+    "NutrientContributions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-dose parameter contributions in hobby units: ppm for no3 / po4 / k / fe / mg / ca, and degrees (dGH / dKH) for gh / kh. Stated for one representative `dose`; the DoseNutrient Command scales linearly by amount. Populate ONLY for disclosed products (disclosed: true) — proprietary products omit this block. Every field is optional so a product can disclose a subset.",
+      "properties": {
+        "no3": { "type": "number", "minimum": 0, "description": "Nitrate (NO3) added, in ppm, per representative dose." },
+        "po4": { "type": "number", "minimum": 0, "description": "Phosphate (PO4) added, in ppm, per representative dose." },
+        "k": { "type": "number", "minimum": 0, "description": "Potassium (K) added, in ppm, per representative dose." },
+        "fe": { "type": "number", "minimum": 0, "description": "Iron (Fe) added, in ppm, per representative dose." },
+        "mg": { "type": "number", "minimum": 0, "description": "Magnesium (Mg) added, in ppm, per representative dose." },
+        "ca": { "type": "number", "minimum": 0, "description": "Calcium (Ca) added, in ppm, per representative dose." },
+        "gh": { "type": "number", "minimum": 0, "description": "General hardness raised, in degrees (dGH), per representative dose." },
+        "kh": { "type": "number", "minimum": 0, "description": "Carbonate hardness raised, in degrees (dKH), per representative dose." }
+      }
+    },
+    "NutrientEntry": {
+      "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }],
+      "type": "object",
+      "required": ["kind", "category", "brand", "form", "dose", "disclosed", "affects", "color"],
+      "additionalProperties": false,
+      "properties": {
+        "catalog": true,
+        "id": true,
+        "version": true,
+        "name": true,
+        "description": true,
+        "tags": true,
+        "kind": { "const": "nutrient" },
+        "category": {
+          "enum": [
+            "macro-salt",
+            "micro-trace",
+            "all-in-one",
+            "liquid-carbon",
+            "conditioner",
+            "remineralizer",
+            "buffer",
+            "bacteria"
+          ],
+          "description": "Coarse classification — drives the Dose picker filter chips + the DoseNutrient category-default delta for proprietary products."
+        },
+        "brand": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Manufacturer / brand (e.g. 'Seachem', '2Hr Aquarist', 'DIY dry salt')."
+        },
+        "form": {
+          "enum": ["dry", "liquid"],
+          "description": "Physical form: weighed dry salts vs. bottled liquid."
+        },
+        "dose": {
+          "type": "object",
+          "required": ["amount", "unit", "perLitres"],
+          "additionalProperties": false,
+          "description": "The representative dose the `contributes` figures are stated for (e.g. { amount: 5, unit: 'ml', perLitres: 100 } = '5 ml per 100 L').",
+          "properties": {
+            "amount": { "type": "number", "exclusiveMinimum": 0, "description": "Amount of product per `perLitres` of tank water." },
+            "unit": { "enum": ["g", "ml"], "description": "Unit of `amount` — grams (dry) or millilitres (liquid)." },
+            "perLitres": { "type": "number", "exclusiveMinimum": 0, "description": "Tank-water volume the dose is stated against, in litres." }
+          }
+        },
+        "contributes": {
+          "$ref": "#/$defs/NutrientContributions",
+          "description": "Per-dose ppm / dGH contributions — present ONLY for disclosed products. Omitted for proprietary products (disclosed: false). JSON Schema cannot enforce the disclosed ⇒ contributes coupling declaratively; the manifest author owes it (advisory, mirrored by a core-catalog test)."
+        },
+        "disclosed": {
+          "type": "boolean",
+          "description": "Whether the per-dose `contributes` figures are publicly disclosed. false marks a proprietary product whose entry carries qualitative `affects` only (and omits `contributes`)."
+        },
+        "affects": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "no3",
+              "po4",
+              "k",
+              "fe",
+              "traces",
+              "gh",
+              "kh",
+              "ph",
+              "ammoniaDetox",
+              "carbon",
+              "bacteriaSeed",
+              "dechlorinate"
+            ]
+          },
+          "description": "Honest qualitative list of which water-chemistry / husbandry parameters this product moves. Declared on every entry (disclosed or not)."
+        },
+        "formula": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Chemical formula for dry salts (e.g. 'KNO3'). Omitted for proprietary liquids."
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Citation URL for the disclosed values / product page."
+        },
+        "color": { "$ref": "#/$defs/HexColor" },
+        "shrimpSafe": {
+          "type": "boolean",
+          "description": "True when the product is safe for shrimp tanks (liquid carbon + some trace mixes are not). Absent = unspecified."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free-form caveats (e.g. 'overdosing melts Vallisneria / mosses')."
         }
       }
     }

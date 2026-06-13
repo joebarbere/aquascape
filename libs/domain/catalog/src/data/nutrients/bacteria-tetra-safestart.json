@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.bacteria.tetra-safestart-plus",
+  "version": 1,
+  "name": "Tetra SafeStart Plus",
+  "kind": "nutrient",
+  "category": "bacteria",
+  "brand": "Tetra",
+  "form": "liquid",
+  "description": "Live nitrifying bacteria for instant biofilter seeding, allowing fish to be added sooner. Seeds the biofilter — no water-chemistry `contributes`.",
+  "tags": ["bacteria", "cycling", "biofilter"],
+  "dose": { "amount": 5, "unit": "ml", "perLitres": 38 },
+  "disclosed": false,
+  "affects": ["bacteriaSeed"],
+  "source": "https://www.tetra-fish.com/products/water-care/tetra-safestart-plus.aspx",
+  "color": "#a8a285",
+  "shrimpSafe": true,
+  "notes": "Single dose at setup; avoid dosing dechlorinator-heavy water within 24 h as it can stress the live culture. Roughly 5 ml per 38 L (per 10 US gal)."
+}

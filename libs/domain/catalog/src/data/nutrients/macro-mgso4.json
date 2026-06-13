@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "nutrient.macro.mgso4",
+  "version": 1,
+  "name": "Magnesium Sulphate (MgSO4·7H2O, Epsom Salt)",
+  "kind": "nutrient",
+  "category": "macro-salt",
+  "brand": "DIY dry salt",
+  "form": "dry",
+  "formula": "MgSO4·7H2O",
+  "description": "Magnesium source (Epsom salt). MgSO4 heptahydrate is ~9.86% Mg by mass, so 1 g in 100 L raises Mg by ~1 ppm (disclosed stoichiometry).",
+  "tags": ["macro", "magnesium", "epsom", "dry-salt"],
+  "dose": { "amount": 1.0, "unit": "g", "perLitres": 100 },
+  "contributes": { "mg": 1 },
+  "disclosed": true,
+  "affects": ["traces"],
+  "source": "https://www.2hraquarist.com/blogs/fertilize-planted-tank/mixing-dry-aquarium-fertilisers",
+  "color": "#e6f0ee",
+  "shrimpSafe": true,
+  "notes": "Used to correct a Ca:Mg imbalance (target ~3:1 to 4:1). Adds Mg without raising carbonate hardness."
+}

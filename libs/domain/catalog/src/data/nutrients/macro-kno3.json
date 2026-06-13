@@ -1,0 +1,21 @@
+{
+  "catalog": "core",
+  "id": "nutrient.macro.kno3",
+  "version": 1,
+  "name": "Potassium Nitrate (KNO3)",
+  "kind": "nutrient",
+  "category": "macro-salt",
+  "brand": "DIY dry salt",
+  "form": "dry",
+  "formula": "KNO3",
+  "description": "The macro nitrate source for Estimative Index dosing. Disclosed stoichiometry: 0.3 g in 10 US gal (~37.85 L) raises NO3 by ~4.84 ppm and K by ~3.1 ppm.",
+  "tags": ["macro", "nitrate", "potassium", "EI", "dry-salt"],
+  "dose": { "amount": 0.3, "unit": "g", "perLitres": 37.85 },
+  "contributes": { "no3": 4.84, "k": 3.1 },
+  "disclosed": true,
+  "affects": ["no3", "k"],
+  "source": "https://rotalabutterfly.com/rex-grigg/dosing.htm",
+  "color": "#e8e4d8",
+  "shrimpSafe": true,
+  "notes": "Primary nitrogen source for high-tech planted tanks. Pair with KH2PO4 + a trace mix for a complete EI regimen."
+}

@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.micro.flourish-iron",
+  "version": 1,
+  "name": "Seachem Flourish Iron",
+  "kind": "nutrient",
+  "category": "micro-trace",
+  "brand": "Seachem",
+  "form": "liquid",
+  "description": "Ferrous-gluconate iron supplement for plants showing iron deficiency despite a comprehensive regimen. Seachem does not publish a per-dose ppm, so values are NOT disclosed — qualitative `affects` only.",
+  "tags": ["micro", "iron", "seachem"],
+  "dose": { "amount": 5, "unit": "ml", "perLitres": 200 },
+  "disclosed": false,
+  "affects": ["fe"],
+  "source": "https://www.seachem.com/flourish-iron.php",
+  "color": "#9a5a2f",
+  "shrimpSafe": true,
+  "notes": "Gluconate iron is fast-uptake but short-lived in the water column. Label dose ~5 ml per 200 L; dose to correct visible Fe deficiency, not blindly."
+}

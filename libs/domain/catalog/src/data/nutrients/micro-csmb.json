@@ -1,0 +1,20 @@
+{
+  "catalog": "core",
+  "id": "nutrient.micro.csmb",
+  "version": 1,
+  "name": "Plantex CSM+B Trace Mix",
+  "kind": "nutrient",
+  "category": "micro-trace",
+  "brand": "DIY dry salt",
+  "form": "dry",
+  "description": "The classic chelated micronutrient mix for planted tanks. Published composition: 7.0% Fe (EDTA), 2.0% Mn, 1.5% Mg, 0.8% B, 0.4% Zn, 0.1% Cu, 0.06% Mo. A representative ~1.16 g in 40 US gal (~151 L) reaches ~0.5 ppm Fe.",
+  "tags": ["micro", "trace", "iron", "EI", "dry-salt"],
+  "dose": { "amount": 1.16, "unit": "g", "perLitres": 151.4 },
+  "contributes": { "fe": 0.5, "mg": 0.107 },
+  "disclosed": true,
+  "affects": ["fe", "traces"],
+  "source": "https://classicalaquascaping.wordpress.com/2016/02/29/the-unbalanced-micronutrient-fertilizer-csmb/",
+  "color": "#caa65a",
+  "shrimpSafe": false,
+  "notes": "Iron is EDTA-chelated — availability drops above pH ~7. Copper content means caution in shrimp tanks; dose conservatively."
+}

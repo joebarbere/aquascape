@@ -20,6 +20,10 @@ export type {
   HexColor,
   LivestockEntry,
   Millimetres,
+  NutrientCategory,
+  NutrientContributions,
+  NutrientEffect,
+  NutrientEntry,
   PlantEntry,
   SubstrateEntry,
 } from './types';

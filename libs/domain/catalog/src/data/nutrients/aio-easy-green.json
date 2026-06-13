@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.aio.easy-green",
+  "version": 1,
+  "name": "Aquarium Co-Op Easy Green",
+  "kind": "nutrient",
+  "category": "all-in-one",
+  "brand": "Aquarium Co-Op",
+  "form": "liquid",
+  "description": "Popular beginner-friendly all-in-one liquid. The manufacturer publishes a guaranteed-analysis nitrogen figure but not a full per-dose ppm breakdown across all axes, so values are NOT disclosed here — qualitative `affects` only.",
+  "tags": ["all-in-one", "macro", "micro", "beginner"],
+  "dose": { "amount": 1, "unit": "ml", "perLitres": 37.85 },
+  "disclosed": false,
+  "affects": ["no3", "po4", "k", "fe", "traces"],
+  "source": "https://www.aquariumcoop.com/products/easy-green-fertilizer",
+  "color": "#4f9a5e",
+  "shrimpSafe": true,
+  "notes": "1 pump per 10 US gal is the label dose. Proprietary blend — per-dose ppm not fully published, so dosing effect is modelled by an all-in-one category default downstream."
+}

@@ -1,0 +1,19 @@
+{
+  "catalog": "core",
+  "id": "nutrient.micro.flourish-trace",
+  "version": 1,
+  "name": "Seachem Flourish Trace",
+  "kind": "nutrient",
+  "category": "micro-trace",
+  "brand": "Seachem",
+  "form": "liquid",
+  "description": "Concentrated trace-element supplement (boron, cobalt, manganese, molybdenum, zinc, etc.). Seachem does not publish a per-dose ppm, so values are NOT disclosed — qualitative `affects` only.",
+  "tags": ["micro", "trace", "seachem"],
+  "dose": { "amount": 5, "unit": "ml", "perLitres": 80 },
+  "disclosed": false,
+  "affects": ["traces"],
+  "source": "https://www.seachem.com/flourish-trace.php",
+  "color": "#5c8f6a",
+  "shrimpSafe": true,
+  "notes": "Label dose ~5 ml per 80 L twice weekly. Replenishes trace minerals depleted by uptake + water changes; complements Flourish Comprehensive."
+}
