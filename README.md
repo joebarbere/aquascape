@@ -147,7 +147,7 @@ Every livestock entry in the document becomes visible, behaving fish in the 3D v
 - Crash-recovery autosave debounced every 3 s
 - Recent-files menu
 - **Image export** — PNG / JPEG at 1080p / 2K / 4K
-- **Setup-sheet export** — Markdown / JSON combining tank dimensions, water volume, plants, hardscape, livestock per-species stats, equipment per-item stats, and the live stocking-warnings list
+- **Setup-sheet export** — Markdown / JSON combining tank dimensions, water volume, plants, hardscape, decor, livestock per-species stats, equipment per-item stats, and the live stocking-warnings list
 
 ### 🎨 UX polish
 
@@ -218,7 +218,6 @@ Everything above is shipped. Remaining work, roughly in priority order:
 - [ ] **Image tank backgrounds** — solid + gradient ship today.
 - [ ] **Per-species fish textures** — deferred; fights per-archetype instancing and the WebGL 16-attribute budget.
 - [ ] **Code signing** — Apple Developer ID + Windows EV certificate for production installers.
-- [ ] **Decor in export summaries** — `features/export` summary grouping covers plants + hardscape only; decoration objects don't appear in exported text summaries yet.
 - [ ] **Empty placeholders to fill** — `libs/ui/` (shared presentational components), `apps/desktop-e2e/` (Playwright-Electron).
 
 ### Simulation & gameplay roadmap

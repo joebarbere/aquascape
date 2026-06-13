@@ -27,6 +27,12 @@ const fakeCatalog: Catalog = {
     if (id === 'wood.spider') {
       return { kind: 'hardscape', name: 'Spiderwood', id: 'wood.spider', catalog: 'core', version: 1 } as never;
     }
+    if (id === 'decor.treasure-chest') {
+      return { kind: 'decor', name: 'Treasure Chest', id: 'decor.treasure-chest', catalog: 'core', version: 1, category: 'wreck' } as never;
+    }
+    if (id === 'decor.greek-column') {
+      return { kind: 'decor', name: 'Greek Column', id: 'decor.greek-column', catalog: 'core', version: 1, category: 'ruin' } as never;
+    }
     return null;
   },
   byKind() {
@@ -96,6 +102,21 @@ function plant(id: string, catalogId: string, scatter?: { density: number; size:
 function hardscape(id: string, catalogId: string): SceneObject {
   return {
     kind: 'hardscape' as const,
+    id: id as never,
+    ref: { catalog: 'core', id: catalogId, version: 1 },
+    transform: {
+      position: { x: 100, y: 100, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      flipX: false,
+      flipY: false,
+    },
+  } as SceneObject;
+}
+
+function decor(id: string, catalogId: string): SceneObject {
+  return {
+    kind: 'decor' as const,
     id: id as never,
     ref: { catalog: 'core', id: catalogId, version: 1 },
     transform: {
@@ -207,6 +228,57 @@ describe('summarizeScene — counts', () => {
   });
 });
 
+describe('summarizeScene — decor', () => {
+  it('returns an empty decor list + zero total when the scene has none', () => {
+    const s = makeScene({
+      layers: [{ objects: [plant('p1', 'plant.hc'), hardscape('h1', 'rock.seiryu')] }],
+    });
+    const sum = summarizeScene(s, fakeCatalog);
+    expect(sum.decor).toEqual([]);
+    expect(sum.totalDecorPieces).toBe(0);
+  });
+
+  it('groups decor objects by catalog ref with per-entry counts', () => {
+    const s = makeScene({
+      layers: [
+        {
+          objects: [
+            decor('d1', 'decor.treasure-chest'),
+            decor('d2', 'decor.treasure-chest'),
+            decor('d3', 'decor.greek-column'),
+          ],
+        },
+      ],
+    });
+    const sum = summarizeScene(s, fakeCatalog);
+    expect(sum.decor).toEqual([
+      { catalogId: 'decor.treasure-chest', name: 'Treasure Chest', count: 2 },
+      { catalogId: 'decor.greek-column', name: 'Greek Column', count: 1 },
+    ]);
+    expect(sum.totalDecorPieces).toBe(3);
+  });
+
+  it('falls back to the catalog id when the decor name cannot be resolved', () => {
+    const s = makeScene({ layers: [{ objects: [decor('d1', 'decor.unknown')] }] });
+    const sum = summarizeScene(s, fakeCatalog);
+    expect(sum.decor[0]?.name).toBe('decor.unknown');
+  });
+
+  it('skips decor in invisible layers', () => {
+    const s = makeScene({
+      layers: [
+        { visible: false, objects: [decor('d1', 'decor.treasure-chest')] },
+        { objects: [decor('d2', 'decor.greek-column')] },
+      ],
+    });
+    const sum = summarizeScene(s, fakeCatalog);
+    expect(sum.decor).toEqual([
+      { catalogId: 'decor.greek-column', name: 'Greek Column', count: 1 },
+    ]);
+    expect(sum.totalDecorPieces).toBe(1);
+  });
+});
+
 describe('summarizeScene — tank + volume', () => {
   it('passes tank dimensions through unchanged', () => {
     const s = makeScene();
@@ -266,6 +338,36 @@ describe('formatSummaryMarkdown', () => {
     const md = formatSummaryMarkdown(summarizeScene(s, fakeCatalog));
     expect(md).toContain('- **Seiryu Stone** × 2');
     expect(md).toContain('Total pieces: 2');
+  });
+
+  it('omits the Decor section when the scene has no decor', () => {
+    const s = makeScene({
+      layers: [{ objects: [hardscape('h1', 'rock.seiryu'), plant('p1', 'plant.hc')] }],
+    });
+    const md = formatSummaryMarkdown(summarizeScene(s, fakeCatalog));
+    expect(md).not.toContain('## Decor');
+  });
+
+  it('renders the Decor section with bolded names, counts + total', () => {
+    const s = makeScene({
+      layers: [
+        {
+          objects: [
+            decor('d1', 'decor.treasure-chest'),
+            decor('d2', 'decor.treasure-chest'),
+            decor('d3', 'decor.greek-column'),
+          ],
+        },
+      ],
+    });
+    const md = formatSummaryMarkdown(summarizeScene(s, fakeCatalog));
+    expect(md).toContain('## Decor');
+    expect(md).toContain('- **Treasure Chest** × 2');
+    expect(md).toContain('- **Greek Column** × 1');
+    expect(md).toContain('Total pieces: 3');
+    // Decor sits between Hardscape and Plants.
+    expect(md.indexOf('## Hardscape')).toBeLessThan(md.indexOf('## Decor'));
+    expect(md.indexOf('## Decor')).toBeLessThan(md.indexOf('## Plants'));
   });
 });
 

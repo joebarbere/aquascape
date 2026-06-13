@@ -3,9 +3,10 @@
 //
 // Turn a `Scene` (+ catalog) into a shape suitable for export as Markdown
 // or JSON: tank dimensions, water + substrate volume, plant list grouped
-// by catalog ref, hardscape list grouped by catalog ref, layer count,
-// livestock inventory with per-species stats, equipment inventory with
-// per-item stats, and the live stocking-guidance warnings. Carpet plants
+// by catalog ref, hardscape list grouped by catalog ref, decor list grouped
+// by catalog ref, layer count, livestock inventory with per-species stats,
+// equipment inventory with per-item stats, and the live stocking-guidance
+// warnings. Carpet plants
 // (scatter polygons) report instance count derived from `density` (1
 // instance per `density² / 1000` mm² of polygon area — matches the
 // renderer's deterministic placement).
@@ -19,6 +20,7 @@
 
 import type {
   Catalog,
+  DecorEntry,
   EquipmentEntry as CatalogEquipmentEntry,
   HardscapeEntry,
   LivestockEntry as CatalogLivestockEntry,
@@ -49,12 +51,16 @@ export interface SceneSummary {
   readonly plants: ReadonlyArray<SummaryItem>;
   /** Hardscape pieces grouped by catalog ref. `count` = number of objects. */
   readonly hardscape: ReadonlyArray<SummaryItem>;
+  /** Decor ornaments grouped by catalog ref. `count` = number of objects. */
+  readonly decor: ReadonlyArray<SummaryItem>;
   /** Number of visible layers. */
   readonly layerCount: number;
   /** Sum of `plants[i].count`. */
   readonly totalPlantInstances: number;
   /** Sum of `hardscape[i].count`. */
   readonly totalHardscapePieces: number;
+  /** Sum of `decor[i].count`. */
+  readonly totalDecorPieces: number;
   /** Livestock inventory (F7.4) — one row per species with per-species stats. */
   readonly livestock: ReadonlyArray<LivestockSummaryItem>;
   /** Sum of `livestock[i].quantity`. */
@@ -121,6 +127,7 @@ export interface StockingWarningSummaryItem extends StockingWarning {
 export function summarizeScene(scene: Scene, catalog: Catalog | null): SceneSummary {
   const plantCounts = new Map<string, number>();
   const hardscapeCounts = new Map<string, number>();
+  const decorCounts = new Map<string, number>();
   let layerCount = 0;
 
   for (const layer of scene.layers) {
@@ -134,6 +141,9 @@ export function summarizeScene(scene: Scene, catalog: Catalog | null): SceneSumm
       } else if (obj.kind === 'hardscape') {
         const key = catalogRefKey(obj.ref);
         hardscapeCounts.set(key, (hardscapeCounts.get(key) ?? 0) + 1);
+      } else if (obj.kind === 'decor') {
+        const key = catalogRefKey(obj.ref);
+        decorCounts.set(key, (decorCounts.get(key) ?? 0) + 1);
       }
     }
   }
@@ -142,6 +152,7 @@ export function summarizeScene(scene: Scene, catalog: Catalog | null): SceneSumm
   const hardscape = sortedItems(hardscapeCounts, (id) =>
     lookupName(catalog, id, 'hardscape'),
   );
+  const decor = sortedItems(decorCounts, (id) => lookupName(catalog, id, 'decor'));
 
   const livestock = summarizeLivestock(scene.livestock ?? [], catalog);
   const equipment = summarizeEquipment(scene.equipment ?? [], catalog);
@@ -156,9 +167,11 @@ export function summarizeScene(scene: Scene, catalog: Catalog | null): SceneSumm
     volume: computeVolumeBreakdown(scene),
     plants,
     hardscape,
+    decor,
     layerCount,
     totalPlantInstances: plants.reduce((s, p) => s + p.count, 0),
     totalHardscapePieces: hardscape.reduce((s, h) => s + h.count, 0),
+    totalDecorPieces: decor.reduce((s, d) => s + d.count, 0),
     livestock,
     totalLivestock: livestock.reduce((s, l) => s + l.quantity, 0),
     equipment,
@@ -307,14 +320,18 @@ function sortedItems(
 function lookupName(
   catalog: Catalog | null,
   catalogId: string,
-  kind: 'plant' | 'hardscape',
+  kind: 'plant' | 'hardscape' | 'decor',
 ): string {
   if (catalog === null) return catalogId;
   const entry = catalog.get({ catalog: 'core', id: catalogId });
   if (entry === null || entry === undefined) return catalogId;
-  // Both PlantEntry + HardscapeEntry carry a `name` field.
-  if ((kind === 'plant' && entry.kind === 'plant') || (kind === 'hardscape' && entry.kind === 'hardscape')) {
-    return (entry as PlantEntry | HardscapeEntry).name;
+  // PlantEntry + HardscapeEntry + DecorEntry each carry a `name` field.
+  if (
+    (kind === 'plant' && entry.kind === 'plant') ||
+    (kind === 'hardscape' && entry.kind === 'hardscape') ||
+    (kind === 'decor' && entry.kind === 'decor')
+  ) {
+    return (entry as PlantEntry | HardscapeEntry | DecorEntry).name;
   }
   return catalogId;
 }
@@ -357,6 +374,18 @@ export function formatSummaryMarkdown(summary: SceneSummary): string {
     lines.push(`Total pieces: ${summary.totalHardscapePieces}`);
   }
   lines.push('');
+  // ── Decor — rendered only when present (an empty scene keeps the
+  //    pre-decor Hardscape + Plants "_None._" layout unchanged). ──────────
+  if (summary.decor.length > 0) {
+    lines.push('## Decor');
+    lines.push('');
+    for (const item of summary.decor) {
+      lines.push(`- **${item.name}** × ${item.count}`);
+    }
+    lines.push('');
+    lines.push(`Total pieces: ${summary.totalDecorPieces}`);
+    lines.push('');
+  }
   lines.push('## Plants');
   lines.push('');
   if (summary.plants.length === 0) {

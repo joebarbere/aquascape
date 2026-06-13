@@ -142,7 +142,8 @@ interface FeedbackState {
           <section class="export-dialog__section">
             <h3 class="export-dialog__section-title">Layout summary</h3>
             <p class="export-dialog__hint">
-              Tank dimensions, water volume, plant list, hardscape list.
+              Tank dimensions, water volume, plant list, hardscape list, decor
+              list.
             </p>
 
             <label class="export-dialog__field">
