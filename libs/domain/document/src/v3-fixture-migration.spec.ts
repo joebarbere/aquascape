@@ -7,18 +7,19 @@
  * forward — every future format change adds a new fixture next to it and a
  * test that loads each in turn.
  *
- * The contract for v3 → v4 is:
- *   1. The v3 fixture loads under the current (v4) reader (v4 is a structural
- *      superset of v3 — `Tank.waterChemistry` is additive and optional).
- *   2. After loading, `schemaVersion === 4` (the migration ran).
- *   3. The tank ends up with `waterChemistry` ABSENT (the migration is a pure
- *      identity that bumps the version number; it MUST NOT invent chemistry —
- *      absent means "no chemistry recorded", and inventing a snapshot would
- *      falsely claim a never-cycled tank had been cycled).
- *   4. The loader reports the single applied step `{ from: 3, to: 4 }`.
+ * The contract for loading the v3 fixture under the current (v5) reader is:
+ *   1. The v3 fixture loads (v4 added `Tank.waterChemistry` additively; v5
+ *      removed `renderHistory`, which the fixture never carried).
+ *   2. After loading, `schemaVersion === 5` (the v3 → v4 → v5 chain ran).
+ *   3. The tank ends up with `waterChemistry` ABSENT (the v3 → v4 step is a
+ *      pure identity that bumps the version number; it MUST NOT invent
+ *      chemistry — absent means "no chemistry recorded", and inventing a
+ *      snapshot would falsely claim a never-cycled tank had been cycled).
+ *   4. The loader reports the applied steps `{ 3 → 4 }, { 4 → 5 }` in order.
  *   5. Apart from `schemaVersion`, the document is byte-for-byte unchanged
- *      (no shape rewrites slipped in under the no-op label — in particular the
- *      v3 `Tank.waterLevelMm` value survives untouched).
+ *      (no shape rewrites slipped in — in particular the v3 `Tank.waterLevelMm`
+ *      value survives untouched, and the fixture carried no `renderHistory` for
+ *      the v5 step to strip).
  */
 
 import { readFileSync } from 'node:fs';
@@ -31,25 +32,28 @@ const V3_FIXTURE_PATH = resolve(__dirname, '__fixtures__/example.v3.aqua.json');
 const V3_FIXTURE_JSON = readFileSync(V3_FIXTURE_PATH, 'utf8');
 const V3_FIXTURE: AquaDocument = JSON.parse(V3_FIXTURE_JSON);
 
-describe('v3 → v4 migration (pinned fixture)', () => {
-  it('loads the v3 fixture successfully under the current (v4) reader', () => {
+describe('v3 → current migration (pinned fixture)', () => {
+  it('loads the v3 fixture successfully under the current (v5) reader', () => {
     const result = loadAquaDocument(V3_FIXTURE_JSON);
     expect(result.ok).toBe(true);
   });
 
-  it('bumps schemaVersion from 3 to 4 on load', () => {
+  it('bumps schemaVersion from 3 to 5 on load', () => {
     expect(V3_FIXTURE.schemaVersion).toBe(3);
     const result = loadAquaDocument(V3_FIXTURE_JSON);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.document.schemaVersion).toBe(4);
+    expect(result.document.schemaVersion).toBe(5);
   });
 
-  it('reports a single applied step { from: 3, to: 4 }', () => {
+  it('reports the applied steps { 3 → 4 }, { 4 → 5 } in order', () => {
     const result = loadAquaDocument(V3_FIXTURE_JSON);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.migrationSteps).toEqual([{ from: 3, to: 4 }]);
+    expect(result.migrationSteps).toEqual([
+      { from: 3, to: 4 },
+      { from: 4, to: 5 },
+    ]);
   });
 
   it('does NOT invent a waterChemistry on the tank (migration is a pure no-op identity)', () => {

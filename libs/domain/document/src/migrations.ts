@@ -6,9 +6,11 @@
  * matches the reader's `CURRENT_SCHEMA_VERSION`. v1 is the baseline; v2 adds
  * the optional `Layer.zone` field, v3 adds the optional `Tank.waterLevelMm`
  * field, and v4 adds the optional `Tank.waterChemistry` snapshot — all
- * additive + optional, so each migration is an identity that only bumps the
- * version number. Prior-version documents in the wild keep loading
- * transparently.
+ * additive + optional, so each of those migrations is an identity that only
+ * bumps the version number. v5 REMOVES the optional `renderHistory` field (AI
+ * render dropped from scope), so its migration deletes the key if present —
+ * still pure + total, just no longer a pure version-stamp identity.
+ * Prior-version documents in the wild keep loading transparently.
  *
  * Re-exports the `Migration` interface from `./aqua-document` so callers have
  * one import for the whole document module.
@@ -41,6 +43,16 @@ export type { Migration };
  *   invent chemistry: absent means "no chemistry recorded" (the tank was
  *   never cycled), and absent stays absent through migration + round-trip.
  *   Inventing a snapshot would falsely claim a tank had been cycled.
+ * - v4 → v5: REMOVES the optional `renderHistory` field (the AI photorealistic
+ *   render feature was dropped from scope). This is the first NON-identity
+ *   migration — it deletes the `renderHistory` key if present so the document
+ *   validates under the v5 schema (whose `additionalProperties: false` no
+ *   longer admits the field). Still pure + total: it never mutates its input
+ *   (it builds a fresh object via rest-destructuring) and never throws. On
+ *   every real document the delete is a no-op, because no shipped writer ever
+ *   emitted `renderHistory` — but a doc that somehow carried it (hand-authored,
+ *   or a speculative pre-Stage-9 experiment) loses it cleanly. Every OTHER
+ *   field carries through untouched.
  */
 export const AQUA_MIGRATIONS: readonly Migration[] = Object.freeze([
   {
@@ -57,6 +69,19 @@ export const AQUA_MIGRATIONS: readonly Migration[] = Object.freeze([
     from: 3,
     to: 4,
     migrate: (doc) => ({ ...(doc as AquaDocument), schemaVersion: 4 }),
+  },
+  {
+    from: 4,
+    to: 5,
+    migrate: (doc) => {
+      // Strip `renderHistory` (AI render dropped from scope). Rest-destructure
+      // so the input object is never mutated and the dropped key simply does
+      // not appear on the result — pure + total, delete-if-present.
+      const { renderHistory: _dropped, ...rest } = doc as AquaDocument & {
+        renderHistory?: unknown;
+      };
+      return { ...rest, schemaVersion: 5 };
+    },
   },
 ]);
 

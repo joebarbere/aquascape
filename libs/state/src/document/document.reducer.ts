@@ -33,9 +33,9 @@ export interface DocumentState {
   readonly isDirty: boolean;
   /**
    * The non-scene part of the on-disk document: `meta` plus any optional
-   * `livestock`/`equipment`/`renderHistory`/`extensions` carried verbatim.
-   * Captured on open, used on save to keep round-trips lossless. `null` for
-   * a fresh New Document (the save effect mints a minimal envelope).
+   * `extensions` bag, carried verbatim. Captured on open, used on save to keep
+   * round-trips lossless. `null` for a fresh New Document (the save effect
+   * mints a minimal envelope).
    */
   readonly envelope: DocumentEnvelope | null;
   /** Last save time as ISO timestamp; `null` if never saved. */

@@ -1,5 +1,5 @@
 /**
- * .aqua document format — TypeScript schema (v4)
+ * .aqua document format — TypeScript schema (v5)
  *
  * This is the canonical, framework-free definition of an Aquascape layout
  * document. It lives in `libs/domain/document` and is the single source of
@@ -28,6 +28,15 @@
  *      that was never cycled in the editor) and absent stays absent through a
  *      round-trip. The live tick is owned by a runtime `WaterChemistryService`;
  *      the document stores only the snapshot needed to resume deterministically.
+ * v5 — REMOVED the optional `renderHistory` field (and the `RenderRecord`
+ *      interface). The AI photorealistic render feature (Stage 9) was dropped
+ *      from scope, so the field — always optional, never written by any shipped
+ *      code — is retired. The v4 → v5 migration STRIPS `renderHistory` from any
+ *      document that somehow carried it (the schema's `additionalProperties:
+ *      false` would otherwise reject such a doc). This is the first migration
+ *      that deletes a key rather than being a pure version-stamp identity; it is
+ *      still pure + total (delete-if-present is a no-op on every real document,
+ *      since no shipped writer ever emitted `renderHistory`).
  *
  * DESIGN RULES
  * ------------
@@ -112,7 +121,7 @@ export interface CatalogRef {
 // Document root
 // ─────────────────────────────────────────────────────────────────────────
 
-export const CURRENT_SCHEMA_VERSION = 4 as const;
+export const CURRENT_SCHEMA_VERSION = 5 as const;
 
 export interface AquaDocument {
   /** Magic discriminator; always "aquascape". */
@@ -129,9 +138,6 @@ export interface AquaDocument {
   /** Optional planning extras (added in later stages; always optional). */
   livestock?: LivestockEntry[];
   equipment?: EquipmentEntry[];
-
-  /** Non-document view aids & integrations that still belong with the file. */
-  renderHistory?: RenderRecord[];
 
   /**
    * Free-form, namespaced extension bag for forward-compat. Unknown keys must
@@ -445,11 +451,11 @@ export interface EquipmentEntry {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Assets & AI render history
+// Assets
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Reference to a binary asset (e.g. an imported tank photo, an AI render).
+ * Reference to a binary asset (e.g. an imported tank photo, a backdrop image).
  * In the zipped .aqua container these resolve to entries under /assets;
  * `uri` may also be a data: URL for small inlined assets.
  */
@@ -462,28 +468,6 @@ export interface AssetRef {
   height?: number;
   /** SHA-256 of the bytes, for integrity and dedupe. */
   hash?: string;
-}
-
-/** Records an AI photorealistic render produced from this layout. */
-export interface RenderRecord {
-  id: Uuid;
-  createdAt: IsoTimestamp;
-  /** Which provider produced it. */
-  provider: {
-    kind: 'local' | 'hosted';
-    /** e.g. "sdxl-local", "replicate", "openai-images". */
-    name: string;
-  };
-  /** The resolved request that was sent (prompt, seed, source view ref). */
-  request: {
-    prompt: string;
-    seed?: number;
-    /** Asset id of the flat render that conditioned the AI image, if any. */
-    sourceRenderAssetId?: Uuid;
-    params?: Record<string, number | string | boolean>;
-  };
-  /** The produced image. */
-  resultAsset: AssetRef;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
