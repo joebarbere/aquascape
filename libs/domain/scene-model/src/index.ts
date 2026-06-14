@@ -166,6 +166,7 @@ export {
 } from './equipment-commands';
 
 // ─── Nutrient dosing commands (Nutrients & additives + dosing, F-B) ────────
+// (Water-change command types are re-exported below alongside its builders.)
 export type {
   DoseNutrientCommand,
   RemoveDoseEventCommand,
@@ -178,6 +179,14 @@ export {
   removeDoseEvent,
   computeDoseDeltas,
 } from './nutrient-commands';
+
+// ─── Water-change command (Stage 13 F13.5a) ───────────────────────────────
+export type {
+  WaterChangeCommand,
+  ReplacementWater,
+} from './water-change-commands';
+
+export { waterChange, applyWaterChange } from './water-change-commands';
 
 // ─── History ──────────────────────────────────────────────────────────────
 export { createHistory } from './history';

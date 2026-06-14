@@ -24,6 +24,7 @@ import type {
   TankStyle,
   HardscapeObject,
   DecorObject,
+  WaterChemistry,
 } from './types';
 
 // ─── Hand-crafted fixtures ────────────────────────────────────────────────
@@ -126,6 +127,44 @@ export function makeScene(): Scene {
       ]),
     ],
     seed: 1337,
+  };
+}
+
+/**
+ * A cycled-tank water-chemistry snapshot: established colonies, high accumulated
+ * nitrate (the water-change signal), trace ammonia/nitrite. Callers may override
+ * any field of the `chemistry` block via {@link makeWaterChemistry}.
+ */
+export function makeWaterChemistry(
+  overrides: Partial<WaterChemistry['chemistry']> = {},
+  algae?: WaterChemistry['algae'],
+): WaterChemistry {
+  const chemistry: WaterChemistry['chemistry'] = {
+    ammonia: 0,
+    nitrite: 0,
+    nitrate: 40,
+    ph: 7.0,
+    aobColony: 2,
+    nobColony: 2,
+    ageWeeks: 6,
+    engineVersion: 1,
+    ...overrides,
+  };
+  return {
+    chemistry,
+    // `cycle` is denormalized; tests that need it consistent recompute via the
+    // command. Default to a plausible value for the cycled default above.
+    cycle: 'cycled',
+    ...(algae !== undefined ? { algae } : {}),
+  };
+}
+
+/** A scene whose tank carries a {@link makeWaterChemistry} snapshot. */
+export function makeSceneWithChemistry(chemistry: WaterChemistry = makeWaterChemistry()): Scene {
+  const scene = makeScene();
+  return {
+    ...scene,
+    tank: { ...scene.tank, waterChemistry: structuredClone(chemistry) },
   };
 }
 
