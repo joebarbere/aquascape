@@ -120,10 +120,30 @@ aquascape --mode simulation            apps/desktop/src/main/app-mode.ts   parse
   (which flips `visibility: hidden → visible`) has to be applied by change
   detection first, or `.focus()` no-ops on the still-hidden field.
 
-- **Esc precedence in simulation mode: console → exit.** `AppComponent.onEscape` closes
-  the console first if it's open, otherwise runs the simulation-exit logic. Don't
-  reorder — a user pressing Esc with the console open expects to close the
-  console, not quit the app.
+- **Esc precedence in simulation mode: console → active tool → exit.**
+  `AppComponent.onEscape` closes the console first if it's open, THEN cancels an
+  active husbandry tool (`SimulationActionService.active()` → `reset()`, Stage
+  15), THEN runs the simulation-exit logic. Don't reorder — a user mid-feed
+  expects Esc to drop the tool, not quit; a user with the console open expects
+  Esc to close it.
+
+- **Stage 15 — the bottom-center action HUD is a distinct surface
+  (`actionsVisible`).** `aquascape-simulation-actions` is pinned bottom-center
+  (the four corners are taken: info top-right, controls top-left, vitality
+  left-middle, console bottom-left). It's gated by
+  `SimulationUiService.actionsVisible` (default `true`, included in `setHud('all')`
+  / `toggleHud('all')` / `resetLayout`) and the `hud … actions` console verb.
+  The HUD owns NO scene/tool state — the active-tool state machine (idle →
+  tool-selected → sub-step) lives in `SimulationActionService`; the feed picker
+  writes the chosen `food` id there, and the **canvas pointer handlers in
+  AppComponent** (NOT the HUD component, NOT a render effect — NG0600) read it to
+  drop typed food at `raycastTankPoint(pixel, { plane: 'floor' })`. The feeding
+  listeners (`pointermove`/`pointerleave`/`click` on the 3D canvas) are installed
+  on `enterSimulationMode` and torn down on leave/destroy; they run outside the
+  Angular zone and re-enter via `ngZone.run` for the marker signal write + the
+  `spawnFood` drop. The `SimulationInteractionRenderer` is the concrete
+  `Three3DRenderer` (resolved by duck-typing `raycastTankPoint` off
+  `SCENE_RENDERER_3D` — a 2D-only test stub yields `null` and the drop no-ops).
 
 - **Saved simulations persist via the platform `StorageService`; `execute` is
   async.** `sim save/load/list/delete` snapshot the live scene under a name

@@ -8,7 +8,14 @@
 import { Injectable, signal } from '@angular/core';
 
 /** Toggleable HUD surfaces the console's `hud` command understands. */
-export type HudTarget = 'info' | 'controls' | 'clock' | 'perf' | 'vitality' | 'all';
+export type HudTarget =
+  | 'info'
+  | 'controls'
+  | 'clock'
+  | 'perf'
+  | 'vitality'
+  | 'actions'
+  | 'all';
 
 @Injectable({ providedIn: 'root' })
 export class SimulationUiService {
@@ -22,6 +29,8 @@ export class SimulationUiService {
   readonly perfVisible = signal(true);
   /** Stage 14 F14.3 — the fish-vitality HUD + inspector (left-middle). */
   readonly vitalityVisible = signal(true);
+  /** Stage 15 — the bottom-center husbandry action HUD (`aquascape-simulation-actions`). */
+  readonly actionsVisible = signal(true);
   /** The Quake-style console (bottom-left). */
   readonly consoleOpen = signal(false);
 
@@ -41,6 +50,7 @@ export class SimulationUiService {
       this.clockVisible.set(visible);
       this.perfVisible.set(visible);
       this.vitalityVisible.set(visible);
+      this.actionsVisible.set(visible);
       return;
     }
     this.signalFor(target).set(visible);
@@ -54,7 +64,8 @@ export class SimulationUiService {
         this.controlsVisible() ||
         this.clockVisible() ||
         this.perfVisible() ||
-        this.vitalityVisible();
+        this.vitalityVisible() ||
+        this.actionsVisible();
       this.setHud('all', !anyVisible);
       return;
     }
@@ -81,6 +92,8 @@ export class SimulationUiService {
         return this.perfVisible;
       case 'vitality':
         return this.vitalityVisible;
+      case 'actions':
+        return this.actionsVisible;
     }
   }
 }

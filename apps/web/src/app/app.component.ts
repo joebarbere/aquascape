@@ -136,6 +136,7 @@ import type {
   HitResult,
   RenderSurface,
   SceneRenderer,
+  SimulationInteractionRenderer,
   SnapGuides,
   Viewport,
 } from '@aquascape/rendering/renderer-api';
@@ -150,6 +151,9 @@ import { pickPlayerEntity } from './game/game-activation';
 import { BehaviorDebugOverlayComponent } from './behavior-debug-overlay.component';
 import { BehaviorDebugService } from './behavior-debug.service';
 import { attachDebugHook, detachDebugHook } from './debug-hook';
+import { SimulationActionsComponent } from './simulation/simulation-actions.component';
+import { SimulationActionService } from './simulation/simulation-action.service';
+import { resolveFoodDrop } from './simulation/feeding-drop';
 import { SimulationConsoleComponent } from './simulation/simulation-console.component';
 import { SimulationControlsComponent } from './simulation/simulation-controls.component';
 import { SimulationHudComponent } from './simulation/simulation-hud.component';
@@ -218,6 +222,7 @@ type DragState =
     CompositionOverlaysComponent,
     DayNightControlComponent,
     DecorationsToolComponent,
+    SimulationActionsComponent,
     SimulationConsoleComponent,
     SimulationControlsComponent,
     SimulationHudComponent,
@@ -499,6 +504,25 @@ type DragState =
             @if (simUi.vitalityVisible()) {
               <aquascape-vitality-hud></aquascape-vitality-hud>
             }
+            <!-- Stage 15 — bottom-center husbandry action HUD (feeding tool +
+                 F15.2's water-change tool). Drives the SimulationActionService
+                 state machine; the feed picker arms a food type, and the canvas
+                 pointer handlers below drop it at the raycast point. -->
+            @if (simUi.actionsVisible()) {
+              <aquascape-simulation-actions></aquascape-simulation-actions>
+            }
+            <!-- Drop-preview marker — a CSS cursor indicator at the projected
+                 tank point, shown only while the feed tool is in its placing
+                 sub-step (a food is armed). Driven on pointermove from the
+                 raycast (event handler, NOT the render effect — NG0600). -->
+            @if (feedPreviewPx(); as p) {
+              <div
+                class="feed-drop-marker"
+                [style.left.px]="p.x"
+                [style.top.px]="p.y"
+                aria-hidden="true"
+              ></div>
+            }
             <aquascape-simulation-console></aquascape-simulation-console>
           }
           <!-- Game HUD — Stage 16. Mounts over the 3D fish-eye view while a
@@ -727,6 +751,22 @@ type DragState =
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
         white-space: nowrap;
       }
+      /* Stage 15 — feeding drop-preview marker. A small ring under the cursor
+         while the feed tool's placing sub-step is active, signalling where a
+         click will drop food. Non-interactive (clicks pass through to the
+         canvas). */
+      .feed-drop-marker {
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        margin: -9px 0 0 -9px;
+        border-radius: 50%;
+        border: 2px solid rgba(150, 220, 255, 0.95);
+        background: rgba(120, 200, 240, 0.22);
+        box-shadow: 0 0 8px rgba(120, 200, 240, 0.6);
+        pointer-events: none;
+        z-index: 7;
+      }
     `,
   ],
 })
@@ -811,6 +851,20 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
+   * Stage 15 — the 3D renderer as a `SimulationInteractionRenderer` when it
+   * implements that surface (the concrete `Three3DRenderer` does; a test stub
+   * may not). Used by the feeding tool to turn a canvas pixel into a canonical
+   * tank coordinate (`raycastTankPoint`) and, in F15.2, to drive the siphon.
+   * Returns `null` when 3D isn't real (2D-only test beds), so callers no-op.
+   */
+  private get simulationInteractionRenderer(): SimulationInteractionRenderer | null {
+    const r = this.renderer3d as unknown as Partial<SimulationInteractionRenderer>;
+    return typeof r.raycastTankPoint === 'function'
+      ? (r as SimulationInteractionRenderer)
+      : null;
+  }
+
+  /**
    * The 2D canvas — pointer interactions (drag, marquee, hit-test, resize-
    * observer measurement) ONLY happen on this canvas. The 3D canvas is
    * owned by OrbitControls inside Three3DRenderer; we never bind app-
@@ -846,6 +900,17 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     width: number;
     height: number;
   } | null>(null);
+
+  /**
+   * Stage 15 — the feeding drop-preview marker's canvas-CSS pixel position
+   * (the raw pointer pixel; the marker is a small ring that sits under the
+   * cursor while the feed tool's placing sub-step is active). Null hides it.
+   * Written from the 3D canvas pointermove handler — an EVENT handler, not the
+   * render effect (NG0600). */
+  readonly feedPreviewPx = signal<{ x: number; y: number } | null>(null);
+
+  /** Cleanup thunks for the simulation-mode 3D-canvas feeding listeners. */
+  private feedingListenersCleanup: (() => void) | null = null;
 
   /**
    * F5.3 — drag readout. Set during a move / scale / rotate drag to a
@@ -911,6 +976,9 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Simulation HUD/console visibility state (the console's `hud` command + `~`). */
   readonly simUi = inject(SimulationUiService);
+
+  /** Stage 15 — the bottom-center action HUD's active-tool state machine. */
+  readonly simAction = inject(SimulationActionService);
 
   /** Unsubscribe thunk for the desktop "Mode" menu push channel (Electron only). */
   private modeMenuCleanup: (() => void) | null = null;
@@ -1057,6 +1125,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     // world's waste source term + pushes ammonia/nitrite into the world so
     // fish health responds to the cycle in real time.
     this.waterChemistry.start(scene);
+    // Stage 15 — reset the action HUD to idle + bind the 3D-canvas feeding
+    // listeners (raycast-driven food drops + the drop-preview marker).
+    this.simAction.reset();
+    this.installFeedingListeners();
   }
 
   /**
@@ -1073,6 +1145,9 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     // its last injected value until the next start re-seeds; a world that's
     // never ticked again is benign (VitalitySystem just reads a static value).
     this.waterChemistry.stop();
+    // Stage 15 — tear down the feeding listeners + reset the tool.
+    this.teardownFeedingListeners();
+    this.simAction.reset();
   }
 
   /**
@@ -1810,6 +1885,14 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       this.simUi.closeConsole();
       return;
     }
+    // Stage 15 — Esc first cancels an active husbandry tool (back to idle)
+    // before it falls through to leaving the showcase, so a user mid-feed can
+    // bail out of the tool without exiting the simulation.
+    if (this.simulationMode() && this.simAction.active()) {
+      this.simAction.reset();
+      this.feedPreviewPx.set(null);
+      return;
+    }
     if (this.simulationMode()) {
       this.exitSimulationMode();
       return;
@@ -2507,6 +2590,8 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       this.wheelZoomCleanup();
       this.wheelZoomCleanup = null;
     }
+    // Stage 15 — drop the simulation-mode feeding listeners.
+    this.teardownFeedingListeners();
     // Stage 10 F10.3 — dispose both renderers we ever attached. The
     // unused renderer never had `attach()` called so its `dispose()` is
     // safe-but-redundant; we track the flags so a future renderer with
@@ -2581,6 +2666,101 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     };
     canvas.addEventListener('wheel', handler, { passive: false });
     this.wheelZoomCleanup = (): void => canvas.removeEventListener('wheel', handler);
+  }
+
+  /**
+   * Stage 15 F15.1 — feeding-tool pointer wiring on the 3D canvas.
+   *
+   * The 3D canvas is otherwise owned by OrbitControls (it handles drag-to-
+   * orbit). We add a NON-CAPTURING `click` listener (a click is a press with
+   * no orbit drag) that — only while the feed tool's placing sub-step is
+   * active — raycasts the pointer to the tank floor and drops the armed food
+   * there, plus a `pointermove`/`pointerleave` pair that updates the drop-
+   * preview marker. All renderer imperative calls (`raycastTankPoint`) happen
+   * INSIDE these event handlers — never the render effect (NG0600).
+   *
+   * Installed on simulation enter, torn down on leave. Listeners run outside
+   * Angular's zone (no per-move change detection); the food-drop path re-enters
+   * the zone for the marker-clearing signal write + so the world's snapshot is
+   * reflected in the next render.
+   */
+  private installFeedingListeners(): void {
+    this.teardownFeedingListeners();
+    const canvas = this.canvas3dRef.nativeElement;
+
+    const toRaycastPoint = (event: PointerEvent | MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return null;
+      return {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+        width: rect.width,
+        height: rect.height,
+      };
+    };
+
+    const onMove = (event: PointerEvent): void => {
+      if (!this.simAction.feedPlacing()) {
+        if (this.feedPreviewPx() !== null) {
+          this.ngZone.run(() => this.feedPreviewPx.set(null));
+        }
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      this.ngZone.run(() =>
+        this.feedPreviewPx.set({ x: event.clientX - rect.left, y: event.clientY - rect.top }),
+      );
+    };
+
+    const onLeave = (): void => {
+      if (this.feedPreviewPx() !== null) {
+        this.ngZone.run(() => this.feedPreviewPx.set(null));
+      }
+    };
+
+    const onClick = (event: MouseEvent): void => {
+      if (!this.simAction.feedPlacing()) return;
+      this.dropFoodAt(toRaycastPoint(event));
+    };
+
+    canvas.addEventListener('pointermove', onMove);
+    canvas.addEventListener('pointerleave', onLeave);
+    canvas.addEventListener('click', onClick);
+    this.feedingListenersCleanup = (): void => {
+      canvas.removeEventListener('pointermove', onMove);
+      canvas.removeEventListener('pointerleave', onLeave);
+      canvas.removeEventListener('click', onClick);
+    };
+  }
+
+  private teardownFeedingListeners(): void {
+    if (this.feedingListenersCleanup !== null) {
+      this.feedingListenersCleanup();
+      this.feedingListenersCleanup = null;
+    }
+    if (this.feedPreviewPx() !== null) {
+      this.ngZone.run(() => this.feedPreviewPx.set(null));
+    }
+  }
+
+  /**
+   * Resolve a canvas pixel to a canonical tank floor coordinate via the 3D
+   * renderer's `raycastTankPoint`, then drop the currently-armed catalog food
+   * there through `LivestockSimulationService.spawnFoodFromCatalog`. No-op when
+   * 3D interaction isn't available, no food is armed, the catalog row is
+   * missing, the world isn't built, or the ray misses. Runs inside the Angular
+   * zone so OnPush HUDs reading the world re-render.
+   */
+  private dropFoodAt(point: { x: number; y: number; width: number; height: number } | null): void {
+    this.ngZone.run(() => {
+      const drop = resolveFoodDrop(point, {
+        renderer: this.simulationInteractionRenderer,
+        foodId: this.simAction.selectedFoodId(),
+        foods: coreCatalog.byKind('food'),
+        spawner: this.livestockSim,
+      });
+      if (drop !== null) this.renderCurrent();
+    });
   }
 
   private buildSurface(canvas: HTMLCanvasElement): RenderSurface {
