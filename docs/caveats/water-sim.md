@@ -17,6 +17,8 @@ The **model lives in the lib; the state lives in the document.** `domain/water-s
 
 `sourceN` is the **ammonia source as a nitrogen MASS rate, mg-N/day** — supplied by the caller from `domain/stocking` bioload (+ a Stage-14 feeding-waste hook, default 0). The model **does not recompute bioload**; it takes it as an input. Internally `sourceN / volumeLitres` converts it to a concentration rate.
 
+**Stage 14 F14.4 — the feeding-waste hook now has a PRODUCER (consumer still pending).** `domain/livestock-ecs`'s world exposes `getWasteSourceN()` returning a smoothed ammonia source term (nitrogen mass rate, mg-N/day) built from a per-fish baseline + uneaten-food decay (uneaten `FoodSprite`s fold `calories × wasteFactor` in on lifetime expiry). That value is the shape `simulateChemistry`'s `sourceN` argument expects — add it to the `domain/stocking` bioload when wiring chemistry. **The live chemistry tick that reads `getWasteSourceN()` and calls `simulateChemistry` is the deferred F13.3 `WaterChemistryService` — it does NOT exist yet.** F14.4 landed the producer only; until F13.3 lands, the term is computed but unconsumed. See `docs/caveats/livestock-ecs.md` → "Health + hunger + waste".
+
 ## Engine version (replay / migration)
 
 `ENGINE_VERSION = 1`. **Bump it whenever a change to the constants or equations below shifts the output of an existing `(state, inputs, seed)`.** A persisted `WaterState` records `engineVersion` (stamped on every output) so a saved sim can replay under its original model or be migrated explicitly — never silently rewrite history. The golden-snapshot test in `chemistry.spec.ts` is the drift tripwire: if it changes, the engine version must change with it.

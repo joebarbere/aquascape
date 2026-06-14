@@ -534,6 +534,93 @@ describe('determinism: 1000 ticks × fixed fleet', () => {
     expect(byteEqual(r1.foodSpritePosition, r2.foodSpritePosition)).toBe(true);
   });
 
+  it('F14.2 + F14.4 — 1000-tick replay with injected water quality + uneaten food is byte-identical (health + hunger + waste included)', () => {
+    // Brings the vitality + waste producer into the determinism contract:
+    //   - injected poor water quality (ammonia + nitrite) → health decays
+    //     (the spawnIndex-keyed VitalitySystem jitter is the only random draw)
+    //   - hungry fish starve → health decays (no food reaches them)
+    //   - a corner sprite rots uneaten → recordUneatenFood folds into the
+    //     ammonia source term
+    // If any of these leaked Math.random / wall-clock, the two runs diverge.
+    const surfaceSpecies = 1;
+    const surfaceBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+    // Hungry fast so the fish crosses the starvation threshold within the run.
+    surfaceBehavior.feeding = { hungerRatePerSec: 1 / 4, threshold: 0.3, category: 'midwater' };
+
+    function runVitality(): {
+      position: Float32Array;
+      health: Float32Array;
+      hunger: Float32Array;
+      wasteSourceN: number;
+    } {
+      const w: LivestockWorld = createLivestockWorld(SEED, { tankAabb: TANK });
+      // Inject steady poor water quality (the future WaterChemistryService
+      // seam). A world that never calls this stays clean → no health decay.
+      w.setWaterQuality({ ammonia: 1.2, nitrite: 0.4 });
+      const handle = w.registerSpeciesBehavior(surfaceSpecies, surfaceBehavior);
+      for (let i = 0; i < 6; i++) {
+        w.spawnFish({
+          archetype: FISH_ARCHETYPE.SLIM_TETRA,
+          speciesId: surfaceSpecies,
+          bodyLengthMm: 30,
+          position: { x: 200 + i * 20, y: 200, z: 150 },
+          behaviorHandleIdx: handle,
+        });
+      }
+      // A short-lived sprite in the far corner the school won't reach → it
+      // rots uneaten and drives the waste source term.
+      w.spawnFoodSprite({ x: 980, y: 380, z: 380 }, 5, 4, FOOD_TYPE.PELLET, 0.6);
+      for (let i = 0; i < TICKS; i++) w.step(SIM_DT);
+      const s = w.snapshot(0);
+      return {
+        position: new Float32Array(s.position),
+        health: new Float32Array(s.health),
+        hunger: new Float32Array(s.hunger),
+        wasteSourceN: w.getWasteSourceN(),
+      };
+    }
+
+    const r1 = runVitality();
+    const r2 = runVitality();
+    expect(byteEqual(r1.position, r2.position)).toBe(true);
+    expect(byteEqual(r1.health, r2.health)).toBe(true);
+    expect(byteEqual(r1.hunger, r2.hunger)).toBe(true);
+    expect(r1.wasteSourceN).toBe(r2.wasteSourceN);
+    // Sanity: poor water + starvation actually MOVED health off the spawn 1.0.
+    expect(r1.health[0] as number).toBeLessThan(1);
+    // Sanity: the uneaten sprite produced a non-zero source term.
+    expect(r1.wasteSourceN).toBeGreaterThan(0);
+  });
+
+  it('F14.2 — a default (clean-water) world with no feeding pressure keeps every fish at full health (replay-safe baseline)', () => {
+    // The byte-identity-preserving baseline: a world that never calls
+    // setWaterQuality + whose fish never starve sees health pinned at 1.0,
+    // so health is a constant slab and the replay is trivially stable. This
+    // documents that the F14.2 additions don't shift behaviour for the common
+    // (clean, fed) case.
+    const species = 1;
+    const behavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+    // Slow hunger so the fish never crosses the starvation threshold in 1000
+    // ticks (~33 s sim-time) — health stays at full.
+    behavior.feeding = { hungerRatePerSec: 1 / 600, threshold: 0.4, category: 'midwater' };
+    const w: LivestockWorld = createLivestockWorld(SEED, { tankAabb: TANK });
+    const handle = w.registerSpeciesBehavior(species, behavior);
+    for (let i = 0; i < 6; i++) {
+      w.spawnFish({
+        archetype: FISH_ARCHETYPE.SLIM_TETRA,
+        speciesId: species,
+        bodyLengthMm: 30,
+        position: { x: 200 + i * 20, y: 200, z: 150 },
+        behaviorHandleIdx: handle,
+      });
+    }
+    for (let i = 0; i < TICKS; i++) w.step(SIM_DT);
+    const s = w.snapshot(0);
+    for (let i = 0; i < s.entityCount; i++) {
+      expect(s.health[i]).toBe(1);
+    }
+  });
+
   it('different seeds still produce identical *static* fields (position w/ v=0, archetype, scale)', () => {
     // With Velocity=0 in F11.1, Position never changes from its spawn value
     // — so the seed only affects fields driven by `tickPrng` (none yet). This

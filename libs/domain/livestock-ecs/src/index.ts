@@ -30,6 +30,7 @@ export {
   BubbleParticle,
   Curiosity,
   FeedingDrive,
+  HealthDrive,
   FoodSprite,
   BodyColor,
   Force,
@@ -54,6 +55,7 @@ export {
 // ─── World factory + scheduler ────────────────────────────────────────────
 export {
   createLivestockWorld,
+  DEFAULT_FOOD_WASTE_FACTOR,
   SIM_DT,
   SIM_HZ,
   type BubbleSourceRegistration,
@@ -64,6 +66,7 @@ export {
   type LivestockWorldInternals,
   type SpawnOpts,
   type TankAabb,
+  type WaterQuality,
   type WorldSnapshot,
 } from './lib/world';
 
@@ -87,7 +90,28 @@ export {
   schoolingSystem,
   steeringIntegrator,
   territorialSystem,
+  vitalitySystem,
 } from './lib/systems';
+
+// ─── Vitality + waste (Stage 14 F14.2 + F14.4) ────────────────────────────
+export {
+  VITALITY_KEY,
+  STARVE_HUNGER_THRESHOLD,
+  STARVE_HEALTH_DECAY_PER_SEC,
+  WATER_SAFE_AMMONIA_MG_L,
+  WATER_SAFE_NITRITE_MG_L,
+  AMMONIA_HEALTH_DECAY_PER_MG_PER_SEC,
+  NITRITE_HEALTH_DECAY_PER_MG_PER_SEC,
+  HEALTH_RECOVERY_PER_SEC,
+} from './lib/vitality-system';
+export {
+  FISH_BASELINE_WASTE_N_MG_PER_DAY,
+  UNEATEN_FOOD_WASTE_N_MG_PER_CALORIE,
+  WASTE_RATE_EMA_PER_SEC,
+  recordUneatenFood,
+  wasteSystem,
+  type WasteAccumulator,
+} from './lib/waste-accumulator';
 
 // ─── Bubble particles (F11.5 Wave 5) ──────────────────────────────────────
 export {
