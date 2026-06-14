@@ -235,3 +235,65 @@ describe('world.injectStartle', () => {
     expect(w.__internals.pendingStartles.get(eid)).toBeUndefined();
   });
 });
+
+describe('world.getHardscapeEntities (Stage 16 F16.5 cleaner seam)', () => {
+  it('snapshots the registered hardscape eids + positions', () => {
+    const w = createLivestockWorld(0, { tankAabb: TANK });
+    w.registerHardscape([
+      { position: { x: 100, y: 0, z: 100 }, coverScore: 0.4, category: HARDSCAPE_CATEGORY.ROCK },
+      { position: { x: 200, y: 10, z: 300 }, coverScore: 0.6, category: HARDSCAPE_CATEGORY.WOOD },
+    ]);
+    const rows = w.getHardscapeEntities();
+    expect(rows.length).toBe(2);
+    expect(rows[0]).toMatchObject({ x: 100, y: 0, z: 100 });
+    expect(rows[1]).toMatchObject({ x: 200, y: 10, z: 300 });
+    // Every returned eid resolves to a real per-type algae record.
+    for (const r of rows) expect(w.getAlgaeByType(r.eid)).not.toBeNull();
+  });
+
+  it('is empty when no hardscape is registered', () => {
+    const w = createLivestockWorld(0, { tankAabb: TANK });
+    expect(w.getHardscapeEntities()).toEqual([]);
+  });
+});
+
+describe('world.raspAlgaeType (Stage 16 F16.5 cleaner mutation)', () => {
+  function rockWorld() {
+    const w = createLivestockWorld(0, { tankAabb: TANK });
+    w.registerHardscape([
+      { position: { x: 100, y: 0, z: 100 }, coverScore: 0.4, category: HARDSCAPE_CATEGORY.ROCK },
+    ]);
+    const eid = w.getHardscapeEntities()[0]!.eid;
+    return { w, eid };
+  }
+
+  it('reduces one type, leaves the others, and re-derives the aggregate', () => {
+    const { w, eid } = rockWorld();
+    const before = w.getAlgaeByType(eid)!; // each type seeded at 0.25 (total 1.0)
+    const removed = w.raspAlgaeType(eid, 'green-spot', 0.1);
+    expect(removed).toBeCloseTo(0.1);
+    const after = w.getAlgaeByType(eid)!;
+    expect(after['green-spot']).toBeCloseTo(before['green-spot'] - 0.1);
+    expect(after.hair).toBe(before.hair);
+    expect(after['black-beard']).toBe(before['black-beard']);
+    expect(after.diatom).toBe(before.diatom);
+    // Aggregate score dropped in lock-step (was 1.0 → 0.9).
+    expect(w.getAlgaeScore(eid)).toBeCloseTo(0.9);
+  });
+
+  it('clamps the stock at zero and returns only what was actually removed', () => {
+    const { w, eid } = rockWorld(); // green-spot starts at 0.25
+    const removed = w.raspAlgaeType(eid, 'green-spot', 1.0); // ask for more than present
+    expect(removed).toBeCloseTo(0.25);
+    expect(w.getAlgaeByType(eid)!['green-spot']).toBe(0);
+    // A second rasp on the empty type is a no-op.
+    expect(w.raspAlgaeType(eid, 'green-spot', 0.1)).toBe(0);
+  });
+
+  it('is a no-op (0) for a non-hardscape eid, a non-positive amount', () => {
+    const { w, eid } = rockWorld();
+    expect(w.raspAlgaeType(999999, 'green-spot', 0.1)).toBe(0);
+    expect(w.raspAlgaeType(eid, 'green-spot', 0)).toBe(0);
+    expect(w.raspAlgaeType(eid, 'green-spot', -1)).toBe(0);
+  });
+});

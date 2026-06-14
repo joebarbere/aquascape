@@ -268,12 +268,76 @@ when `vitality.stamina !== null`); feeding leaves stamina `null` and binds the
 "Food" bar to its game meter. Predator (F16.4) still shows the placeholder (no
 vitality wired) — that's fine, it's a hunt, not a vitality game.
 
-### Cleaner still pending (F16.5)
+### Cleaner (F16.5) — scrub algae, siphon waste, clean the tank
 
-`game:cleaner` runs the **generic** playable loop (swim + objective/score HUD +
-Esc-exit) but has no win/lose rules yet — it's gated on Stage 13 (algae) +
-Stage 15 (`SiphonTool`). The README "Game modes" line reflects that survival /
-feeding / predator are playable while cleaner remains gated.
+`game:cleaner` is fully playable — the LAST mode, so **Stage 16 is complete**
+(all four modes playable). The player wields a `cleaning-tool` (scraper / brush /
+siphon — the siphon REUSES Stage 15's renderer `SiphonTool`, no fork), scrubs
+the Stage 13 F13.6 per-type algae off hardscape, and the gravel siphon lifts
+settled waste (the Stage 13 chemistry tie-in). The objective is a CLEAN tank.
+Same split as the other modes:
+
+- **PURE logic** (`libs/features/game/src/lib/cleaner-rules.ts`):
+  `surfacesInReach` (which hardscape surfaces are within the player's tool
+  reach), `toolAlgaeTargets` (the tool's `targetAlgae` — but only when it can
+  reach a glass/hardscape surface; a substrate-only siphon scrapes NO algae),
+  `raspAmountPerType` (per-frame rasp = `effectiveness × dt`), `cleanlinessFraction`
+  / `cleanlinessScore` (total algae → a `[0,1]` clean fraction → a 0–100 clean-%),
+  `evaluateCleanerOutcome` (clean below `cleanTargetTotal` → `won`; clock →
+  `lost`), `cleanerTimeRemainingSec`, + `DEFAULT_CLEANER_PARAMS` (120 mm reach /
+  0.5 clean-target / 90 s / 0.04 waste-drain/s). Framework-free, exhaustively
+  unit-tested. Imports `AlgaeType` (a string type) from `@aquascape/domain/water-sim`
+  (type-only — `scope:feature` may depend on `scope:domain`).
+- **WORLD MUTATION + wiring** (`apps/web/src/app/game/cleaner-game.service.ts`):
+  `CleanerGameService` resolves the `cleaning-tool` catalog rows into a cycle
+  list (scraper → brush → siphon), and each frame — while the player HOLDS the
+  use button (the `primary` action, Space) — finds the hardscape surfaces near
+  the player (`world.getHardscapeEntities`), rasps the active tool's targeted
+  algae types off each (`world.raspAlgaeType`), and (for the siphon) nudges the
+  live chemistry cleaner via the EXISTING `WaterChemistryService.applyWaterChange`
+  dilution (the single dilution truth — no new waste-removal math). It then
+  computes tank cleanliness (sum of `getAlgaeByType` across hardscape), pushes it
+  to the HUD's "Food" bar (the bar IS the cleanliness meter, like feeding),
+  awards the clean-% score, and dispatches `win`/`lose` (latched).
+
+**Two new `livestock-ecs` world seams** back the cleaner (both reads / between-
+ticks mutations — NEVER called inside `world.step()`, so determinism holds):
+`world.getHardscapeEntities()` (snapshot the registered hardscape eids +
+positions) and `world.raspAlgaeType(eid, type, amount)` (reduce one per-type
+algae stock + re-derive the aggregate `algaeScore` in lock-step — mirrors the
+FeedingSystem grazer rasp's bookkeeping, but driven by live player aim).
+
+**Tool-select UX:** the player presses **`T`** (handled in `AppComponent.onGlobalKeydown`,
+gated on `gameMode() === 'cleaner'`) to cycle scraper → brush → siphon → …. The
+active tool's name + a hint render in a corner indicator (`.cleaner-tool-hud`,
+`role="status"` / `aria-live="polite"`); the cleaner service exposes
+`activeTool()` + `siphonActive()` signals the template + the siphon wiring read.
+
+**The siphon nozzle (renderer imperative calls) stays in `AppComponent`, NOT
+the service** (the service touches a concrete world + the game/chemistry
+services, never the renderer — layer discipline). The `cleanerSiphonEffect`
+(mirrors F15.2's `siphonActiveEffect`) flips `RenderOptions.siphonTool` on/off
+when the player cycles to/away from the siphon (a signal read + `renderCurrent`).
+The nozzle POSITION is pushed from the cleaner frame hook (`driveCleanerSiphon`
+→ `setSiphonPosition` at the player's live world position) + the suction MODE
+from `syncCleanerSiphon` (`setSiphonMode('out')` while active) — all event-path
+calls from the input loop / key handler, **never inside the render effect**
+(NG0600). `leaveGameMode` parks the nozzle (`setSiphonMode('idle')`) before the
+cleaner stops.
+
+#### Determinism boundary (cleaner)
+
+Identical to predator's: a clean STROKE is a **non-deterministic GAME EVENT**
+gated on the LIVE player position + tool + held button. The algae rasp
+(`world.raspAlgaeType`) + the waste dilution run in `CleanerGameService.frame`,
+BETWEEN sim ticks via the input loop's per-frame hook — never inside
+`world.step()`, never in a system. The loop runs ONLY while an active cleaner
+game has a live player marked; a non-game world (no player, no service started)
+never instantiates it, so the 1000-tick byte-identical replay holds. Proven by
+`cleaner-game.service.spec.ts` (a world with no rules running keeps every algae
+stock) + the unchanged `domain-livestock-ecs` determinism suite.
+
+The README "Game modes" line now reads all four modes playable (Stage 16 done).
 
 ### Determinism boundary (both new modes)
 
@@ -313,9 +377,19 @@ byte-identical replay holds. Proven by `survival-game.service.spec.ts` +
 - `libs/features/game/src/lib/predator-rules.spec.ts` — the pure rule logic
   (catch detection, win/lose, countdown).
 - `libs/features/game/src/lib/survival-rules.spec.ts` +
-  `feeding-rules.spec.ts` — the pure rule logic for the two new modes
-  (caught/threat detection, stamina step, eat detection, bite scoring +
-  over-eat penalty, meter drain, win/lose, countdown).
+  `feeding-rules.spec.ts` + `cleaner-rules.spec.ts` — the pure rule logic for
+  the three rule-bearing modes (caught/threat detection, stamina step, eat
+  detection, bite scoring + over-eat penalty, meter drain, reach detection,
+  tool→algae mapping, rasp amount, cleanliness scoring, win/lose, countdown).
+- `apps/web/src/app/game/cleaner-game.service.spec.ts` — the FULL cleaner
+  pipeline: a tool near a rock with the use button held rasps that surface's
+  TARGETED algae + raises the clean score, a non-targeted type is untouched,
+  the siphon dilutes the chemistry waste, cleaning below the target wins, the
+  clock loses, the tool-select cycles + flips `siphonActive`, and a non-game
+  world is untouched (determinism boundary).
+- `libs/domain/livestock-ecs/src/lib/hardscape.spec.ts` — the two cleaner world
+  seams (`getHardscapeEntities` snapshot, `raspAlgaeType` per-type reduce +
+  aggregate re-derive + clamp + no-op guards).
 - `apps/web/src/app/game/survival-game.service.spec.ts` — the FULL survival
   pipeline: a predator in the catch radius loses, surviving the clock wins,
   stamina drains under threat, real vitality is pushed to the HUD, hunters are
@@ -326,11 +400,14 @@ byte-identical replay holds. Proven by `survival-game.service.spec.ts` +
   reach the HUD, and a non-game world spawns/despawns no food.
 - `apps/web-e2e/src/game-mode.spec.ts` adds a **survival** case (boots live, the
   survived-seconds score climbs to ≥ 2 while fleeing) + a **feeding** case
-  (steer toward the nearest dropped food, poll until the score increments). Both
-  need hardware/SwiftShader WebGL (the world only ticks while the 3D canvas
-  paints); validated on a provisioned chromium here. **Game-mode tests wait on
-  the 3D canvas `nth(1)` (the active one in fish-eye), not `.first()` — in game
-  mode the 2D canvas is hidden from the start.**
+  (steer toward the nearest dropped food, poll until the score increments) + a
+  **cleaner** case (the boot loop — advisory tier — boots into fish-eye with a
+  live player loop; it does NOT assert cleaning progression, per the e2e caveat
+  "assert mount/wiring, not simulation progression"). All need hardware/SwiftShader
+  WebGL (the world only ticks while the 3D canvas paints); validated on a
+  provisioned chromium here (all 4 game-mode boot tests green). **Game-mode
+  tests wait on the 3D canvas `nth(1)` (the active one in fish-eye), not
+  `.first()` — in game mode the 2D canvas is hidden from the start.**
 - `libs/domain/livestock-ecs/src/lib/player-seam.spec.ts` — `setPlayerPredator`
   tags/untags + makes nearby prey accumulate fear risk (FearSystem reuse).
 

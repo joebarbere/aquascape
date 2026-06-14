@@ -472,6 +472,14 @@ export interface LivestockWorld {
   /** Count of currently registered Hardscape-tagged entities. */
   getHardscapeCount(): number;
   /**
+   * Stage 16 F16.5 (cleaner game mode) — snapshot the currently-registered
+   * hardscape entities as `{ eid, x, y, z }` rows (positions in canonical doc
+   * coords). The cleaner game uses this to find the surfaces NEAR the player so
+   * the active tool can rasp their algae. A read — no mutation, no allocation
+   * contract beyond the returned array. Empty when no hardscape is registered.
+   */
+  getHardscapeEntities(): ReadonlyArray<{ eid: number; x: number; y: number; z: number }>;
+  /**
    * Read the territory anchor eid for a given fish entity. Returns null
    * if the entity has no Territory component (non-territorial species)
    * or no anchor in range at spawn time. Test + diagnostics surface; the
@@ -645,6 +653,22 @@ export interface LivestockWorld {
    * `getAlgaeScore` stays the rendered total.
    */
   getAlgaeByType(hardscapeEid: number): Record<AlgaeType, number> | null;
+  /**
+   * Stage 16 F16.5 (cleaner game mode) — rasp `amount` (algae stock units, the
+   * same `[0, 1]` scale as the per-type slabs) off a single algae `type` on a
+   * hardscape entity, then re-derive the aggregate `algaeScore` so the renderer
+   * overlay + grazing-target gate track. Clamps the stock to `>= 0`. No-op (0)
+   * when `eid` has no Hardscape component, `amount <= 0`, or the stock is
+   * already empty. Returns the amount actually removed (≤ the prior stock).
+   *
+   * This is the cleaner game's BETWEEN-TICKS world mutation — the exact analogue
+   * of the predator catch's `despawn`. It runs in the app loop while an active
+   * cleaner game has a live player, never inside `world.step()` / a system, so
+   * the deterministic core is untouched and a non-game world replays
+   * byte-identically. Mirrors the FeedingSystem grazer rasp's per-type-then-
+   * aggregate bookkeeping, but driven by live player aim rather than the sim.
+   */
+  raspAlgaeType(hardscapeEid: number, type: AlgaeType, amount: number): number;
   /**
    * Stage 14 F14.4 — read the current ammonia source term (nitrogen MASS rate,
    * mg-N/day) produced by the per-fish baseline + uneaten-food accumulator. A
@@ -1090,6 +1114,15 @@ export function createLivestockWorld(
       return hardscapeEids.length;
     },
 
+    getHardscapeEntities(): ReadonlyArray<{ eid: number; x: number; y: number; z: number }> {
+      return hardscapeEids.map((eid) => ({
+        eid,
+        x: Position.x[eid] as number,
+        y: Position.y[eid] as number,
+        z: Position.z[eid] as number,
+      }));
+    },
+
     getEntityTerritoryAnchor(eid: number): number | null {
       // The bitECS slab stores `NO_ENTITY_REF` (0xffffffff) for "no
       // anchor". We also need to detect entities that have no Territory
@@ -1338,6 +1371,26 @@ export function createLivestockWorld(
         out[type] = Hardscape[field][hardscapeEid] as number;
       }
       return out;
+    },
+
+    raspAlgaeType(hardscapeEid: number, type: AlgaeType, amount: number): number {
+      if (!hardscapeEids.includes(hardscapeEid)) return 0;
+      if (!(amount > 0)) return 0;
+      const entry = ALGAE_TYPE_FIELDS.find((f) => f.type === type);
+      if (entry === undefined) return 0;
+      const field = entry.field;
+      const prior = Hardscape[field][hardscapeEid] as number;
+      if (prior <= 0) return 0;
+      const removed = amount > prior ? prior : amount;
+      Hardscape[field][hardscapeEid] = prior - removed;
+      // Re-derive the aggregate so the overlay + grazer-target gate track (same
+      // lock-step bookkeeping as the FeedingSystem grazer rasp).
+      let aggregate = 0;
+      for (const { field: key } of ALGAE_TYPE_FIELDS) {
+        aggregate += Hardscape[key][hardscapeEid] as number;
+      }
+      Hardscape.algaeScore[hardscapeEid] = aggregate > 1 ? 1 : aggregate;
+      return removed;
     },
 
     getWasteSourceN(): number {

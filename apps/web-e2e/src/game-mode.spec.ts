@@ -110,9 +110,13 @@ test.describe('game-mode activation', () => {
   // grammar resolves, the renderer enters fish-eye, a player is marked, and a
   // live game loop runs. (The deterministic input→velocity→step→move pipeline
   // is unit-tested in game-input.service.spec.ts.)
-  // `cleaner` (F16.5) isn't wired into the per-mode loop yet — add it here when
-  // F16.5b lands so its boot is smoke-tested too.
-  for (const submode of ['predator', 'survival', 'feeding'] as const) {
+  // F16.5 (cleaner) now boots into the same playable loop — the player wields a
+  // cleaning tool (T cycles scraper/brush/siphon) + scrubs algae. Its gameplay
+  // PROGRESSION (algae falls, cleanliness climbs) is deterministically covered
+  // by cleaner-rules + cleaner-game.service specs; here we only smoke the BOOT
+  // invariants (advisory tier — see docs/caveats/e2e.md "assert mount/wiring,
+  // not simulation progression").
+  for (const submode of ['predator', 'survival', 'feeding', 'cleaner'] as const) {
     test(`?mode=game:${submode} boots into fish-eye with a live player loop`, async ({ page }) => {
       test.slow(); // populated showcase scene under software WebGL
 

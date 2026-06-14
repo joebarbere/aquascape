@@ -324,10 +324,8 @@ where you **control a fish** instead of just watching the tank. The four
 sub-modes are `survival`, `feeding`, `predator`, and `cleaner`. They share one
 shell (`@aquascape/features/game`): an objective/score HUD, a state machine
 (objective → playing → paused → won/lost → results), and a device-independent
-input layer. **`survival`, `feeding`, and `predator` are fully playable** (F16.2
-/ F16.3 / F16.4 — see below); **`cleaner` runs the generic playable loop** (swim
-in fish-eye; objective/score HUD; Esc exits) but its **win/lose rules are still
-pending**, gated on Stage 13 (algae) + Stage 15 (`SiphonTool`).
+input layer. **All four modes are fully playable** (F16.2 / F16.3 / F16.4 /
+F16.5 — see below) — Stage 16 is complete.
 
 ### Survival — flee the predators (F16.2)
 
@@ -377,9 +375,31 @@ the win/lose dispatch live in `PredatorGameService`
 your live position), kept out of the deterministic sim core — so non-game worlds
 still replay byte-identically.
 
+### Cleaner — scrub the tank (F16.5)
+
+In `game:cleaner` you wield a **cleaning tool** and **clean the tank**. Press
+**`T`** to cycle the active tool — a glass **scraper** (clears green-spot +
+diatom), a stiff **brush** (clears black-beard + hair off hardscape), or the
+gravel **siphon** (lifts settled waste). **Hold Space** near a rock/wood surface
+to scrub its algae away with the active tool; the more **effective** the tool,
+the faster it clears. The siphon **reuses Stage 15's nozzle** (no fork) — when
+it's the active tool the nozzle hangs at your position and **vacuums waste**,
+diluting the live tank chemistry (the same dilution the water-change tool uses).
+The HUD's "Food" bar becomes a **cleanliness meter** and your **score** is the
+tank's clean-percent (0–100). **Win** by cleaning the tank below the algae target;
+**lose** if the 90-second clock runs out while it's still dirty. The active
+tool's name + a hint show in a corner indicator. The pure rules (reach detection,
+tool→algae mapping, rasp amount, cleanliness scoring, win/lose) live in
+`@aquascape/features/game` → `cleaner-rules.ts`; the algae rasp + the waste
+dilution + the win/lose dispatch live in `CleanerGameService`
+(`apps/web/src/app/game/`). The rasp happens between sim ticks (gated on your
+live position + held button), kept out of the deterministic sim core — so
+non-game worlds still replay byte-identically.
+
 ### Trying it
 
 - Browser / dev server: `http://localhost:4200/?mode=game:predator`
+  (or `…/?mode=game:cleaner`, etc.).
 - Desktop: `aquascape --mode game:predator` (or the **Mode → Game** menu).
 
 ### What activation does (the flow)
@@ -398,16 +418,18 @@ enterGameMode('predator')
   │    predator → PredatorGameService.start  tags YOU a predator → prey flee; catch detection
   │    survival → SurvivalGameService.start  promotes hunters; caught/stamina/health win-lose
   │    feeding  → FeedingGameService.start   drops food; eat-by-proximity fills the meter
+  │    cleaner  → CleanerGameService.start   resolves cleaning tools; scrub algae / siphon waste
   └─ GameInputService.start(sink, frameHook)   per-frame keyboard → velocity → world,
-                                               + the per-mode rules hook (cleaner: none yet)
+                                               + the per-mode rules hook
 ```
 
 ### Controls (keyboard)
 
 `WASD` / arrows strafe + ascend/descend, `Q`/`E` (or `PageUp`/`PageDown`) move
 into/out of the tank depth, `Space` / `Shift` are the (mode-specific) action
-buttons, `Esc` exits. Bindings are keyed by `KeyboardEvent.code` so they work on
-any layout. A **gamepad** backend plugs into the same input layer later (the
+buttons, `Esc` exits. In **cleaner** mode, `T` cycles the active cleaning tool
+(scraper → brush → siphon) and `Space` is the "use tool" / scrub button.
+Bindings are keyed by `KeyboardEvent.code` so they work on any layout. A **gamepad** backend plugs into the same input layer later (the
 separate "game-controller support" plan) — the shell + scoring are unchanged.
 
 ### The input loop (where the player velocity is injected)

@@ -309,8 +309,40 @@ caught/eat/drop are all non-deterministic GAME EVENTS kept OUT of the sim core
 holds (proven by `survival-game.service.spec.ts` + `feeding-game.service.spec.ts`).
 e2e (`game-mode.spec.ts`) boots each mode and asserts the live score updates
 (survival's survived-seconds climbs; feeding's score increments on an eat),
-validated on a provisioned chromium. **Only `cleaner` (F16.5) remains** gated on
-Stages 13 / 15. See [`docs/caveats/game-modes.md`](caveats/game-modes.md).
+validated on a provisioned chromium. See
+[`docs/caveats/game-modes.md`](caveats/game-modes.md).
+
+**F16.5 — the cleaner game (the LAST mode; Stage 16 complete).** You wield a
+`cleaning-tool` (scraper / brush / siphon — the siphon **reuses Stage 15's
+`SiphonTool`**, no fork) and **clean the tank**. `T` cycles the active tool; HOLD
+the use button (Space) near a rock/wood surface within reach (120 mm) and the
+tool **rasps its TARGETED per-type algae** (the Stage 13 F13.6 stocks) — a
+scraper clears green-spot + diatom, a brush clears black-beard + hair off
+hardscape — scaled by the tool's catalog `effectiveness`. The gravel siphon
+**removes waste**: while active its nozzle hangs at the player + vacuums,
+diluting the live chemistry via the EXISTING `WaterChemistryService.applyWaterChange`
+(no new dilution math). The HUD's "Food" bar becomes a **cleanliness meter** and
+the **score is the tank's clean-percent** (sum of `getAlgaeByType` across
+hardscape → `cleanlinessFraction`). **Win** by cleaning below the algae target;
+**lose** on the 90-second clock. Pure rules (reach detection, tool→algae mapping,
+rasp amount, cleanliness scoring, win/lose) live in
+`libs/features/game/src/lib/cleaner-rules.ts`; the algae rasp + waste dilution +
+win/lose dispatch + tool-select state live in `CleanerGameService`
+(`apps/web/src/app/game/`). Two new `livestock-ecs` world seams back it —
+`getHardscapeEntities()` (snapshot surfaces + positions) +
+`raspAlgaeType(eid, type, amount)` (per-type reduce + aggregate re-derive,
+mirroring the FeedingSystem grazer rasp) — both between-ticks reads/mutations,
+never inside `world.step()`. The siphon nozzle's renderer calls
+(`setSiphonPosition` / `setSiphonMode` / the `RenderOptions.siphonTool` mount)
+stay in `AppComponent` event/effect handlers (NG0600-safe), driven off the
+service's `siphonActive()` + `activeTool()` signals + the input loop's frame
+hook. The rasp/dilution are non-deterministic GAME EVENTS kept OUT of the sim
+core — the 1000-tick non-game replay holds (proven by
+`cleaner-game.service.spec.ts` + the unchanged determinism suite). e2e adds a
+`cleaner` boot case (advisory tier — mount/wiring, not progression); all 4
+game-mode boot tests green on a provisioned chromium. **All four game sub-modes
+are now playable — Stage 16 is complete.** See
+[`docs/caveats/game-modes.md`](caveats/game-modes.md).
 
 ## Nutrients & additives + dosing
 
