@@ -1,0 +1,18 @@
+{
+  "catalog": "core",
+  "id": "cleaning-tool.siphon.gravel-vacuum",
+  "version": 1,
+  "name": "Python Gravel Vacuum Siphon",
+  "kind": "cleaning-tool",
+  "type": "siphon",
+  "brand": "Python",
+  "description": "A wide-mouth gravel-vacuum siphon — the tool driven by Stage 15's renderer SiphonTool (the cleaner reuses it, no fork). It vacuums settled waste / detritus out of the substrate during a water change and lightly lifts diatom film sitting on the floor. removesWaste is true — it ties into the Stage 13 chemistry waste / detritus. effectiveness (0.7) + reachMm (50) are MODELLED game-tuning weights, not product specs.",
+  "tags": ["cleaning-tool", "siphon", "substrate", "waste", "detritus", "water-change"],
+  "surfaces": ["substrate"],
+  "targetAlgae": ["diatom"],
+  "effectiveness": 0.7,
+  "reachMm": 50,
+  "removesWaste": true,
+  "color": "#7a6a4f",
+  "notes": "Hover the mouth over gravel — debris lifts, gravel drops back. Don't dig deep into a planted aquasoil bed (it pulls up substrate + uproots carpets); use it over open sand / gravel."
+}

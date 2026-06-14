@@ -1,6 +1,19 @@
 import { resolveBehavior } from '@aquascape/domain/livestock-behaviors';
 
 import { CORE_CATALOG_MANIFESTS, CORE_CATALOG_RESULT, coreCatalog } from './core-catalog';
+import type { AlgaeType } from './types';
+
+/**
+ * The canonical algae-type set, declared locally rather than imported from
+ * `@aquascape/domain/water-sim`. `water-sim` depends on `domain/catalog`
+ * (algae growth resolves catalog rows), so importing it here would form a
+ * `domain-catalog → domain-water-sim → domain-catalog` cycle that the module-
+ * boundary lint rejects. The `cleaning-tool.targetAlgae` / `algae.type` enums
+ * MUST stay in lock-step with `water-sim`'s `AlgaeType`; this constant mirrors
+ * it, and the "algae types match water-sim" test below is the lock-step guard
+ * (water-sim's own suite asserts its `ALGAE_TYPES` equals this same set).
+ */
+const ALGAE_TYPES: readonly AlgaeType[] = ['green-spot', 'hair', 'black-beard', 'diatom'];
 
 describe('core catalog (bundled substrates + hardscape + plants)', () => {
   it('loads cleanly — no validation errors', () => {
@@ -15,7 +28,7 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     expect(coreCatalog.entries.length).toBe(CORE_CATALOG_MANIFESTS.length);
   });
 
-  it('ships substrate (Stage 2), hardscape (Stage 3), plant (Stage 4), livestock (Stage 7 F7.1), equipment (Stage 7 F7.3), decor, nutrient, and the Stage 13 F13.4 husbandry kinds (food / algae / water-test-kit)', () => {
+  it('ships substrate (Stage 2), hardscape (Stage 3), plant (Stage 4), livestock (Stage 7 F7.1), equipment (Stage 7 F7.3), decor, nutrient, the Stage 13 F13.4 husbandry kinds (food / algae / water-test-kit), and the Stage 16 F16.5a cleaning-tool kind', () => {
     expect(coreCatalog.byKind('substrate').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('hardscape').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('plant').length).toBeGreaterThan(0);
@@ -26,6 +39,7 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     expect(coreCatalog.byKind('food').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('algae').length).toBeGreaterThan(0);
     expect(coreCatalog.byKind('water-test-kit').length).toBeGreaterThan(0);
+    expect(coreCatalog.byKind('cleaning-tool').length).toBeGreaterThan(0);
     expect(
       coreCatalog.byKind('substrate').length +
         coreCatalog.byKind('hardscape').length +
@@ -36,7 +50,8 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
         coreCatalog.byKind('nutrient').length +
         coreCatalog.byKind('food').length +
         coreCatalog.byKind('algae').length +
-        coreCatalog.byKind('water-test-kit').length,
+        coreCatalog.byKind('water-test-kit').length +
+        coreCatalog.byKind('cleaning-tool').length,
     ).toBe(coreCatalog.entries.length);
   });
 
@@ -631,6 +646,89 @@ describe('core catalog (bundled substrates + hardscape + plants)', () => {
     expect(params).toEqual(new Set(['ph', 'ammonia', 'nitrite', 'nitrate']));
     const nitrate = entry.reads.find((r) => r.parameter === 'nitrate');
     expect(nitrate).toEqual({ parameter: 'nitrate', min: 0, max: 160, unit: 'ppm' });
+  });
+
+  // ─── Stage 16 F16.5a — cleaning-tool kind (cleaner game mode) ─────────────
+
+  it('ships exactly the 4 seeded cleaning tools across the 3 types (2 scraper + 1 brush + 1 siphon)', () => {
+    const tools = coreCatalog.byKind('cleaning-tool');
+    expect(tools.length).toBe(4);
+    const types = tools.reduce<Record<string, number>>((acc, entry) => {
+      acc[entry.type] = (acc[entry.type] ?? 0) + 1;
+      return acc;
+    }, {});
+    expect(types).toEqual({ scraper: 2, brush: 1, siphon: 1 });
+  });
+
+  it('every cleaning-tool entry carries a swatch, ≥1 surface, an effectiveness in (0,1], and a positive reachMm when set', () => {
+    for (const entry of coreCatalog.byKind('cleaning-tool')) {
+      expect(entry.color).toMatch(/^#[0-9a-fA-F]{6}$/);
+      expect(entry.surfaces.length).toBeGreaterThan(0);
+      expect(entry.effectiveness).toBeGreaterThan(0);
+      expect(entry.effectiveness).toBeLessThanOrEqual(1);
+      if (entry.reachMm !== undefined) {
+        expect(entry.reachMm).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('every cleaning-tool targetAlgae value is a subset of AlgaeType (F16.5b keys these into per-type algae stocks)', () => {
+    const algaeTypes = new Set<string>(ALGAE_TYPES);
+    // The catalog's own `algae` kind is the in-lib mirror of water-sim's
+    // AlgaeType — assert the local constant matches it, so a drift in either
+    // place fails here (the lock-step guard that avoids the import cycle).
+    const catalogAlgaeTypes = new Set<string>(coreCatalog.byKind('algae').map((e) => e.type));
+    expect(catalogAlgaeTypes).toEqual(algaeTypes);
+    for (const entry of coreCatalog.byKind('cleaning-tool')) {
+      for (const target of entry.targetAlgae) {
+        // Lock-step: a tool can only target an algae type the growth model knows.
+        expect(algaeTypes.has(target)).toBe(true);
+      }
+    }
+  });
+
+  it('only the siphon removes waste, and it is the substrate tool', () => {
+    for (const entry of coreCatalog.byKind('cleaning-tool')) {
+      if (entry.removesWaste) {
+        // Waste removal is the gravel-siphon's job (ties to Stage 13 chemistry).
+        expect(entry.type).toBe('siphon');
+        expect(entry.surfaces).toContain('substrate');
+      }
+    }
+    const siphons = coreCatalog.byKind('cleaning-tool').filter((e) => e.type === 'siphon');
+    expect(siphons.length).toBeGreaterThan(0);
+    for (const siphon of siphons) {
+      expect(siphon.removesWaste).toBe(true);
+    }
+  });
+
+  it('the steel scraper blade is reachable, glass-only, and honestly targets only hard green-spot', () => {
+    const entry = coreCatalog.get({ catalog: 'core', id: 'cleaning-tool.scraper.steel-blade' });
+    expect(entry).not.toBeNull();
+    expect(entry?.kind).toBe('cleaning-tool');
+    if (entry?.kind !== 'cleaning-tool') return;
+    expect(entry.type).toBe('scraper');
+    expect(entry.surfaces).toEqual(['glass']);
+    // A rigid blade shears hard glass green-spot; it can't reach BBA on hardscape.
+    expect(entry.targetAlgae).toEqual(['green-spot']);
+  });
+
+  it('the stiff brush is the hardscape tool that honestly targets tufted black-beard', () => {
+    const entry = coreCatalog.get({ catalog: 'core', id: 'cleaning-tool.brush.toothbrush' });
+    expect(entry).not.toBeNull();
+    if (entry?.kind !== 'cleaning-tool') return;
+    expect(entry.type).toBe('brush');
+    expect(entry.surfaces).toEqual(['hardscape']);
+    expect(entry.targetAlgae).toContain('black-beard');
+  });
+
+  it('the gravel-vacuum siphon is the SiphonTool-driven waste remover', () => {
+    const entry = coreCatalog.get({ catalog: 'core', id: 'cleaning-tool.siphon.gravel-vacuum' });
+    expect(entry).not.toBeNull();
+    if (entry?.kind !== 'cleaning-tool') return;
+    expect(entry.type).toBe('siphon');
+    expect(entry.surfaces).toEqual(['substrate']);
+    expect(entry.removesWaste).toBe(true);
   });
 });
 

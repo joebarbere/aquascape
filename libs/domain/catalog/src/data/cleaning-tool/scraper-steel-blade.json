@@ -1,0 +1,17 @@
+{
+  "catalog": "core",
+  "id": "cleaning-tool.scraper.steel-blade",
+  "version": 1,
+  "name": "Stainless Algae Scraper Blade",
+  "kind": "cleaning-tool",
+  "type": "scraper",
+  "brand": "Flipper",
+  "description": "A long-handled stainless razor blade for shearing hard, mature green-spot algae off glass that a magnet pad can't budge. Glass-only — the rigid blade is useless on irregular hardscape. effectiveness (0.9) + reachMm (40) are MODELLED game-tuning weights, not product specs.",
+  "tags": ["cleaning-tool", "scraper", "blade", "glass", "green-spot", "hard-algae"],
+  "surfaces": ["glass"],
+  "targetAlgae": ["green-spot"],
+  "effectiveness": 0.9,
+  "reachMm": 40,
+  "color": "#9aa6ad",
+  "notes": "Steel blades scratch acrylic — glass tanks only. The most effective tool against hard mature green-spot, which nerite snails largely ignore."
+}

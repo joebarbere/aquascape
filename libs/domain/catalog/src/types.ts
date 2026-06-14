@@ -49,7 +49,8 @@ export type CatalogKind =
   | 'nutrient'
   | 'food'
   | 'algae'
-  | 'water-test-kit';
+  | 'water-test-kit'
+  | 'cleaning-tool';
 
 /**
  * Optional photorealistic texture maps (Bucket 2 of the 3D fidelity plan,
@@ -932,6 +933,98 @@ export interface WaterTestKitEntry extends CatalogEntryBase {
   notes?: string;
 }
 
+// ─── Cleaning tool (Stage 16 F16.5a — cleaner game mode) ──────────────────
+
+/**
+ * The surfaces a cleaning tool can act on. Each maps onto where the Stage 16
+ * cleaner game mode reads algae / waste from:
+ *
+ * - `glass`     — the tank's inner glass walls (green-spot + film algae).
+ * - `hardscape` — rocks + driftwood (black-beard tufts cling here).
+ * - `substrate` — the floor (gravel-vacuumed waste / detritus, not algae).
+ */
+export type CleaningSurface = 'glass' | 'hardscape' | 'substrate';
+
+/**
+ * The physical family of a cleaning tool. Drives the cleaner game mode's tool
+ * picker + the action it performs:
+ *
+ * - `scraper` — a stiff blade / razor / magnet that shears hard algae off the
+ *               flat glass (green-spot, film). Glass-only; useless on the
+ *               irregular surfaces of hardscape.
+ * - `brush`   — a stiff-bristled brush / old toothbrush worked into the
+ *               crevices of hardscape to dislodge tufted algae (black-beard).
+ * - `siphon`  — a gravel-vacuum siphon. The one tool driven by Stage 15's
+ *               renderer `SiphonTool` (no fork — the cleaner reuses it):
+ *               vacuums the substrate, lifting settled waste / detritus and
+ *               (lightly) any film algae sitting on the floor. Carries
+ *               `removesWaste: true`.
+ */
+export type CleaningToolType = 'scraper' | 'brush' | 'siphon';
+
+/**
+ * A real-world aquarium cleaning tool the user wields in the Stage 16 cleaner
+ * game mode (F16.5). F16.5a ships the catalog data; F16.5b (next PR) wires the
+ * game/ECS/UI that consumes it — clearing the Stage 13 F13.6 algae types off
+ * glass + hardscape and (for the siphon) removing the Stage 13 chemistry waste.
+ *
+ * **Honesty stance (mirrors the food / algae kinds):**
+ * - `targetAlgae` is the honest list of which algae a tool actually shifts. It
+ *   uses the SAME `AlgaeType` values as `@aquascape/domain/water-sim`
+ *   (`libs/domain/water-sim/src/algae.ts`) and the merged `AlgaeEntry.type` so
+ *   F16.5b can key a tool's targets straight into the per-type algae stocks. A
+ *   magnet/scraper honestly lists only the hard glass algae it shifts
+ *   (`green-spot`), not the BBA it can't reach; a brush lists `black-beard`.
+ * - `effectiveness` + `reachMm` are LABELLED MODELLED coefficients (game-tuning
+ *   weights), NOT product specs — surface them as "modelled" in the UI.
+ *
+ * - `type` is the tool family (the siphon is the `SiphonTool`-driven one).
+ * - `surfaces` is which surfaces the tool works on (a scraper = `['glass']`,
+ *   a brush = `['hardscape']`, a siphon = `['substrate']`).
+ * - `removesWaste` is `true` only for the gravel siphon — it ties to the
+ *   Stage 13 chemistry waste / detritus the vacuum lifts.
+ * - `color` is a UI swatch for the cleaner-mode tool picker — NOT a rendered
+ *   scene colour (cleaning tools are a game affordance, not scene objects).
+ */
+export interface CleaningToolEntry extends CatalogEntryBase {
+  kind: 'cleaning-tool';
+  /** Tool family — scraper / brush / siphon. The siphon is the SiphonTool one. */
+  type: CleaningToolType;
+  /** Manufacturer / product family (e.g. "Mag-Float", "Flipper", "Python"). */
+  brand?: string;
+  /** Surfaces the tool acts on (a scraper works glass; a siphon works substrate). */
+  surfaces: CleaningSurface[];
+  /**
+   * Honest list of algae types this tool removes — uses the SAME `AlgaeType`
+   * values as `water-sim` + `AlgaeEntry.type` (F16.5b keys these into the
+   * per-type algae stocks). May be empty (`[]`) for a pure waste tool (a gravel
+   * siphon that lifts detritus but doesn't scrape algae).
+   */
+  targetAlgae: AlgaeType[];
+  /**
+   * MODELLED removal-rate coefficient in `(0, 1]` (1 = clears its targets in a
+   * single pass). A game-tuning weight, NOT a measured rate — labelled
+   * approximate; surface as "modelled" in the cleaner-mode UI.
+   */
+  effectiveness: number;
+  /**
+   * MODELLED working reach in millimetres — how wide a swath one pass clears
+   * (a magnet's contact face, a siphon tube's mouth). A tuning weight, not a
+   * product dimension. Optional; absent = the game's per-type default.
+   */
+  reachMm?: Millimetres;
+  /**
+   * `true` only for the gravel siphon — it lifts settled waste / detritus,
+   * tying into the Stage 13 chemistry waste. Absent / `false` = the tool only
+   * shifts algae (scrapers + brushes).
+   */
+  removesWaste?: boolean;
+  /** UI swatch for the cleaner-mode tool picker. NOT a rendered scene colour. */
+  color: HexColor;
+  /** Free-form caveats (e.g. "sand-safe magnet — grit between pads scratches glass"). */
+  notes?: string;
+}
+
 // ─── Placeholders for later stages ────────────────────────────────────────
 //
 // Each future kind adds a branch here AND a matching schema branch. Until
@@ -948,7 +1041,8 @@ export type CatalogEntry =
   | NutrientEntry
   | FoodEntry
   | AlgaeEntry
-  | WaterTestKitEntry;
+  | WaterTestKitEntry
+  | CleaningToolEntry;
 
 /**
  * Lookup table built from a validated catalog: `(catalog, id) -> entry`.

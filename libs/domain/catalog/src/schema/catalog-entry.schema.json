@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aquascape.dev/schemas/catalog-entry-v3.json",
   "title": "CatalogEntry",
-  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 + 7 F7.3 ship `substrate` + `hardscape` + `plant` + `livestock` + `equipment`. Future stages add tank under the same oneOf. Manifest schemaVersion 3 (Stage 11 F11.2) adds the optional `behavior` block on `LivestockEntry`; v2 manifests load unchanged because every behavior subfield is optional + additive (`resolveBehavior()` falls back to per-group presets when the block is absent). Stage 11 F11.3 extends the same v3 schema additively with `behavior.territory` / `nipping` / `fear` on livestock and `coverScore` on hardscape — no manifest version bump. Stage 11 F11.4 extends the same v3 schema additively with `behavior.feeding` / `curiosity` on livestock — no manifest version bump. Stage 11 F11.5 extends the same v3 schema additively with `flow` (filter / pump outflow + intake + flowRate) and `airRateMl` (air-stone bubble volumetric rate) on equipment — no manifest version bump. Stage 11 F11.7 extends the same v3 schema additively with `photoperiodHours` on equipment (lighting only) — no manifest version bump. The 3D-fidelity Bucket 2 pass extends the same v3 schema additively with the optional `textures` block (albedo / normal / roughness PNG refs) on substrate + hardscape + plant — no manifest version bump; livestock is deliberately excluded (per-species textures fight the per-archetype InstancedMesh batching). The overhead-equipment-lighting pass extends the same v3 schema additively with the optional `light` block (lumens / colorTempK / beamAngleDeg / fixtureLengthMm) on equipment (lighting only) — no manifest version bump. The decor pass adds a sixth oneOf branch `DecorEntry` (GLB-modelled classic aquarium ornaments referencing a `.glb` file under the catalog model root) — purely additive, manifest schemaVersion stays at 3; pre-decor readers surface a per-entry validation error for the unknown kind (the loader never silently drops it). The Nutrients & additives + dosing feature (F-A) adds a seventh oneOf branch `NutrientEntry` (real-world dry salts / all-in-one liquids / liquid carbon / conditioners / remineralizers / buffers / bacteria) — purely additive, manifest schemaVersion stays at 3. Disclosed products carry honest per-dose ppm/dGH in `contributes`; proprietary products set `disclosed: false`, omit `contributes`, and rely on the qualitative `affects` list (fabricating proprietary ppm is forbidden). Stage 13 F13.4 (aquarium husbandry sim) adds three further oneOf branches — `FoodEntry` (flake / pellet / wafer / live foods with a published `proteinPct` + a MODELLED `wasteFactor`), `AlgaeEntry` (the four algae types — green-spot / hair / black-beard / diatom, whose `type` enum MUST stay in lock-step with `water-sim`'s `AlgaeType` — with modelled growth coefficients + honest grazer lists), and `WaterTestKitEntry` (real test kits with published per-parameter readable ranges) — all purely additive, manifest schemaVersion stays at 3.",
+  "description": "A single catalog entry. Stages 2 + 3 + 4 + 7 F7.1 + 7 F7.3 ship `substrate` + `hardscape` + `plant` + `livestock` + `equipment`. Future stages add tank under the same oneOf. Manifest schemaVersion 3 (Stage 11 F11.2) adds the optional `behavior` block on `LivestockEntry`; v2 manifests load unchanged because every behavior subfield is optional + additive (`resolveBehavior()` falls back to per-group presets when the block is absent). Stage 11 F11.3 extends the same v3 schema additively with `behavior.territory` / `nipping` / `fear` on livestock and `coverScore` on hardscape — no manifest version bump. Stage 11 F11.4 extends the same v3 schema additively with `behavior.feeding` / `curiosity` on livestock — no manifest version bump. Stage 11 F11.5 extends the same v3 schema additively with `flow` (filter / pump outflow + intake + flowRate) and `airRateMl` (air-stone bubble volumetric rate) on equipment — no manifest version bump. Stage 11 F11.7 extends the same v3 schema additively with `photoperiodHours` on equipment (lighting only) — no manifest version bump. The 3D-fidelity Bucket 2 pass extends the same v3 schema additively with the optional `textures` block (albedo / normal / roughness PNG refs) on substrate + hardscape + plant — no manifest version bump; livestock is deliberately excluded (per-species textures fight the per-archetype InstancedMesh batching). The overhead-equipment-lighting pass extends the same v3 schema additively with the optional `light` block (lumens / colorTempK / beamAngleDeg / fixtureLengthMm) on equipment (lighting only) — no manifest version bump. The decor pass adds a sixth oneOf branch `DecorEntry` (GLB-modelled classic aquarium ornaments referencing a `.glb` file under the catalog model root) — purely additive, manifest schemaVersion stays at 3; pre-decor readers surface a per-entry validation error for the unknown kind (the loader never silently drops it). The Nutrients & additives + dosing feature (F-A) adds a seventh oneOf branch `NutrientEntry` (real-world dry salts / all-in-one liquids / liquid carbon / conditioners / remineralizers / buffers / bacteria) — purely additive, manifest schemaVersion stays at 3. Disclosed products carry honest per-dose ppm/dGH in `contributes`; proprietary products set `disclosed: false`, omit `contributes`, and rely on the qualitative `affects` list (fabricating proprietary ppm is forbidden). Stage 13 F13.4 (aquarium husbandry sim) adds three further oneOf branches — `FoodEntry` (flake / pellet / wafer / live foods with a published `proteinPct` + a MODELLED `wasteFactor`), `AlgaeEntry` (the four algae types — green-spot / hair / black-beard / diatom, whose `type` enum MUST stay in lock-step with `water-sim`'s `AlgaeType` — with modelled growth coefficients + honest grazer lists), and `WaterTestKitEntry` (real test kits with published per-parameter readable ranges) — all purely additive, manifest schemaVersion stays at 3. Stage 16 F16.5a (cleaner game mode) adds an eleventh oneOf branch `CleaningToolEntry` (scraper / brush / siphon cleaning tools — the siphon reuses Stage 15's renderer SiphonTool) — purely additive, manifest schemaVersion stays at 3; the entry's `targetAlgae` enum MUST stay in lock-step with `water-sim`'s `AlgaeType` (the same lock-step `AlgaeEntry.type` keeps) so F16.5b can key a tool's targets into the per-type algae stocks.",
   "oneOf": [
     { "$ref": "#/$defs/SubstrateEntry" },
     { "$ref": "#/$defs/HardscapeEntry" },
@@ -13,7 +13,8 @@
     { "$ref": "#/$defs/NutrientEntry" },
     { "$ref": "#/$defs/FoodEntry" },
     { "$ref": "#/$defs/AlgaeEntry" },
-    { "$ref": "#/$defs/WaterTestKitEntry" }
+    { "$ref": "#/$defs/WaterTestKitEntry" },
+    { "$ref": "#/$defs/CleaningToolEntry" }
   ],
   "$defs": {
     "HexColor": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" },
@@ -967,6 +968,65 @@
         "notes": {
           "type": "string",
           "description": "Free-form caveats (e.g. 'shake bottle #2 vigorously to avoid a false zero nitrate')."
+        }
+      }
+    },
+    "CleaningToolEntry": {
+      "allOf": [{ "$ref": "#/$defs/CatalogEntryBase" }],
+      "type": "object",
+      "required": ["kind", "type", "surfaces", "targetAlgae", "effectiveness", "color"],
+      "additionalProperties": false,
+      "description": "A real-world aquarium cleaning tool for the Stage 16 cleaner game mode (F16.5). The siphon is the tool driven by Stage 15's renderer SiphonTool (no fork). `targetAlgae` uses the same AlgaeType values as water-sim + AlgaeEntry.type so F16.5b can key a tool's targets into the per-type algae stocks. `effectiveness` + `reachMm` are LABELLED MODELLED game-tuning coefficients, NOT product specs.",
+      "properties": {
+        "catalog": true,
+        "id": true,
+        "version": true,
+        "name": true,
+        "description": true,
+        "tags": true,
+        "kind": { "const": "cleaning-tool" },
+        "type": {
+          "enum": ["scraper", "brush", "siphon"],
+          "description": "Tool family — scraper (blade/magnet, shears hard glass algae), brush (stiff bristles for tufted hardscape algae), siphon (gravel vacuum; the SiphonTool-driven waste remover)."
+        },
+        "brand": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Manufacturer / product family (e.g. 'Mag-Float', 'Flipper', 'Python')."
+        },
+        "surfaces": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "enum": ["glass", "hardscape", "substrate"] },
+          "description": "Surfaces the tool acts on (scraper = glass, brush = hardscape, siphon = substrate)."
+        },
+        "targetAlgae": {
+          "type": "array",
+          "items": { "enum": ["green-spot", "hair", "black-beard", "diatom"] },
+          "description": "Honest list of algae types this tool removes. MUST use the same AlgaeType values as @aquascape/domain/water-sim (libs/domain/water-sim/src/algae.ts) + AlgaeEntry.type — F16.5b keys these into the per-type algae stocks. May be empty for a pure waste tool (a gravel siphon that lifts detritus but doesn't scrape algae)."
+        },
+        "effectiveness": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "MODELLED removal-rate coefficient in (0, 1] (1 = clears its targets in a single pass). A game-tuning weight, NOT a measured rate — labelled approximate."
+        },
+        "reachMm": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "MODELLED working reach in mm — how wide a swath one pass clears. A tuning weight, not a product dimension. Absent = the game's per-type default."
+        },
+        "removesWaste": {
+          "type": "boolean",
+          "description": "true only for the gravel siphon — it lifts settled waste / detritus, tying into the Stage 13 chemistry waste. Absent / false = the tool only shifts algae (scrapers + brushes)."
+        },
+        "color": {
+          "$ref": "#/$defs/HexColor",
+          "description": "UI swatch for the cleaner-mode tool picker. NOT a rendered scene colour."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free-form caveats (e.g. 'sand-safe magnet — grit between pads scratches glass')."
         }
       }
     }

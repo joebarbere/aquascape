@@ -1,0 +1,17 @@
+{
+  "catalog": "core",
+  "id": "cleaning-tool.scraper.mag-float",
+  "version": 1,
+  "name": "Mag-Float Glass Cleaner",
+  "kind": "cleaning-tool",
+  "type": "scraper",
+  "brand": "Mag-Float",
+  "description": "A floating two-piece magnet cleaner — you wipe green-spot + film algae off the inner glass from outside the tank, no wet hands. Honest targets: it shears soft film + green-spot off the flat glass but can't reach the irregular surfaces of hardscape. effectiveness (0.65) + reachMm (90) are MODELLED game-tuning weights, not product specs.",
+  "tags": ["cleaning-tool", "scraper", "magnet", "glass", "green-spot"],
+  "surfaces": ["glass"],
+  "targetAlgae": ["green-spot", "diatom"],
+  "effectiveness": 0.65,
+  "reachMm": 90,
+  "color": "#3f6fa0",
+  "notes": "Sand-safe variants exist, but grit trapped between the pads scratches glass — lift it off the substrate, never drag it through sand."
+}
