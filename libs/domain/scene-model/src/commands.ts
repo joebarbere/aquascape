@@ -51,6 +51,11 @@ import {
   invertSubstrateCommand,
   type SubstrateCommand,
 } from './substrate-commands';
+import {
+  applyWaterChangeCommand,
+  invertWaterChangeCommand,
+  type WaterChangeCommand,
+} from './water-change-commands';
 import type { HexColor, Layer, LayerId, ObjectId, Scene, SceneObject, TankStyle } from './types';
 
 // ─── Result type ──────────────────────────────────────────────────────────
@@ -486,6 +491,7 @@ export type Command =
   | LivestockCommand
   | EquipmentCommand
   | NutrientCommand
+  | WaterChangeCommand
   | CompositeCommand;
 
 // ─── Internal helpers ─────────────────────────────────────────────────────
@@ -1088,6 +1094,13 @@ export function applyCommand(scene: Scene, command: Command): CommandResult {
       return applyNutrientCommand(scene, command);
     }
 
+    case 'WaterChange': {
+      // A water change isn't object-scoped (it belongs to no layer), so the
+      // locked-layer guard doesn't apply. Delegate to the water-change module.
+      // Stage 13 F13.5a — dilutes the water column, never the bacterial colony.
+      return applyWaterChangeCommand(scene, command);
+    }
+
     case 'Composite': {
       let current = scene;
       for (const child of command.children) {
@@ -1365,6 +1378,10 @@ export function invertCommand(scene: Scene, command: Command): Command {
     case 'DoseNutrient':
     case 'RemoveDoseEvent': {
       return invertNutrientCommand(scene, command);
+    }
+
+    case 'WaterChange': {
+      return invertWaterChangeCommand(scene, command);
     }
 
     case 'Composite': {
