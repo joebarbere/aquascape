@@ -79,6 +79,9 @@ import { Store } from '@ngrx/store';
 
 import { coreCatalog } from '@aquascape/domain/catalog';
 import type {
+  AlgaeEntry as CatalogAlgaeEntry,
+  AlgaeGrazer,
+  AlgaeType,
   Catalog,
   DecorEntry as CatalogDecorEntry,
   EquipmentEntry as CatalogEquipmentEntry,
@@ -103,12 +106,14 @@ import {
 } from '@aquascape/domain/livestock-behaviors';
 import { seededHash01 } from '@aquascape/domain/geometry';
 import {
+  ALGAE_TYPE_FIELDS,
   FISH_ARCHETYPE,
   FOOD_TYPE,
   HARDSCAPE_CATEGORY,
   NO_BEHAVIOR_HANDLE,
   createLivestockWorld,
   tickPrng,
+  type AlgaeProfileScale,
   type BubbleSourceRegistration,
   type FoodTypeId,
   type HardscapeRegistrationEntry,
@@ -486,6 +491,9 @@ export class LivestockSimulationService implements OnDestroy {
       // F11.5: bake + register flow + SDF + bubble sources BEFORE spawn
       // so the world is fully populated when fish first integrate.
       this.wireFluidAndBubbles(this.world, tankAabb, flowSources, sphereInputs, bubbleSources);
+      // F13.6: register per-type algae growth tuning + photoperiod + each
+      // grazing species' preferred-type mask before spawn.
+      this.wireAlgae(this.world, scene, livestock, equipment);
       this.spawnAll(this.world, scene, livestock);
       this.lastSpawnKey = key;
       return;
@@ -521,6 +529,8 @@ export class LivestockSimulationService implements OnDestroy {
     // LAST so auto-anchor + initial bubble debt are consistent with the
     // fully-populated world state.
     this.wireFluidAndBubbles(this.world, tankAabb, flowSources, sphereInputs, bubbleSources);
+    // F13.6: re-register algae tuning + photoperiod + grazer masks on rebuild.
+    this.wireAlgae(this.world, scene, livestock, equipment);
     this.spawnAll(this.world, scene, livestock);
     this.lastSpawnKey = key;
   }
@@ -566,6 +576,75 @@ export class LivestockSimulationService implements OnDestroy {
       world.registerHardscapeSdf(null);
     }
     world.registerBubbleSources(bubbleSources);
+  }
+
+  /**
+   * F13.6 — wire the per-type algae growth inputs into the world:
+   *
+   *   1. PROFILES: register `{ growthRate, lightDependence }` per `AlgaeType`
+   *      from the loaded `algae` catalog rows (`catalog.byKind('algae')`). The
+   *      growth CURVE is owned by the water-sim `algaeGrowth` model; the catalog
+   *      only scales it per type. Absent rows ⇒ the model profile drives the
+   *      type alone (registerAlgaeProfiles falls back per missing key).
+   *
+   *   2. PHOTOPERIOD: the max `EquipmentEntry.photoperiodHours` across the
+   *      scene's lighting equipment (longer day ⇒ more algae). Falls back to
+   *      the world default (8 h) when no equipment declares one.
+   *
+   *   3. GRAZER MASKS: for each unique grazing species in the scene, map the
+   *      species → an `AlgaeGrazer` bucket, then union the algae types whose
+   *      catalog `grazers[]` include that bucket into a bitmask and register it
+   *      so `feedingSystem` rasps the right type(s). A species that maps to no
+   *      bucket (or whose bucket matches nothing) gets no mask → the world's
+   *      generalist fallback (graze the highest-stock type) applies.
+   *
+   * Determinism: nitrate is NOT set here (it's the live `WaterChemistryService`
+   * input via `setWaterQuality`; default 0). With nitrate 0 none of this grows
+   * algae, so a world wired with profiles + photoperiod but no chemistry still
+   * replays run-to-run identically.
+   */
+  private wireAlgae(
+    world: LivestockWorld,
+    scene: Scene,
+    livestock: readonly LivestockEntry[],
+    equipment: readonly EquipmentEntry[],
+  ): void {
+    const algaeRows = this.catalog.byKind('algae');
+
+    // 1. Per-type growth tuning.
+    const profiles: Partial<Record<AlgaeType, AlgaeProfileScale>> = {};
+    for (const row of algaeRows) {
+      profiles[row.type] = {
+        growthRate: row.growthRate,
+        lightDependence: row.lightDependence,
+      };
+    }
+    world.registerAlgaeProfiles(profiles);
+
+    // 2. Photoperiod from lighting equipment (longest declared day wins).
+    let photoperiod: number | null = null;
+    for (const eq of equipment) {
+      const row = this.catalog.get(eq.ref) as CatalogEquipmentEntry | null;
+      const hours = row?.photoperiodHours;
+      if (typeof hours === 'number' && Number.isFinite(hours)) {
+        photoperiod = photoperiod === null ? hours : Math.max(photoperiod, hours);
+      }
+    }
+    if (photoperiod !== null) world.setPhotoperiodHours(photoperiod);
+
+    // 3. Grazer-preference masks. For each unique grazing species, union the
+    //    algae types it controls (catalog `grazers[]` membership) into a mask.
+    const seen = new Set<number>();
+    for (const entry of livestock) {
+      const speciesId = speciesIdForRef(entry.ref.id);
+      if (seen.has(speciesId)) continue;
+      seen.add(speciesId);
+      const row = this.catalog.get(entry.ref) as CatalogLivestockEntry | null;
+      const bucket = grazerBucketForSpecies(entry.ref.id, row);
+      if (bucket === null) continue;
+      const mask = grazerMaskFor(bucket, algaeRows);
+      if (mask !== 0) world.registerGrazerPreference(speciesId, mask);
+    }
   }
 
   /**
@@ -964,6 +1043,56 @@ function hexToRgb01(hex: string | undefined): readonly [number, number, number] 
  */
 function speciesIdForRef(refId: string): number {
   return (seededHash01(0, hashStringTo32(refId)) * 65535) | 0;
+}
+
+/**
+ * F13.6 — classify a grazing species into an `AlgaeGrazer` bucket (the coarse
+ * cleanup-crew categories the `algae` catalog rows list under `grazers[]`).
+ * Returns null when the species isn't a recognised grazer (no preference mask
+ * is registered → the world's generalist fallback applies). Heuristic, in
+ * priority order: explicit id substrings first, then catalog `group`. Honest
+ * hobby mapping — otos eat diatom/soft-film, plecos broad green, SAE black-beard,
+ * shrimp soft hair/biofilm, nerite snails glass/hardscape film + green-spot.
+ */
+function grazerBucketForSpecies(
+  refId: string,
+  row: CatalogLivestockEntry | null,
+): AlgaeGrazer | null {
+  const id = refId.toLowerCase();
+  if (id.includes('oto')) return 'oto';
+  if (id.includes('pleco') || id.includes('bristlenose') || id.includes('ancistrus')) return 'pleco';
+  if (id.includes('siamese-algae') || id.includes('sae') || id.includes('crossocheilus')) {
+    return 'siamese-algae-eater';
+  }
+  if (id.includes('nerite') || id.includes('snail')) return 'nerite-snail';
+  if (id.includes('shrimp') || id.includes('amano') || id.includes('neocaridina') || id.includes('caridina')) {
+    return 'shrimp';
+  }
+  // Fall back to the catalog group for shrimp / snail cleanup crews that don't
+  // advertise in the id.
+  const group = row?.group?.toLowerCase();
+  if (group === 'shrimp') return 'shrimp';
+  if (group === 'snail') return 'nerite-snail';
+  return null;
+}
+
+/**
+ * F13.6 — union the algae types a grazer bucket controls into a bitmask over
+ * `ALGAE_TYPE_FIELDS` index order (bit i = `ALGAE_TYPE_FIELDS[i].type`). A type
+ * whose catalog `grazers[]` includes the bucket sets its bit. Returns 0 when
+ * the bucket controls nothing in the catalog.
+ */
+function grazerMaskFor(
+  bucket: AlgaeGrazer,
+  algaeRows: readonly CatalogAlgaeEntry[],
+): number {
+  let mask = 0;
+  for (let i = 0; i < ALGAE_TYPE_FIELDS.length; i++) {
+    const type = ALGAE_TYPE_FIELDS[i]!.type;
+    const row = algaeRows.find((r) => r.type === type);
+    if (row && row.grazers.includes(bucket)) mask |= 1 << i;
+  }
+  return mask;
 }
 
 /**

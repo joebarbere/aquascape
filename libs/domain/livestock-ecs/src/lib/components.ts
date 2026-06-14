@@ -199,11 +199,34 @@ export const FearState = defineComponent({
  * F11.3 hardscape.spec.ts is binary-compatible — adding fields to a bitECS
  * `defineComponent` only widens the SoA struct; existing slabs keep their
  * shape and existing tests pass without modification.
+ *
+ * Stage 13 F13.6 — PER-TYPE algae. The single `algaeScore` scalar is now an
+ * AGGREGATE (kept = the sum of the four per-type stocks, clamped to [0,1]) so
+ * existing consumers (`getAlgaeScore`, the renderer snapshot's algae overlay,
+ * the grazer-targeting `algaeScore > 0.1` gate) keep working unchanged. The
+ * four per-type stocks each ∈ [0, 1] track green-spot / hair / black-beard /
+ * diatom independently — grown by `algaeGrowthSystem` through the water-sim
+ * `algaeGrowth` model (nitrate × photoperiod × flow, per type) and grazed
+ * type-selectively by `feedingSystem` (otos prefer diatom/green-spot, plecos
+ * broad green, …). `algaeGrowthSystem` re-derives `algaeScore` from the four
+ * stocks each tick; the grazer rasp decrements both a chosen per-type stock
+ * AND the aggregate so the overlay tracks within the same tick. The slab
+ * widening is binary-compatible (existing tests untouched). The four fields'
+ * index order MUST match `ALGAE_TYPE_FIELDS` in `algae-growth-system.ts`.
  */
 export const Hardscape = defineComponent({
   coverScore: Types.f32,
   category: Types.ui8,
+  /** Aggregate algae stock ∈ [0, 1] = clamp(sum of the four per-type stocks). */
   algaeScore: Types.f32,
+  /** F13.6 — green-spot algae stock ∈ [0, 1]. */
+  algaeGreenSpot: Types.f32,
+  /** F13.6 — hair algae stock ∈ [0, 1]. */
+  algaeHair: Types.f32,
+  /** F13.6 — black-beard algae stock ∈ [0, 1]. */
+  algaeBlackBeard: Types.f32,
+  /** F13.6 — diatom algae stock ∈ [0, 1]. */
+  algaeDiatom: Types.f32,
 });
 
 /**

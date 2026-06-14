@@ -1509,3 +1509,125 @@ describe('LivestockSimulationService — F11.4 Feed tank pulse', () => {
     expect(world.getFoodSpriteCount()).toBe(0);
   });
 });
+
+// ─── F13.6 — per-type algae growth wiring ────────────────────────────────────
+//
+// The service registers (a) per-type growth tuning from the `algae` catalog
+// rows, (b) a photoperiod from lighting equipment's `photoperiodHours`, and
+// (c) a preferred-algae-type bitmask per grazing species (from the catalog
+// `algae.grazers[]` → species bucket mapping) — all before spawn. nitrate is
+// NOT set here (it's the live WaterChemistryService input), so a service-wired
+// world with no chemistry still grows no algae.
+
+/** Mint an AlgaeEntry catalog row. */
+function algaeEntry(
+  type: 'green-spot' | 'hair' | 'black-beard' | 'diatom',
+  grazers: string[],
+  opts: { growthRate?: number; lightDependence?: number } = {},
+): CatalogEntry {
+  return {
+    catalog: 'core',
+    id: `algae.${type}`,
+    version: 1,
+    name: `${type} algae`,
+    kind: 'algae',
+    type,
+    growthRate: opts.growthRate ?? 0.5,
+    lightDependence: opts.lightDependence ?? 0.8,
+    grazers,
+    color: '#5f8f3a',
+  } as CatalogEntry;
+}
+
+/** Mint an equipment catalog row carrying a photoperiod. */
+function lightEquipmentEntry(id: string, photoperiodHours: number): CatalogEntry {
+  return {
+    catalog: 'core',
+    id,
+    version: 1,
+    name: id,
+    kind: 'equipment',
+    category: 'light',
+    photoperiodHours,
+  } as CatalogEntry;
+}
+
+describe('LivestockSimulationService — F13.6 algae wiring', () => {
+  function setupAlgae(): { service: LivestockSimulationService; store: MockStore } {
+    const { service, store } = setup();
+    service.setCatalog(
+      makeCatalog([
+        // An oto (algae-grazer) — id substring "oto" → 'oto' bucket.
+        livestockEntry('livestock.fish.otocinclus', { name: 'Otocinclus', tags: ['oto'] }),
+        // A neon tetra (not a grazer).
+        livestockEntry('livestock.fish.neon-tetra', { name: 'Neon tetra' }),
+        // Algae rows: diatom + green-spot are grazed by oto; hair/black-beard not.
+        algaeEntry('green-spot', ['oto', 'nerite-snail'], { growthRate: 0.45, lightDependence: 0.9 }),
+        algaeEntry('hair', ['shrimp'], { growthRate: 0.7, lightDependence: 0.9 }),
+        algaeEntry('black-beard', ['siamese-algae-eater'], { growthRate: 0.5, lightDependence: 0.5 }),
+        algaeEntry('diatom', ['oto', 'nerite-snail', 'shrimp'], { growthRate: 0.6, lightDependence: 0.2 }),
+        // A light with an 11 h photoperiod.
+        lightEquipmentEntry('equipment.light.led-bar', 11),
+      ]),
+    );
+    return { service, store };
+  }
+
+  it('registers per-type algae growth profiles from the catalog', () => {
+    const { service, store } = setupAlgae();
+    store.overrideSelector(
+      selectScene,
+      sceneWithLivestock([entry('e1', 'livestock.fish.neon-tetra', 4)], 7),
+    );
+    store.refreshState();
+    const world = service.getWorld()!;
+    expect(world.algaeProfiles['green-spot']).toEqual({ growthRate: 0.45, lightDependence: 0.9 });
+    expect(world.algaeProfiles.diatom).toEqual({ growthRate: 0.6, lightDependence: 0.2 });
+  });
+
+  it('sets the photoperiod from the lighting equipment row', () => {
+    const { service, store } = setupAlgae();
+    const scene: Scene = {
+      ...sceneWithLivestock([entry('e1', 'livestock.fish.neon-tetra', 3)], 7),
+      equipment: [
+        { id: asObjectId('eq1'), ref: { catalog: 'core', id: 'equipment.light.led-bar', version: 1 } },
+      ],
+    };
+    store.overrideSelector(selectScene, scene);
+    store.refreshState();
+    const world = service.getWorld()!;
+    expect(world.photoperiodHours).toBeCloseTo(11, 5);
+  });
+
+  it('registers a grazer-preference mask for the oto (diatom + green-spot bits set)', () => {
+    const { service, store } = setupAlgae();
+    store.overrideSelector(
+      selectScene,
+      sceneWithLivestock([entry('e1', 'livestock.fish.otocinclus', 2)], 7),
+    );
+    store.refreshState();
+    const world = service.getWorld()!;
+    // green-spot is ALGAE_TYPE_FIELDS index 0, diatom is index 3.
+    const GREEN_SPOT_BIT = 1 << 0;
+    const DIATOM_BIT = 1 << 3;
+    const HAIR_BIT = 1 << 1;
+    // Find the oto's speciesId via its single registered grazer-preference entry.
+    expect(world.grazerPreference.size).toBe(1);
+    const [mask] = Array.from(world.grazerPreference.values());
+    expect(mask & GREEN_SPOT_BIT).toBe(GREEN_SPOT_BIT);
+    expect(mask & DIATOM_BIT).toBe(DIATOM_BIT);
+    // Hair is NOT grazed by the oto bucket.
+    expect(mask & HAIR_BIT).toBe(0);
+  });
+
+  it('a non-grazing species (neon tetra) gets NO grazer-preference mask', () => {
+    const { service, store } = setupAlgae();
+    store.overrideSelector(
+      selectScene,
+      sceneWithLivestock([entry('e1', 'livestock.fish.neon-tetra', 4)], 7),
+    );
+    store.refreshState();
+    const world = service.getWorld()!;
+    expect(world.grazerPreference.size).toBe(0);
+  });
+});
