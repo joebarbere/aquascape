@@ -175,9 +175,14 @@ export class WaterChemistryService implements OnDestroy {
     this.state = simulateChemistry(this.params, this.state, WEEKS_PER_TICK, sourceN, this.seed);
     this.tickCount += 1;
 
-    // Close the loop: push ammonia + nitrite to the world so VitalitySystem
-    // reads them next sim tick. No-op when there's no world yet.
-    world?.setWaterQuality({ ammonia: this.state.ammonia, nitrite: this.state.nitrite });
+    // Close the loop: push ammonia + nitrite (VitalitySystem) + nitrate
+    // (F13.6 AlgaeGrowthSystem) to the world so they read the latest chemistry
+    // next sim tick. No-op when there's no world yet.
+    world?.setWaterQuality({
+      ammonia: this.state.ammonia,
+      nitrite: this.state.nitrite,
+      nitrate: this.state.nitrate,
+    });
 
     this.zone.run(() => this.publish());
   }
@@ -212,11 +217,14 @@ export class WaterChemistryService implements OnDestroy {
     );
     this.state = diluted.chemistry;
 
-    // Push the diluted ammonia + nitrite to the world so VitalitySystem reads
-    // the cleaner water next sim tick — the fish-health response is immediate.
-    this.livestockSim
-      .getWorld()
-      ?.setWaterQuality({ ammonia: this.state.ammonia, nitrite: this.state.nitrite });
+    // Push the diluted ammonia + nitrite + nitrate to the world so
+    // VitalitySystem + AlgaeGrowthSystem read the cleaner water next sim tick —
+    // a water change cuts nitrate, so algae growth eases off immediately too.
+    this.livestockSim.getWorld()?.setWaterQuality({
+      ammonia: this.state.ammonia,
+      nitrite: this.state.nitrite,
+      nitrate: this.state.nitrate,
+    });
 
     this.zone.run(() => this.publish());
     return this.state;

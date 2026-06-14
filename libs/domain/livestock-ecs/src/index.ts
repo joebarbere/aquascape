@@ -75,6 +75,7 @@ export { ParamStore, NO_BEHAVIOR_HANDLE } from './lib/param-store';
 
 // ─── Systems (exported for renderer / tests; normally run via world.step) ──
 export {
+  algaeGrowthSystem,
   animationSystem,
   collisionSystem,
   curiositySystem,
@@ -92,6 +93,16 @@ export {
   territorialSystem,
   vitalitySystem,
 } from './lib/systems';
+
+// ─── Per-type algae growth (Stage 13 F13.6) ───────────────────────────────
+export {
+  ALGAE_TYPE_FIELDS,
+  DEFAULT_PHOTOPERIOD_HOURS,
+  DEFAULT_ALGAE_SCALE,
+  FLOW_NORMALISE_MM_PER_S,
+  type AlgaeFieldKey,
+  type AlgaeProfileScale,
+} from './lib/algae-growth-system';
 
 // ─── Vitality + waste (Stage 14 F14.2 + F14.4) ────────────────────────────
 export {

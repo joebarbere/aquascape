@@ -73,11 +73,22 @@ A test-kit readout (the classic colour-chart for ammonia/nitrite/nitrate/pH) sur
 a volume (dilutes nitrate/ammonia proportionally) and/or sets replacement-water params — the model
 primitive the Stage 15 siphon flow drives.
 
-### F13.6 — Algae simulation
+### F13.6 — Algae simulation ✅ SHIPPED
 Algae growth ∝ nitrate × light(photoperiod from `EquipmentEntry.photoperiodHours`) × flow, per algae
 type, feeding the ECS `Hardscape.algaeScore` (already a regrowing scalar in `feeding-system.ts`).
 Extend that scalar toward per-type algae so grazers (otos) and the cleaner game mode can target
 specific types.
+
+SHIPPED: `Hardscape` gained four per-type stocks (green-spot/hair/black-beard/diatom); `algaeScore`
+is now their clamped-sum aggregate (every existing consumer unchanged). A new `algaeGrowthSystem`
+(slotted before `feedingSystem`) grows each type through the water-sim `algaeGrowth` model from
+nitrate (`setWaterQuality.nitrate`, default 0) × photoperiod (`setPhotoperiodHours`, default 8 h,
+fed from `EquipmentEntry.photoperiodHours`) × flow-field magnitude, scaled per type by the registered
+`algae` catalog rows. `feedingSystem`'s rasp is now type-selective (per-species `registerGrazerPreference`
+mask from the catalog `grazers[]` mapping; generalist fallback = highest-stock type). Per-type stocks
+read via `world.getAlgaeByType(eid)` (snapshot shape unchanged — aggregate stays the rendered total).
+Defaults (nitrate 0) keep a chemistry-less world replay-identical. The cleaner game mode consuming
+per-type algae is Stage 16 F16.5 (gated on Stage 15). **This completes Stage 13.**
 
 ## Acceptance criteria
 
@@ -86,7 +97,8 @@ specific types.
 - [ ] A `.aqua` file saved with chemistry round-trips losslessly through v4; a v3 file loads with the
       field absent (no invented values).
 - [ ] A water change reduces nitrate and shifts params toward the replacement water; undo restores.
-- [ ] Algae grows faster under high nitrate + long photoperiod; grazing reduces it.
+- [x] Algae grows faster under high nitrate + long photoperiod; grazing reduces it. (F13.6 — per-type;
+      `algae-growth-system.spec.ts` pins the nitrate + photoperiod monotonicity + type-selective rasp.)
 
 ## Testing
 

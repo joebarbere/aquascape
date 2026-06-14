@@ -92,6 +92,13 @@ import {
 } from './bubble-fluid';
 import { vitalitySystem } from './vitality-system';
 import {
+  algaeGrowthSystem,
+  ALGAE_TYPE_FIELDS,
+  DEFAULT_PHOTOPERIOD_HOURS,
+  type AlgaeProfileScale,
+} from './algae-growth-system';
+import type { AlgaeType } from '@aquascape/domain/water-sim';
+import {
   makeWasteAccumulator,
   wasteSystem,
   type WasteAccumulator,
@@ -149,10 +156,18 @@ export interface WaterQuality {
   ammonia: number;
   /** Nitrite (NO2-N) in mg/L. 0 = clean. */
   nitrite: number;
+  /**
+   * Stage 13 F13.6 — nitrate (NO3-N) in mg/L. The nutrient driver for the
+   * per-type algae growth model (`algaeGrowthSystem` → water-sim `algaeGrowth`).
+   * DEFAULTS to 0: a world with no `WaterChemistryService` wired sees zero algae
+   * growth (the Monod nutrient driver is 0 at nitrate 0), so the 1000-tick
+   * replay stays run-to-run identical and the no-chemistry path stays benign.
+   */
+  nitrate: number;
 }
 
 /** Default (clean) water quality — the byte-identical-replay-preserving baseline. */
-const DEFAULT_WATER_QUALITY: WaterQuality = { ammonia: 0, nitrite: 0 };
+const DEFAULT_WATER_QUALITY: WaterQuality = { ammonia: 0, nitrite: 0, nitrate: 0 };
 
 /**
  * F14.4 — default modelled waste fraction stamped on a food sprite when the
@@ -382,6 +397,30 @@ export interface LivestockWorld {
    */
   readonly waterQuality: WaterQuality;
   /**
+   * Stage 13 F13.6 — daily photoperiod (hours) the `algaeGrowthSystem` feeds to
+   * the water-sim `algaeGrowth` light driver. Set via `setPhotoperiodHours`
+   * (the host derives it from `EquipmentEntry.photoperiodHours` / the day-night
+   * state). Defaults to `DEFAULT_PHOTOPERIOD_HOURS` (8 h). Mutable; read each
+   * tick by `algaeGrowthSystem`. A default-photoperiod world with nitrate 0
+   * grows no algae, so the default is replay-safe.
+   */
+  photoperiodHours: number;
+  /**
+   * Stage 13 F13.6 — per-type algae catalog tuning (growthRate / lightDependence).
+   * Keyed by `AlgaeType`; a missing key falls back to the model's built-in
+   * profile (`DEFAULT_ALGAE_SCALE`). Populated by `registerAlgaeProfiles`. Read
+   * by `algaeGrowthSystem`. Empty by default — the model drives every type
+   * alone, which keeps a catalog-less world deterministic.
+   */
+  readonly algaeProfiles: Partial<Record<AlgaeType, AlgaeProfileScale>>;
+  /**
+   * Stage 13 F13.6 — speciesId → preferred-algae-type bitmask (bit i set ⇒ the
+   * species grazes `ALGAE_TYPE_FIELDS[i]`). Populated by `registerGrazerPreference`.
+   * Read by `feedingSystem`'s algae-grazer branch. A species absent here grazes
+   * the highest-stock type (the generalist fallback). Empty by default.
+   */
+  readonly grazerPreference: Map<number, number>;
+  /**
    * @internal — per-source Stam fluid slices that advect rising bubbles
    * (the "bubble fluid fidelity pass"). Mutated in place by
    * `bubbleFluidStepSystem`; rebuilt by `registerBubbleSources` / tank
@@ -563,14 +602,49 @@ export interface LivestockWorld {
    */
   setPlayerPredator(flag: boolean): void;
   /**
-   * Stage 14 F14.2 — set the current water-quality scalars the VitalitySystem
-   * reads (ammonia + nitrite, mg/L). The LIVE value comes from the future
-   * `WaterChemistryService` (Stage 13 F13.3 — deferred); for now this is the
-   * injection seam. Defaults to clean (0/0): a world that never calls this
-   * behaves benignly and replays byte-identically (no health decay from water).
-   * Negative inputs are clamped to 0.
+   * Stage 14 F14.2 / Stage 13 F13.6 — set the current water-quality scalars the
+   * VitalitySystem + AlgaeGrowthSystem read (ammonia + nitrite + nitrate, mg/L).
+   * The LIVE value comes from `WaterChemistryService` (F13.3). Defaults to clean
+   * (0/0/0): a world that never calls this behaves benignly and replays
+   * run-to-run identically (no health decay from water, no algae growth at
+   * nitrate 0). `nitrate` is OPTIONAL on the input — omitting it leaves the
+   * current nitrate untouched (so a F14.2-era caller that only passes
+   * ammonia/nitrite keeps working). Negative inputs are clamped to 0.
    */
-  setWaterQuality(quality: { ammonia: number; nitrite: number }): void;
+  setWaterQuality(quality: { ammonia: number; nitrite: number; nitrate?: number }): void;
+  /**
+   * Stage 13 F13.6 — set the daily photoperiod (hours, clamped to [0, 24]) the
+   * AlgaeGrowthSystem feeds the light driver. The host derives it from
+   * `EquipmentEntry.photoperiodHours` / the day-night state. Default 8 h.
+   */
+  setPhotoperiodHours(hours: number): void;
+  /**
+   * Stage 13 F13.6 — register the per-type algae growth tuning from the loaded
+   * `algae` catalog rows (growthRate / lightDependence per `AlgaeType`). Replaces
+   * the whole table. Pass `{}` to clear (every type falls back to the model
+   * profile). Stored by value (shallow copy). The growth CURVE stays owned by
+   * the water-sim model — this only scales it per type.
+   */
+  registerAlgaeProfiles(profiles: Partial<Record<AlgaeType, AlgaeProfileScale>>): void;
+  /**
+   * Stage 13 F13.6 — register which algae TYPES a grazing species prefers, as a
+   * bitmask over `ALGAE_TYPE_FIELDS` index order (bit 0 = green-spot, 1 = hair,
+   * 2 = black-beard, 3 = diatom). The host derives the mask by mapping each
+   * grazing species to its `AlgaeGrazer` bucket and unioning the catalog `algae`
+   * rows whose `grazers[]` include that bucket. `feedingSystem` reads it via the
+   * fish's `SpeciesId` and reduces only the preferred type(s). A species with no
+   * registered mask (or mask 0) falls back to grazing the HIGHEST-stock type
+   * (so a generalist grazer still cleans the worst patch). Idempotent per
+   * speciesId — re-register overwrites.
+   */
+  registerGrazerPreference(speciesId: number, typeMask: number): void;
+  /**
+   * Stage 13 F13.6 — read the per-type algae stocks for a hardscape entity.
+   * Returns null if `eid` has no Hardscape component. The cleaner game mode
+   * (Stage 16 F16.5) + tests target specific types via this. The aggregate
+   * `getAlgaeScore` stays the rendered total.
+   */
+  getAlgaeByType(hardscapeEid: number): Record<AlgaeType, number> | null;
   /**
    * Stage 14 F14.4 — read the current ammonia source term (nitrogen MASS rate,
    * mg-N/day) produced by the per-fish baseline + uneaten-food accumulator. A
@@ -775,6 +849,18 @@ export function createLivestockWorld(
   // byte-identical vs. a chemistry-less baseline.
   const waterQuality: WaterQuality = { ...DEFAULT_WATER_QUALITY };
 
+  // Stage 13 F13.6 — algae growth inputs. `photoperiodHours` is mutated by
+  // setPhotoperiodHours (default 8 h); `algaeProfiles` is replaced by
+  // registerAlgaeProfiles (default empty → every type uses the model profile).
+  // Both default-safe: with nitrate 0 (the WaterQuality default) the growth
+  // model returns 0 regardless of photoperiod/profiles, so a chemistry-less
+  // world grows no algae and replays run-to-run identically.
+  const algaeProfiles: Partial<Record<AlgaeType, AlgaeProfileScale>> = {};
+  // F13.6 — speciesId → preferred-algae-type bitmask. Empty default → every
+  // grazer is a generalist (grazes the highest-stock type). The host registers
+  // a mask per grazing species from the catalog `algae.grazers[]` mapping.
+  const grazerPreference = new Map<number, number>();
+
   // Stage 16 F16.1 (game modes) — the single player-controlled fish, or
   // `NO_ENTITY_REF` when none is marked. The injected velocity is the ONE
   // live, non-deterministic signal entering the world; it's overwritten onto
@@ -795,6 +881,9 @@ export function createLivestockWorld(
     __bubbleFluid: bubbleFluid,
     __waste: waste,
     waterQuality,
+    photoperiodHours: DEFAULT_PHOTOPERIOD_HOURS,
+    algaeProfiles,
+    grazerPreference,
     seed: seed | 0,
     tickCounter: 0,
     paramStore,
@@ -985,6 +1074,14 @@ export function createLivestockWorld(
         const startAlgae =
           cat === HARDSCAPE_CATEGORY.ROCK || cat === HARDSCAPE_CATEGORY.WOOD ? 1.0 : 0.0;
         Hardscape.algaeScore[eid] = startAlgae;
+        // F13.6 — seed the four per-type stocks so their sum equals the
+        // aggregate `startAlgae` (each type starts equal; the growth model +
+        // type-selective grazing then differentiate them over sim time).
+        const perType = startAlgae / 4;
+        Hardscape.algaeGreenSpot[eid] = perType;
+        Hardscape.algaeHair[eid] = perType;
+        Hardscape.algaeBlackBeard[eid] = perType;
+        Hardscape.algaeDiatom[eid] = perType;
         hardscapeEids.push(eid);
       }
     },
@@ -1199,12 +1296,48 @@ export function createLivestockWorld(
       }
     },
 
-    setWaterQuality(quality: { ammonia: number; nitrite: number }): void {
-      // Mutate the live object in place (VitalitySystem reads it each tick).
-      // Clamp negatives to 0 so a bad input can't manufacture health recovery
-      // by going below the safe floor in the wrong direction.
+    setWaterQuality(quality: { ammonia: number; nitrite: number; nitrate?: number }): void {
+      // Mutate the live object in place (VitalitySystem + AlgaeGrowthSystem read
+      // it each tick). Clamp negatives to 0 so a bad input can't manufacture
+      // health recovery by going below the safe floor in the wrong direction.
       waterQuality.ammonia = quality.ammonia > 0 ? quality.ammonia : 0;
       waterQuality.nitrite = quality.nitrite > 0 ? quality.nitrite : 0;
+      // nitrate is optional — only update when supplied so a F14.2-era caller
+      // (ammonia/nitrite only) leaves the algae driver untouched.
+      if (quality.nitrate !== undefined) {
+        waterQuality.nitrate = quality.nitrate > 0 ? quality.nitrate : 0;
+      }
+    },
+
+    setPhotoperiodHours(hours: number): void {
+      const h = Number.isFinite(hours) ? hours : DEFAULT_PHOTOPERIOD_HOURS;
+      this.photoperiodHours = h < 0 ? 0 : h > 24 ? 24 : h;
+    },
+
+    registerAlgaeProfiles(profiles: Partial<Record<AlgaeType, AlgaeProfileScale>>): void {
+      // Replace the whole table — shallow-copy each supplied entry so a later
+      // caller mutation can't alias our stored tuning.
+      for (const key of Object.keys(algaeProfiles) as AlgaeType[]) {
+        delete algaeProfiles[key];
+      }
+      for (const key of Object.keys(profiles) as AlgaeType[]) {
+        const p = profiles[key];
+        if (p === undefined) continue;
+        algaeProfiles[key] = { growthRate: p.growthRate, lightDependence: p.lightDependence };
+      }
+    },
+
+    registerGrazerPreference(speciesId: number, typeMask: number): void {
+      grazerPreference.set(speciesId & 0xffff, typeMask | 0);
+    },
+
+    getAlgaeByType(hardscapeEid: number): Record<AlgaeType, number> | null {
+      if (!hardscapeEids.includes(hardscapeEid)) return null;
+      const out = {} as Record<AlgaeType, number>;
+      for (const { type, field } of ALGAE_TYPE_FIELDS) {
+        out[type] = Hardscape[field][hardscapeEid] as number;
+      }
+      return out;
     },
 
     getWasteSourceN(): number {
@@ -1254,6 +1387,12 @@ export function createLivestockWorld(
       fearSystem(this, dt);
       nippingSystem(this, dt);
       territorialSystem(this, dt);
+      // F13.6 — grow per-type algae (water-sim model) BEFORE feeding so a
+      // grazer rasps freshly-grown algae this tick + the aggregate the snapshot
+      // reads is current. Replaces the flat-rate regrowth that used to live at
+      // the tail of feedingSystem. nitrate-0 (the default) ⇒ no growth, so a
+      // chemistry-less world is unaffected and replays run-to-run identically.
+      algaeGrowthSystem(this, dt);
       feedingSystem(this, dt);
       // F14.2 — integrate per-fish health off the just-updated hunger +
       // injected water quality. Slotted right after FeedingSystem (which
@@ -1435,6 +1574,14 @@ export function createLivestockWorld(
       waste.pendingUneatenN = 0;
       waterQuality.ammonia = DEFAULT_WATER_QUALITY.ammonia;
       waterQuality.nitrite = DEFAULT_WATER_QUALITY.nitrite;
+      // F13.6 — restore default algae inputs so a reused-then-disposed world
+      // doesn't carry a stale nitrate / photoperiod / catalog tuning forward.
+      waterQuality.nitrate = DEFAULT_WATER_QUALITY.nitrate;
+      this.photoperiodHours = DEFAULT_PHOTOPERIOD_HOURS;
+      for (const key of Object.keys(algaeProfiles) as AlgaeType[]) {
+        delete algaeProfiles[key];
+      }
+      grazerPreference.clear();
       paramStore.clear();
       this.spatialGrid.clear();
       pendingStartles.clear();

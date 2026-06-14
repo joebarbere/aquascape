@@ -379,6 +379,32 @@ frac, replacement?)` helper — the **single source of dilution truth**. Honest
   assert the test-kit readout mounts (4 rows, swatch + band), ammonia climbs over sim
   time, and `Change 50%` drops it.
 
+- **F13.6 — per-type algae simulation (completes Stage 13).** Extended the single
+  F11.4 `Hardscape.algaeScore` regrowing scalar into FOUR per-type stocks
+  (green-spot / hair / black-beard / diatom) on the `Hardscape` slab, with
+  `algaeScore` kept as their clamped-sum aggregate so every existing consumer
+  (renderer overlay, the `algaeScore > 0.1` grazer gate, `getAlgaeScore`) is
+  unchanged. A new `algaeGrowthSystem` (slotted before `feedingSystem`) grows each
+  type through the SINGLE source-of-truth `domain/water-sim` `algaeGrowth` model:
+  **nitrate** × **photoperiod** × **flow**, scaled per type by the registered
+  `algae` catalog rows (`growthRate` / `lightDependence`). Three default-safe input
+  seams: `setWaterQuality` now carries an optional `nitrate` (default 0 ⇒ no growth);
+  `setPhotoperiodHours` (default 8 h, fed from `EquipmentEntry.photoperiodHours`);
+  and the flow-field magnitude sampled at each surface. `feedingSystem`'s algae rasp
+  became TYPE-SELECTIVE — a per-species `registerGrazerPreference` bitmask (built by
+  the service from the catalog `algae.grazers[]` → species-bucket mapping: oto / pleco
+  / SAE / nerite-snail / shrimp) reduces only the type(s) the grazer controls, with a
+  highest-stock generalist fallback; the old flat regrowth left `feedingSystem`. The
+  snapshot shape is UNCHANGED — the aggregate stays the rendered total; per-type stocks
+  read via `world.getAlgaeByType(eid)` for the Stage 16 cleaner game + tests.
+  `WaterChemistryService` now pushes `nitrate` alongside ammonia/nitrite. Determinism:
+  pure scalar math, no PRNG — same seed + same inputs ⇒ byte-identical over 1000 ticks
+  (`algae-growth-system.spec.ts` + a new `determinism.spec.ts` case); with nitrate 0
+  the algae state is constant, so a chemistry-less world replays run-to-run identical.
+  Coverage 97.7 %; p95 bench 3.5 ms @ 200 fish (nitrate-0 fast path keeps growth cheap).
+  **This completes Stage 13.** The cleaner game mode that targets specific algae types
+  is Stage 16 F16.5 (gated on Stage 15).
+
 ## Stage 14 — fish vitality & feeding
 
 Made feeding meaningful: typed food, a health/hunger model, and a vitality

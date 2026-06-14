@@ -10,7 +10,12 @@
  *   - 'midwater'     Nearest FoodSprite, no Y filter.
  *   - 'substrate'    Nearest FoodSprite, optionally biased to lower third.
  *   - 'algae-grazer' Nearest Hardscape with algaeScore > 0.1. On contact,
- *                    rasp (decrement algaeScore) and decrement hunger.
+ *                    rasp the grazer's PREFERRED per-type stock(s) (F13.6 —
+ *                    from the world's `grazerPreference` mask keyed by the
+ *                    fish's SpeciesId; a no-mask grazer reduces the
+ *                    highest-stock type) and decrement hunger. The aggregate
+ *                    `algaeScore` is decremented in lock-step so the overlay +
+ *                    targeting gate track within the tick.
  *   - 'plant-eater'  Same as algae-grazer for F11.4 (plant-scatter
  *                    integration is reserved for F11.6).
  *   - 'detritivore'  Wander toward substrate Y, never seek a sprite,
@@ -22,10 +27,12 @@
  * removed via `removeEntity`. FoodSpriteLifetimeSystem (separate path)
  * handles the 30s timeout.
  *
- * Algae regrowth: at the end of the per-tick loop, every Hardscape with
- * `algaeScore < 1.0` regrows at a slow rate (~17 min sim-time to full
- * regrowth from 0). This runs unconditional of fish presence — the SoA
- * scan is cheap and keeps the regrowth coupled to the feeding loop.
+ * Algae regrowth: F13.6 moved growth to the dedicated `algaeGrowthSystem`
+ * (which grows the four per-type stocks via the water-sim `algaeGrowth`
+ * model and re-derives the aggregate). FeedingSystem no longer regrows
+ * algae — it only RASPS it down (type-selectively). With nitrate 0 (the
+ * default) the growth system grows nothing, so a chemistry-less world's
+ * grazed rock simply stays bare (matching the no-nutrient hobby reality).
  *
  * Determinism: target selection iterates in bitECS eid order (stable
  * within one world; the per-tick PRNG isn't used here — no random
@@ -48,7 +55,9 @@ import {
   Hardscape,
   NO_INTEREST,
   Position,
+  SpeciesId,
 } from './components';
+import { ALGAE_TYPE_FIELDS, type AlgaeFieldKey } from './algae-growth-system';
 import type { LivestockWorld } from './world';
 
 const feederQuery = defineQuery([
@@ -78,13 +87,6 @@ const RASP_REACH_BL_MULT = 2;
  * time-slider scale per the F11.4 spec.
  */
 const RASP_RATE_PER_SEC = 0.033;
-
-/**
- * Algae regrowth rate per second (per hardscape entity). At 0.001/s a
- * fully-grazed rock regrows in ~17 min sim time. Slow on purpose so a
- * heavily-stocked tank shows visibly bare patches in the renderer.
- */
-const ALGAE_REGROWTH_PER_SEC = 0.001;
 
 /**
  * Maximum range an algae-grazer will travel to a target rock (mm). Beyond
@@ -236,12 +238,13 @@ export function feedingSystem(world: LivestockWorld, dt: number): void {
       if (bestEid >= 0) {
         const dist = Math.sqrt(bestDistSq);
         if (dist < reachRaspMm) {
-          // Within rasp range — rasp the rock + reduce hunger.
-          const newScore = Math.max(
-            0,
-            (Hardscape.algaeScore[bestEid] as number) - RASP_RATE_PER_SEC * dt,
-          );
-          Hardscape.algaeScore[bestEid] = newScore;
+          // Within rasp range — rasp the grazer's PREFERRED per-type stock(s)
+          // (F13.6) then re-derive the aggregate. The amount rasped is the same
+          // RASP_RATE_PER_SEC * dt budget, split across the preferred types the
+          // rock actually carries; a no-preference grazer rasps the single
+          // highest-stock type.
+          const speciesId = SpeciesId.id[eid] as number;
+          raspByType(world, bestEid, speciesId, RASP_RATE_PER_SEC * dt);
           hunger -= GRAZE_HUNGER_REDUCTION_PER_SEC * dt;
           if (hunger < 0) hunger = 0;
           FeedingDrive.lastFedAt[eid] = world.tickCounter * dt;
@@ -346,15 +349,8 @@ export function feedingSystem(world: LivestockWorld, dt: number): void {
     FeedingDrive.hunger[eid] = hunger;
   }
 
-  // 3. Algae regrowth — every hardscape with algaeScore < 1 regrows
-  //    slowly. Independent of fish presence; cheap SoA scan.
-  for (const hEid of hardscapeEids) {
-    const score = Hardscape.algaeScore[hEid] as number;
-    if (score < 1) {
-      const next = score + ALGAE_REGROWTH_PER_SEC * dt;
-      Hardscape.algaeScore[hEid] = next > 1 ? 1 : next;
-    }
-  }
+  // F13.6 — algae GROWTH now lives in `algaeGrowthSystem` (water-sim model,
+  // per type). FeedingSystem only rasps. No regrowth scan here.
 
   // Touch Curiosity component reference so unused-import lint doesn't
   // flag it — the FeedingSystem doesn't read Curiosity but the symbol
@@ -363,6 +359,74 @@ export function feedingSystem(world: LivestockWorld, dt: number): void {
   void Curiosity;
   void NO_INTEREST;
   void hasComponent;
+}
+
+/**
+ * Rasp the grazer's PREFERRED per-type algae stock(s) on a hardscape entity
+ * by `budget` total (F13.6), then re-derive the aggregate `algaeScore` so the
+ * renderer overlay + the `algaeScore > 0.1` targeting gate track within the
+ * same tick.
+ *
+ * Type selection (deterministic, order-independent):
+ *   - If the species has a registered `grazerPreference` mask, rasp every
+ *     preferred type the rock CARRIES (stock > 0), splitting the budget evenly
+ *     across them. If the rock carries none of the preferred types, fall
+ *     through to the generalist path so the grazer still does something.
+ *   - Generalist fallback (no mask, or mask matches nothing present): rasp the
+ *     single HIGHEST-stock type. Ties broken by `ALGAE_TYPE_FIELDS` index order
+ *     (a fixed, stable tiebreak — no PRNG, no iteration-order dependence).
+ *
+ * Pure scalar math keyed off the SoA slabs + the world's preference map; no
+ * random draws, so the 1000-tick replay holds.
+ */
+function raspByType(
+  world: LivestockWorld,
+  hEid: number,
+  speciesId: number,
+  budget: number,
+): void {
+  const mask = world.grazerPreference.get(speciesId & 0xffff) ?? 0;
+
+  // Collect the preferred types the rock actually carries.
+  const preferred: AlgaeFieldKey[] = [];
+  if (mask !== 0) {
+    for (let i = 0; i < ALGAE_TYPE_FIELDS.length; i++) {
+      if ((mask & (1 << i)) === 0) continue;
+      const key = ALGAE_TYPE_FIELDS[i]!.field;
+      if ((Hardscape[key][hEid] as number) > 0) preferred.push(key);
+    }
+  }
+
+  if (preferred.length > 0) {
+    const per = budget / preferred.length;
+    for (const key of preferred) {
+      const next = (Hardscape[key][hEid] as number) - per;
+      Hardscape[key][hEid] = next < 0 ? 0 : next;
+    }
+  } else {
+    // Generalist fallback — rasp the highest-stock type (stable index tiebreak).
+    let bestKey: AlgaeFieldKey | null = null;
+    let bestStock = 0;
+    for (let i = 0; i < ALGAE_TYPE_FIELDS.length; i++) {
+      const key = ALGAE_TYPE_FIELDS[i]!.field;
+      const s = Hardscape[key][hEid] as number;
+      if (s > bestStock) {
+        bestStock = s;
+        bestKey = key;
+      }
+    }
+    if (bestKey !== null) {
+      const next = (Hardscape[bestKey][hEid] as number) - budget;
+      Hardscape[bestKey][hEid] = next < 0 ? 0 : next;
+    }
+  }
+
+  // Re-derive the aggregate from the (now-reduced) per-type stocks.
+  let aggregate = 0;
+  for (let i = 0; i < ALGAE_TYPE_FIELDS.length; i++) {
+    aggregate += Hardscape[ALGAE_TYPE_FIELDS[i]!.field][hEid] as number;
+  }
+  Hardscape.algaeScore[hEid] = aggregate > 1 ? 1 : aggregate;
 }
 
 /**

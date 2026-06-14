@@ -621,6 +621,83 @@ describe('determinism: 1000 ticks × fixed fleet', () => {
     }
   });
 
+  it('F13.6 per-type algae — 1000-tick replay with nitrate + photoperiod + flow + grazer is byte-identical (per-type stocks + fish)', () => {
+    // Brings the F13.6 algae state into the canonical replay gate: a rock + a
+    // grazing oto with a registered type-preference mask, nitrate + photoperiod
+    // + a flow field driving the growth model, registered per-type catalog
+    // tuning. The growth model is pure scalar (no PRNG), the rasp is
+    // SpeciesId-keyed (no PRNG), so two cold worlds must match byte-for-byte —
+    // both the fish slab AND the per-type algae stocks.
+    const otoSpecies = 1;
+    const cardinalSpecies = 2;
+    const GREEN_SPOT_BIT = 1 << 0;
+    const DIATOM_BIT = 1 << 3;
+    const otoBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+    otoBehavior.feeding = { hungerRatePerSec: 1 / 8, threshold: 0.3, category: 'algae-grazer' };
+    otoBehavior.depth.preferredY = 0.2;
+    const cardinalBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+
+    function run(): { position: Float32Array; algae: Float32Array } {
+      const w: LivestockWorld = createLivestockWorld(SEED, { tankAabb: TANK });
+      const otoHandle = w.registerSpeciesBehavior(otoSpecies, otoBehavior);
+      const cardinalHandle = w.registerSpeciesBehavior(cardinalSpecies, cardinalBehavior);
+      w.registerHardscape([
+        { position: { x: 300, y: 80, z: 200 }, coverScore: 0.4, category: HARDSCAPE_CATEGORY.ROCK },
+        { position: { x: 700, y: 60, z: 150 }, coverScore: 0.6, category: HARDSCAPE_CATEGORY.WOOD },
+      ]);
+      w.registerAlgaeProfiles({
+        'green-spot': { growthRate: 0.45, lightDependence: 0.9 },
+        hair: { growthRate: 0.7, lightDependence: 0.9 },
+        'black-beard': { growthRate: 0.5, lightDependence: 0.5 },
+        diatom: { growthRate: 0.6, lightDependence: 0.2 },
+      });
+      w.setPhotoperiodHours(11);
+      w.setWaterQuality({ ammonia: 0, nitrite: 0, nitrate: 25 });
+      w.registerGrazerPreference(otoSpecies, GREEN_SPOT_BIT | DIATOM_BIT);
+      w.registerFlowField(
+        bakeFlowField({
+          tankAabb: { min: { x: 0, y: 0, z: 0 }, max: { x: 1000, y: 400, z: 400 } },
+          sources: [{ outflowPos: { x: 900, y: 350, z: 200 }, flowRate: 300 }],
+        }),
+      );
+      w.spawnFish({
+        archetype: FISH_ARCHETYPE.CORY_CYLINDER,
+        speciesId: otoSpecies,
+        bodyLengthMm: 40,
+        position: { x: 320, y: 80, z: 220 },
+        behaviorHandleIdx: otoHandle,
+      });
+      for (let i = 0; i < 6; i++) {
+        w.spawnFish({
+          archetype: FISH_ARCHETYPE.SLIM_TETRA,
+          speciesId: cardinalSpecies,
+          bodyLengthMm: 30,
+          position: { x: 200 + i * 20, y: 200, z: 150 },
+          behaviorHandleIdx: cardinalHandle,
+        });
+      }
+      for (let i = 0; i < TICKS; i++) w.step(SIM_DT);
+      const s = w.snapshot(0);
+      const algae: number[] = [];
+      // Scan a wide eid range — bitECS eids are module-global, so by the time
+      // this test runs the cursor is well past any small cap. The per-world
+      // getAlgaeByType returns null for non-hardscape eids, so the scan picks up
+      // exactly this world's two rocks in registration (eid-ascending) order.
+      for (let eid = 0; eid < 100000; eid++) {
+        const t = w.getAlgaeByType(eid);
+        if (t === null) continue;
+        algae.push(t['green-spot'], t.hair, t['black-beard'], t.diatom);
+      }
+      return { position: new Float32Array(s.position), algae: new Float32Array(algae) };
+    }
+
+    const r1 = run();
+    const r2 = run();
+    expect(r1.algae.length).toBe(8); // 2 hardscape × 4 types
+    expect(byteEqual(r1.position, r2.position)).toBe(true);
+    expect(byteEqual(r1.algae, r2.algae)).toBe(true);
+  });
+
   it('different seeds still produce identical *static* fields (position w/ v=0, archetype, scale)', () => {
     // With Velocity=0 in F11.1, Position never changes from its spawn value
     // — so the seed only affects fields driven by `tickPrng` (none yet). This
