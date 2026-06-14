@@ -8,6 +8,7 @@ import { SceneActions } from '@aquascape/state';
 
 import { SimulationControlsComponent } from './simulation-controls.component';
 import { createShowcaseScene } from './showcase-scene';
+import { WaterChemistryService } from '../water-chemistry.service';
 
 interface AnyAction {
   type: string;
@@ -21,15 +22,20 @@ function setup() {
     setPhase: jest.fn(),
     setMode: jest.fn(),
   };
+  const waterChemistry = { applyWaterChange: jest.fn() };
   TestBed.configureTestingModule({
-    providers: [provideMockStore(), { provide: DayNightService, useValue: dayNight }],
+    providers: [
+      provideMockStore(),
+      { provide: DayNightService, useValue: dayNight },
+      { provide: WaterChemistryService, useValue: waterChemistry },
+    ],
   });
   const store = TestBed.inject(MockStore);
   const dispatch = jest.spyOn(store, 'dispatch');
   const fixture = TestBed.createComponent(SimulationControlsComponent);
   fixture.componentInstance.scene = createShowcaseScene();
   fixture.detectChanges();
-  return { fixture, cmp: fixture.componentInstance, dispatch, dayNight };
+  return { fixture, cmp: fixture.componentInstance, dispatch, dayNight, waterChemistry };
 }
 
 /** Last `dispatchCommand` payload, or null. */
@@ -72,6 +78,40 @@ describe('SimulationControlsComponent', () => {
       entryId: first.id,
       quantity: first.quantity + 1,
     });
+  });
+
+  it('changeWater dilutes the live runtime (F13.5b)', () => {
+    const { cmp, waterChemistry } = setup();
+    cmp.changeWater(0.25);
+    expect(waterChemistry.applyWaterChange).toHaveBeenCalledWith(0.25);
+    expect(cmp.wcStatus()).toContain('25%');
+  });
+
+  it('changeWater dispatches the undoable WaterChange command when the tank tracks chemistry', () => {
+    const { cmp, dispatch, waterChemistry } = setup();
+    const base = createShowcaseScene();
+    cmp.scene = {
+      ...base,
+      tank: {
+        ...base.tank,
+        waterChemistry: {
+          chemistry: {
+            ammonia: 1,
+            nitrite: 0,
+            nitrate: 40,
+            ph: 7,
+            aobColony: 5,
+            nobColony: 5,
+            ageWeeks: 8,
+            engineVersion: 1,
+          },
+          cycle: 'cycled',
+        },
+      },
+    };
+    cmp.changeWater(0.5);
+    expect(lastCommand(dispatch)).toMatchObject({ kind: 'WaterChange', fractionReplaced: 0.5 });
+    expect(waterChemistry.applyWaterChange).toHaveBeenCalledWith(0.5);
   });
 
   it('removes the entry when stepping below 1', () => {

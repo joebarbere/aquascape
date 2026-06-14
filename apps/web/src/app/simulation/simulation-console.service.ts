@@ -18,10 +18,17 @@ import {
   removeLivestockEntry,
   setWaterLevel,
   updateLivestockQuantity,
+  waterChange,
   type Command,
 } from '@aquascape/domain/scene-model';
-import { DayNightService } from '@aquascape/features/editor-shell';
+import {
+  buildPanelReadout,
+  parameterLabel,
+  DayNightService,
+} from '@aquascape/features/editor-shell';
 import { SceneActions, selectScene } from '@aquascape/state';
+
+import { WaterChemistryService } from '../water-chemistry.service';
 
 import {
   addRandomItem,
@@ -65,14 +72,7 @@ const PHASE_WORDS: Record<string, number> = {
   evening: 0.75,
 };
 
-const HUD_TARGETS: readonly HudTarget[] = [
-  'info',
-  'controls',
-  'clock',
-  'perf',
-  'vitality',
-  'all',
-];
+const HUD_TARGETS: readonly HudTarget[] = ['info', 'controls', 'clock', 'perf', 'vitality', 'all'];
 const HUD_ACTIONS = ['show', 'hide', 'toggle'] as const;
 const ITEM_KINDS: readonly ItemKind[] = ['rock', 'wood', 'plant', 'decor'];
 
@@ -91,6 +91,7 @@ export class SimulationConsoleService {
   private readonly dayNight = inject(DayNightService);
   private readonly ui = inject(SimulationUiService);
   private readonly simStore = inject(SimulationStoreService);
+  private readonly waterChemistry = inject(WaterChemistryService);
   private readonly sceneSig = this.store.selectSignal(selectScene);
 
   readonly commands: readonly ConsoleCommand[] = this.buildCommands();
@@ -134,6 +135,12 @@ export class SimulationConsoleService {
         .map((s) => s.toLowerCase())
         .filter((s) => s.startsWith(prefix))
         .filter((s, i, a) => a.indexOf(s) === i);
+    }
+    if (command === 'water' && args.length <= 1) {
+      const prefix = (args[0] ?? '').toLowerCase();
+      // The named subverbs (numbers are also valid as a first arg but don't
+      // complete). `change` + `test` are the F13.5b additions.
+      return ['auto', 'test', 'change'].filter((s) => s.startsWith(prefix));
     }
     return [];
   }
@@ -217,21 +224,9 @@ export class SimulationConsoleService {
       },
       {
         name: 'water',
-        summary: 'Set the water level in mm (or "auto")',
-        usage: 'water <mm|auto>',
-        run: (args) => {
-          const token = args[0];
-          if (token === 'auto') {
-            this.dispatch(setWaterLevel(null));
-            return [out('water level → auto')];
-          }
-          const mm = clampInt(token ?? '');
-          const tank = this.sceneSig()?.tank;
-          if (mm === null || tank === undefined) return [err('usage: water <mm|auto>')];
-          const clamped = Math.max(MIN_WATER_MM, Math.min(tank.height, mm));
-          this.dispatch(setWaterLevel(clamped));
-          return [out(`water level → ${clamped} mm`)];
-        },
+        summary: 'Water level (mm/auto), test readout, or a water change',
+        usage: 'water <mm|auto> | water test | water change <pct>',
+        run: (args) => this.waterCommand(args),
       },
       {
         name: 'fish',
@@ -333,6 +328,78 @@ export class SimulationConsoleService {
     }
 
     return [err(usage)];
+  }
+
+  /**
+   * `water` — three behaviours keyed off the first token:
+   *   water <mm>          → set the water level (mm)
+   *   water auto          → clear the water-level override (default fill)
+   *   water test          → print the test-kit readout (ammonia/nitrite/
+   *                         nitrate/pH + safe/caution/danger band)
+   *   water change <pct>  → perform a water change of `<pct>` % (default 25).
+   *                         Dispatches the undoable `WaterChange` Command AND
+   *                         dilutes the live runtime via WaterChemistryService
+   *                         (the same `applyWaterChange` helper, one math).
+   */
+  private waterCommand(args: string[]): ConsoleLine[] {
+    const sub = (args[0] ?? '').toLowerCase();
+    const usage = 'usage: water <mm|auto> | water test | water change <pct>';
+
+    if (sub === 'test') {
+      const live = this.waterChemistry.live();
+      const reads =
+        coreCatalog
+          .byKind('water-test-kit')
+          .find((k) => k.id === 'water-test-kit.api.freshwater-master')?.reads ?? [];
+      const rows = buildPanelReadout(
+        {
+          ammonia: live.state.ammonia,
+          nitrite: live.state.nitrite,
+          nitrate: live.state.nitrate,
+          ph: live.state.ph,
+        },
+        reads,
+      );
+      return [
+        out(`water test — cycle: ${live.cycle}`),
+        ...rows.map((r) =>
+          out(
+            `  ${parameterLabel(r.parameter).padEnd(8)} ${r.value.toFixed(2).padStart(7)} [${r.band}]`,
+          ),
+        ),
+      ];
+    }
+
+    if (sub === 'change') {
+      const pctToken = args[1];
+      let pct = 25;
+      if (pctToken !== undefined) {
+        const n = Number(pctToken.replace('%', ''));
+        if (!Number.isFinite(n) || n <= 0 || n > 100) {
+          return [err('usage: water change <pct>  (1–100)')];
+        }
+        pct = n;
+      }
+      const fraction = pct / 100;
+      // Persisted path — only when the tank tracks chemistry (else reject).
+      if (this.sceneSig()?.tank.waterChemistry !== undefined) {
+        this.dispatch(waterChange(fraction));
+      }
+      this.waterChemistry.applyWaterChange(fraction);
+      return [out(`water change → ${pct}% replaced`)];
+    }
+
+    // Default: water-level set (mm | auto).
+    if (sub === 'auto') {
+      this.dispatch(setWaterLevel(null));
+      return [out('water level → auto')];
+    }
+    const mm = clampInt(sub);
+    const tank = this.sceneSig()?.tank;
+    if (mm === null || sub === '' || tank === undefined) return [err(usage)];
+    const clamped = Math.max(MIN_WATER_MM, Math.min(tank.height, mm));
+    this.dispatch(setWaterLevel(clamped));
+    return [out(`water level → ${clamped} mm`)];
   }
 
   private fishCommand(args: string[]): ConsoleLine[] {

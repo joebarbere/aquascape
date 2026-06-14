@@ -89,6 +89,7 @@ import {
   Orbit3DControlsComponent,
   TimeSliderComponent,
   CycleIndicatorComponent,
+  TestKitReadoutComponent,
   ViewModeService,
   ViewportService,
   WallBackgroundComponent,
@@ -236,6 +237,7 @@ type DragState =
     TankSetupComponent,
     TimeSliderComponent,
     CycleIndicatorComponent,
+    TestKitReadoutComponent,
     WallBackgroundComponent,
     ZoomControlComponent,
   ],
@@ -364,6 +366,9 @@ type DragState =
             <aquascape-wall-background></aquascape-wall-background>
             <aquascape-backdrop-panel></aquascape-backdrop-panel>
             <aquascape-day-night-control></aquascape-day-night-control>
+            <!-- F13.5b — water test-kit readout (colour-chart for ammonia /
+                 nitrite / nitrate / pH) + the undoable WaterChange action. -->
+            <aquascape-test-kit-readout></aquascape-test-kit-readout>
           </div>
         </aside>
 
@@ -2342,9 +2347,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     // and its neutral defaults and the user would see a brightness flicker
     // while orbiting. So in 3D we always pass an explicit lookup, falling back
     // to `NEUTRAL_DAY_NIGHT_LOOKUP` if the service ever yields null.
-    const dayNightLookup = is3d
-      ? (this.dayNight.lookup() ?? NEUTRAL_DAY_NIGHT_LOOKUP)
-      : null;
+    const dayNightLookup = is3d ? (this.dayNight.lookup() ?? NEUTRAL_DAY_NIGHT_LOOKUP) : null;
     // Fidelity pass — forward the baked tank flow field in 3D so the renderer
     // can couple plant sway to the current. Null when no filter/pump
     // equipment is present (the renderer falls back to constant sway).

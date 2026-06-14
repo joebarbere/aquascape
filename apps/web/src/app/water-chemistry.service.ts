@@ -51,7 +51,7 @@ import { Injectable, NgZone, type OnDestroy, inject, signal } from '@angular/cor
 
 import { coreCatalog } from '@aquascape/domain/catalog';
 import type { Catalog } from '@aquascape/domain/catalog';
-import type { Scene } from '@aquascape/domain/scene-model';
+import { applyWaterChange, type ReplacementWater, type Scene } from '@aquascape/domain/scene-model';
 import {
   bioloadSourceN,
   cycleProgress,
@@ -180,6 +180,46 @@ export class WaterChemistryService implements OnDestroy {
     world?.setWaterQuality({ ammonia: this.state.ammonia, nitrite: this.state.nitrite });
 
     this.zone.run(() => this.publish());
+  }
+
+  /**
+   * Apply a water change to the LIVE runtime state — the simulation-mode path
+   * of F13.5b. Dilutes the running `WaterState` by `fractionReplaced` (in
+   * `(0, 1]`) of clean (or `replacement`) water, REUSING the single source of
+   * dilution truth `applyWaterChange` from `domain/scene-model` so the live
+   * tick and the persisted `WaterChange` Command agree by construction — no
+   * re-implemented dilution math here.
+   *
+   * The colony + cycling clock are preserved (a water change doesn't reset the
+   * cycle — nitrifiers live on surfaces), so the cycle keeps its progress and
+   * only the dissolved nitrogen drops. The diluted ammonia + nitrite are pushed
+   * straight to the livestock world so fish health responds immediately, then
+   * the live signal republishes for the HUD readout.
+   *
+   * No-op when the fraction is out of range. Returns the new `WaterState`.
+   */
+  applyWaterChange(fractionReplaced: number, replacement?: ReplacementWater): WaterState {
+    if (!Number.isFinite(fractionReplaced) || fractionReplaced <= 0 || fractionReplaced > 1) {
+      return this.state;
+    }
+    // Lift the live WaterState into a WaterChemistry snapshot (the chemistry
+    // block IS a WaterState field-for-field), dilute via the shared helper,
+    // then lift the result back. cycle is recomputed inside the helper.
+    const diluted = applyWaterChange(
+      { chemistry: this.state, cycle: cycleProgress(this.state) },
+      fractionReplaced,
+      replacement,
+    );
+    this.state = diluted.chemistry;
+
+    // Push the diluted ammonia + nitrite to the world so VitalitySystem reads
+    // the cleaner water next sim tick — the fish-health response is immediate.
+    this.livestockSim
+      .getWorld()
+      ?.setWaterQuality({ ammonia: this.state.ammonia, nitrite: this.state.nitrite });
+
+    this.zone.run(() => this.publish());
+    return this.state;
   }
 
   private publish(): void {

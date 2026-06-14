@@ -350,9 +350,34 @@ nitrogen cycle to life.
   Initial state loads from `Tank.waterChemistry` (else fresh); the live tick state
   is runtime-only (not written back per-tick — no undo-stack spam). The 1000-tick
   livestock replay still holds (`setWaterQuality` defaults clean, so only an active
-  service injects water quality, between sim ticks via a host-driven scalar). The
-  full test-kit colour-chart readout + the undo-able `WaterChange` Command are
-  Stage 13 F13.5.
+  service injects water quality, between sim ticks via a host-driven scalar).
+
+- **F13.5a — `WaterChange` Command + pure `applyWaterChange`.** The undoable model
+  primitive (`domain/scene-model`) that dilutes `Tank.waterChemistry` by a fraction
+  of clean (or replacement) water, plus the exported pure `applyWaterChange(chemistry,
+frac, replacement?)` helper — the **single source of dilution truth**. Honest
+  biology: dilutes the water column's dissolved compounds (ammonia/nitrite/nitrate/pH)
+  only; the bacterial colony + cycling clock live on surfaces and are left untouched,
+  so a water change never resets the cycle. Capture-and-restore invert (dilution is
+  lossy).
+- **F13.5b — test-kit readout + water-change action (closes F13.5).** The classic
+  colour-chart readout (ammonia / nitrite / nitrate / pH) surfaced two ways: a
+  **Water test** accordion in the editor right rail (`TestKitReadoutComponent`,
+  reading `PreviewChemistryService`) and the **simulation HUD** chemistry block
+  (reading the live `WaterChemistryService`). A pure `water-test-kit.ts` helper maps
+  each value against a selected `water-test-kit` entry's `reads[]` ranges (API
+  Freshwater Master default) → a swatch position + colour + a safe/caution/danger
+  verdict (the verdict keyed off honest hobby thresholds, not the kit's chart range).
+  A **water-change action** (25 / 50 % presets + a fraction slider/buttons) dispatches
+  the undoable `WaterChange` Command through the NgRx pipeline (editor) and, in
+  simulation mode, also calls a new `WaterChemistryService.applyWaterChange` that
+  dilutes the **live runtime** `WaterState` via the **same** pure helper — so the live
+  ammonia/nitrate drop immediately and fish health responds (one math source, no
+  re-implemented dilution). A `water` console verb gained `water test` (prints the
+  readout) + `water change <pct>` (default 25), Tab-completing `auto` / `test` /
+  `change` consistent with the other verbs. e2e (`water-chemistry.spec.ts`) extended:
+  assert the test-kit readout mounts (4 rows, swatch + band), ammonia climbs over sim
+  time, and `Change 50%` drops it.
 
 ## Stage 14 — fish vitality & feeding
 
