@@ -10,13 +10,21 @@ describe('SimulationUiService', () => {
   });
 
   it('defaults to everything visible + console closed', () => {
-    expect([s.infoVisible(), s.controlsVisible(), s.clockVisible(), s.perfVisible()]).toEqual([
-      true,
-      true,
-      true,
-      true,
-    ]);
+    expect([
+      s.infoVisible(),
+      s.controlsVisible(),
+      s.clockVisible(),
+      s.perfVisible(),
+      s.actionsVisible(),
+    ]).toEqual([true, true, true, true, true]);
     expect(s.consoleOpen()).toBe(false);
+  });
+
+  it('setHud toggles the actions HUD', () => {
+    s.setHud('actions', false);
+    expect(s.actionsVisible()).toBe(false);
+    s.setHud('actions', true);
+    expect(s.actionsVisible()).toBe(true);
   });
 
   it('toggleConsole flips the console flag', () => {
@@ -34,12 +42,13 @@ describe('SimulationUiService', () => {
 
   it('setHud all sets every target', () => {
     s.setHud('all', false);
-    expect([s.infoVisible(), s.controlsVisible(), s.clockVisible(), s.perfVisible()]).toEqual([
-      false,
-      false,
-      false,
-      false,
-    ]);
+    expect([
+      s.infoVisible(),
+      s.controlsVisible(),
+      s.clockVisible(),
+      s.perfVisible(),
+      s.actionsVisible(),
+    ]).toEqual([false, false, false, false, false]);
   });
 
   it('toggleHud flips a single target', () => {

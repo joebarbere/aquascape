@@ -104,6 +104,17 @@ describe('SimulationConsoleService.execute', () => {
     expect(ui.infoVisible()).toBe(false);
   });
 
+  it('hud hide/show actions toggles the action HUD', async () => {
+    const { svc, ui } = setup();
+    expect(ui.actionsVisible()).toBe(true);
+    const hidden = await svc.execute('hud hide actions');
+    expect(ui.actionsVisible()).toBe(false);
+    expect(hidden[0].kind).toBe('out');
+    expect(hidden[0].text).toContain('actions');
+    await svc.execute('hud show actions');
+    expect(ui.actionsVisible()).toBe(true);
+  });
+
   it('light night drives the day/night service to phase 0', async () => {
     const { svc, dayNight } = setup();
     await svc.execute('light night');

@@ -122,7 +122,36 @@ model stays honest per simulated week, and the run is deterministic from the sce
 > a water-change control that dispatches the undoable `WaterChange` Command. Same model,
 > same seed — one previews, the other ticks live.
 
-### 4. The console — bottom-left (the CLI) ⌨️
+### 4. Action HUD — bottom-center (hands-on husbandry tools)
+
+Stage 15. A row of **square, rounded-border tool buttons** pinned to the lower
+middle of the view — the hands-on husbandry surface. It's a `role="toolbar"`
+(arrow-key navigable, each button a labelled toggle); selecting a tool opens its
+inline panel above the bar.
+
+**Feeding tool (F15.1):**
+
+1. Click **Feed** → a **food-type picker** appears (the catalog `food` entries —
+   each with a colour swatch, name, and form: flake / pellet / wafer / live).
+2. Pick a food → the picker is replaced by a **"Click the tank to drop …"**
+   prompt, and a small ring **drop-preview marker** follows your cursor over the
+   3D canvas.
+3. **Click the 3D canvas** → typed food drops at that exact point. The click
+   pixel is ray-cast to the substrate floor (`raycastTankPoint`), so the food
+   lands where you aimed; the fish find it and feed. Keep clicking to drop more.
+4. **Change** (in the prompt) returns to the picker; **Esc** cancels the tool
+   (a second Esc then exits simulation mode).
+
+This is the **precise** feed — drop food exactly where you want it. The quick
+**Feed tank** scatter on the control HUD (random surface drops) is unchanged for
+a fast top-up.
+
+> The water-change tool (F15.2) lands in the same bar — a multi-step flow (set
+> replacement-water params → place a siphon → siphon out → siphon in).
+
+Hide the bar with `hud hide actions` (or `hud hide all`).
+
+### 5. The console — bottom-left (the CLI) ⌨️
 
 A **Quake-style developer console**. See the next section.
 
@@ -161,7 +190,7 @@ Grammar is simple: `command [args…]`, whitespace-separated. Run `help` any tim
 | `help`  | `help [command]`                                                        | List all commands, or show usage for one.                                                                                                                                                                       |
 | `clear` | `clear`                                                                 | Clear the console output.                                                                                                                                                                                       |
 | `close` | `close`                                                                 | Close the console (same as `~` / Esc).                                                                                                                                                                          |
-| `hud`   | `hud <show\|hide\|toggle> <info\|controls\|clock\|perf\|vitality\|all>` | Show / hide / toggle HUD surfaces (or sub-elements).                                                                                                                                                            |
+| `hud`   | `hud <show\|hide\|toggle> <info\|controls\|clock\|perf\|vitality\|actions\|all>` | Show / hide / toggle HUD surfaces (or sub-elements). `actions` is the bottom-center husbandry tool bar.                                                                                                          |
 | `light` | `light <midnight\|dawn\|day\|dusk\|0..1>`                               | Set the day/night phase (word or a 0–1 fraction).                                                                                                                                                               |
 | `water` | `water <mm\|auto>`                                                      | Set the water level in mm, or `auto` for the default fill.                                                                                                                                                      |
 |         | `water test`                                                            | Print the test-kit readout (ammonia · nitrite · nitrate · pH + safe/caution/danger band).                                                                                                                       |
@@ -252,6 +281,7 @@ can disambiguate.
 > light dusk                  # warm, low evening light
 > hud hide controls           # hide the left control panel
 > hud toggle vitality         # flip the fish-vitality HUD (left-middle)
+> hud hide actions            # hide the bottom-center husbandry tool bar
 > hud toggle perf             # flip the FPS strip on the info HUD
 > hud hide all                # hide every HUD for a clean capture
 > hud show all                # bring them back
