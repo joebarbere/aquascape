@@ -77,7 +77,7 @@ describe('document-round-trip', () => {
     );
   });
 
-  it('property: a v2 document migrates to v4 without inventing tank.waterLevelMm / waterChemistry', () => {
+  it('property: a v2 document migrates to v5 without inventing tank.waterLevelMm / waterChemistry', () => {
     fc.assert(
       fc.property(arbAquaDocument(), (doc) => {
         // Rewind an arbitrary current-version doc to a structurally-valid v2
@@ -92,9 +92,10 @@ describe('document-round-trip', () => {
         const loaded = loadAquaDocument(serializeAquaDocument(v2Doc as AquaDocument));
         expect(loaded.ok).toBe(true);
         if (!loaded.ok) return;
-        expect(loaded.document.schemaVersion).toBe(4);
-        // Absent stays absent through the whole v2 → v3 → v4 chain — each step
-        // is a version-stamp pass-through and must NOT materialise a default.
+        expect(loaded.document.schemaVersion).toBe(5);
+        // Absent stays absent through the whole v2 → v3 → v4 → v5 chain — the
+        // additive steps are version-stamp pass-throughs and must NOT
+        // materialise a default; the v5 step strips renderHistory (absent here).
         expect('waterLevelMm' in loaded.document.tank).toBe(false);
         expect('waterChemistry' in loaded.document.tank).toBe(false);
         expect({ ...loaded.document, schemaVersion: 2 }).toEqual(v2Doc);
@@ -103,7 +104,7 @@ describe('document-round-trip', () => {
     );
   });
 
-  it('property: a v3 document migrates to v4 without inventing tank.waterChemistry', () => {
+  it('property: a v3 document migrates to v5 without inventing tank.waterChemistry', () => {
     fc.assert(
       fc.property(arbAquaDocument(), (doc) => {
         // Rewind an arbitrary current-version doc to a structurally-valid v3
@@ -114,11 +115,49 @@ describe('document-round-trip', () => {
         const loaded = loadAquaDocument(serializeAquaDocument(v3Doc as AquaDocument));
         expect(loaded.ok).toBe(true);
         if (!loaded.ok) return;
-        expect(loaded.document.schemaVersion).toBe(4);
+        expect(loaded.document.schemaVersion).toBe(5);
         // Absent stays absent — the v3 → v4 step is a version-stamp
         // pass-through and must NOT invent a cycle history.
         expect('waterChemistry' in loaded.document.tank).toBe(false);
         expect({ ...loaded.document, schemaVersion: 3 }).toEqual(v3Doc);
+      }),
+      { numRuns: 50 },
+    );
+  });
+
+  it('property: a v4 document carrying renderHistory migrates to v5 with the field stripped', () => {
+    fc.assert(
+      fc.property(arbAquaDocument(), (doc) => {
+        // Stamp an arbitrary current-version doc back to v4 and attach a
+        // renderHistory bag (the now-retired AI-render field). The v4 schema is
+        // a structural superset of v5 minus this field, so the doc is a valid
+        // v4 document. The v4 → v5 step must strip renderHistory so it loads
+        // cleanly under the v5 schema's `additionalProperties: false`.
+        const v4Doc = {
+          ...doc,
+          schemaVersion: 4,
+          renderHistory: [
+            {
+              id: '11111111-0000-4000-8000-000000000001',
+              createdAt: '2026-05-23T15:00:00.000Z',
+              provider: { kind: 'local', name: 'sdxl-local' },
+              request: { prompt: 'a tank' },
+              resultAsset: {
+                id: '11111111-0000-4000-8000-000000000002',
+                uri: 'assets/render.png',
+                mimeType: 'image/png',
+              },
+            },
+          ],
+        };
+        const loaded = loadAquaDocument(serializeAquaDocument(v4Doc as AquaDocument));
+        expect(loaded.ok).toBe(true);
+        if (!loaded.ok) return;
+        expect(loaded.document.schemaVersion).toBe(5);
+        // The dropped field is GONE; everything else carries through unchanged.
+        expect('renderHistory' in loaded.document).toBe(false);
+        const { renderHistory: _dropped, ...v4Rest } = v4Doc;
+        expect({ ...loaded.document, schemaVersion: 4 }).toEqual(v4Rest);
       }),
       { numRuns: 50 },
     );

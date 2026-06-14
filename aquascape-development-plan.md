@@ -124,7 +124,8 @@ Key format decisions:
 - **Forward-compatible** — an `extensions` bag and per-object optional fields mean older readers preserve unknown data rather than dropping it.
 - **Container** — the on-disk `.aqua` file is a ZIP holding `document.json`, an `assets/` directory (imported tank photos), and an optional `thumbnail.png`. Asset-free documents may be saved as bare JSON with the `.aqua` extension; readers sniff for ZIP magic and accept both.
 - **Reproducibility** — a document-level `seed` (plus optional per-scatter seed) makes scatter planting and growth jitter deterministic.
-- **AI render history** lives in the document as `renderHistory[]`, each record tagging whether a `local` or `hosted` provider produced it, the resolved request (prompt/seed/source), and the result asset.
+
+> _Historical note:_ early drafts reserved a `renderHistory[]` field for AI photorealistic renders (Stage 9). The AI render feature was later dropped from scope, and the field was removed from the format in schema v5 (the v4→v5 migration strips it).
 
 ---
 

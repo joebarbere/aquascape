@@ -105,14 +105,16 @@ describe('runMigrations', () => {
     });
   });
 
-  it('exports a frozen migration list with the v1 → v2, v2 → v3 and v3 → v4 no-op steps', () => {
-    expect(AQUA_MIGRATIONS).toHaveLength(3);
+  it('exports a frozen migration list with the v1→v2, v2→v3, v3→v4 no-op steps and the v4→v5 renderHistory-strip step', () => {
+    expect(AQUA_MIGRATIONS).toHaveLength(4);
     expect(AQUA_MIGRATIONS[0]?.from).toBe(1);
     expect(AQUA_MIGRATIONS[0]?.to).toBe(2);
     expect(AQUA_MIGRATIONS[1]?.from).toBe(2);
     expect(AQUA_MIGRATIONS[1]?.to).toBe(3);
     expect(AQUA_MIGRATIONS[2]?.from).toBe(3);
     expect(AQUA_MIGRATIONS[2]?.to).toBe(4);
+    expect(AQUA_MIGRATIONS[3]?.from).toBe(4);
+    expect(AQUA_MIGRATIONS[3]?.to).toBe(5);
     expect(Object.isFrozen(AQUA_MIGRATIONS)).toBe(true);
   });
 
@@ -180,6 +182,63 @@ describe('runMigrations', () => {
     expect(v4.tank.waterLevelMm).toBe(320);
     // Every other field is preserved unchanged.
     expect({ ...v4, schemaVersion: 3 }).toEqual(v3);
+  });
+
+  it('v4 → v5 step strips renderHistory and bumps schemaVersion (no other change)', () => {
+    const v4 = {
+      format: 'aquascape',
+      schemaVersion: 4,
+      meta: { id: 'x', title: 't', createdAt: 'c', updatedAt: 'u', appVersion: '1.0.0', seed: 1 },
+      tank: { width: 600, height: 360, depth: 360, style: { frame: 'rimless', background: { kind: 'none' } } },
+      substrate: { regions: [] },
+      layers: [{ id: 'l1', name: 'L1', opacity: 1, visible: true, locked: false, objects: [] }],
+      // A doc that somehow carried the (now-retired) AI-render history field.
+      renderHistory: [
+        {
+          id: 'r1',
+          createdAt: 'c',
+          provider: { kind: 'local', name: 'sdxl-local' },
+          request: { prompt: 'a tank' },
+          resultAsset: { id: 'a1', uri: 'assets/r1.png', mimeType: 'image/png' },
+        },
+      ],
+    };
+    const step = AQUA_MIGRATIONS[3]!;
+    const v5 = step.migrate(v4) as Record<string, unknown>;
+    expect(v5.schemaVersion).toBe(5);
+    // renderHistory is GONE (the dropped key, not present-with-undefined).
+    expect('renderHistory' in v5).toBe(false);
+    // Every other field is preserved unchanged.
+    const { renderHistory: _dropped, ...v4WithoutHistory } = v4;
+    expect({ ...v5, schemaVersion: 4 }).toEqual(v4WithoutHistory);
+  });
+
+  it('v4 → v5 step is a no-op (apart from the version stamp) when renderHistory is absent', () => {
+    const v4 = {
+      format: 'aquascape',
+      schemaVersion: 4,
+      meta: { id: 'x', title: 't', createdAt: 'c', updatedAt: 'u', appVersion: '1.0.0', seed: 1 },
+      tank: { width: 600, height: 360, depth: 360, style: { frame: 'rimless', background: { kind: 'none' } } },
+      substrate: { regions: [] },
+      layers: [{ id: 'l1', name: 'L1', opacity: 1, visible: true, locked: false, objects: [] }],
+    };
+    const step = AQUA_MIGRATIONS[3]!;
+    const v5 = step.migrate(v4) as typeof v4;
+    expect(v5.schemaVersion).toBe(5);
+    expect('renderHistory' in v5).toBe(false);
+    expect({ ...v5, schemaVersion: 4 }).toEqual(v4);
+  });
+
+  it('v4 → v5 step does not mutate its input (purity)', () => {
+    const v4 = {
+      schemaVersion: 4,
+      renderHistory: [{ id: 'r1' }],
+    };
+    const step = AQUA_MIGRATIONS[3]!;
+    step.migrate(v4);
+    // Input is untouched — the migration builds a fresh object.
+    expect(v4.schemaVersion).toBe(4);
+    expect('renderHistory' in v4).toBe(true);
   });
 
   it('treats null and non-object inputs as version 0', () => {

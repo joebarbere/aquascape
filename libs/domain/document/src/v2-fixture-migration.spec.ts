@@ -7,18 +7,20 @@
  * format change adds a new fixture next to it and a test that loads each in
  * turn.
  *
- * The contract for loading a v2 document under the current (v4) reader is:
- *   1. The v2 fixture loads (every later version is a structural superset of
- *      v2 — `Tank.waterLevelMm` (v3) + `Tank.waterChemistry` (v4) are additive
- *      and optional).
- *   2. After loading, `schemaVersion === 4` (the v2 → v3 → v4 chain ran).
+ * The contract for loading a v2 document under the current (v5) reader is:
+ *   1. The v2 fixture loads (`Tank.waterLevelMm` (v3) + `Tank.waterChemistry`
+ *      (v4) are additive and optional; v5 removed `renderHistory`, which the
+ *      fixture never carried).
+ *   2. After loading, `schemaVersion === 5` (the v2 → v3 → v4 → v5 chain ran).
  *   3. The tank ends up with `waterLevelMm` AND `waterChemistry` ABSENT (each
- *      migration is a pure identity that bumps the version number; it MUST NOT
- *      invent a water level or a chemistry snapshot).
- *   4. The loader reports the applied steps `{ 2 → 3 }, { 3 → 4 }` in order.
+ *      additive migration is a pure identity that bumps the version number; it
+ *      MUST NOT invent a water level or a chemistry snapshot).
+ *   4. The loader reports the applied steps `{ 2 → 3 }, { 3 → 4 }, { 4 → 5 }`
+ *      in order.
  *   5. Apart from `schemaVersion`, the document is byte-for-byte unchanged
- *      (no shape rewrites slipped in under the no-op label — in particular
- *      the v2 `Layer.zone` values survive untouched).
+ *      (no shape rewrites slipped in — in particular the v2 `Layer.zone` values
+ *      survive untouched, and the fixture carried no `renderHistory` for the v5
+ *      step to strip).
  */
 
 import { readFileSync } from 'node:fs';
@@ -32,26 +34,27 @@ const V2_FIXTURE_JSON = readFileSync(V2_FIXTURE_PATH, 'utf8');
 const V2_FIXTURE: AquaDocument = JSON.parse(V2_FIXTURE_JSON);
 
 describe('v2 → current migration (pinned fixture)', () => {
-  it('loads the v2 fixture successfully under the current (v4) reader', () => {
+  it('loads the v2 fixture successfully under the current (v5) reader', () => {
     const result = loadAquaDocument(V2_FIXTURE_JSON);
     expect(result.ok).toBe(true);
   });
 
-  it('bumps schemaVersion from 2 to 4 on load', () => {
+  it('bumps schemaVersion from 2 to 5 on load', () => {
     expect(V2_FIXTURE.schemaVersion).toBe(2);
     const result = loadAquaDocument(V2_FIXTURE_JSON);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.document.schemaVersion).toBe(4);
+    expect(result.document.schemaVersion).toBe(5);
   });
 
-  it('reports the applied steps { 2 → 3 }, { 3 → 4 } in order', () => {
+  it('reports the applied steps { 2 → 3 }, { 3 → 4 }, { 4 → 5 } in order', () => {
     const result = loadAquaDocument(V2_FIXTURE_JSON);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.migrationSteps).toEqual([
       { from: 2, to: 3 },
       { from: 3, to: 4 },
+      { from: 4, to: 5 },
     ]);
   });
 

@@ -81,7 +81,8 @@ describe('documentToScene', () => {
 
   it('envelope no longer carries equipment (F7.3 promotion)', () => {
     const { envelope } = documentToScene(EXAMPLE);
-    // After F7.3 the envelope is strictly { meta, renderHistory?, extensions? }.
+    // After F7.3 (and the v5 renderHistory removal) the envelope is strictly
+    // { meta, extensions? }.
     expect('equipment' in envelope).toBe(false);
   });
 
@@ -90,10 +91,8 @@ describe('documentToScene', () => {
     delete noOptionals.livestock;
     delete noOptionals.equipment;
     delete noOptionals.extensions;
-    delete noOptionals.renderHistory;
     const { envelope } = documentToScene(noOptionals);
     expect(envelope.extensions).toBeUndefined();
-    expect(envelope.renderHistory).toBeUndefined();
   });
 });
 
@@ -140,7 +139,6 @@ describe('sceneToDocument', () => {
     const saved = sceneToDocument(sceneNoOptionals, envelopeOnlyMeta);
     expect('livestock' in saved).toBe(false);
     expect('equipment' in saved).toBe(false);
-    expect('renderHistory' in saved).toBe(false);
     expect('extensions' in saved).toBe(false);
   });
 

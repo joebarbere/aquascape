@@ -3,7 +3,7 @@
  *
  * The in-memory `Scene` (from `@aquascape/domain/scene-model`) is the document
  * minus its `format` / `schemaVersion` / `meta` envelope and the optional
- * `renderHistory` / `extensions` bag.
+ * `extensions` bag.
  *
  * Splitting the doc into `{ scene, envelope }` keeps `scene-model` ignorant of
  * the on-disk wrapper while still letting load → edit → save be **lossless**:
@@ -15,10 +15,10 @@
  * **Promotion history.** As of Stage 7 F7.3, BOTH `livestock` (promoted in
  * F7.1) AND `equipment` live on the in-memory `Scene` — they each round-trip
  * through `Scene.livestock` / `Scene.equipment` so their mutations flow
- * through the Command pipeline with undo/redo. Only `renderHistory` and
- * `extensions` still ride on the envelope; both are non-user-editable
- * carry-throughs (render history is append-only via Stage 9; extensions are
- * the forward-compat catch-all).
+ * through the Command pipeline with undo/redo. Only `extensions` still rides
+ * on the envelope; it is the non-user-editable forward-compat carry-through.
+ * (The `renderHistory` envelope field was retired in schema v5 when the AI
+ * render feature was dropped from scope.)
  */
 
 import type {
@@ -27,12 +27,7 @@ import type {
   Scene,
 } from '@aquascape/domain/scene-model';
 
-import type {
-  AquaDocument,
-  DocumentMeta,
-  Layer,
-  RenderRecord,
-} from './aqua-document';
+import type { AquaDocument, DocumentMeta, Layer } from './aqua-document';
 import { CURRENT_SCHEMA_VERSION } from './aqua-document';
 
 /**
@@ -45,7 +40,6 @@ import { CURRENT_SCHEMA_VERSION } from './aqua-document';
  */
 export interface DocumentEnvelope {
   meta: DocumentMeta;
-  renderHistory?: RenderRecord[];
   extensions?: Record<string, unknown>;
 }
 
@@ -82,7 +76,6 @@ export function documentToScene(doc: AquaDocument): {
 
   const envelope: DocumentEnvelope = {
     meta: doc.meta,
-    ...(doc.renderHistory !== undefined ? { renderHistory: doc.renderHistory } : {}),
     ...(doc.extensions !== undefined ? { extensions: doc.extensions } : {}),
   };
 
@@ -109,13 +102,10 @@ export function sceneToDocument(
     substrate: scene.substrate,
     layers: scene.layers as unknown as Layer[],
     // Livestock comes off the scene (F7.1); equipment comes off the scene
-    // too (F7.3). Only `renderHistory` and `extensions` still ride on the
-    // envelope — both are non-user-editable carry-throughs.
+    // too (F7.3). Only `extensions` still rides on the envelope — the
+    // non-user-editable forward-compat carry-through.
     ...(scene.livestock !== undefined ? { livestock: scene.livestock } : {}),
     ...(scene.equipment !== undefined ? { equipment: scene.equipment } : {}),
-    ...(envelope.renderHistory !== undefined
-      ? { renderHistory: envelope.renderHistory }
-      : {}),
     ...(envelope.extensions !== undefined ? { extensions: envelope.extensions } : {}),
   };
 }

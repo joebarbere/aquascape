@@ -24,12 +24,12 @@ between the on-disk `AquaDocument` and the in-memory `Scene`.
   `LoadResult`, never throws on bad payloads), `serializeAquaDocument(doc)`,
   `packAquaDocument(doc, { assets?, thumbnail? })`.
 - `marshal.ts` — `documentToScene(doc) -> { scene, envelope }` and
-  `sceneToDocument(scene, envelope) -> AquaDocument`. The envelope carries
-  the document's `meta` and any optional `livestock` / `equipment` /
-  `renderHistory` / `extensions` so load → edit → save is lossless (the
-  editor only mutates `scene`; on save the original envelope is reattached
-  unchanged — this is the concrete mechanism for the "don't drop what you
-  don't understand" rule).
+  `sceneToDocument(scene, envelope) -> AquaDocument`. `livestock` /
+  `equipment` live on the `scene` (so commands can mutate them); the envelope
+  carries the document's `meta` and any optional `extensions` so load → edit →
+  save is lossless (the editor only mutates `scene`; on save the original
+  envelope is reattached unchanged — this is the concrete mechanism for the
+  "don't drop what you don't understand" rule).
 
 ## v1 is locked
 

@@ -45,21 +45,27 @@ Readers sniff the magic bytes and accept both. Packing/unpacking uses
 | Plain serializable data — `JSON.parse(JSON.stringify(doc))` lossless | round-trips, diffs, property tests |
 | `schemaVersion` + pure, total `Migration` chain | old files always open |
 | `extensions` bag + optional fields | older readers preserve newer data ("don't drop what you don't understand") |
-| Document-level `seed` | deterministic scatter, growth jitter, fish simulation, AI renders |
+| Document-level `seed` | deterministic scatter, growth jitter, fish simulation |
 
 ## Versions so far
 
-| Version | Added | Migration |
+| Version | Added / Removed | Migration |
 | --- | --- | --- |
 | v1 | The locked baseline | — |
 | v2 | `Layer.zone?` (foreground / midground / background — 3D depth banding) | identity version-stamp |
 | v3 | `Tank.waterLevelMm?` (adjustable water fill line) | identity version-stamp |
+| v4 | `Tank.waterChemistry?` (persisted water-sim snapshot — Stage 13 F13.2) | identity version-stamp |
+| v5 | **Removed** `renderHistory` / `RenderRecord` (AI render dropped from scope) | strips `renderHistory` if present |
 
-Both additions are optional + additive: a migration **must not invent a
-value** for them. "Absent" has meaning — e.g. no `waterLevelMm` means
+The v2–v4 additions are optional + additive: a migration **must not invent
+a value** for them. "Absent" has meaning — e.g. no `waterLevelMm` means
 "default fill", computed at consume time by scene-model's
 `effectiveWaterLevelMm()` (tank height − 25 mm), never materialised into
-the file.
+the file. v5 is the first **removal**: its migration deletes the
+`renderHistory` key (pure rest-destructure, no mutation) so a doc that
+carried it loads cleanly under the v5 schema's `additionalProperties:
+false`. On every real document the strip is a no-op — no shipped writer
+ever emitted the field.
 
 ## The load pipeline
 
@@ -69,7 +75,7 @@ flowchart LR
     B --> C[JSON.parse]
     C --> D{schemaVersion<br/>present + numeric?}
     D -- no --> V1["validate FIRST →<br/>clear 'schema-invalid' error"]
-    D -- yes --> E["runMigrations<br/>(v1→v2→v3→…)"]
+    D -- yes --> E["runMigrations<br/>(v1→…→v5→…)"]
     E --> F["validateAquaDocument<br/>(AJV, compiled once)"]
     F --> G["documentToScene<br/>(marshal)"]
     G --> H[Scene in the store]
@@ -88,10 +94,11 @@ envelope and the in-memory `Scene`:
   for undo/redo); the marshal moves them between `doc.*` and `scene.*`.
   They are deliberately *not* on the document envelope twice — one writer
   per field.
-- **`renderHistory` + `extensions` ride the envelope verbatim** — load →
-  edit → save never drops fields the editor doesn't model.
-  `renderHistory` is reserved for the future AI-render stage;
-  `extensions` is the forward-compatibility escape hatch.
+- **`extensions` rides the envelope verbatim** — load → edit → save never
+  drops fields the editor doesn't model. `extensions` is the
+  forward-compatibility escape hatch. (The `renderHistory` envelope field
+  was retired in schema v5 when the AI render feature was dropped from
+  scope — the envelope is now strictly `{ meta, extensions? }`.)
 
 ## Changing the format — the non-negotiable checklist
 

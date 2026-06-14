@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://aquascape.dev/schemas/aqua-document-v4.json",
+  "$id": "https://aquascape.dev/schemas/aqua-document-v5.json",
   "title": "AquaDocument",
-  "description": "Aquascape layout document, schema version 4. All linear units are millimetres. v2 adds optional Layer.zone (foreground/midground/background); v3 adds optional Tank.waterLevelMm (water-surface height above the interior floor, integer mm; absent = default fill derived at render time; the [1, height] upper bound is advisory — cross-field comparison is not expressible here); v4 adds optional Tank.waterChemistry (a persisted domain/water-sim WaterState snapshot + denormalized cycle stage + per-type algae block; absent = no chemistry recorded). Prior-version docs migrate forward without transformation.",
+  "description": "Aquascape layout document, schema version 5. All linear units are millimetres. v2 adds optional Layer.zone (foreground/midground/background); v3 adds optional Tank.waterLevelMm (water-surface height above the interior floor, integer mm; absent = default fill derived at render time; the [1, height] upper bound is advisory — cross-field comparison is not expressible here); v4 adds optional Tank.waterChemistry (a persisted domain/water-sim WaterState snapshot + denormalized cycle stage + per-type algae block; absent = no chemistry recorded); v5 removes the optional renderHistory field (the AI photorealistic render feature was dropped from scope) — the v4 → v5 migration strips it from any document that carried it. Prior-version docs migrate forward without transformation (except v5's deliberate renderHistory removal).",
   "type": "object",
   "required": ["format", "schemaVersion", "meta", "tank", "substrate", "layers"],
   "additionalProperties": false,
@@ -15,7 +15,6 @@
     "layers": { "type": "array", "items": { "$ref": "#/$defs/Layer" } },
     "livestock": { "type": "array", "items": { "$ref": "#/$defs/LivestockEntry" } },
     "equipment": { "type": "array", "items": { "$ref": "#/$defs/EquipmentEntry" } },
-    "renderHistory": { "type": "array", "items": { "$ref": "#/$defs/RenderRecord" } },
     "extensions": { "type": "object" }
   },
   "$defs": {
@@ -372,36 +371,6 @@
         "ref": { "$ref": "#/$defs/CatalogRef" },
         "settings": { "type": "object" },
         "note": { "type": "string" }
-      }
-    },
-    "RenderRecord": {
-      "type": "object",
-      "required": ["id", "createdAt", "provider", "request", "resultAsset"],
-      "additionalProperties": false,
-      "properties": {
-        "id": { "$ref": "#/$defs/Uuid" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "provider": {
-          "type": "object",
-          "required": ["kind", "name"],
-          "additionalProperties": false,
-          "properties": {
-            "kind": { "enum": ["local", "hosted"] },
-            "name": { "type": "string" }
-          }
-        },
-        "request": {
-          "type": "object",
-          "required": ["prompt"],
-          "additionalProperties": false,
-          "properties": {
-            "prompt": { "type": "string" },
-            "seed": { "type": "number" },
-            "sourceRenderAssetId": { "$ref": "#/$defs/Uuid" },
-            "params": { "type": "object" }
-          }
-        },
-        "resultAsset": { "$ref": "#/$defs/AssetRef" }
       }
     }
   }

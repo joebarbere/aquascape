@@ -20,7 +20,6 @@ export type {
   Migration,
   Millimetres,
   PlantObject,
-  RenderRecord,
   SceneObject,
   Substrate,
   SubstrateRegion,

@@ -4,7 +4,7 @@
  *
  * Coverage goal: exercise every branch the JSON Schema admits — every
  * background `kind`, every scene-object `kind`, optional fields present and
- * absent, multi-region substrates, livestock + equipment, extensions bag.
+ * absent, multi-region substrates, livestock + equipment, the extensions bag.
  * The generators stay deterministic-by-seed (fast-check default) so failures
  * are reproducible.
  *
@@ -26,7 +26,6 @@ import type {
   Layer,
   LivestockEntry,
   PlantObject,
-  RenderRecord,
   SceneObject,
   Substrate,
   SubstrateRegion,
@@ -403,30 +402,6 @@ const arbEquipmentEntry = (): fc.Arbitrary<EquipmentEntry> =>
     { requiredKeys: ['id', 'ref'] },
   );
 
-const arbRenderRecord = (): fc.Arbitrary<RenderRecord> =>
-  fc.record({
-    id: arbUuid(),
-    createdAt: arbIsoTimestamp(),
-    provider: fc.record({
-      kind: fc.constantFrom('local', 'hosted') as fc.Arbitrary<'local' | 'hosted'>,
-      name: fc.constantFrom('sdxl-local', 'replicate', 'openai-images'),
-    }),
-    request: fc.record(
-      {
-        prompt: fc.string({ minLength: 1, maxLength: 80 }),
-        seed: fc.integer({ min: 0, max: 1_000_000 }),
-        sourceRenderAssetId: arbUuid(),
-        params: fc.dictionary(
-          fc.string({ minLength: 1, maxLength: 12 }),
-          fc.oneof(fc.integer(), fc.string({ maxLength: 12 }), fc.boolean()),
-          { maxKeys: 4 },
-        ),
-      },
-      { requiredKeys: ['prompt'] },
-    ),
-    resultAsset: arbAssetRef(),
-  });
-
 /**
  * Top-level `AquaDocument` arbitrary.
  *
@@ -446,9 +421,6 @@ export const arbAquaDocument = (): fc.Arbitrary<AquaDocument> =>
       fc.option(fc.array(arbEquipmentEntry(), { minLength: 0, maxLength: 3 }), {
         nil: undefined,
       }),
-      fc.option(fc.array(arbRenderRecord(), { minLength: 0, maxLength: 2 }), {
-        nil: undefined,
-      }),
       fc.option(
         fc
           .dictionary(fc.string({ minLength: 1, maxLength: 12 }), fc.jsonValue(), {
@@ -460,7 +432,7 @@ export const arbAquaDocument = (): fc.Arbitrary<AquaDocument> =>
         { nil: undefined },
       ),
     )
-    .map(([meta, tank, substrate, layers, livestock, equipment, renderHistory, extensions]) => {
+    .map(([meta, tank, substrate, layers, livestock, equipment, extensions]) => {
       const doc: AquaDocument = {
         format: 'aquascape',
         schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -471,7 +443,6 @@ export const arbAquaDocument = (): fc.Arbitrary<AquaDocument> =>
       };
       if (livestock !== undefined) doc.livestock = livestock;
       if (equipment !== undefined) doc.equipment = equipment;
-      if (renderHistory !== undefined) doc.renderHistory = renderHistory;
       if (extensions !== undefined) doc.extensions = extensions as Record<string, unknown>;
       return doc;
     });

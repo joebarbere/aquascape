@@ -7,16 +7,17 @@
  * to it (see `example.v2.aqua.json` + `v2-fixture-migration.spec.ts`) and a
  * test that loads each in turn.
  *
- * The contract for loading a v1 document under the current (v4) reader is:
- *   1. The v1 fixture loads (every later version is a structural superset of
- *      v1 — additive optional fields only).
- *   2. After loading, `schemaVersion === 4` (the full chain ran).
+ * The contract for loading a v1 document under the current (v5) reader is:
+ *   1. The v1 fixture loads (v2–v4 added optional fields; v5 removed
+ *      `renderHistory`, which the fixture never carried).
+ *   2. After loading, `schemaVersion === 5` (the full chain ran).
  *   3. Every layer ends up with `zone` absent and the tank with `waterLevelMm`
- *      AND `waterChemistry` absent (each migration is a pure identity that
- *      bumps the version number; it does NOT invent values).
- *   4. The loader reports the applied steps `{1→2}, {2→3}, {3→4}` in order.
+ *      AND `waterChemistry` absent (each additive migration is a pure identity
+ *      that bumps the version number; it does NOT invent values).
+ *   4. The loader reports the applied steps `{1→2}, {2→3}, {3→4}, {4→5}` in
+ *      order.
  *   5. Apart from `schemaVersion`, the document is byte-for-byte unchanged
- *      (no shape rewrites slipped in under the no-op label).
+ *      (the fixture carried no `renderHistory` for the v5 step to strip).
  */
 
 import { readFileSync } from 'node:fs';
@@ -30,20 +31,20 @@ const V1_FIXTURE_JSON = readFileSync(V1_FIXTURE_PATH, 'utf8');
 const V1_FIXTURE: AquaDocument = JSON.parse(V1_FIXTURE_JSON);
 
 describe('v1 → current migration (pinned fixture)', () => {
-  it('loads the v1 fixture successfully under the current (v4) reader', () => {
+  it('loads the v1 fixture successfully under the current (v5) reader', () => {
     const result = loadAquaDocument(V1_FIXTURE_JSON);
     expect(result.ok).toBe(true);
   });
 
-  it('bumps schemaVersion from 1 to 4 on load', () => {
+  it('bumps schemaVersion from 1 to 5 on load', () => {
     expect(V1_FIXTURE.schemaVersion).toBe(1);
     const result = loadAquaDocument(V1_FIXTURE_JSON);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.document.schemaVersion).toBe(4);
+    expect(result.document.schemaVersion).toBe(5);
   });
 
-  it('reports the applied steps { 1 → 2 }, { 2 → 3 }, { 3 → 4 } in order', () => {
+  it('reports the applied steps { 1 → 2 }, { 2 → 3 }, { 3 → 4 }, { 4 → 5 } in order', () => {
     const result = loadAquaDocument(V1_FIXTURE_JSON);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -51,6 +52,7 @@ describe('v1 → current migration (pinned fixture)', () => {
       { from: 1, to: 2 },
       { from: 2, to: 3 },
       { from: 3, to: 4 },
+      { from: 4, to: 5 },
     ]);
   });
 
