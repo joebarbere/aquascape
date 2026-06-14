@@ -9,18 +9,29 @@ export { EditorShellComponent } from './lib/editor-shell.component';
 export { SelectionInspectorComponent } from './lib/selection-inspector.component';
 export { TimeSliderComponent } from './lib/time-slider.component';
 export { PreviewTimeService } from './lib/preview-time.service';
-export {
-  PreviewChemistryService,
-  type PreviewChemistry,
-} from './lib/preview-chemistry.service';
+export { PreviewChemistryService, type PreviewChemistry } from './lib/preview-chemistry.service';
 export { CycleIndicatorComponent } from './lib/cycle-indicator.component';
+export {
+  TestKitReadoutComponent,
+  TEST_KIT_READOUT_COLLAPSED_KEY,
+  DEFAULT_TEST_KIT_ID,
+} from './lib/test-kit-readout.component';
+export {
+  PANEL_PARAMETERS,
+  DEFAULT_PANEL_READINGS,
+  buildPanelReadout,
+  classifyBand,
+  mapReading,
+  parameterLabel,
+  type TestKitBand,
+  type WaterBand,
+  type PanelChemistry,
+  type PanelParameter,
+} from './lib/water-test-kit';
 export { ThemeToggleComponent } from './lib/theme-toggle.component';
 export { ThemeService, STORAGE_KEY_THEME, type ThemePreference } from './lib/theme.service';
 export { StatusBarComponent } from './lib/status-bar.component';
-export {
-  CursorPositionService,
-  type CursorWorldPosition,
-} from './lib/cursor-position.service';
+export { CursorPositionService, type CursorWorldPosition } from './lib/cursor-position.service';
 export {
   CompositionOverlaysComponent,
   COMPOSITION_OVERLAYS_COLLAPSED_KEY,
@@ -35,10 +46,7 @@ export { ViewportService } from './lib/viewport.service';
 export { ZoomControlComponent } from './lib/zoom-control.component';
 export { Orbit3DService } from './lib/orbit-3d.service';
 export { Orbit3DControlsComponent } from './lib/orbit-3d-controls.component';
-export {
-  ORBITAL_3D_CONTROLS,
-  type Orbital3DControls,
-} from './lib/orbital-3d-controls.token';
+export { ORBITAL_3D_CONTROLS, type Orbital3DControls } from './lib/orbital-3d-controls.token';
 export {
   WallBackgroundComponent,
   WALL_BACKGROUND_COLLAPSED_KEY,
@@ -55,10 +63,7 @@ export {
   STORAGE_KEY_WALL_HEIGHT_MM,
   STORAGE_KEY_WALL_WIDTH_MM,
 } from './lib/wall-background.service';
-export {
-  SnapSettingsComponent,
-  SNAP_SETTINGS_COLLAPSED_KEY,
-} from './lib/snap-settings.component';
+export { SnapSettingsComponent, SNAP_SETTINGS_COLLAPSED_KEY } from './lib/snap-settings.component';
 export {
   SnapOptionsService,
   STORAGE_KEY_SNAP_ENABLED,
@@ -98,11 +103,7 @@ export {
 } from './lib/templates.service';
 export { ExportDialogComponent } from './lib/export-dialog.component';
 export { ViewToggleComponent } from './lib/view-toggle.component';
-export {
-  ViewModeService,
-  STORAGE_KEY_VIEW_MODE,
-  type ViewMode,
-} from './lib/view-mode.service';
+export { ViewModeService, STORAGE_KEY_VIEW_MODE, type ViewMode } from './lib/view-mode.service';
 export {
   BackdropPanelComponent,
   BACKDROP_PANEL_COLLAPSED_KEY,
@@ -116,11 +117,7 @@ export {
   STORAGE_KEY_BACKDROP_OPACITY,
   type ImageDecoder,
 } from './lib/backdrop.service';
-export {
-  DayNightService,
-  type DayNightLookup,
-  type DayNightMode,
-} from './lib/day-night.service';
+export { DayNightService, type DayNightLookup, type DayNightMode } from './lib/day-night.service';
 export {
   DayNightControlComponent,
   DAY_NIGHT_CONTROL_COLLAPSED_KEY,

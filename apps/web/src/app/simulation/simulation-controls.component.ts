@@ -23,11 +23,14 @@ import {
   removeLivestockEntry,
   setWaterLevel,
   updateLivestockQuantity,
+  waterChange,
   effectiveWaterLevelMm,
   type Scene,
 } from '@aquascape/domain/scene-model';
 import { DayNightService } from '@aquascape/features/editor-shell';
 import { SceneActions } from '@aquascape/state';
+
+import { WaterChemistryService } from '../water-chemistry.service';
 
 import {
   addRandomItem,
@@ -107,6 +110,19 @@ type NutrientFilter = 'all' | NutrientCategory;
             (input)="onWater($event)"
             aria-label="Water level in millimetres"
           />
+        </div>
+
+        <div class="sim-controls__group">
+          <div class="sim-controls__group-title" id="demo-wc-title">Water change</div>
+          <div class="sim-controls__wc" role="group" aria-labelledby="demo-wc-title">
+            <div class="sim-controls__items">
+              <button type="button" (click)="changeWater(0.25)">Change 25%</button>
+              <button type="button" (click)="changeWater(0.5)">Change 50%</button>
+            </div>
+            @if (wcStatus(); as status) {
+              <p class="sim-controls__dose-status" role="status" aria-live="polite">{{ status }}</p>
+            }
+          </div>
         </div>
 
         <div class="sim-controls__group">
@@ -209,11 +225,7 @@ type NutrientFilter = 'all' | NutrientCategory;
                 (input)="onDoseAmount($any($event.target).value)"
                 aria-label="Dose amount"
               />
-              <button
-                type="button"
-                [disabled]="selectedNutrient() === null"
-                (click)="dose()"
-              >
+              <button type="button" [disabled]="selectedNutrient() === null" (click)="dose()">
                 Dose
               </button>
             </div>
@@ -425,8 +437,14 @@ type NutrientFilter = 'all' | NutrientCategory;
 export class SimulationControlsComponent {
   private readonly store = inject(Store);
   readonly dayNight = inject(DayNightService);
+  // F13.5b — the live runtime chemistry. A water change in sim must dilute the
+  // running WaterState (so fish health responds), not just the persisted scene.
+  private readonly waterChemistry = inject(WaterChemistryService);
 
   private readonly sceneSig = signal<Scene | null>(null);
+
+  /** Last water-change feedback for the live region. */
+  readonly wcStatus = signal<string>('');
 
   /** Live scene to read current values from. The host keeps it in sync. */
   @Input() set scene(value: Scene | null) {
@@ -514,6 +532,27 @@ export class SimulationControlsComponent {
     const value = Number((event.target as HTMLInputElement).value);
     const clamped = Math.min(tank.height, Math.max(MIN_WATER_MM, value));
     this.dispatch(setWaterLevel(clamped));
+  }
+
+  // ── Water change ─────────────────────────────────────────────────────────
+
+  /**
+   * Perform a water change of `fraction` (in (0, 1]). Two paths, one math:
+   *  - PERSISTED/EDITOR: dispatch the undoable `WaterChange` Command (mutates
+   *    `Tank.waterChemistry`) through the normal NgRx pipeline.
+   *  - LIVE RUNTIME: dilute the running `WaterState` via
+   *    `WaterChemistryService.applyWaterChange`, which reuses the SAME pure
+   *    `applyWaterChange` helper — so the live ammonia/nitrate drop immediately
+   *    and fish health responds.
+   */
+  changeWater(fraction: number): void {
+    // Persisted path — only when the tank is tracking chemistry (else the
+    // command rejects 'invalid'). The live path always runs.
+    if (this.sceneSig()?.tank.waterChemistry !== undefined) {
+      this.dispatch(waterChange(fraction));
+    }
+    this.waterChemistry.applyWaterChange(fraction);
+    this.wcStatus.set(`Changed ${Math.round(fraction * 100)}% of the water.`);
   }
 
   // ── Livestock ────────────────────────────────────────────────────────────

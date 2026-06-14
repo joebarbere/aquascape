@@ -94,6 +94,26 @@ describe('SimulationHudComponent', () => {
     expect(root.querySelectorAll('.sim-hud__list li').length).toBeGreaterThan(0);
   });
 
+  it('renders the four-row test-kit readout with swatches + bands (F13.5b)', () => {
+    // Dirty water: ammonia 2 + nitrate 60 read danger; clean would read safe.
+    stubChemistry.live.set({
+      state: { ...freshWaterState(), ammonia: 2, nitrite: 0, nitrate: 60, ph: 7.0 },
+      cycle: 'cycling',
+      ticks: 5,
+    });
+    const fixture = TestBed.createComponent(SimulationHudComponent);
+    fixture.componentInstance.scene = createShowcaseScene();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelectorAll('.sim-hud__kit-row').length).toBe(4);
+    expect(root.querySelectorAll('.sim-hud__kit-swatch').length).toBe(4);
+    expect(root.querySelector('.sim-hud__kit-band--danger')).not.toBeNull();
+
+    // Reset the stub for the remaining specs.
+    stubChemistry.live.set({ state: freshWaterState(), cycle: 'uncycled', ticks: 0 });
+  });
+
   it('renders the live performance strip from the metrics input', () => {
     const fixture = TestBed.createComponent(SimulationHudComponent);
     fixture.componentInstance.scene = createShowcaseScene();

@@ -44,7 +44,12 @@ const catalog: Catalog = {
 
 function scene(overrides: Partial<Scene> = {}): Scene {
   return {
-    tank: { width: 600, height: 400, depth: 400, style: { frame: 'rimless', background: { kind: 'none' } } },
+    tank: {
+      width: 600,
+      height: 400,
+      depth: 400,
+      style: { frame: 'rimless', background: { kind: 'none' } },
+    },
     substrate: { regions: [] },
     layers: [],
     seed: 99,
@@ -155,6 +160,40 @@ describe('WaterChemistryService', () => {
     for (let i = 0; i < 30; i++) service.tickOnce();
     // 12 medium fish drive a real cycle even without a live world.
     expect(service.live().state.nitrate).toBeGreaterThan(0);
+  });
+
+  it('applyWaterChange dilutes the live state + pushes cleaner water to the world (F13.5b)', () => {
+    const { service, stub } = configure();
+    const world = new FakeWorld();
+    world.sourceN = 12 * 0.6;
+    stub.world = world;
+    service.start(scene());
+    // Build up a dirty tank.
+    for (let i = 0; i < 40; i++) service.tickOnce();
+    const before = service.live().state;
+    expect(before.nitrate).toBeGreaterThan(0);
+
+    const after = service.applyWaterChange(0.5);
+    // A 50% change against clean water halves the dissolved nitrogen.
+    expect(after.nitrate).toBeCloseTo(before.nitrate * 0.5, 5);
+    expect(after.ammonia).toBeCloseTo(before.ammonia * 0.5, 5);
+    // Colony + cycling clock are preserved (a water change doesn't reset cycling).
+    expect(after.aobColony).toBe(before.aobColony);
+    expect(after.ageWeeks).toBe(before.ageWeeks);
+    // The cleaner ammonia/nitrite are pushed to the world (fish health responds).
+    expect(world.pushed?.ammonia).toBeCloseTo(after.ammonia, 5);
+    // The live signal reflects the diluted state.
+    expect(service.live().state.nitrate).toBeCloseTo(after.nitrate, 5);
+  });
+
+  it('applyWaterChange is a no-op for an out-of-range fraction', () => {
+    const { service, stub } = configure();
+    stub.world = new FakeWorld();
+    service.start(scene());
+    for (let i = 0; i < 10; i++) service.tickOnce();
+    const before = service.live().state.nitrate;
+    expect(service.applyWaterChange(0).nitrate).toBe(before);
+    expect(service.applyWaterChange(1.5).nitrate).toBe(before);
   });
 
   it('stop() halts ticking', () => {

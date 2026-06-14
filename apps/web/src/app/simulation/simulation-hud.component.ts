@@ -21,6 +21,12 @@ import {
 } from '@angular/core';
 
 import type { Scene } from '@aquascape/domain/scene-model';
+import {
+  buildPanelReadout,
+  parameterLabel,
+  type TestKitBand,
+} from '@aquascape/features/editor-shell';
+import { coreCatalog } from '@aquascape/domain/catalog';
 
 import { formatClock } from './simulation-clock';
 import { buildSimulationHudModel } from './simulation-hud.model';
@@ -94,16 +100,24 @@ import { WaterChemistryService } from '../water-chemistry.service';
               >{{ chem().cycle }}</span
             >
           </h3>
-          <dl class="sim-hud__grid">
-            <dt>Ammonia</dt>
-            <dd>{{ fmt(chem().state.ammonia) }} mg/L</dd>
-            <dt>Nitrite</dt>
-            <dd>{{ fmt(chem().state.nitrite) }} mg/L</dd>
-            <dt>Nitrate</dt>
-            <dd>{{ fmt(chem().state.nitrate) }} mg/L</dd>
-            <dt>pH</dt>
-            <dd>{{ fmt(chem().state.ph) }}</dd>
-          </dl>
+          <ul class="sim-hud__kit" aria-label="Test-kit readout">
+            @for (row of chemRows(); track row.parameter) {
+              <li class="sim-hud__kit-row">
+                <span class="sim-hud__kit-param">{{ label(row.parameter) }}</span>
+                <span class="sim-hud__kit-val">{{ fmt(row.value) }}</span>
+                <span
+                  class="sim-hud__kit-swatch"
+                  [style.background]="row.swatch"
+                  aria-hidden="true"
+                ></span>
+                <span
+                  class="sim-hud__kit-band sim-hud__kit-band--{{ row.band }}"
+                  [attr.aria-label]="label(row.parameter) + ' ' + row.band"
+                  >{{ row.band }}</span
+                >
+              </li>
+            }
+          </ul>
         </section>
 
         <section class="sim-hud__block" aria-label="Livestock">
@@ -284,6 +298,55 @@ import { WaterChemistryService } from '../water-chemistry.service';
         background: rgba(120, 220, 140, 0.22);
         color: #9fe7b6;
       }
+      .sim-hud__kit {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .sim-hud__kit-row {
+        display: grid;
+        grid-template-columns: 1fr auto 16px auto;
+        align-items: center;
+        gap: 8px;
+      }
+      .sim-hud__kit-param {
+        opacity: 0.7;
+      }
+      .sim-hud__kit-val {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .sim-hud__kit-swatch {
+        width: 16px;
+        height: 16px;
+        border-radius: 3px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+      .sim-hud__kit-band {
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+        min-width: 52px;
+        text-align: center;
+        padding: 1px 6px;
+        border-radius: 999px;
+      }
+      .sim-hud__kit-band--safe {
+        background: rgba(120, 220, 140, 0.22);
+        color: #9fe7b6;
+      }
+      .sim-hud__kit-band--caution {
+        background: rgba(255, 180, 60, 0.22);
+        color: #ffcd7a;
+      }
+      .sim-hud__kit-band--danger {
+        background: rgba(230, 90, 90, 0.26);
+        color: #ff9a9a;
+      }
       .sim-hud__list {
         list-style: none;
         margin: 0;
@@ -337,6 +400,24 @@ export class SimulationHudComponent implements OnInit, OnDestroy {
 
   /** Live chemistry (state + cycle stage) from the running chemistry tick. */
   readonly chem = this.waterChemistry.live;
+
+  /** The API master kit's reading ranges drive the HUD swatch scale. */
+  private readonly kitReads =
+    coreCatalog
+      .byKind('water-test-kit')
+      .find((k) => k.id === 'water-test-kit.api.freshwater-master')?.reads ?? [];
+
+  /** Test-kit readout rows (value → swatch + safe/caution/danger band). */
+  readonly chemRows = computed<TestKitBand[]>(() => {
+    const s = this.chem().state;
+    return buildPanelReadout(
+      { ammonia: s.ammonia, nitrite: s.nitrite, nitrate: s.nitrate, ph: s.ph },
+      this.kitReads,
+    );
+  });
+
+  /** Parameter display label. */
+  label = parameterLabel;
 
   /** Format a concentration / pH value to 2 dp for the readout. */
   fmt(value: number): string {

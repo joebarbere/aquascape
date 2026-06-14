@@ -42,7 +42,7 @@ overlays:
 - A live **date / clock**.
 - A **performance strip**: FPS · frame time · live entity count · bubble count, sampled twice a second.
 - The **tank spec**: dimensions, volume (L + US gal), frame, water line, substrate, and object counts.
-- A live **water-chemistry** block (Stage 13 F13.3): a **cycle badge** (uncycled / cycling / cycled) + the nitrogen readout (ammonia · nitrite · nitrate · pH). These advance in real time as the chemistry tick runs (see "The live nitrogen cycle" below).
+- A live **water-chemistry** block (Stage 13 F13.3 / F13.5b): a **cycle badge** (uncycled / cycling / cycled) + a **test-kit readout** — the classic colour-chart for ammonia · nitrite · nitrate · pH, each row showing the value, a colour swatch on the kit's chart scale (API Freshwater Master ranges), and a **safe / caution / danger** verdict. These advance in real time as the chemistry tick runs (see "The live nitrogen cycle" below).
 - The **livestock manifest** (species × quantity) and the **equipment list**.
 
 ### 2. Control HUD — top-left (interactive)
@@ -51,6 +51,7 @@ Point-and-click controls that mutate the live scene:
 
 - **Lighting** slider (day ↔ night).
 - **Water level** slider.
+- **Water change** (Stage 13 F13.5b): `Change 25%` / `Change 50%` buttons. A water change dispatches the undoable `WaterChange` Command (mutating `Tank.waterChemistry` when the tank tracks it) **and** dilutes the **live runtime** `WaterState` via `WaterChemistryService.applyWaterChange` — the same pure `applyWaterChange` helper the command uses, so the live ammonia/nitrate drop immediately and fish health responds. (A water change dilutes the water column only; the bacterial colony lives on surfaces, so cycling is **not** reset.)
 - **Livestock** rows with `−` / `+` quantity steppers and `✕` remove, plus an **Add species** dropdown.
 - **Add items**: `+ Rock`, `+ Wood`, `+ Plant`, `+ Decor` (each drops a random one in).
 - **Dose nutrient**: a category filter, a nutrient picker (with a colour swatch), an amount stepper (pre-filled with the product's representative dose), and a **Dose** button. Picks from the ~30 real `nutrient` catalog products. **Recorded only** — the dose is appended to the scene's dose log via the `DoseNutrient` command; the actual water-chemistry effect is deferred pending `domain/water-sim` (Stage 13).
@@ -99,7 +100,15 @@ back into the simulation so **fish health responds** (the vitality HUD reflects 
 overfeed a fresh, uncycled tank and ammonia climbs, stressing the fish; let a stocked
 tank run and the bacterial filter establishes, ammonia + nitrite fall to safe, and the
 **cycle badge** moves uncycled → cycling → cycled while **nitrate accumulates** (the
-husbandry signal a water change — Stage 13 F13.5 — will later reset).
+husbandry signal a **water change** resets — see below).
+
+A **water change** (the `Change 25%` / `Change 50%` control-HUD buttons or the
+`water change <pct>` console verb — Stage 13 F13.5b) dilutes the live water column:
+ammonia / nitrite / nitrate drop in proportion to the fraction replaced, and the test-kit
+readout + the vitality response follow immediately. Cycling is **not** reset — the
+nitrifying bacteria live on surfaces (filter media, substrate), not in the water, so the
+colony + the cycling clock are preserved (an honest aquarium fact baked into the shared
+`applyWaterChange` helper).
 
 **Time is accelerated** so cycling is visible in **minutes, not weeks**: the ~6-week
 hobby cycle window elapses in ~2 real minutes. The acceleration is presentational — the
@@ -108,8 +117,10 @@ model stays honest per simulated week, and the run is deterministic from the sce
 
 > In the **editor** (not simulation mode) the same model is driven by the **time
 > slider** instead: scrub weeks 0–52 to preview the cycle ahead of time, surfaced by a
-> minimal cycle badge beside the slider. Same model, same seed — one previews, the other
-> ticks live. The full test-kit colour-chart readout + water changes are Stage 13 F13.5.
+> minimal cycle badge beside the slider **and** the full **Water test** panel in the
+> right rail — the test-kit colour-chart readout (ammonia / nitrite / nitrate / pH) plus
+> a water-change control that dispatches the undoable `WaterChange` Command. Same model,
+> same seed — one previews, the other ticks live.
 
 ### 4. The console — bottom-left (the CLI) ⌨️
 
@@ -145,26 +156,28 @@ and reopen).
 
 Grammar is simple: `command [args…]`, whitespace-separated. Run `help` any time.
 
-| Command | Usage                                                         | What it does                                                                 |
-| ------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `help`  | `help [command]`                                              | List all commands, or show usage for one.                                    |
-| `clear` | `clear`                                                       | Clear the console output.                                                    |
-| `close` | `close`                                                       | Close the console (same as `~` / Esc).                                       |
-| `hud`   | `hud <show\|hide\|toggle> <info\|controls\|clock\|perf\|vitality\|all>` | Show / hide / toggle HUD surfaces (or sub-elements).               |
-| `light` | `light <midnight\|dawn\|day\|dusk\|0..1>`                     | Set the day/night phase (word or a 0–1 fraction).                            |
-| `water` | `water <mm\|auto>`                                            | Set the water level in mm, or `auto` for the default fill.                   |
-| `fish`  | `fish list`                                                   | List the stocked species + quantities.                                       |
-|         | `fish add <species> [qty]`                                    | Add a species (default qty 5). `<species>` is fuzzy — a name or id fragment. |
-|         | `fish remove <species>`                                       | Remove a stocked species.                                                    |
-|         | `fish set <species> <qty>`                                    | Set a stocked species' quantity (0 removes it).                              |
-| `item`  | `item add <rock\|wood\|plant\|decor>`                         | Drop a random catalog item of that kind into the tank.                       |
-| `dose`  | `dose list`                                                   | List every catalog nutrient (name · category · representative dose).        |
-|         | `dose <product> [amount]`                                    | Dose a nutrient. `<product>` is fuzzy (id or name fragment, Tab-completes). `amount` defaults to the product's representative dose, and may carry a unit suffix (`2ml`, `0.6g`). **Recorded only** (see below). |
-| `reset` | `reset`                                                       | Reload the pristine showcase scene.                                          |
-| `sim`   | `sim save <name>`                                             | Save the **current** scene as a named simulation (overwrites if it exists).  |
-|         | `sim load <name>`                                             | Load a saved simulation. `sim load demo` loads the built-in showcase.        |
-|         | `sim list`                                                    | List simulations (the built-in `demo` + your saved ones).                    |
-|         | `sim delete <name>`                                           | Delete a saved simulation.                                                   |
+| Command | Usage                                                                   | What it does                                                                                                                                                                                                    |
+| ------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `help`  | `help [command]`                                                        | List all commands, or show usage for one.                                                                                                                                                                       |
+| `clear` | `clear`                                                                 | Clear the console output.                                                                                                                                                                                       |
+| `close` | `close`                                                                 | Close the console (same as `~` / Esc).                                                                                                                                                                          |
+| `hud`   | `hud <show\|hide\|toggle> <info\|controls\|clock\|perf\|vitality\|all>` | Show / hide / toggle HUD surfaces (or sub-elements).                                                                                                                                                            |
+| `light` | `light <midnight\|dawn\|day\|dusk\|0..1>`                               | Set the day/night phase (word or a 0–1 fraction).                                                                                                                                                               |
+| `water` | `water <mm\|auto>`                                                      | Set the water level in mm, or `auto` for the default fill.                                                                                                                                                      |
+|         | `water test`                                                            | Print the test-kit readout (ammonia · nitrite · nitrate · pH + safe/caution/danger band).                                                                                                                       |
+|         | `water change <pct>`                                                    | Water change of `<pct>` % (default 25). Dispatches the undoable `WaterChange` Command **and** dilutes the live runtime (one `applyWaterChange` helper). `change` / `test` / `auto` Tab-complete.                |
+| `fish`  | `fish list`                                                             | List the stocked species + quantities.                                                                                                                                                                          |
+|         | `fish add <species> [qty]`                                              | Add a species (default qty 5). `<species>` is fuzzy — a name or id fragment.                                                                                                                                    |
+|         | `fish remove <species>`                                                 | Remove a stocked species.                                                                                                                                                                                       |
+|         | `fish set <species> <qty>`                                              | Set a stocked species' quantity (0 removes it).                                                                                                                                                                 |
+| `item`  | `item add <rock\|wood\|plant\|decor>`                                   | Drop a random catalog item of that kind into the tank.                                                                                                                                                          |
+| `dose`  | `dose list`                                                             | List every catalog nutrient (name · category · representative dose).                                                                                                                                            |
+|         | `dose <product> [amount]`                                               | Dose a nutrient. `<product>` is fuzzy (id or name fragment, Tab-completes). `amount` defaults to the product's representative dose, and may carry a unit suffix (`2ml`, `0.6g`). **Recorded only** (see below). |
+| `reset` | `reset`                                                                 | Reload the pristine showcase scene.                                                                                                                                                                             |
+| `sim`   | `sim save <name>`                                                       | Save the **current** scene as a named simulation (overwrites if it exists).                                                                                                                                     |
+|         | `sim load <name>`                                                       | Load a saved simulation. `sim load demo` loads the built-in showcase.                                                                                                                                           |
+|         | `sim list`                                                              | List simulations (the built-in `demo` + your saved ones).                                                                                                                                                       |
+|         | `sim delete <name>`                                                     | Delete a saved simulation.                                                                                                                                                                                      |
 
 ### Dosing nutrients (recorded only)
 
@@ -234,6 +247,8 @@ can disambiguate.
 > item add rock               # drop in a random rock
 > dose easy-green             # dose a nutrient (recorded only)
 > water 540                   # raise the water line to 540 mm
+> water test                  # print the test-kit readout + bands
+> water change 50             # 50% water change (dilutes live nitrate/ammonia)
 > light dusk                  # warm, low evening light
 > hud hide controls           # hide the left control panel
 > hud toggle vitality         # flip the fish-vitality HUD (left-middle)
@@ -322,11 +337,11 @@ seed-deterministic.
 
 **Esc** is the exit key, and what it does depends on how you got into simulation mode:
 
-| You launched…                            | Esc…                                                                                            |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `--mode simulation` kiosk (desktop)      | **Quits the app** — there's nothing to return to.                                               |
-| Entered simulation via the **Mode** menu | **Returns to the editor** (and exits fullscreen).                                               |
-| `?mode=simulation` in a browser tab      | Tries to close the tab; if the browser refuses, reveals the editor with the scene still loaded. |
+| You launched…                            | Esc…                                                                                                                                                                               |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--mode simulation` kiosk (desktop)      | **Quits the app** — there's nothing to return to.                                                                                                                                  |
+| Entered simulation via the **Mode** menu | **Returns to the editor** (and exits fullscreen).                                                                                                                                  |
+| `?mode=simulation` in a browser tab      | Tries to close the tab; if the browser refuses, reveals the editor with the scene still loaded.                                                                                    |
 | `--mode game:<submode>` / `?mode=game:…` | Same split: kiosk quits; menu-entered returns to the editor; browser tab tries to close then reveals the editor (the player tag is relinquished so the world replays clean again). |
 
 (If the console is open, the first Esc closes it; the second does the above.)

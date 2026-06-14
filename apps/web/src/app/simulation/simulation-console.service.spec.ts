@@ -11,6 +11,7 @@ import { SceneActions, selectScene } from '@aquascape/state';
 import { SimulationConsoleService } from './simulation-console.service';
 import { SimulationUiService } from './simulation-ui.service';
 import { createShowcaseScene } from './showcase-scene';
+import { WaterChemistryService } from '../water-chemistry.service';
 
 interface AnyAction {
   type: string;
@@ -35,11 +36,21 @@ function memStorage(): StorageService {
 
 function setup() {
   const dayNight = { phase: signal(0.5), setPhase: jest.fn(), setMode: jest.fn() };
+  // Mock the live chemistry service — a fixed live() readout + a spy dilution.
+  const waterChemistry = {
+    live: () => ({
+      state: { ammonia: 2, nitrite: 0.5, nitrate: 60, ph: 7.0 },
+      cycle: 'cycling',
+      ticks: 0,
+    }),
+    applyWaterChange: jest.fn(),
+  };
   TestBed.configureTestingModule({
     providers: [
       provideMockStore(),
       { provide: DayNightService, useValue: dayNight },
       { provide: STORAGE_SERVICE, useValue: memStorage() },
+      { provide: WaterChemistryService, useValue: waterChemistry },
       SimulationUiService,
       SimulationConsoleService,
     ],
@@ -49,7 +60,7 @@ function setup() {
   const dispatch = jest.spyOn(store, 'dispatch');
   const svc = TestBed.inject(SimulationConsoleService);
   const ui = TestBed.inject(SimulationUiService);
-  return { svc, store, dispatch, dayNight, ui };
+  return { svc, store, dispatch, dayNight, ui, waterChemistry };
 }
 
 function lastCommand(
@@ -106,6 +117,40 @@ describe('SimulationConsoleService.execute', () => {
     expect(lastCommand(dispatch)).toEqual({ kind: 'SetWaterLevel', waterLevelMm: 300 });
     await svc.execute('water auto');
     expect(lastCommand(dispatch)).toEqual({ kind: 'SetWaterLevel', waterLevelMm: null });
+  });
+
+  it('water test prints the kit readout with bands', async () => {
+    const { svc } = setup();
+    const lines = text(await svc.execute('water test'));
+    expect(lines).toContain('cycle: cycling');
+    expect(lines).toContain('Ammonia');
+    expect(lines).toContain('Nitrate');
+    // The mocked live ammonia (2) + nitrate (60) read as danger.
+    expect(lines).toContain('[danger]');
+  });
+
+  it('water change dilutes the live runtime (showcase has no chemistry → no command)', async () => {
+    const { svc, dispatch, waterChemistry } = setup();
+    await svc.execute('water change 50');
+    expect(waterChemistry.applyWaterChange).toHaveBeenCalledWith(0.5);
+    // The showcase scene carries no waterChemistry → the persisted command is
+    // skipped (it would reject 'invalid'); only the live dilution runs.
+    expect(lastCommand(dispatch)?.kind).not.toBe('WaterChange');
+  });
+
+  it('water change defaults to 25% and rejects out-of-range', async () => {
+    const { svc, waterChemistry } = setup();
+    await svc.execute('water change');
+    expect(waterChemistry.applyWaterChange).toHaveBeenLastCalledWith(0.25);
+    const errLines = await svc.execute('water change 200');
+    expect(errLines[0].kind).toBe('err');
+  });
+
+  it('Tab-completes the water subverbs (change / test)', () => {
+    const { svc } = setup();
+    expect(svc.completeArgs('water', ['ch'])).toEqual(['change']);
+    expect(svc.completeArgs('water', ['te'])).toEqual(['test']);
+    expect(svc.completeArgs('water', [''])).toEqual(['auto', 'test', 'change']);
   });
 
   it('fish list / add / remove / set', async () => {
