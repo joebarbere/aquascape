@@ -20,6 +20,7 @@ import {
   BEHAVIOR_MODE,
   BehaviorMode,
   FISH_ARCHETYPE,
+  FOOD_TYPE,
   FeedingDrive,
   Force,
   HARDSCAPE_CATEGORY,
@@ -274,6 +275,72 @@ describe('feedingSystem — food sprite consumption', () => {
     feedingSystem(w, SIM_DT);
     // Force should be toward substrate sprite (+x mostly).
     expect(Force.x[eid] as number).toBeGreaterThan(0);
+  });
+});
+
+describe('feedingSystem — typed-food band matching (F14.1)', () => {
+  it('surface feeder prefers a near FLAKE over an equidistant WAFER', () => {
+    const w = createLivestockWorld(0, { tankAabb: TANK });
+    const top = clone(TOP_PRESET);
+    top.feeding = { hungerRatePerSec: 0, threshold: 0.4, category: 'surface' };
+    const handle = w.registerSpeciesBehavior(1, top);
+    const eid = w.spawnFish({
+      archetype: FISH_ARCHETYPE.HATCHET_WEDGE,
+      speciesId: 1,
+      bodyLengthMm: 30,
+      position: { x: 500, y: 360, z: 200 },
+      behaviorHandleIdx: handle,
+    });
+    FeedingDrive.hunger[eid] = 0.8;
+    // A wafer to the LEFT (-x) and a flake to the RIGHT (+x), both in the
+    // surface band, both equidistant. The surface feeder should steer toward
+    // the flake (+x) thanks to the type-preference bias.
+    w.spawnFoodSprite({ x: 300, y: 360, z: 200 }, 60, 1, FOOD_TYPE.WAFER);
+    w.spawnFoodSprite({ x: 700, y: 360, z: 200 }, 60, 1, FOOD_TYPE.FLAKE);
+    feedingSystem(w, SIM_DT);
+    expect(Force.x[eid] as number).toBeGreaterThan(0);
+  });
+
+  it('substrate feeder prefers a near WAFER over an equidistant FLAKE', () => {
+    const w = createLivestockWorld(0, { tankAabb: TANK });
+    const bot = clone(BOTTOM_PRESET);
+    bot.feeding = { hungerRatePerSec: 0, threshold: 0.4, category: 'substrate' };
+    const handle = w.registerSpeciesBehavior(1, bot);
+    const eid = w.spawnFish({
+      archetype: FISH_ARCHETYPE.CORY_CYLINDER,
+      speciesId: 1,
+      bodyLengthMm: 40,
+      position: { x: 500, y: 30, z: 200 },
+      behaviorHandleIdx: handle,
+    });
+    FeedingDrive.hunger[eid] = 0.8;
+    // Flake to the left, wafer to the right — both settled in the substrate
+    // band. The substrate feeder should steer toward the wafer (+x).
+    w.spawnFoodSprite({ x: 300, y: 20, z: 200 }, 60, 1, FOOD_TYPE.FLAKE);
+    w.spawnFoodSprite({ x: 700, y: 20, z: 200 }, 60, 1, FOOD_TYPE.WAFER);
+    feedingSystem(w, SIM_DT);
+    expect(Force.x[eid] as number).toBeGreaterThan(0);
+  });
+
+  it('a mismatched-but-only sprite is still eaten (preference biases, never ignores)', () => {
+    const w = createLivestockWorld(0, { tankAabb: TANK });
+    const top = clone(TOP_PRESET);
+    top.feeding = { hungerRatePerSec: 0, threshold: 0.4, category: 'surface' };
+    const handle = w.registerSpeciesBehavior(1, top);
+    const eid = w.spawnFish({
+      archetype: FISH_ARCHETYPE.HATCHET_WEDGE,
+      speciesId: 1,
+      bodyLengthMm: 30,
+      position: { x: 200, y: 360, z: 200 },
+      behaviorHandleIdx: handle,
+    });
+    FeedingDrive.hunger[eid] = 0.8;
+    // Only a WAFER within reach (mismatched for a surface feeder). It should
+    // still be consumed — the penalty is a selection bias, not a gate.
+    w.spawnFoodSprite({ x: 220, y: 360, z: 200 }, 60, 0.5, FOOD_TYPE.WAFER);
+    feedingSystem(w, SIM_DT);
+    expect(FeedingDrive.hunger[eid] as number).toBe(0);
+    expect(w.getFoodSpriteCount()).toBe(0);
   });
 });
 

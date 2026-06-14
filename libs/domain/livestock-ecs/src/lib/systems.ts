@@ -23,6 +23,7 @@ export { fearSystem } from './fear-system';
 export { nippingSystem } from './nipping-system';
 export { territorialSystem } from './territorial-system';
 export { feedingSystem, foodSpriteLifetimeSystem } from './feeding-system';
+export { foodSpriteKinematicSystem } from './food-kinematics';
 export { curiositySystem } from './curiosity-system';
 export { flowFieldSystem } from './flow-field-system';
 export { collisionSystem } from './collision-system';

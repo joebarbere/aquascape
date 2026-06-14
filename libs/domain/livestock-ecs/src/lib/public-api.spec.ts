@@ -18,8 +18,17 @@ import {
   FearState,
   FeedingDrive,
   FISH_ARCHETYPE,
+  FLAKE_FLOAT_SECONDS,
+  FLAKE_FLOAT_VY_MM_PER_S,
+  FLAKE_SINK_VY_MM_PER_S,
+  FOOD_TYPE,
   FoodSprite,
+  foodSpriteKinematicSystem,
   Force,
+  initialFoodKinematics,
+  LIVE_DRIFT_VY_MM_PER_S,
+  PELLET_SINK_VY_MM_PER_S,
+  WAFER_SINK_VY_MM_PER_S,
   HARDSCAPE_CATEGORY,
   Hardscape,
   NippingDrive,
@@ -213,5 +222,37 @@ describe('public API surface', () => {
     expect(snap.foodSpritePosition[2]).toBeCloseTo(200);
     // Fish slab unchanged — no fish spawned, count is 0.
     expect(snap.entityCount).toBe(0);
+  });
+
+  it('F14.1 exposes FOOD_TYPE + the kinematic system + the typed snapshot slab', () => {
+    expect(FOOD_TYPE.FLAKE).toBe(0);
+    expect(FOOD_TYPE.PELLET).toBe(1);
+    expect(FOOD_TYPE.WAFER).toBe(2);
+    expect(FOOD_TYPE.LIVE).toBe(3);
+    expect(typeof foodSpriteKinematicSystem).toBe('function');
+    const w = createLivestockWorld(0);
+    const eid = w.spawnFoodSprite({ x: 100, y: 200, z: 200 }, 30, 1, FOOD_TYPE.PELLET);
+    expect(FoodSprite.foodType[eid] as number).toBe(FOOD_TYPE.PELLET);
+    const snap = w.snapshot(0);
+    expect(snap.foodSpriteType).toBeInstanceOf(Uint8Array);
+    expect(snap.foodSpriteType.length).toBe(snap.foodSpriteCount);
+    expect(snap.foodSpriteType[0]).toBe(FOOD_TYPE.PELLET);
+  });
+
+  it('F14.1 exposes the food sink constants + initialFoodKinematics', () => {
+    // Sink speeds: flakes rise while buoyant, every form sinks otherwise,
+    // and the pellet is the fastest sinker.
+    expect(FLAKE_FLOAT_VY_MM_PER_S).toBeGreaterThan(0);
+    expect(FLAKE_SINK_VY_MM_PER_S).toBeLessThan(0);
+    expect(WAFER_SINK_VY_MM_PER_S).toBeLessThan(0);
+    expect(LIVE_DRIFT_VY_MM_PER_S).toBeLessThan(0);
+    expect(PELLET_SINK_VY_MM_PER_S).toBeLessThan(WAFER_SINK_VY_MM_PER_S);
+    expect(FLAKE_FLOAT_SECONDS).toBeGreaterThan(0);
+    // Flake seeds with its float velocity + window; other forms start at rest.
+    expect(initialFoodKinematics(FOOD_TYPE.FLAKE)).toEqual({
+      vy: FLAKE_FLOAT_VY_MM_PER_S,
+      floatRemaining: FLAKE_FLOAT_SECONDS,
+    });
+    expect(initialFoodKinematics(FOOD_TYPE.PELLET)).toEqual({ vy: 0, floatRemaining: 0 });
   });
 });
