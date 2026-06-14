@@ -145,6 +145,28 @@ aquascape --mode simulation            apps/desktop/src/main/app-mode.ts   parse
   `Three3DRenderer` (resolved by duck-typing `raycastTankPoint` off
   `SCENE_RENDERER_3D` — a 2D-only test stub yields `null` and the drop no-ops).
 
+- **Stage 15 F15.2 — the water-change tool is a guided 4-step flow on the same
+  state machine.** Selecting `water-change` opens straight into the `params`
+  sub-step (no `tool-selected` hop, unlike feed): `params` (replacement form) →
+  `place-siphon` → `siphon-out` → `siphon-in`. The flow's effects (dispatching
+  the undoable `WaterChange` + `SetWaterLevel` commands AND driving the live
+  `WaterChemistryService.applyWaterChange`) live in a separate
+  `WaterChangeService`, NOT the HUD component — both paths reuse the one
+  `applyWaterChange` dilution helper. The OUT/IN volume → dilution-fraction +
+  new-water-level mapping is the pure `water-change-flow` helper (no
+  re-implemented dilution math); `WaterChangeService` captures the pre-drain
+  level so IN restores it exactly. The shared `SiphonTool` mounts only while
+  `SimulationActionService.siphonActive()` is true: a `siphonActiveEffect`
+  re-renders so `renderCurrent` flips `RenderOptions.siphonTool`, and a separate
+  `siphonModeEffect` pushes `setSiphonMode(out|in|idle)` — both effects make
+  renderer imperative calls but NEVER write a signal (NG0600 only bans
+  signal-writes in reactive contexts; a renderer method call is fine). The
+  nozzle is dragged via dedicated 3D-canvas `pointerdown/move/up` listeners
+  (installed on sim enter, torn down on leave) that raycast to the **water**
+  plane and call `setSiphonPosition`. On tool exit / Esc / leave: park the
+  nozzle (`setSiphonMode('idle')`), tear down the listeners, and
+  `WaterChangeService.clear()` the pending OUT capture.
+
 - **Saved simulations persist via the platform `StorageService`; `execute` is
   async.** `sim save/load/list/delete` snapshot the live scene under a name
   into one `aquascape.simulations` record (IndexedDB on web, on-disk JSON on

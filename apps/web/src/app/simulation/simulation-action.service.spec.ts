@@ -35,7 +35,9 @@ describe('SimulationActionService', () => {
     s.selectTool('feed');
     s.selectTool('water-change');
     expect(s.tool()).toBe('water-change');
-    expect(s.phase()).toBe('tool-selected');
+    // The water-change tool opens straight into its first flow sub-step (params).
+    expect(s.phase()).toBe('sub-step');
+    expect(s.subStep()).toBe('params');
   });
 
   it('beginSubStep advances to sub-step phase', () => {
@@ -112,5 +114,91 @@ describe('SimulationActionService', () => {
     expect(s.subStep()).toBeNull();
     expect(s.selectedFoodId()).toBeNull();
     expect(s.active()).toBe(false);
+  });
+
+  // ── Water-change flow (F15.2) ──────────────────────────────────────────────
+
+  describe('water-change flow', () => {
+    it('selecting the tool opens straight into the params sub-step (no nozzle yet)', () => {
+      s.selectTool('water-change');
+      expect(s.subStep()).toBe('params');
+      expect(s.phase()).toBe('sub-step');
+      expect(s.siphonActive()).toBe(false);
+      expect(s.siphonMode()).toBe('idle');
+    });
+
+    it('walks params → place-siphon → siphon-out → siphon-in', () => {
+      s.selectTool('water-change');
+      s.confirmReplacement();
+      expect(s.subStep()).toBe('place-siphon');
+      expect(s.siphonActive()).toBe(true);
+      expect(s.siphonPlaced()).toBe(false);
+
+      s.markSiphonPlaced();
+      expect(s.siphonPlaced()).toBe(true);
+
+      s.siphonOut();
+      expect(s.subStep()).toBe('siphon-out');
+      expect(s.siphonMode()).toBe('out');
+      expect(s.siphonActive()).toBe(true);
+
+      s.siphonIn();
+      expect(s.subStep()).toBe('siphon-in');
+      expect(s.siphonMode()).toBe('in');
+      expect(s.siphonActive()).toBe(true);
+    });
+
+    it('confirmReplacement only fires from the params sub-step', () => {
+      s.selectTool('water-change');
+      s.confirmReplacement();
+      s.confirmReplacement(); // already past params — no-op
+      expect(s.subStep()).toBe('place-siphon');
+    });
+
+    it('siphonOut requires the place-siphon (or post-in) sub-step', () => {
+      s.selectTool('water-change');
+      s.siphonOut(); // still in params — no-op
+      expect(s.subStep()).toBe('params');
+    });
+
+    it('siphonIn requires a prior OUT', () => {
+      s.selectTool('water-change');
+      s.confirmReplacement();
+      s.siphonIn(); // no OUT yet — no-op
+      expect(s.subStep()).toBe('place-siphon');
+    });
+
+    it('can OUT again after an IN (multi-pass change)', () => {
+      s.selectTool('water-change');
+      s.confirmReplacement();
+      s.siphonOut();
+      s.siphonIn();
+      s.siphonOut();
+      expect(s.subStep()).toBe('siphon-out');
+    });
+
+    it('stores replacement params from the form', () => {
+      s.selectTool('water-change');
+      s.setReplacement({ temperatureC: 21, ph: 6.5, hardnessDgh: 3 });
+      expect(s.replacement()).toEqual({ temperatureC: 21, ph: 6.5, hardnessDgh: 3 });
+    });
+
+    it('reset clears the flow + siphon state', () => {
+      s.selectTool('water-change');
+      s.confirmReplacement();
+      s.markSiphonPlaced();
+      s.siphonOut();
+      s.reset();
+      expect(s.tool()).toBeNull();
+      expect(s.siphonActive()).toBe(false);
+      expect(s.siphonMode()).toBe('idle');
+      expect(s.siphonPlaced()).toBe(false);
+    });
+
+    it('siphonMode/siphonActive are idle/false for the feed tool', () => {
+      s.selectTool('feed');
+      expect(s.siphonActive()).toBe(false);
+      expect(s.siphonMode()).toBe('idle');
+    });
   });
 });

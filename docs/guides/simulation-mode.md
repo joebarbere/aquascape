@@ -146,8 +146,34 @@ This is the **precise** feed — drop food exactly where you want it. The quick
 **Feed tank** scatter on the control HUD (random surface drops) is unchanged for
 a fast top-up.
 
-> The water-change tool (F15.2) lands in the same bar — a multi-step flow (set
-> replacement-water params → place a siphon → siphon out → siphon in).
+**Water-change tool (F15.2):**
+
+A guided **4-step** flow in the same bar — a real partial water change:
+
+1. Click **Water change** → a **replacement-water form** appears (temperature /
+   pH / hardness for the new water). Adjust the fields, then **Next: place
+   siphon**.
+2. **Place the siphon** → a draggable **siphon nozzle** mounts in the 3D view.
+   **Drag on the 3D canvas** to position it near the surface; the drag pixel is
+   ray-cast to the **water plane** (`raycastTankPoint({ plane: 'water' })`) and
+   the nozzle follows. Placing it enables the OUT button.
+3. **Siphon out** → the nozzle's drain mode lights up; the **water level drops**
+   (`SetWaterLevel`) and ammonia / nitrite / **nitrate** dilute toward clean
+   source water. You can watch the test-kit **nitrate** reading fall in the
+   info HUD.
+4. **Siphon in fresh water** → the nozzle's fill mode lights up; the **level
+   rises back** to where it was and the chemistry **lerps toward the
+   replacement** params you chose. **Done** closes the tool.
+
+OUT then IN = a real partial water change. Each step dispatches the undoable
+`WaterChange` Command **and** drives the live runtime
+(`WaterChemistryService.applyWaterChange`), both reusing the single
+`applyWaterChange` dilution helper — so the readout + fish respond immediately
+and **undo reverses** the level + chemistry mutations. A water change dilutes the
+water column only; the bacterial colony lives on surfaces, so cycling is **not**
+reset. The siphon nozzle is the renderer's shared `SiphonTool` (the Stage 16
+cleaner mode reuses it, no fork). **Esc** cancels the tool (a second Esc exits
+simulation mode), parking the nozzle.
 
 Hide the bar with `hud hide actions` (or `hud hide all`).
 
