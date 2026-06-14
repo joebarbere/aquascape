@@ -42,6 +42,7 @@ overlays:
 - A live **date / clock**.
 - A **performance strip**: FPS · frame time · live entity count · bubble count, sampled twice a second.
 - The **tank spec**: dimensions, volume (L + US gal), frame, water line, substrate, and object counts.
+- A live **water-chemistry** block (Stage 13 F13.3): a **cycle badge** (uncycled / cycling / cycled) + the nitrogen readout (ammonia · nitrite · nitrate · pH). These advance in real time as the chemistry tick runs (see "The live nitrogen cycle" below).
 - The **livestock manifest** (species × quantity) and the **equipment list**.
 
 ### 2. Control HUD — top-left (interactive)
@@ -82,6 +83,33 @@ simulation (the per-fish `health` + `hunger` the F14.2 vitality system drives):
 > rather than a per-instance attribute (see `docs/caveats/livestock-ecs.md`).
 
 Hide it with `hud hide vitality` (or `hud hide all`).
+
+### The live nitrogen cycle (Stage 13 F13.3)
+
+Simulation mode runs a **live water-chemistry tick** (`WaterChemistryService`) that
+advances the deterministic [`domain/water-sim`](../architecture/water-sim.md) model
+over the showcase's time axis. It closes the husbandry loop end-to-end:
+
+> **feed → waste → ammonia → fish health**
+
+Each tick reads the world's waste source term (`world.getWasteSourceN()` — a per-fish
+baseline **plus** decay from uneaten food you drop with "Feed tank"), advances the
+nitrogen cycle (ammonia → nitrite → nitrate), and pushes the resulting water quality
+back into the simulation so **fish health responds** (the vitality HUD reflects it):
+overfeed a fresh, uncycled tank and ammonia climbs, stressing the fish; let a stocked
+tank run and the bacterial filter establishes, ammonia + nitrite fall to safe, and the
+**cycle badge** moves uncycled → cycling → cycled while **nitrate accumulates** (the
+husbandry signal a water change — Stage 13 F13.5 — will later reset).
+
+**Time is accelerated** so cycling is visible in **minutes, not weeks**: the ~6-week
+hobby cycle window elapses in ~2 real minutes. The acceleration is presentational — the
+model stays honest per simulated week, and the run is deterministic from the scene
+`seed` (same seed + same tick count ⇒ same chemistry).
+
+> In the **editor** (not simulation mode) the same model is driven by the **time
+> slider** instead: scrub weeks 0–52 to preview the cycle ahead of time, surfaced by a
+> minimal cycle badge beside the slider. Same model, same seed — one previews, the other
+> ticks live. The full test-kit colour-chart readout + water changes are Stage 13 F13.5.
 
 ### 4. The console — bottom-left (the CLI) ⌨️
 

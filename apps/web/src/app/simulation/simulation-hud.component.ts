@@ -25,6 +25,7 @@ import type { Scene } from '@aquascape/domain/scene-model';
 import { formatClock } from './simulation-clock';
 import { buildSimulationHudModel } from './simulation-hud.model';
 import type { PerfMetrics } from './simulation-perf.service';
+import { WaterChemistryService } from '../water-chemistry.service';
 
 @Component({
   selector: 'aquascape-simulation-hud',
@@ -83,6 +84,27 @@ import type { PerfMetrics } from './simulation-perf.service';
             {{ m.decorCount }} decor · {{ m.layerCount }} layers
           </dd>
         </dl>
+
+        <section class="sim-hud__block" aria-label="Water chemistry">
+          <h3>
+            Water chemistry
+            <span
+              class="sim-hud__cycle sim-hud__cycle--{{ chem().cycle }}"
+              [attr.aria-label]="'Cycle stage ' + chem().cycle"
+              >{{ chem().cycle }}</span
+            >
+          </h3>
+          <dl class="sim-hud__grid">
+            <dt>Ammonia</dt>
+            <dd>{{ fmt(chem().state.ammonia) }} mg/L</dd>
+            <dt>Nitrite</dt>
+            <dd>{{ fmt(chem().state.nitrite) }} mg/L</dd>
+            <dt>Nitrate</dt>
+            <dd>{{ fmt(chem().state.nitrate) }} mg/L</dd>
+            <dt>pH</dt>
+            <dd>{{ fmt(chem().state.ph) }}</dd>
+          </dl>
+        </section>
 
         <section class="sim-hud__block" aria-label="Livestock">
           <h3>
@@ -242,6 +264,26 @@ import type { PerfMetrics } from './simulation-perf.service';
         opacity: 0.6;
         font-weight: 400;
       }
+      .sim-hud__cycle {
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 1px 7px;
+        border-radius: 999px;
+        font-weight: 600;
+      }
+      .sim-hud__cycle--uncycled {
+        background: rgba(150, 150, 150, 0.22);
+        color: #c7d0d6;
+      }
+      .sim-hud__cycle--cycling {
+        background: rgba(255, 180, 60, 0.22);
+        color: #ffcd7a;
+      }
+      .sim-hud__cycle--cycled {
+        background: rgba(120, 220, 140, 0.22);
+        color: #9fe7b6;
+      }
       .sim-hud__list {
         list-style: none;
         margin: 0;
@@ -287,8 +329,20 @@ import type { PerfMetrics } from './simulation-perf.service';
 })
 export class SimulationHudComponent implements OnInit, OnDestroy {
   private readonly zone = inject(NgZone);
+  // F13.3 — live water chemistry. The service owns the tick; we just read its
+  // `live()` signal so the HUD reflects the running cycle.
+  private readonly waterChemistry = inject(WaterChemistryService);
 
   private readonly sceneSig = signal<Scene | null>(null);
+
+  /** Live chemistry (state + cycle stage) from the running chemistry tick. */
+  readonly chem = this.waterChemistry.live;
+
+  /** Format a concentration / pH value to 2 dp for the readout. */
+  fmt(value: number): string {
+    if (!Number.isFinite(value)) return '0';
+    return (Math.round(value * 100) / 100).toFixed(2);
+  }
 
   /** The scene whose spec the HUD displays. Null hides the panel. */
   @Input() set scene(value: Scene | null) {

@@ -314,6 +314,46 @@ dose them in simulation mode. Landed across three PRs:
   Command pipeline — the UI never mutates the scene directly. Dosing is
   surfaced as recorded-only, with the chemistry effect explicitly deferred.
 
+## Stage 13 — aquarium husbandry (nitrogen cycle, water chemistry)
+
+The deterministic `domain/water-sim` chemistry model, its persisted document
+field, the new catalog kinds, and the two driver paths that bring the tank's
+nitrogen cycle to life.
+
+- **F13.1 — `domain/water-sim` model.** A pure, seeded, framework-free chemistry
+  engine (the sibling of `domain/growth-sim`): two-stage nitrification (ammonia →
+  nitrite → nitrate) with bacterial colonies that grow over sim-time toward a
+  substrate-set carrying capacity (the classic fishless-cycle curve), the honest
+  Emerson-1975 NH₃/NH₄⁺ pH/temperature equilibrium, KH-buffered pH drift, and
+  per-type algae growth. Time is an INPUT (`elapsedWeeks` / `dt`); an
+  `ENGINE_VERSION` stamps every output for replay/migration.
+- **F13.2 — `.aqua` v3 → v4.** Additive optional `Tank.waterChemistry` (the
+  persistable `WaterState` subset + denormalized `cycle` stage + per-type algae
+  block). Identity migration, schema mirror, marshal both directions, fixture
+  round-trip.
+- **F13.4 — catalog kinds.** Additive `food` / `algae` / `water-test-kit` oneOf
+  branches + manifests.
+- **F13.3 — time-axis integration ("cycle the tank").** Wired the model into the
+  app over **two driver paths that agree on bioload by construction** (shared
+  `water-sim` helpers `bioloadSourceN` / `waterParamsFromTank` /
+  `evaluateChemistryAtWeek`, anchored to the ECS per-fish baseline):
+  - **Editor preview-time** (`PreviewChemistryService` + a minimal
+    `CycleIndicatorComponent`): scrubbing the time slider previews the cycle
+    weeks ahead — deterministic from the scene seed, never dirtying undo/autosave.
+  - **Live tick** (`WaterChemistryService`): in simulation/game mode, a
+    fixed-`WEEKS_PER_TICK` deterministic tick reads `world.getWasteSourceN()` as
+    the source term, advances `simulateChemistry`, and pushes `setWaterQuality`
+    back so fish health responds — **closing feed → waste → ammonia → health
+    end-to-end**. Time-accelerated (~6-week cycle in ~2 real minutes); the live
+    chemistry surfaces in the simulation HUD's water-chemistry block.
+
+  Initial state loads from `Tank.waterChemistry` (else fresh); the live tick state
+  is runtime-only (not written back per-tick — no undo-stack spam). The 1000-tick
+  livestock replay still holds (`setWaterQuality` defaults clean, so only an active
+  service injects water quality, between sim ticks via a host-driven scalar). The
+  full test-kit colour-chart readout + the undo-able `WaterChange` Command are
+  Stage 13 F13.5.
+
 ## Stage 14 — fish vitality & feeding
 
 Made feeding meaningful: typed food, a health/hunger model, and a vitality
@@ -347,9 +387,9 @@ surface — without touching the renderer's per-instance data.
   projection; the inspector is camera-independent so a future picker can feed
   the same selection. The per-fish readout (`fishVitalityAt` / `healthToHearts`)
   is the **game-mode reuse seam** — Stage 16's game HUD renders the same hearts
-  for `world.getPlayerEntity()`. Console `hud … vitality` toggles it. The
-  **waste → chemistry live loop** still awaits Stage 13 F13.3's
-  `WaterChemistryService` consumer (the producer side is in place).
+  for `world.getPlayerEntity()`. Console `hud … vitality` toggles it. (The
+  **waste → chemistry live loop** was closed shortly after by Stage 13 F13.3's
+  `WaterChemistryService` — see the Stage 13 section above.)
 
 ## Document & catalog version history
 
