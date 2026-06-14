@@ -61,6 +61,37 @@ export {
   type PreyCandidate,
 } from './lib/predator-rules';
 
+// ─── Survival rules (pure; Stage 16 F16.2) ───────────────────────────────
+export {
+  DEFAULT_SURVIVAL_PARAMS,
+  SURVIVAL_MAX_STAMINA,
+  anyWithin,
+  evaluateSurvivalOutcome,
+  isCaught,
+  isThreatened,
+  stepStamina,
+  survivalScoreFor,
+  survivalTimeRemainingSec,
+  type PredatorCandidate,
+  type SurvivalOutcome,
+  type SurvivalRuleParams,
+} from './lib/survival-rules';
+
+// ─── Feeding rules (pure; Stage 16 F16.3) ────────────────────────────────
+export {
+  DEFAULT_FEEDING_PARAMS,
+  FEEDING_MAX_FILL,
+  applyBites,
+  detectEaten,
+  drainFill,
+  evaluateFeedingOutcome,
+  feedingTimeRemainingSec,
+  type BiteResult,
+  type FeedingOutcome,
+  type FeedingRuleParams,
+  type FoodCandidate,
+} from './lib/feeding-rules';
+
 // ─── Angular glue ────────────────────────────────────────────────────────
 export { GameModeService, type PlayerVitality } from './lib/game-mode.service';
 export { GameHudComponent } from './lib/game-hud.component';

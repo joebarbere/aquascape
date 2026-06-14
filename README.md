@@ -174,7 +174,12 @@ Every livestock entry in the document becomes visible, behaving fish in the 3D v
 - A **Quake-style developer console** (press **`~`**, bottom-left) drives everything by command — `fish add cardinal 24`, `water 540`, `light dusk`, `item add rock`, `dose easy-green`, `hud hide all`, `reset` — with command history (↑/↓) and Tab-completion. **Save your own demos** with `sim save <name>` / `sim load <name>` — persisted across restarts, so you can build a library of scenes. See the **[demo-mode guide](docs/guides/simulation-mode.md)**
 - On the desktop a native **Mode menu** switches between Normal Editor and Simulation at runtime; **Esc** exits (quits a kiosk launch, or returns to the editor)
 - Also reachable in any browser at **`/?mode=simulation`** (handy for kiosks, screenshots, and the dev server) — no desktop packaging required
-- **Play the tank** — `--mode game:<submode>` / `?mode=game:<submode>` drops you into a fish-eye, player-controlled mini-game (WASD/arrows to swim; gamepad support is planned). **`predator` is fully playable**: you ARE the predator, prey **flee from you** via the fear system, and you score by **catching 8 prey before a 60-second clock** — win/lose, countdown, and live score in the game HUD. The other sub-modes (`survival` / `feeding` / `cleaner`) boot the same playable loop but their win/lose rules are gated on upcoming stages
+- **Play the tank** — `--mode game:<submode>` / `?mode=game:<submode>` drops you into a fish-eye, player-controlled mini-game (WASD/arrows to swim; gamepad support is planned). **Three sub-modes are fully playable** — each with a clear objective, win/lose, live score, and a real health/food HUD:
+  - **`predator`** — you ARE the predator; prey **flee from you** via the fear system; **catch 8 prey before a 60-second clock**.
+  - **`survival`** — you're **prey**; roaming predators hunt you; **flee and outlast 90 seconds** without being caught (a stamina bar drains when a predator looms; lose on caught / starved / exhausted).
+  - **`feeding`** — typed food **falls from the surface**; **eat it to fill the food meter to 90 %** — but **don't gorge** (over-eating wastes the bite + costs score + fouls the tank).
+
+  Only **`cleaner`** remains gated — it boots the same playable loop but its win/lose rules wait on the Stage 15 `SiphonTool` + per-type algae
 
 ---
 
@@ -231,7 +236,7 @@ Everything above is shipped. Remaining work, roughly in priority order:
 Planned follow-ons to [simulation mode](docs/guides/simulation-mode.md); full briefs live under [`plans/`](plans/) (indexed in [`plans/README.md`](plans/README.md)).
 
 - [ ] **Simulation debugger** — a `debugger` console command + 3D dev overlay (flow field / SDF / AABBs / entity inspector / system timings). See [`plans/simulation-debugger.md`](plans/simulation-debugger.md).
-- [ ] **Game modes** — `--mode game:<submode>` fish-eye, player-controlled. **`predator` is playable** (hunt prey on a timer); `survival` / `feeding` / `cleaner` boot the playable loop but their win/lose rules are gated on Stage 14 (food + health) / Stage 16 (`cleaner` mode F16.5 reuses the Stage 15 `SiphonTool` to vacuum the per-type algae). ⚑ [ADR-0007](docs/decisions/0007-game-mode-cli-grammar.md). See [`plans/stage-16-game-modes.md`](plans/stage-16-game-modes.md).
+- [ ] **Game modes** — `--mode game:<submode>` fish-eye, player-controlled. **`predator`, `survival`, and `feeding` are playable** (hunt prey on a timer / flee predators and outlast the clock / eat falling food to fill the meter — each with win/lose, score, and a real health/food HUD). Only **`cleaner` (F16.5)** remains: it boots the playable loop but its win/lose rules wait on the Stage 15 `SiphonTool` to vacuum the per-type algae. ⚑ [ADR-0007](docs/decisions/0007-game-mode-cli-grammar.md). See [`plans/stage-16-game-modes.md`](plans/stage-16-game-modes.md).
 - [ ] **Game-controller support** — broad gamepad support (W3C Standard mapping + fallback): orbit/zoom the 3D camera, move the player fish in game modes, basic UI. See [`plans/game-controller-support.md`](plans/game-controller-support.md).
 - [ ] **Performance + ANGLE attribute budget** — reclaim the livestock shader's 16/16 vertex-attribute ceiling (drop the dead `instanceMatrix`, pack scalars → 10/16) plus a render-side perf pass (render-on-demand, quality tiers, lazy-load the 3D stack). See [`plans/perf-and-angle-budget.md`](plans/perf-and-angle-budget.md).
 

@@ -53,13 +53,46 @@ If a shortcut is eaten because focus is in an INPUT / TEXTAREA / SELECT, the han
 
 `sharp` (already a workspace dev dep) handles the PNG decode + variance math; no new deps were added for pixelmatch / pngjs.
 
-**Text-readout specs** (`vitality-hud.spec.ts`, `water-chemistry.spec.ts`) don't measure pixels — they boot `?mode=simulation`, wait for the live world (`getEntityCount() > 0`), and assert on **HUD DOM** that updates as the sim ticks. `water-chemistry.spec.ts` (Stage 13 F13.3 + F13.5b) asserts: (1) the simulation HUD's **test-kit readout** mounts — cycle badge + four `.sim-hud__kit-row`s, each with a `.sim-hud__kit-swatch` + a safe/caution/danger `.sim-hud__kit-band`; (2) the **ammonia value CHANGES** (climbs off zero) over a few seconds — the live chemistry tick advancing the nitrogen cycle over the showcase's (time-accelerated) time axis; (3) clicking the control HUD's **`Change 50%`** water-change button **DROPS** the ammonia readout (the F13.5b live dilution via `applyWaterChange`). The selector convention to know: the chemistry block is now the **test-kit `.sim-hud__kit-row`** list (value cell `.sim-hud__kit-val`, row 0 = Ammonia), NOT the old `.sim-hud__grid` `dd` cells — a spec reading the grid will break. (In simulation mode the editor time slider is hidden; the live tick IS the time axis. The editor-slider preview + the editor `Water test` panel / `WaterChange` dispatch are unit-tested in `features-editor-shell`.)
+**Text-readout specs** (`vitality-hud.spec.ts`, `water-chemistry.spec.ts`, `water-change-tool.spec.ts`) don't measure pixels — they boot `?mode=simulation`, wait for the live world (`getEntityCount() > 0`), and assert on **HUD DOM**. `water-chemistry.spec.ts` (Stage 13 F13.3 + F13.5b) asserts MOUNT + WIRING: (1) the simulation HUD's **test-kit readout** mounts — cycle badge + four `.sim-hud__kit-row`s, each with a `.sim-hud__kit-swatch` + a safe/caution/danger `.sim-hud__kit-band` + a **finite numeric** `.sim-hud__kit-val`; (2) the control HUD's **`Change 50%`** water-change button is enabled + operable — firing it surfaces the live-region status (`Changed 50% of the water.`) and leaves the readout a valid number (proving the `WaterChange` command + `applyWaterChange` pipeline is wired). `water-change-tool.spec.ts` (Stage 15 F15.2) walks the guided action-HUD flow (params → place-siphon → OUT → IN) through the live camera + GL canvas, asserting each step mounts + the canvas-drag raycast enables OUT. **Neither asserts that ammonia/nitrate numerically CLIMBS over time or DROPS after the change** — see "Software-WebGL e2e: assert mount/wiring, not simulation progression" below. The selector convention to know: the chemistry block is the **test-kit `.sim-hud__kit-row`** list (value cell `.sim-hud__kit-val`, row 0 = Ammonia, row 2 = Nitrate, row 3 = pH), NOT the old `.sim-hud__grid` `dd` cells — a spec reading the grid will break. (In simulation mode the editor time slider is hidden; the live tick IS the time axis. The editor-slider preview + the editor `Water test` panel / `WaterChange` dispatch are unit-tested in `features-editor-shell`.)
+
+Two HUD-overlap + contention gotchas these specs hit: (a) the showcase HUDs are absolutely-positioned overlays, so the controls-panel `Change 50%` button can be **pointer-intercepted** by the vitality HUD title — `dispatchEvent('click')` (or `force`-then-verify-handler) fires the handler past the overlap once the button is asserted visible + enabled; (b) under serial software-WebGL the FIRST synthetic click on a flow-transition button can be **dropped** before Angular swaps the panel in, so wrap each transition in `expect(async () => { await btn.click(); await expect(nextStep).toBeVisible({ timeout: 2_000 }); }).toPass()` — a click-then-verify retry, NOT `test.retry`.
+
+## Software-WebGL e2e: assert mount/wiring, not simulation progression
+
+**The rule:** the CI e2e runs under **software WebGL (SwiftShader)**, where the world/sim/chemistry only ticks while the 3D canvas paints — and that RAF/sim cadence is **throttled + non-deterministic**. So an e2e MUST NOT assert a **time-dependent simulation/physics/chemistry numeric OUTCOME**. It can't reliably deliver one, and a spec that waits for one is flaky-by-construction (a 30s timeout when the value never crosses the threshold).
+
+What the e2e DOES prove, reliably, under SwiftShader: **boot + render + WIRING** — the app boots, the canvas paints (variance/diff floors), the HUD/tool MOUNTS, and driving its controls **fires the pipeline** (a command dispatches, a service method runs, the flow advances a step, a live-region status appears, the readout stays a valid number). What it must NOT require: that the meter fills to N, the player displaces ≥ N mm, a catch scores, ammonia climbs past a threshold, or nitrate numerically drops.
+
+The numeric/time-dependent outcomes are covered **deterministically** by unit + integration specs, which is where they belong:
+
+- **Game physics / player movement / catches** → `predator-rules` / `survival-rules` / `feeding-rules` (features-game) + the per-mode game services (apps/web). `game-mode.spec.ts` asserts only the boot invariants (fish-eye, player marked, valid game state, score ≥ 0) — see its header + "Game-mode e2e under software WebGL".
+- **Water chemistry progression + dilution** → `domain/water-sim` (the nitrogen-cycle + band math), `WaterChemistryService` (the live tick + `applyWaterChange`), the `WaterChange` command, and `water-change-flow` / `water-change.service` (apps/web). `water-chemistry.spec.ts` + `water-change-tool.spec.ts` assert only that the test-kit readout mounts with valid numbers + the water-change control/flow is operable.
+
+When you write a new sim/game e2e: if an assertion would **wait for a number to change over time** (`expect.poll(...).toBeGreaterThan(threshold)` against a live sim value, or a before/after numeric delta), that's the anti-pattern — assert presence/validity/operability instead, and push the numeric assertion down to a unit/integration spec. (Counter-examples that ARE fine: a count that rises from a **direct user action** with no time dependence — `getFoodSpriteCount() ≥ 1` after a feed click, `getBubbleParticleCount() > 0` after placing an air-stone — those are wiring proofs, not progression.)
+
+## Blocking smoke vs advisory full e2e (the quarantine)
+
+The full Playwright suite runs **serially under software WebGL (SwiftShader)**. The heavy 3D-canvas sim/game interaction specs (`game-mode`, `feeding-tool`, `water-change-tool`, `water-chemistry`, `vitality-hud`, `lights-fisheye`, the animation/day-night/bubble specs) **pass deterministically locally but are flaky under CI load** — the suite outgrew what SwiftShader can reliably paint in time, so they time out / fail on different runs. Their deterministic logic is already exhaustively unit/integration tested (the blocking nx-affected `test` gate). So the e2e is split into two tiers:
+
+- **Blocking smoke** — the `@smoke`-tagged tests only:
+  - `baseline.spec.ts` → `home page loads with title Aquascape @smoke` (2D editor boots, Angular bootstraps).
+  - `livestock-3d.spec.ts` → `3D canvas paints visible content (variance > floor) @smoke` (the canonical "3D fish actually paint" check — pixel-channel variance, no interaction timing, robust under SwiftShader).
+
+  These prove **boot + 3D render**, which is the reliable part. They gate the PR (and main).
+- **Advisory full** — everything `--grep-invert=@smoke`. Runs for signal under `continue-on-error: true`; **never blocks** PRs or main.
+
+**Adding a test to a tier:** put `@smoke` in the Playwright test title to make it blocking (only do this for robust, no-interaction-timing assertions — pixel variance / frame-diff floors, not time-dependent sim outcomes). Leave the title untagged and it's advisory by default.
+
+**`--grep` forwarding through nx.** The flag must come AFTER the `--` passthrough or nx swallows it: `nx affected -t e2e … -- --grep="@smoke"` (verified — `--grep` before `--` runs the whole suite). `--grep-invert="@smoke"` selects the advisory rest.
 
 ## CI integration
 
-**`.github/workflows/pr.yml#e2e` job.** Cached Playwright browsers keyed on `@playwright/test` version (re-downloads only on bump); `nx affected -t e2e` so the suite runs only when `web-e2e` or its implicit dep on `web` changed. Per-run timeout 20 min; reports uploaded as artifacts on always (7-day retention).
+**`.github/workflows/pr.yml`** has two e2e jobs:
 
-**`.github/workflows/main.yml#matrix.E2E` step** now installs Playwright across the OS matrix (Ubuntu / macOS / Windows) with the same browser cache. `continue-on-error: true` stays until `apps/desktop-e2e/` is also real Playwright — once both web + desktop e2e are reliable, split into per-target steps and drop the flag for web-e2e.
+- **`e2e (web Playwright)`** — BLOCKING. `nx affected -t e2e … --configuration=ci -- --grep="@smoke"`. Name preserved (may be a required status check). 20-min timeout. Cached Playwright browsers keyed on `@playwright/test` version; `nx affected` so it runs only when `web-e2e` or its implicit dep on `web` changed.
+- **`e2e-full (advisory)`** — `continue-on-error: true`, same setup, `-- --grep-invert="@smoke"`. 35-min timeout. Runs for signal, never blocks.
+
+**`.github/workflows/main.yml#matrix`** runs the e2e in two steps per OS: **`E2E smoke (BLOCKING)`** (`nx run-many -t e2e --parallel=1 -- --grep="@smoke"`) gates main green, and **`E2E full suite (ADVISORY — non-blocking)`** (`continue-on-error: true`, `-- --grep-invert="@smoke"`) carries the rest plus the still-placeholder `apps/desktop-e2e/`. Playwright installs across the OS matrix (Ubuntu / macOS / Windows) with the shared browser cache.
 
 ## Running locally
 

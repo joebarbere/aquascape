@@ -12,7 +12,7 @@
 // `docs/caveats/game-modes.md` + `docs/caveats/livestock-ecs.md`.
 
 import type { LivestockWorld } from '@aquascape/domain/livestock-ecs';
-import { NO_ENTITY_REF } from '@aquascape/domain/livestock-ecs';
+import { NO_ENTITY_REF, STARVE_HUNGER_THRESHOLD } from '@aquascape/domain/livestock-ecs';
 
 /**
  * Deterministically choose the player entity from a populated world. We take
@@ -54,4 +54,39 @@ export function readEntityPosition(
     }
   }
   return null;
+}
+
+/** The player's live vitality, read from the world snapshot's Stage 14 slabs. */
+export interface PlayerVitals {
+  /** `HealthDrive.health` fraction `[0, 1]` (1 when the eid isn't found). */
+  readonly health: number;
+  /**
+   * FULLNESS fraction `[0, 1]` derived from `FeedingDrive.hunger`: `1` when
+   * sated (hunger 0), `0` at/above the starve threshold. This is the fish's
+   * intrinsic hunger (the survival HUD's food bar); the feeding GAME shows its
+   * own game-local meter instead.
+   */
+  readonly food: number;
+}
+
+/**
+ * Read the player entity's live `HealthDrive.health` + `FeedingDrive.hunger`
+ * from the world snapshot (the Stage 14 vitality slabs, parallel to `ids`) and
+ * return them as HUD fractions. Returns full-health / full-food defaults when
+ * the eid isn't in the current snapshot (e.g. between a despawn + the next
+ * snapshot). Pure read — no world mutation. The per-mode game service calls
+ * this each frame and pushes the result onto `GameModeService.setVitality`.
+ */
+export function readPlayerVitals(world: LivestockWorld, eid: number): PlayerVitals {
+  const snap = world.snapshot(0);
+  for (let i = 0; i < snap.entityCount; i++) {
+    if (snap.ids[i] === eid) {
+      const health = snap.health[i] ?? 1;
+      const hunger = snap.hunger[i] ?? 0;
+      const fullness = 1 - hunger / STARVE_HUNGER_THRESHOLD;
+      const food = fullness < 0 ? 0 : fullness > 1 ? 1 : fullness;
+      return { health: health < 0 ? 0 : health > 1 ? 1 : health, food };
+    }
+  }
+  return { health: 1, food: 1 };
 }

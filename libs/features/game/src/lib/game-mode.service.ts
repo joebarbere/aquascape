@@ -38,19 +38,32 @@ import { INITIAL_SCORE, awardPoints, tickElapsed, type ScoreState } from './scor
  * health system exists.
  */
 export interface PlayerVitality {
-  /** Health fraction in `[0, 1]`. Stubbed to full until Stage 14 wires real vitality. */
+  /** Health fraction in `[0, 1]` (1 = healthy, 0 = critical). */
   readonly health: number;
-  /** Food / hunger fraction in `[0, 1]`. Stubbed to mid until Stage 14. */
+  /** Food / fullness fraction in `[0, 1]` (1 = full, 0 = starving). */
   readonly food: number;
-  /** Always `true` in F16.1 — flags the values as not-yet-real. */
+  /**
+   * Optional stamina fraction in `[0, 1]`, or `null` when the active mode has
+   * no stamina concept. Survival (F16.2) drives it (drains while a predator is
+   * near); other modes leave it `null` and the HUD hides the bar.
+   */
+  readonly stamina: number | null;
+  /**
+   * `true` while the values are the F16.1 STUB (no real game wired yet) — the
+   * HUD marks the bar "preview". The real-vitality modes (F16.2 survival /
+   * F16.3 feeding, Stage 14-backed) set `false` so the bar reads as live.
+   */
   readonly isPlaceholder: boolean;
 }
 
 const PLACEHOLDER_VITALITY: PlayerVitality = {
   health: 1,
   food: 0.5,
+  stamina: null,
   isPlaceholder: true,
 };
+
+const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 @Injectable({ providedIn: 'root' })
 export class GameModeService {
@@ -138,12 +151,33 @@ export class GameModeService {
   }
 
   /**
-   * Update the placeholder vitality (Stage 14 will replace this with a read
-   * from the player entity's real health/hunger). Kept so the HUD can be
-   * exercised; clamps both to `[0, 1]`.
+   * Update the placeholder vitality (used by the generic shell / modes without
+   * real vitality wired). Clamps both to `[0, 1]` and keeps `isPlaceholder`
+   * true so the HUD shows the "preview" badge.
    */
   setVitalityPlaceholder(health: number, food: number): void {
-    const clamp = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
-    this._vitality.set({ health: clamp(health), food: clamp(food), isPlaceholder: true });
+    this._vitality.set({
+      health: clamp01(health),
+      food: clamp01(food),
+      stamina: null,
+      isPlaceholder: true,
+    });
+  }
+
+  /**
+   * Set the REAL player vitality from the live world (Stage 14 health/hunger).
+   * The per-mode game service reads the player's `HealthDrive.health` +
+   * `FeedingDrive.hunger` from the world snapshot each frame and pushes it here,
+   * replacing the F16.1 placeholder. `stamina` is mode-local (survival drives
+   * it; pass `null` when the mode has no stamina). All fields clamp to `[0, 1]`;
+   * `isPlaceholder` is `false` so the HUD drops the "preview" badge.
+   */
+  setVitality(health: number, food: number, stamina: number | null = null): void {
+    this._vitality.set({
+      health: clamp01(health),
+      food: clamp01(food),
+      stamina: stamina === null ? null : clamp01(stamina),
+      isPlaceholder: false,
+    });
   }
 }

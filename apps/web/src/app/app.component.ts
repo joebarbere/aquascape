@@ -147,6 +147,8 @@ import { gameModeOf, isGameAppMode, resolveAppMode, type AppMode } from './app-m
 import { GameHudComponent, GameModeService, type GameMode } from '@aquascape/features/game';
 import { GameInputService } from './game/game-input.service';
 import { PredatorGameService } from './game/predator-game.service';
+import { SurvivalGameService } from './game/survival-game.service';
+import { FeedingGameService } from './game/feeding-game.service';
 import { pickPlayerEntity } from './game/game-activation';
 import { BehaviorDebugOverlayComponent } from './behavior-debug-overlay.component';
 import { BehaviorDebugService } from './behavior-debug.service';
@@ -979,6 +981,12 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Predator-mode rules (catch detection + scoring + win/lose) — F16.4. */
   private readonly predatorGame = inject(PredatorGameService);
 
+  /** Survival-mode rules (flee predators, stamina, survive the clock) — F16.2. */
+  private readonly survivalGame = inject(SurvivalGameService);
+
+  /** Feeding-mode rules (eat falling food, fill the meter) — F16.3. */
+  private readonly feedingGame = inject(FeedingGameService);
+
   /** Live performance sampler feeding the HUD's metrics strip (simulation only). */
   readonly simPerf = inject(SimulationPerfService);
 
@@ -1223,15 +1231,28 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     // can foul if overfed). Same scene the world was seeded from.
     this.waterChemistry.start(scene);
 
-    // F16.4 — predator is the first mode with real rules: flag the player a
-    // predator (prey flee via FearSystem) + run catch detection each frame. The
-    // rules ride the input loop's per-frame hook (decoupled from world.step, so
-    // catches stay out of the deterministic core). Other sub-modes pass no hook
-    // and run the generic playable loop until their rules land (Stages 14/15).
+    // Per-mode RULES ride the input loop's per-frame hook (decoupled from
+    // world.step, so the game events — catches / eats / lose-on-caught — stay
+    // out of the deterministic core). Each mode's service owns its world
+    // reads/mutations + win/lose dispatch; the cleaner mode (F16.5) still runs
+    // the generic playable loop until its rules land.
     let frameHook: ((dt: number) => void) | null = null;
-    if (mode === 'predator' && world !== null && playerEid >= 0) {
-      this.predatorGame.start(world, playerEid);
-      frameHook = (dt) => this.predatorGame.frame(dt);
+    if (world !== null && playerEid >= 0) {
+      if (mode === 'predator') {
+        // F16.4 — flag the player a predator (prey flee via FearSystem).
+        this.predatorGame.start(world, playerEid);
+        frameHook = (dt) => this.predatorGame.frame(dt);
+      } else if (mode === 'survival') {
+        // F16.2 — player is PREY (not tagged Predator); the existing predator
+        // agents hunt it via FearSystem. Lose on caught / health-0 / stamina-0.
+        this.survivalGame.start(world, playerEid);
+        frameHook = (dt) => void this.survivalGame.frame(dt);
+      } else if (mode === 'feeding') {
+        // F16.3 — drop food + eat-by-proximity fills the meter; over/under-eat
+        // affects score/health.
+        this.feedingGame.start(world, playerEid);
+        frameHook = (dt) => void this.feedingGame.frame(dt);
+      }
     }
 
     // Per-frame input → intent → velocity → world.setPlayerVelocity, plus the
@@ -1252,9 +1273,12 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private leaveGameMode(): void {
     if (this.gameMode() === null) return;
     this.gameInput.stop();
-    // Tear down the predator rules (no-op for other modes) BEFORE clearing the
-    // player — clearPlayer() strips the predator tag so prey stop fleeing.
+    // Tear down any per-mode rules (each `stop` is a no-op when that mode
+    // wasn't running) BEFORE clearing the player — clearPlayer() strips the
+    // predator tag so prey stop fleeing.
     this.predatorGame.stop();
+    this.survivalGame.stop();
+    this.feedingGame.stop();
     this.livestockSim.getWorld()?.clearPlayer();
     this.gameMode.set(null);
     this.game.dispatch({ type: 'quit' });

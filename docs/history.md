@@ -279,6 +279,39 @@ debug hook gained read-only `getGameScore()` / `getGameState()` for the e2e.
 Survival / feeding / cleaner remain on the generic playable loop, gated on
 Stages 14 / 13 / 15. See [`docs/caveats/game-modes.md`](caveats/game-modes.md).
 
+**F16.2 — the survival game.** You are **prey**: roaming predators hunt you via
+the existing `FearSystem` path, and you flee with the keyboard. `SurvivalGameService`
+(`apps/web/src/app/game/`) reads the live predator + player positions each frame
+(it **mutates nothing** in the sim — only reads), steps a **game-local stamina**
+bar (drains when a predator looms within 280 mm, recovers when safe), awards the
+seconds-survived score, and dispatches **lose** on caught (predator within
+90 mm) / health-0 / stamina-0 or **win** on outlasting 90 s. If the loaded scene
+has no predators of its own, the service promotes the few fish FARTHEST from the
+player to roaming hunters at start (demoted on exit) so there's always a threat.
+The pure rules live in `libs/features/game/src/lib/survival-rules.ts`.
+
+**F16.3 — the feeding game.** Typed food (Stage 14 `FoodSprite`) **falls from
+the surface** and you eat it by proximity. `FeedingGameService` periodically
+drops food (a service-local PRNG picks drop columns — never the sim core),
+detects which sprites are within the eat radius (70 mm) via the pure
+`detectEaten`, **despawns** them, and folds the bites into a **food meter**: each
+bite fills + scores, but a bite taken while the meter is full **gorges** (wasted
++ a score penalty). The meter slowly drains; **fill it to 90 %** to win, or lose
+on health-0 (starved) / clock-expiry below target. The pure rules live in
+`libs/features/game/src/lib/feeding-rules.ts`.
+
+**Both modes wire the HUD vitality bars to REAL values** (replacing the F16.1
+placeholder): `GameModeService.setVitality(health, food, stamina)` reads the
+player's `HealthDrive.health` + `FeedingDrive.hunger` from the snapshot via
+`readPlayerVitals`; survival adds a third **stamina** bar. The
+caught/eat/drop are all non-deterministic GAME EVENTS kept OUT of the sim core
+(between ticks, gated on an active game) — the 1000-tick non-game replay still
+holds (proven by `survival-game.service.spec.ts` + `feeding-game.service.spec.ts`).
+e2e (`game-mode.spec.ts`) boots each mode and asserts the live score updates
+(survival's survived-seconds climbs; feeding's score increments on an eat),
+validated on a provisioned chromium. **Only `cleaner` (F16.5) remains** gated on
+Stages 13 / 15. See [`docs/caveats/game-modes.md`](caveats/game-modes.md).
+
 ## Nutrients & additives + dosing
 
 A new catalog **kind** of real-world aquarium nutrients/additives plus a way to
