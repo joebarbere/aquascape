@@ -25,6 +25,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  Input,
   ViewChildren,
   type QueryList,
   computed,
@@ -33,8 +34,14 @@ import {
 } from '@angular/core';
 
 import { coreCatalog, type FoodEntry } from '@aquascape/domain/catalog';
+import type { Scene } from '@aquascape/domain/scene-model';
 
 import { SimulationActionService, type ActionTool } from './simulation-action.service';
+import { WaterChangeService } from './water-change.service';
+import {
+  DEFAULT_WATER_CHANGE_FRACTION,
+  type ReplacementParams,
+} from './water-change-flow';
 
 interface ToolButton {
   readonly tool: ActionTool;
@@ -87,6 +94,86 @@ interface ToolButton {
                 </li>
               }
             </ul>
+          }
+        </div>
+      }
+
+      @if (action.tool() === 'water-change') {
+        <div class="actions__panel" role="group" aria-label="Water change">
+          @switch (action.subStep()) {
+            @case ('params') {
+              <p class="actions__panel-title">Replacement water</p>
+              <div class="actions__form">
+                <label class="actions__field">
+                  <span>Temperature (°C)</span>
+                  <input
+                    type="number"
+                    inputmode="decimal"
+                    step="0.5"
+                    [value]="action.replacement().temperatureC"
+                    (input)="onParam('temperatureC', $event)"
+                    aria-label="Replacement temperature in Celsius"
+                  />
+                </label>
+                <label class="actions__field">
+                  <span>pH</span>
+                  <input
+                    type="number"
+                    inputmode="decimal"
+                    step="0.1"
+                    [value]="action.replacement().ph"
+                    (input)="onParam('ph', $event)"
+                    aria-label="Replacement pH"
+                  />
+                </label>
+                <label class="actions__field">
+                  <span>Hardness (dGH)</span>
+                  <input
+                    type="number"
+                    inputmode="decimal"
+                    step="1"
+                    [value]="action.replacement().hardnessDgh"
+                    (input)="onParam('hardnessDgh', $event)"
+                    aria-label="Replacement general hardness in degrees"
+                  />
+                </label>
+                <button
+                  type="button"
+                  class="actions__primary"
+                  (click)="action.confirmReplacement()"
+                >
+                  Next: place siphon
+                </button>
+              </div>
+            }
+            @case ('place-siphon') {
+              <p class="actions__panel-title">Place the siphon</p>
+              <p class="actions__hint">
+                Drag on the tank to position the siphon near the surface.
+              </p>
+              <button
+                type="button"
+                class="actions__primary"
+                [disabled]="!action.siphonPlaced()"
+                (click)="onSiphonOut()"
+              >
+                Siphon out
+              </button>
+            }
+            @case ('siphon-out') {
+              <p class="actions__panel-title">Draining…</p>
+              <p class="actions__hint">{{ wcStatus() }}</p>
+              <button type="button" class="actions__primary" (click)="onSiphonIn()">
+                Siphon in fresh water
+              </button>
+            }
+            @case ('siphon-in') {
+              <p class="actions__panel-title">Refilled</p>
+              <p class="actions__hint">{{ wcStatus() }}</p>
+              <button type="button" class="actions__primary" (click)="action.reset()">
+                Done
+              </button>
+            }
           }
         </div>
       }
@@ -189,6 +276,55 @@ interface ToolButton {
         background: rgba(90, 200, 240, 0.12);
         color: #9fe0f5;
         cursor: pointer;
+      }
+      .actions__hint {
+        margin: 0 0 8px;
+        font-size: 11px;
+        opacity: 0.7;
+      }
+      .actions__form {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .actions__field {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 11px;
+        opacity: 0.9;
+      }
+      .actions__field input {
+        width: 72px;
+        padding: 4px 6px;
+        border-radius: 6px;
+        border: 1px solid rgba(120, 200, 230, 0.35);
+        background: rgba(255, 255, 255, 0.06);
+        color: inherit;
+        font: inherit;
+        font-size: 11px;
+      }
+      .actions__primary {
+        margin-top: 4px;
+        width: 100%;
+        padding: 7px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(120, 200, 230, 0.55);
+        background: rgba(90, 200, 240, 0.18);
+        color: #f4fbfd;
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .actions__primary:hover:not(:disabled),
+      .actions__primary:focus-visible {
+        background: rgba(90, 200, 240, 0.3);
+        outline: none;
+      }
+      .actions__primary:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
       }
       .actions__picker {
         list-style: none;
@@ -298,6 +434,17 @@ interface ToolButton {
 })
 export class SimulationActionsComponent {
   readonly action = inject(SimulationActionService);
+  private readonly waterChange = inject(WaterChangeService);
+
+  /**
+   * F15.2 — the live scene (host keeps it in sync with the store). The OUT/IN
+   * steps need the current tank for the level/chemistry mapping. Null before the
+   * showcase scene loads.
+   */
+  @Input() scene: Scene | null = null;
+
+  /** Status line for the OUT/IN steps (volume changed). */
+  readonly wcStatus = signal('');
 
   /** The husbandry tools the HUD exposes. F15.2 wires the water-change flow. */
   readonly toolButtons: readonly ToolButton[] = [
@@ -325,6 +472,41 @@ export class SimulationActionsComponent {
   onSelect(tool: ActionTool, index: number): void {
     this.focusIndex.set(index);
     this.action.selectTool(tool);
+  }
+
+  // ── Water-change form + OUT/IN (F15.2) ─────────────────────────────────────
+
+  /** Update one replacement-water param from its input. */
+  onParam(field: keyof ReplacementParams, event: Event): void {
+    const value = Number((event.target as HTMLInputElement).value);
+    if (!Number.isFinite(value)) return;
+    this.action.setReplacement({ ...this.action.replacement(), [field]: value });
+  }
+
+  /**
+   * Run the siphon OUT step: advance the state machine, then dispatch the drain
+   * (level down + chemistry dilute) via the WaterChangeService. The renderer's
+   * siphon mode is driven from the app's event handler (off `siphonMode()`).
+   */
+  onSiphonOut(): void {
+    this.action.siphonOut();
+    const result = this.waterChange.siphonOut(this.scene, DEFAULT_WATER_CHANGE_FRACTION);
+    if (result !== null) {
+      this.wcStatus.set(`Drained ${Math.round(result.fraction * 100)}% — nitrate falling.`);
+    }
+  }
+
+  /** Run the siphon IN step: refill + lerp chemistry toward the replacement. */
+  onSiphonIn(): void {
+    this.action.siphonIn();
+    const result = this.waterChange.siphonIn(
+      this.scene,
+      this.action.replacement(),
+      DEFAULT_WATER_CHANGE_FRACTION,
+    );
+    if (result !== null) {
+      this.wcStatus.set(`Refilled to ${result.newLevelMm} mm of fresh water.`);
+    }
   }
 
   /** Arrow-key roving focus across the toolbar (toolbar a11y pattern). */

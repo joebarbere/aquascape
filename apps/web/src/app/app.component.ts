@@ -153,6 +153,7 @@ import { BehaviorDebugService } from './behavior-debug.service';
 import { attachDebugHook, detachDebugHook } from './debug-hook';
 import { SimulationActionsComponent } from './simulation/simulation-actions.component';
 import { SimulationActionService } from './simulation/simulation-action.service';
+import { WaterChangeService } from './simulation/water-change.service';
 import { resolveFoodDrop } from './simulation/feeding-drop';
 import { SimulationConsoleComponent } from './simulation/simulation-console.component';
 import { SimulationControlsComponent } from './simulation/simulation-controls.component';
@@ -509,7 +510,9 @@ type DragState =
                  state machine; the feed picker arms a food type, and the canvas
                  pointer handlers below drop it at the raycast point. -->
             @if (simUi.actionsVisible()) {
-              <aquascape-simulation-actions></aquascape-simulation-actions>
+              <aquascape-simulation-actions
+                [scene]="simulationScene()"
+              ></aquascape-simulation-actions>
             }
             <!-- Drop-preview marker — a CSS cursor indicator at the projected
                  tank point, shown only while the feed tool is in its placing
@@ -912,6 +915,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Cleanup thunks for the simulation-mode 3D-canvas feeding listeners. */
   private feedingListenersCleanup: (() => void) | null = null;
 
+  /** Cleanup thunks for the F15.2 3D-canvas siphon-placement listeners. */
+  private siphonListenersCleanup: (() => void) | null = null;
+  /** The siphon mode last pushed to the renderer, to skip redundant calls. */
+  private lastSiphonMode: 'idle' | 'out' | 'in' = 'idle';
+
   /**
    * F5.3 — drag readout. Set during a move / scale / rotate drag to a
    * `{text, cssX, cssY}` triple that the template renders as a small pill
@@ -979,6 +987,9 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Stage 15 — the bottom-center action HUD's active-tool state machine. */
   readonly simAction = inject(SimulationActionService);
+
+  /** Stage 15 F15.2 — the water-change OUT/IN execution seam (clear on leave). */
+  private readonly waterChangeSvc = inject(WaterChangeService);
 
   /** Unsubscribe thunk for the desktop "Mode" menu push channel (Electron only). */
   private modeMenuCleanup: (() => void) | null = null;
@@ -1129,6 +1140,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     // listeners (raycast-driven food drops + the drop-preview marker).
     this.simAction.reset();
     this.installFeedingListeners();
+    // Stage 15 F15.2 — bind the siphon-placement listeners + clear any stale
+    // OUT capture from a prior run.
+    this.installSiphonListeners();
+    this.waterChangeSvc.clear();
+    this.lastSiphonMode = 'idle';
   }
 
   /**
@@ -1147,6 +1163,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.waterChemistry.stop();
     // Stage 15 — tear down the feeding listeners + reset the tool.
     this.teardownFeedingListeners();
+    // Stage 15 F15.2 — park the nozzle, tear down its listeners, clear capture.
+    this.simulationInteractionRenderer?.setSiphonMode('idle');
+    this.lastSiphonMode = 'idle';
+    this.teardownSiphonListeners();
+    this.waterChangeSvc.clear();
     this.simAction.reset();
   }
 
@@ -1396,6 +1417,43 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.currentScene !== null) {
       this.renderCurrent();
     }
+  });
+
+  // Stage 15 F15.2 — re-render when the water-change tool's siphon mounts /
+  // unmounts so `renderCurrent` flips `RenderOptions.siphonTool` on/off (the
+  // nozzle only exists while the tool needs it; renders are bit-identical
+  // otherwise). This effect ONLY reads a signal + calls `renderCurrent`; the
+  // imperative `setSiphonMode` / `setSiphonPosition` calls live in event
+  // handlers (the canvas drag + the OUT/IN sync below), never a signal write —
+  // so it stays clear of the NG0600 signal-write-in-effect trap.
+  private siphonActiveFirstRun = true;
+  private readonly siphonActiveEffect = effect(() => {
+    const active = this.simAction.siphonActive();
+    if (this.siphonActiveFirstRun) {
+      this.siphonActiveFirstRun = false;
+      return;
+    }
+    if (!active && this.lastSiphonMode !== 'idle') {
+      // Tool unmounting — park the nozzle before the next render drops it.
+      this.simulationInteractionRenderer?.setSiphonMode('idle');
+      this.lastSiphonMode = 'idle';
+    }
+    if (this.currentScene !== null) {
+      this.renderCurrent();
+    }
+  });
+
+  // Stage 15 F15.2 — push the siphon's OUT/IN/idle visual mode to the renderer
+  // when the water-change sub-step changes. `siphonMode()` only flips on an
+  // explicit user button click (an EVENT) — the effect reacts to that derived
+  // signal and makes a single imperative renderer call (NOT a signal write, so
+  // NG0600-safe). Kept separate from the render effect so the mode push and the
+  // mount toggle are independently traceable.
+  private readonly siphonModeEffect = effect(() => {
+    const mode = this.simAction.siphonMode();
+    if (mode === this.lastSiphonMode) return;
+    this.lastSiphonMode = mode;
+    this.simulationInteractionRenderer?.setSiphonMode(mode);
   });
 
   // Stage 10 F10.3 — when the user flips 2D ↔ 3D, dispose the previously-
@@ -1891,6 +1949,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.simulationMode() && this.simAction.active()) {
       this.simAction.reset();
       this.feedPreviewPx.set(null);
+      this.waterChangeSvc.clear();
       return;
     }
     if (this.simulationMode()) {
@@ -2464,6 +2523,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       ...(is3d
         ? { cameraMode: mode === 'fish-eye' ? ('fish-eye' as const) : ('orbit' as const) }
         : {}),
+      // Stage 15 F15.2 — mount the shared siphon nozzle only while the water-
+      // change tool's place/out/in sub-steps are active (3D-only). Absent ⇒ the
+      // renderer keeps the nozzle disposed + renders are bit-identical to the
+      // pre-Stage-15 path. The mount toggle is driven by `siphonActiveEffect`.
+      ...(is3d && this.simAction.siphonActive() ? { siphonTool: true as const } : {}),
     });
   }
 
@@ -2740,6 +2804,81 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     if (this.feedPreviewPx() !== null) {
       this.ngZone.run(() => this.feedPreviewPx.set(null));
+    }
+  }
+
+  /**
+   * Stage 15 F15.2 — siphon-placement wiring on the 3D canvas.
+   *
+   * While the water-change tool's place/out/in sub-steps are active, a pointer
+   * drag on the 3D canvas raycasts to the WATER plane and moves the shared
+   * siphon nozzle there (`setSiphonPosition`) — an explicit-method call from an
+   * EVENT handler, never the render effect (NG0600). The first landed drag also
+   * marks the nozzle placed (gating the OUT button). Installed on simulation
+   * enter, torn down on leave. Listeners run outside Angular's zone; the
+   * placed-flag write re-enters the zone so the OnPush HUD updates.
+   */
+  private installSiphonListeners(): void {
+    this.teardownSiphonListeners();
+    const canvas = this.canvas3dRef.nativeElement;
+
+    let dragging = false;
+
+    const toPoint = (event: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return null;
+      return {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+        width: rect.width,
+        height: rect.height,
+      };
+    };
+
+    const place = (event: PointerEvent): void => {
+      if (!this.simAction.siphonActive()) return;
+      const renderer = this.simulationInteractionRenderer;
+      if (renderer === null) return;
+      const point = toPoint(event);
+      if (point === null) return;
+      const pos = renderer.raycastTankPoint(point, { plane: 'water' });
+      if (pos === null) return;
+      renderer.setSiphonPosition(pos);
+      this.ngZone.run(() => {
+        if (!this.simAction.siphonPlaced()) this.simAction.markSiphonPlaced();
+        this.renderCurrent();
+      });
+    };
+
+    const onDown = (event: PointerEvent): void => {
+      if (!this.simAction.siphonActive()) return;
+      dragging = true;
+      place(event);
+    };
+    const onMove = (event: PointerEvent): void => {
+      if (!dragging) return;
+      place(event);
+    };
+    const onUp = (): void => {
+      dragging = false;
+    };
+
+    canvas.addEventListener('pointerdown', onDown);
+    canvas.addEventListener('pointermove', onMove);
+    canvas.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointerleave', onUp);
+    this.siphonListenersCleanup = (): void => {
+      canvas.removeEventListener('pointerdown', onDown);
+      canvas.removeEventListener('pointermove', onMove);
+      canvas.removeEventListener('pointerup', onUp);
+      canvas.removeEventListener('pointerleave', onUp);
+    };
+  }
+
+  private teardownSiphonListeners(): void {
+    if (this.siphonListenersCleanup !== null) {
+      this.siphonListenersCleanup();
+      this.siphonListenersCleanup = null;
     }
   }
 

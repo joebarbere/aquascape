@@ -442,6 +442,47 @@ surface — without touching the renderer's per-instance data.
   **waste → chemistry live loop** was closed shortly after by Stage 13 F13.3's
   `WaterChemistryService` — see the Stage 13 section above.)
 
+## Stage 15 — husbandry interactions (the hands-on action HUD)
+
+A bottom-center action HUD in simulation mode — square, rounded tool buttons
+that drive hands-on husbandry through the same NgRx + Command pipeline the
+editor uses. The renderer surface (`SimulationInteractionRenderer`:
+`raycastTankPoint` + the shared `SiphonTool` + `setSiphonPosition` /
+`setSiphonMode`, opt-in via `RenderOptions.siphonTool`) landed in a renderer PR
+ahead of the HUD.
+
+- **F15.1 — feeding tool.** Select **Feed** → a catalog-`food` picker; pick a
+  food, then click the 3D canvas to drop typed food at the ray-cast substrate
+  point (`raycastTankPoint({ plane: 'floor' })` → the Stage 14 typed-spawn API),
+  replacing the random scatter with placed feeding. A drop-preview marker
+  follows the cursor. The `SimulationActionService` owns the tool state machine
+  (idle → tool-selected → sub-step); all renderer imperative calls live in the
+  app's canvas **event handlers**, never the render effect (NG0600). A pure
+  `resolveFoodDrop` helper is the catalog-row-lookup + raycast + spawn seam.
+- **F15.2 — water-change tool (multi-step flow).** Selecting **Water change**
+  runs a guided 4-step flow: (1) a **replacement-params form** (temperature /
+  pH / hardness) stored on the tool state; (2) **place-siphon** — mounts the
+  shared `SiphonTool` and a 3D-canvas drag positions the nozzle at the **water
+  plane** (`raycastTankPoint({ plane: 'water' })` → `setSiphonPosition`, off an
+  event handler); (3) **siphon OUT** — `setSiphonMode('out')`, the water level
+  drops (`SetWaterLevel`) and ammonia/nitrite/**nitrate** dilute toward clean
+  source water; (4) **siphon IN** — `setSiphonMode('in')`, the level rises back
+  and the chemistry lerps toward the replacement params. Each step dispatches an
+  undoable `WaterChange` + `SetWaterLevel` Command **and** drives the live
+  runtime (`WaterChemistryService.applyWaterChange`), both reusing the single
+  `applyWaterChange` dilution helper — so the test-kit readout + fish respond at
+  once and **undo reverses** the level + chemistry mutations. A pure
+  `water-change-flow` helper maps the OUT/IN volume fraction → the dilution
+  fraction + the new water level (no re-implemented dilution math); a
+  `WaterChangeService` owns the OUT/IN command-dispatch + live-runtime drive and
+  captures the pre-drain level so IN restores it exactly. `RenderOptions.siphonTool`
+  is wired into `renderCurrent` only while the tool is active (renders stay
+  bit-identical otherwise); on tool exit the nozzle is parked
+  (`setSiphonMode('idle')`) and disposed. The `SiphonTool` is shared with the
+  Stage 16 cleaner mode (F16.5) — no fork. e2e (`water-change-tool.spec.ts`):
+  drive the flow (params → place → OUT) and assert the test-kit **nitrate**
+  reading drops after OUT. **This closes Stage 15.**
+
 ## Document & catalog version history
 
 | Version         | Change                                                                                                                                                                                                                                                                                                                                     |
