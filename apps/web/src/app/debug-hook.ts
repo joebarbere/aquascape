@@ -34,6 +34,7 @@ import type { LivestockWorld } from '@aquascape/domain/livestock-ecs';
 import type { Scene } from '@aquascape/domain/scene-model';
 import { selectScene } from '@aquascape/state';
 import type { ViewMode, ViewModeService } from '@aquascape/features/editor-shell';
+import type { GameModeService } from '@aquascape/features/game';
 
 import type { LivestockSimulationService } from './livestock-simulation.service';
 
@@ -88,6 +89,18 @@ export interface AquascapeDebugHandle {
   getScene(): Scene | null;
   /** The current canvas view mode driven by `ViewModeService`. */
   getViewMode(): ViewMode;
+  /**
+   * Stage 16 F16.4 — the active game run's score (catches in predator mode).
+   * Returns 0 when no game is running. Read-only; the predator e2e uses it to
+   * assert a catch landed after driving the player into a prey cluster.
+   */
+  getGameScore(): number;
+  /**
+   * Stage 16 — the active game run's lifecycle state
+   * (`objective`/`playing`/`paused`/`won`/`lost`/`results`), or `'none'` when
+   * no game is running. Lets the predator e2e assert a win/lose transition.
+   */
+  getGameState(): string;
 }
 
 declare global {
@@ -116,6 +129,7 @@ export function attachDebugHook(deps: {
   store: Store;
   livestockSim: LivestockSimulationService;
   viewMode: ViewModeService;
+  game: GameModeService;
 }): void {
   if (!isDevMode()) return;
   if (typeof window === 'undefined') return;
@@ -163,6 +177,8 @@ export function attachDebugHook(deps: {
       return current;
     },
     getViewMode: () => deps.viewMode.mode(),
+    getGameScore: () => deps.game.score().points,
+    getGameState: () => (deps.game.mode() === null ? 'none' : deps.game.state()),
   };
 
   window.__aquascape_debug__ = handle;

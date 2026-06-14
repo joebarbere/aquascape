@@ -246,6 +246,39 @@ equipment list. Validated on the real-GPU Playwright loop (3D view, populated
 HUD, chrome gone). See
 [`docs/caveats/app-modes.md`](caveats/app-modes.md).
 
+## Stage 16 — game modes (`--mode game:<submode>`)
+
+Extended the launch-mode grammar with a **game** family — `game:<submode>`
+(`survival` / `feeding` / `predator` / `cleaner`) — branching the SAME
+`--mode` parse + `additionalArguments` transport as `simulation` (ADR-0007).
+F16.1 shipped the shared shell (`libs/features/game/`): a framework-free state
+machine, scoring, an input-intent layer, per-sub-mode descriptors, plus the
+Angular `GameModeService` + game HUD. The **player-control seam** lives in
+`livestock-ecs` (`setPlayer` / `setPlayerVelocity` injected at the top of
+`step()`, `SteeringIntegrator` skips the player) — the one live-input boundary,
+gated so non-game worlds replay byte-identically. F16.1b wired it into
+`apps/web` (`enterGameMode` mirrors the showcase activation + marks a player;
+`GameInputService` owns the keyboard listener + per-frame rAF loop).
+
+**F16.4 — the predator game (first fully-playable mode).** You ARE the predator:
+`world.setPlayerPredator(true)` adds the existing `Predator` tag to the marked
+player, so prey **flee via the existing `FearSystem` proximity path** — zero new
+fear/flee code. Each frame, `PredatorGameService` (`apps/web/src/app/game/`)
+reads the live snapshot, runs the **pure** `detectCatches`
+(`libs/features/game/src/lib/predator-rules.ts`), **despawns** every prey inside
+the catch radius (90 mm), awards a point per catch, and dispatches `win`/`lose`
+on the first decided outcome (catch 8 prey before a 60-second countdown). The
+rule logic (catch detection, win/lose, countdown) is pure + exhaustively unit
+tested; the world mutation (despawn) + the rAF wiring stay in the app layer. The
+**catch/despawn is a non-deterministic game event** kept OUT of the
+replay-critical sim core — it runs between sim ticks, only while an active game
+has a live player, so the 1000-tick byte-identical replay for non-game worlds
+holds (proven by `player-seam.spec.ts` + `predator-game.service.spec.ts`). The
+HUD shows a countdown (the descriptor gained an optional `timeLimitSec`); the
+debug hook gained read-only `getGameScore()` / `getGameState()` for the e2e.
+Survival / feeding / cleaner remain on the generic playable loop, gated on
+Stages 14 / 13 / 15. See [`docs/caveats/game-modes.md`](caveats/game-modes.md).
+
 ## Nutrients & additives + dosing
 
 A new catalog **kind** of real-world aquarium nutrients/additives plus a way to

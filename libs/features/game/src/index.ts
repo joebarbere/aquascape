@@ -49,6 +49,18 @@ export {
   type InputIntent,
 } from './lib/input-intent';
 
+// ─── Predator rules (pure; Stage 16 F16.4) ───────────────────────────────
+export {
+  DEFAULT_PREDATOR_PARAMS,
+  detectCatches,
+  evaluatePredatorOutcome,
+  predatorTimeRemainingSec,
+  type CatchPoint,
+  type PredatorOutcome,
+  type PredatorRuleParams,
+  type PreyCandidate,
+} from './lib/predator-rules';
+
 // ─── Angular glue ────────────────────────────────────────────────────────
 export { GameModeService, type PlayerVitality } from './lib/game-mode.service';
 export { GameHudComponent } from './lib/game-hud.component';

@@ -39,6 +39,16 @@ import { GameModeService, keysToIntent, type InputIntent } from '@aquascape/feat
 export type PlayerVelocitySink = (vx: number, vy: number, vz: number) => void;
 
 /**
+ * Optional per-frame hook run after the velocity sink each frame, with the
+ * frame `dtSec`. The per-mode RULES (Stage 16 F16.4 predator catch detection
+ * + scoring + win/lose) wire in here — the loop already runs every frame with
+ * the live world, so the predator rules ride the same beat as the input push.
+ * Kept as a plain callback (not a hard dependency) so the generic shell stays
+ * mode-agnostic; only a game with rules registers one.
+ */
+export type GameFrameHook = (dtSec: number) => void;
+
+/**
  * Owns the keyboard listener + the per-frame input loop for an active game
  * run. `root`-provided so a single instance spans the app; `start`/`stop` are
  * idempotent so AppComponent can drive them on game enter / leave without
@@ -63,6 +73,9 @@ export class GameInputService {
 
   /** The world sink, set by `start`. Null when the loop isn't running. */
   private sink: PlayerVelocitySink | null = null;
+
+  /** Optional per-mode rules hook, set by `start`. Null = generic loop. */
+  private frameHook: GameFrameHook | null = null;
 
   /** Wall-clock of the previous frame (ms), for the elapsed-clock dt. */
   private lastFrameMs = 0;
@@ -89,10 +102,11 @@ export class GameInputService {
    * service's signals are read/written without scheduling CD here (the HUD
    * reads the same signals and refreshes on its own OnPush schedule).
    */
-  start(sink: PlayerVelocitySink): void {
+  start(sink: PlayerVelocitySink, frameHook: GameFrameHook | null = null): void {
     if (typeof window === 'undefined') return;
     this.stop();
     this.sink = sink;
+    this.frameHook = frameHook;
     this.held.clear();
     this.lastFrameMs = 0;
 
@@ -117,6 +131,7 @@ export class GameInputService {
     window.removeEventListener('blur', this.onBlur);
     this.held.clear();
     this.sink = null;
+    this.frameHook = null;
     // The host's `leaveGameMode` calls `world.clearPlayer()` right after this,
     // which zeroes the stored player velocity — so a stopped game never leaves
     // the player drifting even though the seam would otherwise keep the last
@@ -142,8 +157,13 @@ export class GameInputService {
     if (this.lastFrameMs !== 0) {
       const dtSec = Math.max(0, (nowMs - this.lastFrameMs) / 1000);
       // Re-enter the zone for the score signal write so the HUD's OnPush
-      // timer refreshes; cheap (once/frame) and only while a game runs.
-      this.ngZone.run(() => this.game.tick(dtSec));
+      // timer refreshes; cheap (once/frame) and only while a game runs. The
+      // per-mode rules hook (predator catch detection + scoring + win/lose)
+      // rides the same zone re-entry so its score/state writes refresh the HUD.
+      this.ngZone.run(() => {
+        this.game.tick(dtSec);
+        this.frameHook?.(dtSec);
+      });
     }
     this.lastFrameMs = nowMs;
   }

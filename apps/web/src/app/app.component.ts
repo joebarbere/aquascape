@@ -143,6 +143,7 @@ import { Store } from '@ngrx/store';
 import { gameModeOf, isGameAppMode, resolveAppMode, type AppMode } from './app-mode';
 import { GameHudComponent, GameModeService, type GameMode } from '@aquascape/features/game';
 import { GameInputService } from './game/game-input.service';
+import { PredatorGameService } from './game/predator-game.service';
 import { pickPlayerEntity } from './game/game-activation';
 import { BehaviorDebugOverlayComponent } from './behavior-debug-overlay.component';
 import { BehaviorDebugService } from './behavior-debug.service';
@@ -875,6 +876,9 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Keyboard + per-frame input loop for an active game run (app-layer glue). */
   private readonly gameInput = inject(GameInputService);
 
+  /** Predator-mode rules (catch detection + scoring + win/lose) — F16.4. */
+  private readonly predatorGame = inject(PredatorGameService);
+
   /** Live performance sampler feeding the HUD's metrics strip (simulation only). */
   readonly simPerf = inject(SimulationPerfService);
 
@@ -936,6 +940,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       store: this.store,
       livestockSim: this.livestockSim,
       viewMode: this.viewMode,
+      game: this.game,
     });
 
     this.maybeActivateSimulationMode();
@@ -1071,20 +1076,34 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     // the scene selector), then mark the player on the now-populated world.
     this.store.dispatch(SceneActions.setScene({ scene }));
     const world = this.livestockSim.getWorld();
+    let playerEid = -1;
     if (world !== null) {
-      const playerEid = pickPlayerEntity(world);
+      playerEid = pickPlayerEntity(world);
       world.setPlayer(playerEid);
     }
     // Shared shell: reset the run to the objective briefing, then start playing
     // so the generic loop is immediately controllable. Per-mode rules
-    // (16.2-16.5) will own the objective→playing handoff + win/lose later.
+    // (16.2-16.5) own win/lose; F16.4 (predator) is the first to land them.
     this.game.startGame(mode);
     this.game.dispatch({ type: 'start' });
-    // Per-frame input → intent → velocity → world.setPlayerVelocity.
+
+    // F16.4 — predator is the first mode with real rules: flag the player a
+    // predator (prey flee via FearSystem) + run catch detection each frame. The
+    // rules ride the input loop's per-frame hook (decoupled from world.step, so
+    // catches stay out of the deterministic core). Other sub-modes pass no hook
+    // and run the generic playable loop until their rules land (Stages 14/15).
+    let frameHook: ((dt: number) => void) | null = null;
+    if (mode === 'predator' && world !== null && playerEid >= 0) {
+      this.predatorGame.start(world, playerEid);
+      frameHook = (dt) => this.predatorGame.frame(dt);
+    }
+
+    // Per-frame input → intent → velocity → world.setPlayerVelocity, plus the
+    // optional per-mode rules hook.
     this.gameInput.start((vx, vy, vz) => {
       const w = this.livestockSim.getWorld();
       w?.setPlayerVelocity(vx, vy, vz);
-    });
+    }, frameHook);
   }
 
   /**
@@ -1097,6 +1116,9 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private leaveGameMode(): void {
     if (this.gameMode() === null) return;
     this.gameInput.stop();
+    // Tear down the predator rules (no-op for other modes) BEFORE clearing the
+    // player — clearPlayer() strips the predator tag so prey stop fleeing.
+    this.predatorGame.stop();
     this.livestockSim.getWorld()?.clearPlayer();
     this.gameMode.set(null);
     this.game.dispatch({ type: 'quit' });
