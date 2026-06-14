@@ -10,8 +10,9 @@
  *      — the injection path is a strict no-op, so the 1000-tick determinism
  *      contract for non-game worlds holds.
  */
+import { hasComponent } from 'bitecs';
 import { MID_PRESET, type ResolvedBehavior } from '@aquascape/domain/livestock-behaviors';
-import { FISH_ARCHETYPE, NO_ENTITY_REF, Position, Velocity } from '../index';
+import { FearState, FISH_ARCHETYPE, NO_ENTITY_REF, Position, Predator, Velocity } from '../index';
 import { createLivestockWorld, type TankAabb } from './world';
 
 const TANK: TankAabb = { minX: 0, maxX: 1000, minY: 0, maxY: 400, minZ: 0, maxZ: 400 };
@@ -130,6 +131,51 @@ describe('player seam — marking + injection', () => {
     // Fish `a` is AI-driven, so its velocity is whatever steering produced —
     // certainly not the injected (500,500,500).
     expect(Velocity.x[a] as number).not.toBeCloseTo(500, 1);
+  });
+});
+
+describe('player-predator seam (F16.4)', () => {
+  it('setPlayerPredator(true) tags the marked player a predator', () => {
+    const { world, a } = spawnTwoFish(SEED);
+    world.setPlayer(a);
+    expect(hasComponent(world.ecs, Predator, a)).toBe(false);
+    world.setPlayerPredator(true);
+    expect(hasComponent(world.ecs, Predator, a)).toBe(true);
+  });
+
+  it('setPlayerPredator(false) removes the tag', () => {
+    const { world, a } = spawnTwoFish(SEED);
+    world.setPlayer(a);
+    world.setPlayerPredator(true);
+    world.setPlayerPredator(false);
+    expect(hasComponent(world.ecs, Predator, a)).toBe(false);
+  });
+
+  it('is a no-op when no player is marked', () => {
+    const { world, a } = spawnTwoFish(SEED);
+    expect(() => world.setPlayerPredator(true)).not.toThrow();
+    expect(hasComponent(world.ecs, Predator, a)).toBe(false);
+  });
+
+  it('clearPlayer strips the predator tag from the departing player', () => {
+    const { world, a } = spawnTwoFish(SEED);
+    world.setPlayer(a);
+    world.setPlayerPredator(true);
+    world.clearPlayer();
+    expect(hasComponent(world.ecs, Predator, a)).toBe(false);
+  });
+
+  it('makes nearby prey flee — risk rises while the player-predator lingers', () => {
+    // Player + a prey fish close enough to be inside PREDATOR_FEAR_RADIUS_MM
+    // (280 mm). With the player tagged predator, FearSystem accumulates risk on
+    // the prey each tick — reusing the existing predator-proximity path.
+    const { world, a, b } = spawnTwoFish(SEED);
+    world.setPlayer(a);
+    world.setPlayerVelocity(0, 0, 0); // hold the predator still next to the prey
+    world.setPlayerPredator(true);
+    // Step a beat; the prey should build measurable fear risk.
+    for (let i = 0; i < 30; i++) world.step(SIM_DT);
+    expect(FearState.risk[b] as number).toBeGreaterThan(0);
   });
 });
 

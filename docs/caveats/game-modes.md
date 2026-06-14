@@ -160,12 +160,56 @@ player ENTITY is deterministic; only the live INPUT velocity is not. An empty
 world returns `NO_ENTITY_REF` and the caller skips `setPlayer` (so a no-livestock
 scene is still a clean non-game world).
 
-### Per-mode rules are still pending
+### Predator (F16.4) — the first mode with real RULES
 
-F16.1b is the **generic** playable loop only — objective/score HUD + Esc-exit +
-a player you can swim. The real win/lose evaluation, food-aiming, fear-coupling,
-algae grazing (16.2–16.5) hook into the shared state machine + `GameModeService`
-later. Stage 16 stays on the README TODO until those land.
+`game:predator` is fully playable: the player IS the predator, prey flee, and
+catching them scores. The rules layer is split by the layer-boundary rule:
+
+- **PURE logic** (`libs/features/game/src/lib/predator-rules.ts`): `detectCatches`
+  (which prey are within `catchRadiusMm` of the player), `evaluatePredatorOutcome`
+  (reach `targetCatches` → `won`; clock hits `timeLimitSec` below target →
+  `lost`; else ongoing), `predatorTimeRemainingSec`, + `DEFAULT_PREDATOR_PARAMS`
+  (90 mm radius / 8 catches / 60 s). Framework-free, exhaustively unit-tested.
+- **WORLD MUTATION + wiring** (`apps/web/src/app/game/predator-game.service.ts`):
+  `PredatorGameService` reads the live snapshot each frame, runs `detectCatches`,
+  **despawns** each caught prey (`world.despawn`), awards a point per catch, and
+  dispatches `win`/`lose` on the first decided outcome (latched so it fires once).
+  It rides the input loop's per-frame hook (`GameInputService.start(sink,
+  frameHook)`) — the SAME beat as the input push, decoupled from `world.step`.
+
+**The player becomes a predator by REUSING the existing `Predator` tag + the
+`FearSystem` proximity path — no parallel fear/flee code.** The world seam is
+`world.setPlayerPredator(true)` (adds `Predator` to the marked player; `false`
+removes it). FearSystem already scans every `Predator`-tagged entity as a
+roaming risk source (`predatorProximityRisk`), so tagging the player makes
+nearby prey accumulate risk + flee with zero new logic. `clearPlayer()` strips
+the tag from the departing player so a formerly-player fish doesn't keep scaring
+prey once the game ends. `PredatorGameService.start` calls `setPlayerPredator(true)`;
+`leaveGameMode` calls `predatorGame.stop()` then `world.clearPlayer()`.
+
+### The catch/despawn determinism boundary (load-bearing)
+
+A **catch is a non-deterministic GAME EVENT** — it's gated on the LIVE player
+position, which comes from live input. So the despawn it triggers MUST stay OUT
+of the replay-critical deterministic sim core, and it does:
+
+- Catch detection + `world.despawn` run in `PredatorGameService.frame` (the app
+  loop), **between** sim ticks — never inside `world.step()`, never in a system.
+  It's the same class of out-of-tick entity mutation the editor's add/remove
+  livestock already does; it is not part of the seeded tick stream.
+- The loop only runs while an **active predator game** has a **live player**
+  marked. A non-game world (no player, no `PredatorGameService` started) never
+  instantiates the frame loop → no despawn → the **1000-tick byte-identical
+  replay holds**. Proven by `player-seam.spec.ts` (no-player replay) +
+  `predator-game.service.spec.ts` (a world with no rules running keeps every prey).
+
+### Other modes still pending
+
+Survival / feeding / cleaner (F16.2/16.3/16.5) run the **generic** playable loop
+(swim + objective/score HUD + Esc-exit) but have no win/lose rules yet — they're
+gated on Stage 14 (food + health) / Stage 13 (algae) / Stage 15 (`SiphonTool`).
+The README "Game modes" line is reworded to reflect that predator is playable
+while the others remain gated.
 
 ### Tests + e2e
 
@@ -177,11 +221,22 @@ later. Stage 16 stays on the README TODO until those land.
   Esc-exit, the Mode-menu game switch).
 - `apps/web-e2e/src/game-mode.spec.ts` — boots `?mode=game:predator`, asserts
   3D fish-eye + a marked player, then a synthetic key moves the player's world
-  position. **Needs hardware/SwiftShader WebGL** (the world only ticks while the
-  3D canvas paints) — runs under `nx serve web` per the e2e caveat; it was NOT
-  run in the authoring environment (no chromium binary provisioned there), so
-  the equivalent coverage is the component + integration specs above. Validate
-  it on a box with a GPU / provisioned chromium.
+  position. F16.4 adds a second case: steer toward the nearest prey + poll
+  `getGameScore()` (a new read-only debug-hook accessor, alongside
+  `getGameState()`) until a catch lands. **Needs hardware/SwiftShader WebGL**
+  (the world only ticks + the catch loop runs while the 3D canvas paints) — runs
+  under `nx serve web` per the e2e caveat; it was NOT run in the authoring
+  environment (no chromium binary provisioned there), so the equivalent coverage
+  is the component + integration specs above (`predator-game.service.spec.ts`).
+  Validate it on a box with a GPU / provisioned chromium.
+- `apps/web/src/app/game/predator-game.service.spec.ts` — the FULL predator
+  pipeline against a real world: a catch despawns a prey + increments the score,
+  reaching the target dispatches `win`, the clock dispatches `lose`, and a
+  non-game world keeps every prey (determinism boundary).
+- `libs/features/game/src/lib/predator-rules.spec.ts` — the pure rule logic
+  (catch detection, win/lose, countdown).
+- `libs/domain/livestock-ecs/src/lib/player-seam.spec.ts` — `setPlayerPredator`
+  tags/untags + makes nearby prey accumulate fear risk (FearSystem reuse).
 
 ## CI
 

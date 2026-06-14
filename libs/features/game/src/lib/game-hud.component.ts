@@ -36,8 +36,8 @@ import { GameModeService } from './game-mode.service';
         <dl class="game-hud__score" role="group" aria-label="Score">
           <dt>Score</dt>
           <dd>{{ score().points }}</dd>
-          <dt>Time</dt>
-          <dd>{{ elapsedLabel() }}</dd>
+          <dt>{{ hasCountdown() ? 'Time left' : 'Time' }}</dt>
+          <dd>{{ timeLabel() }}</dd>
         </dl>
 
         <div class="game-hud__vitals" role="group" aria-label="Player vitality">
@@ -121,8 +121,8 @@ import { GameModeService } from './game-mode.service';
           <dl class="game-hud__results">
             <dt>Score</dt>
             <dd>{{ score().points }}</dd>
-            <dt>Time</dt>
-            <dd>{{ elapsedLabel() }}</dd>
+            <dt>{{ hasCountdown() ? 'Time left' : 'Time' }}</dt>
+            <dd>{{ timeLabel() }}</dd>
           </dl>
           <div class="game-hud__btn-row">
             <button type="button" class="game-hud__btn" (click)="onRestart()">Play again</button>
@@ -301,9 +301,19 @@ export class GameHudComponent {
   readonly healthPct = computed(() => Math.round(this.vitality().health * 100));
   readonly foodPct = computed(() => Math.round(this.vitality().food * 100));
 
-  /** `mm:ss` from the score's elapsed seconds. */
-  readonly elapsedLabel = computed(() => {
-    const total = Math.floor(this.score().elapsedSec);
+  /** True when the active mode has a hard time limit → show a countdown. */
+  readonly hasCountdown = computed(() => this.game.descriptor()?.timeLimitSec !== undefined);
+
+  /**
+   * `m:ss` clock — the time REMAINING when the mode has a `timeLimitSec`
+   * (predator F16.4), otherwise the elapsed (count-up) time. Clamped at 0 so a
+   * just-expired run reads `0:00` rather than a negative value.
+   */
+  readonly timeLabel = computed(() => {
+    const limit = this.game.descriptor()?.timeLimitSec;
+    const elapsed = this.score().elapsedSec;
+    const shown = limit === undefined ? elapsed : Math.max(0, limit - elapsed);
+    const total = Math.floor(shown);
     const mins = Math.floor(total / 60);
     const secs = total % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;

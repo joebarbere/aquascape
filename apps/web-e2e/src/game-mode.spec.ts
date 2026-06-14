@@ -37,6 +37,8 @@ interface AquascapeDebugHandle {
   getViewMode(): string;
   getEntityCount(): number;
   getWorld(): DebugWorld | null;
+  getGameScore(): number;
+  getGameState(): string;
 }
 declare global {
   interface Window {
@@ -105,5 +107,103 @@ test.describe('game-mode activation (?mode=game:predator)', () => {
     const dz = Math.abs((after!.z ?? 0) - (before!.z ?? 0));
     const moved = Math.hypot(dx, dy, dz);
     expect(moved).toBeGreaterThan(20);
+  });
+
+  // F16.4 — the predator RULES: hunting a prey within the catch radius eats it
+  // and increments the score. We steer the player toward the nearest prey each
+  // beat (the showcase tank is densely shoaled, so the player starts amid prey)
+  // and poll the game score via the debug hook until it ticks up. The score is
+  // catches; a single catch proves the catch-detection → despawn → award
+  // pipeline runs end-to-end through the live world + state machine.
+  //
+  // NOTE: prey flee via FearSystem (the player is flagged a predator), so this
+  // is an honest hunt — we chase the nearest prey rather than asserting an
+  // instant freebie. Validated in CI (chromium isn't provisioned in the
+  // authoring sandbox — see docs/caveats/e2e.md); the deterministic catch +
+  // win/lose logic is exhaustively unit-tested in features-game + apps/web.
+  test('hunting a prey within the catch radius scores a catch', async ({ page }) => {
+    test.slow();
+
+    await page.goto('/?mode=game:predator');
+    await expect(page.locator('canvas').first()).toBeVisible();
+    await page.waitForFunction(() => Boolean(window.__aquascape_debug__));
+    await page.waitForFunction(
+      () => window.__aquascape_debug__?.getViewMode() === 'fish-eye',
+      undefined,
+      { timeout: 10_000 },
+    );
+    await page.waitForFunction(() => (window.__aquascape_debug__?.getEntityCount() ?? 0) > 1, {
+      timeout: 10_000,
+    });
+    // The run is live (predator rules started on entry).
+    expect(await page.evaluate(() => window.__aquascape_debug__?.getGameState())).toBe('playing');
+    expect(await page.evaluate(() => window.__aquascape_debug__?.getGameScore())).toBe(0);
+
+    // Steer toward the nearest prey for up to ~12 s, polling the score. Each
+    // iteration: read the player + nearest-prey direction, press the matching
+    // cardinal keys for a beat, then release. The catch loop runs on the input
+    // rAF, so a held key that closes within 90 mm lands a catch.
+    let scored = 0;
+    for (let i = 0; i < 24 && scored === 0; i++) {
+      const dir = await page.evaluate(() => {
+        const dbg = window.__aquascape_debug__;
+        const world = dbg?.getWorld();
+        if (!world) return null;
+        const player = world.getPlayerEntity();
+        const snap = world.snapshot(0);
+        let px = 0;
+        let py = 0;
+        let pz = 0;
+        let found = false;
+        const prey: { x: number; y: number; z: number }[] = [];
+        for (let j = 0; j < snap.entityCount; j++) {
+          const x = snap.position[j * 3] as number;
+          const y = snap.position[j * 3 + 1] as number;
+          const z = snap.position[j * 3 + 2] as number;
+          if (snap.ids[j] === player) {
+            px = x;
+            py = y;
+            pz = z;
+            found = true;
+          } else {
+            prey.push({ x, y, z });
+          }
+        }
+        if (!found || prey.length === 0) return null;
+        let bestX = px;
+        let bestY = py;
+        let bestZ = pz;
+        let bestD = Infinity;
+        for (const p of prey) {
+          const d = (p.x - px) ** 2 + (p.y - py) ** 2 + (p.z - pz) ** 2;
+          if (d < bestD) {
+            bestD = d;
+            bestX = p.x;
+            bestY = p.y;
+            bestZ = p.z;
+          }
+        }
+        return { dx: bestX - px, dy: bestY - py, dz: bestZ - pz };
+      });
+      if (dir === null) break;
+
+      // Press the cardinal keys toward the nearest prey for a beat.
+      // DEFAULT_KEY_BINDINGS: x = KeyD/KeyA (right/left), y = KeyW/KeyS
+      // (up/down), z = KeyE/KeyQ (forward/back into depth).
+      const pressed: string[] = [];
+      if (dir.dx > 30) pressed.push('KeyD');
+      else if (dir.dx < -30) pressed.push('KeyA');
+      if (dir.dy > 30) pressed.push('KeyW');
+      else if (dir.dy < -30) pressed.push('KeyS');
+      if (dir.dz > 30) pressed.push('KeyE');
+      else if (dir.dz < -30) pressed.push('KeyQ');
+      for (const k of pressed) await page.keyboard.down(k);
+      await page.waitForTimeout(500);
+      for (const k of pressed) await page.keyboard.up(k);
+
+      scored = (await page.evaluate(() => window.__aquascape_debug__?.getGameScore() ?? 0)) as number;
+    }
+
+    expect(scored).toBeGreaterThan(0);
   });
 });

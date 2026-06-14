@@ -22,6 +22,7 @@ import {
   createWorld,
   defineQuery,
   hasComponent,
+  removeComponent,
   removeEntity,
   type IWorld,
 } from 'bitecs';
@@ -462,6 +463,19 @@ export interface LivestockWorld {
    * No-op when no player is marked. This is the single live-input seam.
    */
   setPlayerVelocity(vx: number, vy: number, vz: number): void;
+  /**
+   * Stage 16 F16.4 (predator game mode) — flag the current player entity as a
+   * PREDATOR (`flag === true` adds the `Predator` tag; `false` removes it). This
+   * reuses the existing `FearSystem` proximity-risk path verbatim: a tagged
+   * predator is a roaming risk source, so nearby prey accumulate fear + flee.
+   * No-op when no player is marked. The tag is the only ECS footprint — the
+   * `WorldSnapshot` shape is unchanged, so a NON-predator game (or any non-game
+   * world) is unaffected and the byte-identical replay holds. Clearing the
+   * player (`clearPlayer`) leaves the tag on the former player harmless (it's no
+   * longer the player), so call `setPlayerPredator(false)` before leaving if you
+   * want the fish to stop scaring prey; the host's `leaveGameMode` does this.
+   */
+  setPlayerPredator(flag: boolean): void;
   /** Run one sim tick of duration `dt` (callers pass `SIM_DT`). */
   step(dt: number): void;
   /**
@@ -990,6 +1004,15 @@ export function createLivestockWorld(
     },
 
     clearPlayer(): void {
+      // Strip the predator tag from the departing player (F16.4) so a
+      // formerly-player fish doesn't keep scaring prey once the game ends and
+      // the world reverts to a plain (non-game) showcase. Guarded on a real
+      // eid + an attached tag so a non-predator game / no-player world is a
+      // no-op. The injection branch is already gated on `playerEid`, so this
+      // just keeps the fear source from lingering.
+      if (playerEid !== NO_ENTITY_REF && hasComponent(ecs, Predator, playerEid)) {
+        removeComponent(ecs, Predator, playerEid);
+      }
       playerEid = NO_ENTITY_REF;
       playerVx = 0;
       playerVy = 0;
@@ -1007,6 +1030,21 @@ export function createLivestockWorld(
       playerVx = vx;
       playerVy = vy;
       playerVz = vz;
+    },
+
+    setPlayerPredator(flag: boolean): void {
+      // Reuse the existing Predator tag — FearSystem already scans every
+      // Predator-tagged entity as a roaming risk source (predatorProximityRisk),
+      // so marking the player a predator makes the existing prey flee it with
+      // ZERO new fear/flee logic. No-op when there's no player.
+      if (playerEid === NO_ENTITY_REF) return;
+      if (flag) {
+        if (!hasComponent(ecs, Predator, playerEid)) {
+          addComponent(ecs, Predator, playerEid);
+        }
+      } else if (hasComponent(ecs, Predator, playerEid)) {
+        removeComponent(ecs, Predator, playerEid);
+      }
     },
 
     step(dt: number): void {

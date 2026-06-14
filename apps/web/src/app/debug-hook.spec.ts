@@ -140,6 +140,8 @@ describe('debug hook — attachment lifecycle', () => {
     expect(typeof handle.getEntityCount).toBe('function');
     expect(typeof handle.getScene).toBe('function');
     expect(typeof handle.getViewMode).toBe('function');
+    expect(typeof handle.getGameScore).toBe('function');
+    expect(typeof handle.getGameState).toBe('function');
     fixture.destroy();
   });
 
@@ -229,6 +231,8 @@ describe('debug hook — read-only accessors', () => {
       'getBubbleParticleCount',
       'getEntityCount',
       'getFoodSpriteCount',
+      'getGameScore',
+      'getGameState',
       'getScene',
       'getViewMode',
       'getWorld',

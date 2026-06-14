@@ -35,6 +35,13 @@ export interface GameModeDescriptor {
   readonly objective: string;
   /** Default player swim speed in mm/s (the input → velocity scale). */
   readonly playerSpeedMmPerSec: number;
+  /**
+   * Optional run time limit in seconds. When set, the HUD shows a COUNTDOWN
+   * (time-remaining) instead of a count-up timer. Predator (F16.4) is the
+   * first mode to set it; modes without a hard clock leave it undefined and
+   * the HUD shows elapsed time.
+   */
+  readonly timeLimitSec?: number;
 }
 
 const SURVIVAL: GameModeDescriptor = {
@@ -54,8 +61,10 @@ const FEEDING: GameModeDescriptor = {
 const PREDATOR: GameModeDescriptor = {
   mode: 'predator',
   title: 'Predator',
-  objective: 'Hunt the prey before time runs out.',
+  // Mirrors DEFAULT_PREDATOR_PARAMS (predator-rules.ts) — 8 catches / 60 s.
+  objective: 'Catch 8 prey before the 60s clock runs out.',
   playerSpeedMmPerSec: 260,
+  timeLimitSec: 60,
 };
 
 const CLEANER: GameModeDescriptor = {

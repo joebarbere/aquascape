@@ -196,9 +196,25 @@ where you **control a fish** instead of just watching the tank. The four
 sub-modes are `survival`, `feeding`, `predator`, and `cleaner`. They share one
 shell (`@aquascape/features/game`): an objective/score HUD, a state machine
 (objective → playing → paused → won/lost → results), and a device-independent
-input layer. The **per-mode win/lose rules (Stage 16.2–16.5) are still pending**
-— F16.1b ships the activation + a generic playable loop (move around in
-fish-eye; the objective/score HUD is visible; Esc exits).
+input layer. **`predator` is the first fully-playable mode** (F16.4 — see below);
+survival / feeding / cleaner run the generic playable loop (swim in fish-eye;
+objective/score HUD; Esc exits) but their **win/lose rules are still pending**,
+gated on Stage 14 (food + health) / Stage 13 (algae) / Stage 15 (`SiphonTool`).
+
+### Predator — hunt the prey (F16.4)
+
+In `game:predator` you ARE the predator. The player fish is flagged with the
+existing `Predator` tag, so prey **flee from you** via the same `FearSystem`
+proximity risk that already drives the showcase's roaming predator. Swim within
+the catch radius (90 mm) of a prey fish and you **eat it** — it vanishes and your
+**score** (= catches) ticks up. The HUD shows a **countdown**; **catch 8 prey
+before the 60-second clock runs out** to win, otherwise you lose. The pure rules
+(catch detection, win/lose, countdown) live in
+`@aquascape/features/game` → `predator-rules.ts`; the catch loop + the despawn +
+the win/lose dispatch live in `PredatorGameService`
+(`apps/web/src/app/game/`). The catch/despawn happens between sim ticks (gated on
+your live position), kept out of the deterministic sim core — so non-game worlds
+still replay byte-identically.
 
 ### Trying it
 
@@ -217,7 +233,9 @@ enterGameMode('predator')
   ├─ store.dispatch(setScene)           → LivestockSimulationService re-spawns the world
   ├─ pickPlayerEntity(world) → world.setPlayer(eid)   one fish becomes YOU (snapshot index 0)
   ├─ GameModeService.startGame() + dispatch('start')  → live "playing" loop
-  └─ GameInputService.start(sink)       per-frame keyboard → velocity → world
+  ├─ (predator only) PredatorGameService.start(world, playerEid)   tags YOU a predator → prey flee
+  └─ GameInputService.start(sink, frameHook)   per-frame keyboard → velocity → world,
+                                               + the predator rules hook (catch detection)
 ```
 
 ### Controls (keyboard)
