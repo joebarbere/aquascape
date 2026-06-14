@@ -2177,6 +2177,147 @@ describe('validateCatalogEntry (water-test-kit — Stage 13 F13.4 husbandry sim)
   });
 });
 
+describe('validateCatalogEntry (cleaning-tool — Stage 16 F16.5a cleaner game mode)', () => {
+  const validScraper = {
+    catalog: 'core',
+    id: 'cleaning-tool.scraper.test',
+    version: 1,
+    name: 'Test scraper',
+    kind: 'cleaning-tool',
+    type: 'scraper',
+    brand: 'Mag-Float',
+    surfaces: ['glass'],
+    targetAlgae: ['green-spot'],
+    effectiveness: 0.7,
+    reachMm: 90,
+    color: '#3f6fa0',
+  };
+
+  const validBrush = {
+    catalog: 'core',
+    id: 'cleaning-tool.brush.test',
+    version: 1,
+    name: 'Test brush',
+    kind: 'cleaning-tool',
+    type: 'brush',
+    surfaces: ['hardscape'],
+    targetAlgae: ['black-beard', 'hair'],
+    effectiveness: 0.55,
+    color: '#5c8c52',
+  };
+
+  const validSiphon = {
+    catalog: 'core',
+    id: 'cleaning-tool.siphon.test',
+    version: 1,
+    name: 'Test siphon',
+    kind: 'cleaning-tool',
+    type: 'siphon',
+    surfaces: ['substrate'],
+    targetAlgae: [],
+    effectiveness: 0.7,
+    removesWaste: true,
+    color: '#7a6a4f',
+  };
+
+  it('accepts a well-formed scraper entry', () => {
+    expect(validateCatalogEntry(validScraper)).toEqual({ ok: true });
+  });
+
+  it('accepts a well-formed brush entry (one representative per type)', () => {
+    expect(validateCatalogEntry(validBrush)).toEqual({ ok: true });
+  });
+
+  it('accepts a well-formed siphon entry with removesWaste + an empty targetAlgae list', () => {
+    expect(validateCatalogEntry(validSiphon)).toEqual({ ok: true });
+  });
+
+  it('accepts every tool type enum value', () => {
+    for (const type of ['scraper', 'brush', 'siphon']) {
+      expect(validateCatalogEntry({ ...validScraper, type }).ok).toBe(true);
+    }
+  });
+
+  it('rejects an unknown tool type enum value', () => {
+    expect(validateCatalogEntry({ ...validScraper, type: 'pressure-washer' }).ok).toBe(false);
+  });
+
+  it('accepts every surface enum value', () => {
+    for (const surface of ['glass', 'hardscape', 'substrate']) {
+      expect(validateCatalogEntry({ ...validScraper, surfaces: [surface] }).ok).toBe(true);
+    }
+  });
+
+  it('rejects an unknown surface enum value', () => {
+    expect(validateCatalogEntry({ ...validScraper, surfaces: ['ceiling'] }).ok).toBe(false);
+  });
+
+  it('rejects an empty surfaces array (minItems 1)', () => {
+    expect(validateCatalogEntry({ ...validScraper, surfaces: [] }).ok).toBe(false);
+  });
+
+  it('accepts every targetAlgae enum value (must match water-sim AlgaeType)', () => {
+    for (const algae of ['green-spot', 'hair', 'black-beard', 'diatom']) {
+      expect(validateCatalogEntry({ ...validScraper, targetAlgae: [algae] }).ok).toBe(true);
+    }
+  });
+
+  it('rejects an unknown targetAlgae enum value', () => {
+    expect(validateCatalogEntry({ ...validScraper, targetAlgae: ['staghorn'] }).ok).toBe(false);
+  });
+
+  it('accepts an empty targetAlgae array (a pure waste tool)', () => {
+    expect(validateCatalogEntry({ ...validScraper, targetAlgae: [] }).ok).toBe(true);
+  });
+
+  it('rejects an effectiveness of 0 (exclusiveMinimum 0) or above 1', () => {
+    expect(validateCatalogEntry({ ...validScraper, effectiveness: 0 }).ok).toBe(false);
+    expect(validateCatalogEntry({ ...validScraper, effectiveness: 1.2 }).ok).toBe(false);
+  });
+
+  it('accepts effectiveness = 1 (single-pass clear bound)', () => {
+    expect(validateCatalogEntry({ ...validScraper, effectiveness: 1 }).ok).toBe(true);
+  });
+
+  it('rejects a reachMm of 0 or negative (exclusiveMinimum 0)', () => {
+    expect(validateCatalogEntry({ ...validScraper, reachMm: 0 }).ok).toBe(false);
+    expect(validateCatalogEntry({ ...validScraper, reachMm: -10 }).ok).toBe(false);
+  });
+
+  it('accepts an entry with no reachMm (game uses the per-type default)', () => {
+    const { reachMm: _reachMm, ...rest } = validScraper;
+    expect(validateCatalogEntry(rest).ok).toBe(true);
+  });
+
+  it('accepts removesWaste as a boolean and rejects a non-boolean', () => {
+    expect(validateCatalogEntry({ ...validScraper, removesWaste: false }).ok).toBe(true);
+    expect(validateCatalogEntry({ ...validScraper, removesWaste: 'yes' }).ok).toBe(false);
+  });
+
+  it('rejects a missing required field (type / surfaces / targetAlgae / effectiveness / color)', () => {
+    for (const key of ['type', 'surfaces', 'targetAlgae', 'effectiveness', 'color']) {
+      const rest = { ...validScraper };
+      delete (rest as Record<string, unknown>)[key];
+      expect(validateCatalogEntry(rest).ok).toBe(false);
+    }
+  });
+
+  it('rejects an invalid color', () => {
+    expect(validateCatalogEntry({ ...validScraper, color: 'not-a-color' }).ok).toBe(false);
+  });
+
+  it('rejects extraneous properties (additionalProperties: false)', () => {
+    expect(validateCatalogEntry({ ...validScraper, surprise: true }).ok).toBe(false);
+  });
+
+  it('surfaces the offending path on a bad targetAlgae value', () => {
+    const result = validateCatalogEntry({ ...validScraper, targetAlgae: ['bad'] });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((e) => e.path.includes('targetAlgae'))).toBe(true);
+  });
+});
+
 describe('formatError (defensive fallbacks)', () => {
   it('falls back to "invalid" when an AJV error lacks a message field', () => {
     const out = formatError({

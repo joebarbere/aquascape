@@ -1,0 +1,17 @@
+{
+  "catalog": "core",
+  "id": "cleaning-tool.brush.toothbrush",
+  "version": 1,
+  "name": "Stiff Algae Brush (Toothbrush)",
+  "kind": "cleaning-tool",
+  "type": "brush",
+  "brand": "DIY / generic",
+  "description": "The hobbyist classic: a stiff-bristled brush (an old toothbrush) worked into the crevices of rocks + driftwood to dislodge tufted black-beard and hair algae a flat scraper can't reach. Hardscape-focused — it shifts the tufted reds + strands but isn't the right tool for hard glass green-spot. effectiveness (0.55) + reachMm (20) are MODELLED game-tuning weights, not product specs.",
+  "tags": ["cleaning-tool", "brush", "hardscape", "black-beard", "hair"],
+  "surfaces": ["hardscape"],
+  "targetAlgae": ["black-beard", "hair"],
+  "effectiveness": 0.55,
+  "reachMm": 20,
+  "color": "#5c8c52",
+  "notes": "Brush dislodges BBA + hair tufts so they lift off in the water flow; remove a rock to a bucket of tank water and spot-treat with liquid carbon for the stubborn bases SAEs don't finish."
+}

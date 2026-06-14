@@ -202,6 +202,11 @@ import testKitSalifertNitrate from './data/water-test-kit/salifert-nitrate.json'
 import testKitJblTestlab from './data/water-test-kit/jbl-testlab.json';
 import testKitApi5in1Strips from './data/water-test-kit/api-5in1-strips.json';
 import testKitJblCo2DropChecker from './data/water-test-kit/jbl-co2-drop-checker.json';
+// Cleaning tools (Stage 16 F16.5a — cleaner game mode) — scraper / brush / siphon
+import cleaningToolScraperMagFloat from './data/cleaning-tool/scraper-magfloat.json';
+import cleaningToolScraperSteelBlade from './data/cleaning-tool/scraper-steel-blade.json';
+import cleaningToolBrushToothbrush from './data/cleaning-tool/brush-toothbrush.json';
+import cleaningToolSiphonGravelVacuum from './data/cleaning-tool/siphon-gravel-vacuum.json';
 import { loadCatalog, type CatalogLoadResult } from './loader';
 
 /** Raw manifest array — exposed so tests + tools can re-load it deliberately. */
@@ -393,6 +398,11 @@ export const CORE_CATALOG_MANIFESTS: readonly unknown[] = [
   testKitJblTestlab,
   testKitApi5in1Strips,
   testKitJblCo2DropChecker,
+  // Cleaning tools (Stage 16 F16.5a) — 4 tools: 2 scraper + 1 brush + 1 siphon
+  cleaningToolScraperMagFloat,
+  cleaningToolScraperSteelBlade,
+  cleaningToolBrushToothbrush,
+  cleaningToolSiphonGravelVacuum,
 ];
 
 /**
