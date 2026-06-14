@@ -203,13 +203,90 @@ of the replay-critical deterministic sim core, and it does:
   replay holds**. Proven by `player-seam.spec.ts` (no-player replay) +
   `predator-game.service.spec.ts` (a world with no rules running keeps every prey).
 
-### Other modes still pending
+### Survival (F16.2) — flee predators, outlast the clock
 
-Survival / feeding / cleaner (F16.2/16.3/16.5) run the **generic** playable loop
-(swim + objective/score HUD + Esc-exit) but have no win/lose rules yet — they're
-gated on Stage 14 (food + health) / Stage 13 (algae) / Stage 15 (`SiphonTool`).
-The README "Game modes" line is reworded to reflect that predator is playable
-while the others remain gated.
+`game:survival` is fully playable: the player is **prey** (NOT tagged
+`Predator`), the existing predator agents hunt it via the existing `FearSystem`
+proximity path (no parallel hunt code), and the objective is to outlast the
+clock without being caught. Same split as predator:
+
+- **PURE logic** (`libs/features/game/src/lib/survival-rules.ts`): `isCaught`
+  (a predator inside `catchRadiusMm` → lose), `isThreatened` (a predator inside
+  the wider `threatRadiusMm` → stamina drains), `stepStamina` (drain near a
+  predator, recover when safe), `evaluateSurvivalOutcome` (lose on
+  caught / health-0 / stamina-0; win on surviving `timeLimitSec`),
+  `survivalScoreFor` (whole seconds survived) + `DEFAULT_SURVIVAL_PARAMS`
+  (90 mm catch / 280 mm threat / 90 s). Framework-free, exhaustively tested.
+- **WORLD READS + wiring** (`apps/web/src/app/game/survival-game.service.ts`):
+  `SurvivalGameService` reads the live snapshot + queries the `Predator`-tagged
+  entities each frame, steps a **game-local stamina** bar, pushes the player's
+  REAL `HealthDrive.health` + fullness + stamina to the HUD, awards the
+  seconds-survived score, and dispatches `win`/`lose` on the first decided
+  outcome (latched). It **mutates nothing** in the world (only reads) — the
+  lose/win is a state-machine transition, not a sim change.
+- **Threat seeding (between ticks, app-layer):** if the loaded scene has no
+  predators of its own, `start` **promotes** the `HUNTER_COUNT` (3) fish
+  FARTHEST from the player to `Predator` (so they don't catch the player on
+  frame 0). `stop` demotes exactly those eids, so a formerly-hunter fish doesn't
+  keep scaring prey after the game and the world replays byte-identically again.
+  This tag mutation runs OUTSIDE `world.step()`, gated on an active game.
+
+### Feeding (F16.3) — eat falling food, fill the meter
+
+`game:feeding` is fully playable: typed food (Stage 14 `FoodSprite`) falls from
+the surface, the player eats it by proximity (the same between-ticks despawn
+pattern as a predator catch), and the objective is to fill a **food meter** to a
+target without **over-eating**.
+
+- **PURE logic** (`libs/features/game/src/lib/feeding-rules.ts`): `detectEaten`
+  (food within `eatRadiusMm` of the player), `applyBites` (each bite fills the
+  meter + scores, OR — when the meter is already full — wastes the bite +
+  PENALISES the score: gorging), `drainFill` (hunger creeps the meter back down
+  over time), `evaluateFeedingOutcome` (win on reaching `targetFill`; lose on
+  health-0 / clock-below-target) + `DEFAULT_FEEDING_PARAMS` (70 mm eat / 12 %
+  per bite / 90 % target / 60 s). Framework-free, exhaustively tested.
+- **WORLD MUTATION + wiring** (`apps/web/src/app/game/feeding-game.service.ts`):
+  `FeedingGameService` periodically **drops** food (`world.spawnFoodSprite`
+  every `DROP_INTERVAL_SEC`, capped at `MAX_LIVE_FOOD`), runs `detectEaten`,
+  **despawns** each eaten sprite, folds the bites into the meter + score, pushes
+  the player's REAL health + the GAME METER (not the fish's intrinsic hunger) to
+  the HUD, and dispatches `win`/`lose` (latched). Drop columns come from a
+  **service-local LCG** seeded to a fixed constant on `start` — NEVER
+  `Math.random` / `Date.now`, and never read inside `world.step()` — so the
+  drop pattern is reproducible per run and nothing leaks into the seeded tick
+  stream. The food then sinks per its `FOOD_TYPE` kinematics via the sim's
+  `foodSpriteKinematicSystem` (the service only places the drop).
+
+### The HUD vitality bars are now REAL (F16.2/16.3)
+
+The F16.1 placeholder vitality is replaced by `GameModeService.setVitality(health,
+food, stamina)` (`isPlaceholder: false`, drops the "preview" badge). The per-mode
+service reads the player's `HealthDrive.health` + `FeedingDrive.hunger` from the
+world snapshot via `readPlayerVitals(world, eid)` (`game-activation.ts`) each
+frame. Survival drives the **stamina** bar (a third meter the HUD shows only
+when `vitality.stamina !== null`); feeding leaves stamina `null` and binds the
+"Food" bar to its game meter. Predator (F16.4) still shows the placeholder (no
+vitality wired) — that's fine, it's a hunt, not a vitality game.
+
+### Cleaner still pending (F16.5)
+
+`game:cleaner` runs the **generic** playable loop (swim + objective/score HUD +
+Esc-exit) but has no win/lose rules yet — it's gated on Stage 13 (algae) +
+Stage 15 (`SiphonTool`). The README "Game modes" line reflects that survival /
+feeding / predator are playable while cleaner remains gated.
+
+### Determinism boundary (both new modes)
+
+Identical to predator's: being-caught (survival) and an eat (feeding) are
+**non-deterministic GAME EVENTS** gated on the LIVE player position. The
+detection + any world mutation (feeding's despawn/drop; survival mutates
+nothing) run in the per-mode service's `frame`, BETWEEN sim ticks via the input
+loop's per-frame hook — never inside `world.step()`, never in a system. Each
+loop runs ONLY while an active game has a live player marked; a non-game world
+(no player, no service started) never instantiates it, so the 1000-tick
+byte-identical replay holds. Proven by `survival-game.service.spec.ts` +
+`feeding-game.service.spec.ts` (a world with no rules running keeps every entity
++ spawns no food).
 
 ### Tests + e2e
 
@@ -235,6 +312,25 @@ while the others remain gated.
   non-game world keeps every prey (determinism boundary).
 - `libs/features/game/src/lib/predator-rules.spec.ts` — the pure rule logic
   (catch detection, win/lose, countdown).
+- `libs/features/game/src/lib/survival-rules.spec.ts` +
+  `feeding-rules.spec.ts` — the pure rule logic for the two new modes
+  (caught/threat detection, stamina step, eat detection, bite scoring +
+  over-eat penalty, meter drain, win/lose, countdown).
+- `apps/web/src/app/game/survival-game.service.spec.ts` — the FULL survival
+  pipeline: a predator in the catch radius loses, surviving the clock wins,
+  stamina drains under threat, real vitality is pushed to the HUD, hunters are
+  promoted/demoted, and a non-game world is untouched (determinism boundary).
+- `apps/web/src/app/game/feeding-game.service.spec.ts` — the FULL feeding
+  pipeline: food near the player is despawned + the meter fills + scores,
+  filling to target wins, food drops appear over time, real health + the meter
+  reach the HUD, and a non-game world spawns/despawns no food.
+- `apps/web-e2e/src/game-mode.spec.ts` adds a **survival** case (boots live, the
+  survived-seconds score climbs to ≥ 2 while fleeing) + a **feeding** case
+  (steer toward the nearest dropped food, poll until the score increments). Both
+  need hardware/SwiftShader WebGL (the world only ticks while the 3D canvas
+  paints); validated on a provisioned chromium here. **Game-mode tests wait on
+  the 3D canvas `nth(1)` (the active one in fish-eye), not `.first()` — in game
+  mode the 2D canvas is hidden from the start.**
 - `libs/domain/livestock-ecs/src/lib/player-seam.spec.ts` — `setPlayerPredator`
   tags/untags + makes nearby prey accumulate fear risk (FearSystem reuse).
 

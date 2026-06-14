@@ -324,10 +324,43 @@ where you **control a fish** instead of just watching the tank. The four
 sub-modes are `survival`, `feeding`, `predator`, and `cleaner`. They share one
 shell (`@aquascape/features/game`): an objective/score HUD, a state machine
 (objective → playing → paused → won/lost → results), and a device-independent
-input layer. **`predator` is the first fully-playable mode** (F16.4 — see below);
-survival / feeding / cleaner run the generic playable loop (swim in fish-eye;
-objective/score HUD; Esc exits) but their **win/lose rules are still pending**,
-gated on Stage 14 (food + health) / Stage 13 (algae) / Stage 15 (`SiphonTool`).
+input layer. **`survival`, `feeding`, and `predator` are fully playable** (F16.2
+/ F16.3 / F16.4 — see below); **`cleaner` runs the generic playable loop** (swim
+in fish-eye; objective/score HUD; Esc exits) but its **win/lose rules are still
+pending**, gated on Stage 13 (algae) + Stage 15 (`SiphonTool`).
+
+### Survival — flee the predators (F16.2)
+
+In `game:survival` you are **prey**. Roaming **predators hunt you** — the same
+`FearSystem` proximity path the showcase uses — and you flee with the keyboard,
+using hardscape as cover. The HUD shows a **countdown** plus a **health** and a
+**stamina** bar; **survive 90 seconds** to win. You **lose** if a predator gets
+within the catch radius (90 mm), if your stamina runs out (it drains while a
+predator looms within 280 mm and recovers when you're safe), or if your Stage 14
+**health** hits zero (e.g. a fouled tank). Your **score** is the whole seconds
+survived. The pure rules (caught/threat detection, stamina, win/lose) live in
+`@aquascape/features/game` → `survival-rules.ts`; the world reads + the
+win/lose dispatch live in `SurvivalGameService` (`apps/web/src/app/game/`). If
+the loaded tank has no predators of its own, the service quietly promotes the
+few fish farthest from you to roaming hunters at the start (and demotes them on
+exit) so there's always a threat. The service **mutates nothing** in the sim
+each frame (it only reads), so non-game worlds still replay byte-identically.
+
+### Feeding — eat the falling food (F16.3)
+
+In `game:feeding` typed food (flakes) **falls from the surface** and you eat it
+by **swimming into it**. Each bite **fills a food meter** (the HUD's "Food" bar)
+and scores a point; **fill the meter to 90 %** to win. But don't **gorge** — a
+bite taken while the meter is already full is wasted and **costs** a point (it
+also fouls the tank, the same over-feeding loop the live chemistry models). The
+meter slowly **drains** over time, so keep eating. You **lose** if your Stage 14
+**health** starves to zero, or if the 60-second clock expires below target. The
+pure rules (eat detection, meter fill/drain, bite scoring, win/lose) live in
+`@aquascape/features/game` → `feeding-rules.ts`; the food drop + the eaten-sprite
+despawn + the win/lose dispatch live in `FeedingGameService`
+(`apps/web/src/app/game/`). The drop + despawn happen between sim ticks (gated on
+your live position; drop columns come from a service-local PRNG, never the sim
+core), kept out of the deterministic sim core.
 
 ### Predator — hunt the prey (F16.4)
 
@@ -361,9 +394,12 @@ enterGameMode('predator')
   ├─ store.dispatch(setScene)           → LivestockSimulationService re-spawns the world
   ├─ pickPlayerEntity(world) → world.setPlayer(eid)   one fish becomes YOU (snapshot index 0)
   ├─ GameModeService.startGame() + dispatch('start')  → live "playing" loop
-  ├─ (predator only) PredatorGameService.start(world, playerEid)   tags YOU a predator → prey flee
+  ├─ per-mode rules service (one of):
+  │    predator → PredatorGameService.start  tags YOU a predator → prey flee; catch detection
+  │    survival → SurvivalGameService.start  promotes hunters; caught/stamina/health win-lose
+  │    feeding  → FeedingGameService.start   drops food; eat-by-proximity fills the meter
   └─ GameInputService.start(sink, frameHook)   per-frame keyboard → velocity → world,
-                                               + the predator rules hook (catch detection)
+                                               + the per-mode rules hook (cleaner: none yet)
 ```
 
 ### Controls (keyboard)

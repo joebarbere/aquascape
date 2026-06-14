@@ -66,7 +66,7 @@ test.describe('game-mode activation (?mode=game:predator)', () => {
     test.slow(); // game scene is the showcase (populated) under software WebGL
 
     await page.goto('/?mode=game:predator');
-    await expect(page.locator('canvas').first()).toBeVisible();
+    await expect(page.locator('canvas').nth(1)).toBeVisible();
     await page.waitForFunction(() => Boolean(window.__aquascape_debug__));
 
     // ── Entered the game: 3D fish-eye + a populated world with a marked player.
@@ -125,7 +125,7 @@ test.describe('game-mode activation (?mode=game:predator)', () => {
     test.slow();
 
     await page.goto('/?mode=game:predator');
-    await expect(page.locator('canvas').first()).toBeVisible();
+    await expect(page.locator('canvas').nth(1)).toBeVisible();
     await page.waitForFunction(() => Boolean(window.__aquascape_debug__));
     await page.waitForFunction(
       () => window.__aquascape_debug__?.getViewMode() === 'fish-eye',
@@ -202,6 +202,149 @@ test.describe('game-mode activation (?mode=game:predator)', () => {
       for (const k of pressed) await page.keyboard.up(k);
 
       scored = (await page.evaluate(() => window.__aquascape_debug__?.getGameScore() ?? 0)) as number;
+    }
+
+    expect(scored).toBeGreaterThan(0);
+  });
+});
+
+// F16.2 — survival: the player is prey; predators hunt it; the objective is to
+// outlast the clock. We assert the run boots live + the survived-seconds SCORE
+// climbs (the survival service awards the whole seconds survived each frame).
+// A full win (90 s) is too slow for CI, so we prove the loop is alive + scoring.
+// Lose-on-caught + win-at-the-limit are exhaustively covered by the integration
+// spec (survival-game.service.spec.ts) — this proves the live pipeline ticks.
+//
+// Validated in CI / on a provisioned chromium (see docs/caveats/e2e.md).
+test.describe('game-mode survival (?mode=game:survival)', () => {
+  test('boots live and the survived-seconds score climbs', async ({ page }) => {
+    test.slow();
+
+    await page.goto('/?mode=game:survival');
+    await expect(page.locator('canvas').nth(1)).toBeVisible();
+    await page.waitForFunction(() => Boolean(window.__aquascape_debug__));
+    await page.waitForFunction(
+      () => window.__aquascape_debug__?.getViewMode() === 'fish-eye',
+      undefined,
+      { timeout: 10_000 },
+    );
+    await page.waitForFunction(() => (window.__aquascape_debug__?.getEntityCount() ?? 0) > 1, {
+      timeout: 10_000,
+    });
+    // The run booted live (the survival rules started on entry); the mode is set.
+    expect(['playing', 'won', 'lost']).toContain(
+      await page.evaluate(() => window.__aquascape_debug__?.getGameState()),
+    );
+
+    // Swim AWAY from a hunter (toward the far +x wall) and poll the score. The
+    // survival service awards the WHOLE SECONDS SURVIVED each frame, so the
+    // score climbs while the run is live. We assert it reaches >= 2 (the player
+    // outlasted at least 2 s of the hunt) — that proves the live survival loop
+    // is scoring through the real pipeline. The run may end in a `lost` later
+    // (a hunter eventually catches a fleeing prey) — that's legitimate; the
+    // score is latched at the seconds survived. Win-at-the-limit + lose-on-
+    // caught are covered exhaustively by survival-game.service.spec.ts.
+    await page.keyboard.down('KeyD');
+    await page.waitForFunction(
+      () => (window.__aquascape_debug__?.getGameScore() ?? 0) >= 2,
+      undefined,
+      { timeout: 15_000 },
+    );
+    await page.keyboard.up('KeyD');
+
+    const score = (await page.evaluate(
+      () => window.__aquascape_debug__?.getGameScore() ?? 0,
+    )) as number;
+    expect(score).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// F16.3 — feeding: food falls from the surface; eating it by proximity fills
+// the meter + scores. We steer the player toward the nearest food sprite each
+// beat and poll the score until it ticks up (the eat → despawn → score pipeline
+// through the live world). Food sprites carry no Orientation, so we read them
+// from the snapshot's food slab (foodSpritePosition / foodSpriteCount).
+//
+// Validated in CI / on a provisioned chromium (see docs/caveats/e2e.md).
+test.describe('game-mode feeding (?mode=game:feeding)', () => {
+  test('eating dropped food increments the score', async ({ page }) => {
+    test.slow();
+
+    await page.goto('/?mode=game:feeding');
+    await expect(page.locator('canvas').nth(1)).toBeVisible();
+    await page.waitForFunction(() => Boolean(window.__aquascape_debug__));
+    await page.waitForFunction(
+      () => window.__aquascape_debug__?.getViewMode() === 'fish-eye',
+      undefined,
+      { timeout: 10_000 },
+    );
+    expect(await page.evaluate(() => window.__aquascape_debug__?.getGameState())).toBe('playing');
+    expect(await page.evaluate(() => window.__aquascape_debug__?.getGameScore())).toBe(0);
+
+    // Steer toward the nearest dropped food for up to ~14 s, polling the score.
+    let scored = 0;
+    for (let i = 0; i < 28 && scored === 0; i++) {
+      const dir = await page.evaluate(() => {
+        const dbg = window.__aquascape_debug__;
+        const world = dbg?.getWorld();
+        if (!world) return null;
+        const player = world.getPlayerEntity();
+        const snap = world.snapshot(0);
+        let px = 0;
+        let py = 0;
+        let pz = 0;
+        let found = false;
+        for (let j = 0; j < snap.entityCount; j++) {
+          if (snap.ids[j] === player) {
+            px = snap.position[j * 3] as number;
+            py = snap.position[j * 3 + 1] as number;
+            pz = snap.position[j * 3 + 2] as number;
+            found = true;
+          }
+        }
+        // Food sprites are a separate slab on the snapshot.
+        const fc = (snap as unknown as { foodSpriteCount?: number }).foodSpriteCount ?? 0;
+        const fp =
+          (snap as unknown as { foodSpritePosition?: Float32Array | number[] }).foodSpritePosition ??
+          [];
+        if (!found || fc === 0) return null;
+        let bestX = px;
+        let bestY = py;
+        let bestZ = pz;
+        let bestD = Infinity;
+        for (let k = 0; k < fc; k++) {
+          const fx = fp[k * 3] as number;
+          const fy = fp[k * 3 + 1] as number;
+          const fz = fp[k * 3 + 2] as number;
+          const d = (fx - px) ** 2 + (fy - py) ** 2 + (fz - pz) ** 2;
+          if (d < bestD) {
+            bestD = d;
+            bestX = fx;
+            bestY = fy;
+            bestZ = fz;
+          }
+        }
+        return { dx: bestX - px, dy: bestY - py, dz: bestZ - pz };
+      });
+      if (dir === null) {
+        await page.waitForTimeout(400); // wait for the next drop
+        continue;
+      }
+
+      const pressed: string[] = [];
+      if (dir.dx > 30) pressed.push('KeyD');
+      else if (dir.dx < -30) pressed.push('KeyA');
+      if (dir.dy > 30) pressed.push('KeyW');
+      else if (dir.dy < -30) pressed.push('KeyS');
+      if (dir.dz > 30) pressed.push('KeyE');
+      else if (dir.dz < -30) pressed.push('KeyQ');
+      for (const k of pressed) await page.keyboard.down(k);
+      await page.waitForTimeout(500);
+      for (const k of pressed) await page.keyboard.up(k);
+
+      scored = (await page.evaluate(
+        () => window.__aquascape_debug__?.getGameScore() ?? 0,
+      )) as number;
     }
 
     expect(scored).toBeGreaterThan(0);

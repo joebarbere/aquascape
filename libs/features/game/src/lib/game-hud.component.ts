@@ -72,6 +72,21 @@ import { GameModeService } from './game-mode.service';
               <span class="game-hud__meter-fill game-hud__meter-fill--food" [style.width.%]="foodPct()"></span>
             </div>
           </div>
+          @if (staminaPct() !== null) {
+            <div class="game-hud__bar-row">
+              <span class="game-hud__bar-label" id="game-hud-stamina-label">Stamina</span>
+              <div
+                class="game-hud__meter"
+                role="progressbar"
+                aria-labelledby="game-hud-stamina-label"
+                [attr.aria-valuemin]="0"
+                [attr.aria-valuemax]="100"
+                [attr.aria-valuenow]="staminaPct()"
+              >
+                <span class="game-hud__meter-fill game-hud__meter-fill--stamina" [style.width.%]="staminaPct()"></span>
+              </div>
+            </div>
+          }
         </div>
       </header>
 
@@ -226,6 +241,9 @@ import { GameModeService } from './game-mode.service';
       .game-hud__meter-fill--food {
         background: #fbbf24;
       }
+      .game-hud__meter-fill--stamina {
+        background: #38bdf8;
+      }
       .game-hud__overlay {
         position: absolute;
         top: 50%;
@@ -300,6 +318,11 @@ export class GameHudComponent {
 
   readonly healthPct = computed(() => Math.round(this.vitality().health * 100));
   readonly foodPct = computed(() => Math.round(this.vitality().food * 100));
+  /** Stamina percentage, or `null` when the active mode has no stamina (bar hidden). */
+  readonly staminaPct = computed(() => {
+    const s = this.vitality().stamina;
+    return s === null ? null : Math.round(s * 100);
+  });
 
   /** True when the active mode has a hard time limit → show a countdown. */
   readonly hasCountdown = computed(() => this.game.descriptor()?.timeLimitSec !== undefined);
