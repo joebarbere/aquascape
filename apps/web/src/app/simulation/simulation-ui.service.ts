@@ -8,7 +8,7 @@
 import { Injectable, signal } from '@angular/core';
 
 /** Toggleable HUD surfaces the console's `hud` command understands. */
-export type HudTarget = 'info' | 'controls' | 'clock' | 'perf' | 'all';
+export type HudTarget = 'info' | 'controls' | 'clock' | 'perf' | 'vitality' | 'all';
 
 @Injectable({ providedIn: 'root' })
 export class SimulationUiService {
@@ -20,6 +20,8 @@ export class SimulationUiService {
   readonly clockVisible = signal(true);
   /** The FPS/frame/entity/bubble perf strip inside the info HUD. */
   readonly perfVisible = signal(true);
+  /** Stage 14 F14.3 — the fish-vitality HUD + inspector (left-middle). */
+  readonly vitalityVisible = signal(true);
   /** The Quake-style console (bottom-left). */
   readonly consoleOpen = signal(false);
 
@@ -38,6 +40,7 @@ export class SimulationUiService {
       this.controlsVisible.set(visible);
       this.clockVisible.set(visible);
       this.perfVisible.set(visible);
+      this.vitalityVisible.set(visible);
       return;
     }
     this.signalFor(target).set(visible);
@@ -47,7 +50,11 @@ export class SimulationUiService {
   toggleHud(target: HudTarget): void {
     if (target === 'all') {
       const anyVisible =
-        this.infoVisible() || this.controlsVisible() || this.clockVisible() || this.perfVisible();
+        this.infoVisible() ||
+        this.controlsVisible() ||
+        this.clockVisible() ||
+        this.perfVisible() ||
+        this.vitalityVisible();
       this.setHud('all', !anyVisible);
       return;
     }
@@ -72,6 +79,8 @@ export class SimulationUiService {
         return this.clockVisible;
       case 'perf':
         return this.perfVisible;
+      case 'vitality':
+        return this.vitalityVisible;
     }
   }
 }

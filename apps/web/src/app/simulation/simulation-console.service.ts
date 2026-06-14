@@ -65,7 +65,14 @@ const PHASE_WORDS: Record<string, number> = {
   evening: 0.75,
 };
 
-const HUD_TARGETS: readonly HudTarget[] = ['info', 'controls', 'clock', 'perf', 'all'];
+const HUD_TARGETS: readonly HudTarget[] = [
+  'info',
+  'controls',
+  'clock',
+  'perf',
+  'vitality',
+  'all',
+];
 const HUD_ACTIONS = ['show', 'hide', 'toggle'] as const;
 const ITEM_KINDS: readonly ItemKind[] = ['rock', 'wood', 'plant', 'decor'];
 
@@ -174,14 +181,14 @@ export class SimulationConsoleService {
       {
         name: 'hud',
         summary: 'Show / hide / toggle HUD elements',
-        usage: 'hud <show|hide|toggle> <info|controls|clock|perf|all>',
+        usage: 'hud <show|hide|toggle> <info|controls|clock|perf|vitality|all>',
         run: (args) => {
           const [action, target] = args;
           if (
             !HUD_ACTIONS.includes(action as (typeof HUD_ACTIONS)[number]) ||
             !HUD_TARGETS.includes(target as HudTarget)
           ) {
-            return [err(`usage: hud <show|hide|toggle> <info|controls|clock|perf|all>`)];
+            return [err(`usage: hud <show|hide|toggle> <info|controls|clock|perf|vitality|all>`)];
           }
           if (action === 'toggle') this.ui.toggleHud(target as HudTarget);
           else this.ui.setHud(target as HudTarget, action === 'show');

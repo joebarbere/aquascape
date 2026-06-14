@@ -55,7 +55,35 @@ Point-and-click controls that mutate the live scene:
 - **Dose nutrient**: a category filter, a nutrient picker (with a colour swatch), an amount stepper (pre-filled with the product's representative dose), and a **Dose** button. Picks from the ~30 real `nutrient` catalog products. **Recorded only** — the dose is appended to the scene's dose log via the `DoseNutrient` command; the actual water-chemistry effect is deferred pending `domain/water-sim` (Stage 13).
 - **Reset scene**.
 
-### 3. The console — bottom-left (the CLI) ⌨️
+### 3. Vitality HUD — left-middle (read-only, click-to-inspect)
+
+Stage 14 F14.3. Surfaces the fish school's **vitality** straight from the live
+simulation (the per-fish `health` + `hunger` the F14.2 vitality system drives):
+
+- **School summary**: **avg health**, **min health**, and **% hungry** —
+  recomputed ~12× a second. "Hungry" means a fish at/above the feeding
+  seek-threshold (the level at which a fish actively goes looking for food), so
+  the count tracks the fish that are out foraging. The stats turn amber/red as
+  health drops.
+- **Selectable fish list**: one row per fish (id · archetype · health % · a ⚠
+  hunger flag). The marked **player fish** (game modes) shows a ★.
+- **Click-to-inspect**: click (or focus + Enter/Space) a row to inspect that
+  fish — its **health hearts** (a 5-pip ♥ readout off the [0,1] health scale)
+  and a **hunger meter**. The inspector updates live as the picked fish's
+  vitality changes.
+
+> **Why a list, not a click-on-the-fish?** The 3D view is read-only — the
+> renderer's `hitTest` returns null and it doesn't expose its live camera, so
+> there's no reliable canvas raycast to a fish. The selectable list is the
+> deterministic, keyboard-operable picker; the inspector itself is
+> camera-independent, so a future canvas picker could feed the same selection.
+> Per-fish **floating health bars are deliberately NOT used** — the fish shader
+> sits at the GPU's 16-vertex-attribute ceiling, so vitality is HUD-surfaced
+> rather than a per-instance attribute (see `docs/caveats/livestock-ecs.md`).
+
+Hide it with `hud hide vitality` (or `hud hide all`).
+
+### 4. The console — bottom-left (the CLI) ⌨️
 
 A **Quake-style developer console**. See the next section.
 
@@ -94,7 +122,7 @@ Grammar is simple: `command [args…]`, whitespace-separated. Run `help` any tim
 | `help`  | `help [command]`                                              | List all commands, or show usage for one.                                    |
 | `clear` | `clear`                                                       | Clear the console output.                                                    |
 | `close` | `close`                                                       | Close the console (same as `~` / Esc).                                       |
-| `hud`   | `hud <show\|hide\|toggle> <info\|controls\|clock\|perf\|all>` | Show / hide / toggle HUD surfaces (or sub-elements).                         |
+| `hud`   | `hud <show\|hide\|toggle> <info\|controls\|clock\|perf\|vitality\|all>` | Show / hide / toggle HUD surfaces (or sub-elements).               |
 | `light` | `light <midnight\|dawn\|day\|dusk\|0..1>`                     | Set the day/night phase (word or a 0–1 fraction).                            |
 | `water` | `water <mm\|auto>`                                            | Set the water level in mm, or `auto` for the default fill.                   |
 | `fish`  | `fish list`                                                   | List the stocked species + quantities.                                       |
@@ -180,6 +208,7 @@ can disambiguate.
 > water 540                   # raise the water line to 540 mm
 > light dusk                  # warm, low evening light
 > hud hide controls           # hide the left control panel
+> hud toggle vitality         # flip the fish-vitality HUD (left-middle)
 > hud toggle perf             # flip the FPS strip on the info HUD
 > hud hide all                # hide every HUD for a clean capture
 > hud show all                # bring them back
