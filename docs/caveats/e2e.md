@@ -70,11 +70,29 @@ The numeric/time-dependent outcomes are covered **deterministically** by unit + 
 
 When you write a new sim/game e2e: if an assertion would **wait for a number to change over time** (`expect.poll(...).toBeGreaterThan(threshold)` against a live sim value, or a before/after numeric delta), that's the anti-pattern — assert presence/validity/operability instead, and push the numeric assertion down to a unit/integration spec. (Counter-examples that ARE fine: a count that rises from a **direct user action** with no time dependence — `getFoodSpriteCount() ≥ 1` after a feed click, `getBubbleParticleCount() > 0` after placing an air-stone — those are wiring proofs, not progression.)
 
+## Blocking smoke vs advisory full e2e (the quarantine)
+
+The full Playwright suite runs **serially under software WebGL (SwiftShader)**. The heavy 3D-canvas sim/game interaction specs (`game-mode`, `feeding-tool`, `water-change-tool`, `water-chemistry`, `vitality-hud`, `lights-fisheye`, the animation/day-night/bubble specs) **pass deterministically locally but are flaky under CI load** — the suite outgrew what SwiftShader can reliably paint in time, so they time out / fail on different runs. Their deterministic logic is already exhaustively unit/integration tested (the blocking nx-affected `test` gate). So the e2e is split into two tiers:
+
+- **Blocking smoke** — the `@smoke`-tagged tests only:
+  - `baseline.spec.ts` → `home page loads with title Aquascape @smoke` (2D editor boots, Angular bootstraps).
+  - `livestock-3d.spec.ts` → `3D canvas paints visible content (variance > floor) @smoke` (the canonical "3D fish actually paint" check — pixel-channel variance, no interaction timing, robust under SwiftShader).
+
+  These prove **boot + 3D render**, which is the reliable part. They gate the PR (and main).
+- **Advisory full** — everything `--grep-invert=@smoke`. Runs for signal under `continue-on-error: true`; **never blocks** PRs or main.
+
+**Adding a test to a tier:** put `@smoke` in the Playwright test title to make it blocking (only do this for robust, no-interaction-timing assertions — pixel variance / frame-diff floors, not time-dependent sim outcomes). Leave the title untagged and it's advisory by default.
+
+**`--grep` forwarding through nx.** The flag must come AFTER the `--` passthrough or nx swallows it: `nx affected -t e2e … -- --grep="@smoke"` (verified — `--grep` before `--` runs the whole suite). `--grep-invert="@smoke"` selects the advisory rest.
+
 ## CI integration
 
-**`.github/workflows/pr.yml#e2e` job.** Cached Playwright browsers keyed on `@playwright/test` version (re-downloads only on bump); `nx affected -t e2e` so the suite runs only when `web-e2e` or its implicit dep on `web` changed. Per-run timeout 20 min; reports uploaded as artifacts on always (7-day retention).
+**`.github/workflows/pr.yml`** has two e2e jobs:
 
-**`.github/workflows/main.yml#matrix.E2E` step** now installs Playwright across the OS matrix (Ubuntu / macOS / Windows) with the same browser cache. `continue-on-error: true` stays until `apps/desktop-e2e/` is also real Playwright — once both web + desktop e2e are reliable, split into per-target steps and drop the flag for web-e2e.
+- **`e2e (web Playwright)`** — BLOCKING. `nx affected -t e2e … --configuration=ci -- --grep="@smoke"`. Name preserved (may be a required status check). 20-min timeout. Cached Playwright browsers keyed on `@playwright/test` version; `nx affected` so it runs only when `web-e2e` or its implicit dep on `web` changed.
+- **`e2e-full (advisory)`** — `continue-on-error: true`, same setup, `-- --grep-invert="@smoke"`. 35-min timeout. Runs for signal, never blocks.
+
+**`.github/workflows/main.yml#matrix`** runs the e2e in two steps per OS: **`E2E smoke (BLOCKING)`** (`nx run-many -t e2e --parallel=1 -- --grep="@smoke"`) gates main green, and **`E2E full suite (ADVISORY — non-blocking)`** (`continue-on-error: true`, `-- --grep-invert="@smoke"`) carries the rest plus the still-placeholder `apps/desktop-e2e/`. Playwright installs across the OS matrix (Ubuntu / macOS / Windows) with the shared browser cache.
 
 ## Running locally
 

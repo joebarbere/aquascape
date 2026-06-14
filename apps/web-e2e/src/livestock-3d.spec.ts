@@ -148,7 +148,7 @@ test.describe('livestock 3D rendering', () => {
       .toBe(FISH_TO_ADD);
   });
 
-  test('3D canvas paints visible content (variance > floor)', async ({ page }) => {
+  test('3D canvas paints visible content (variance > floor) @smoke', async ({ page }) => {
     await addOneFishAndEnter3d(page);
 
     // The 3D canvas is the SECOND `<canvas>` in the DOM (paint order: 2D

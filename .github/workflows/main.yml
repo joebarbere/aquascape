@@ -92,12 +92,21 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
         shell: bash
 
-      # E2E: web-e2e is real (Playwright). Electron e2e (apps/desktop-e2e)
-      # is still a placeholder; keep continue-on-error until that lands too,
-      # then split into per-target steps and drop the flag for web-e2e.
-      - name: E2E
+      # E2E — split into a BLOCKING smoke gate + an ADVISORY full suite so
+      # main stays reliably green. The `@smoke` tests (2D-editor boot + 3D
+      # pixel-variance) are robust under software WebGL (SwiftShader); the
+      # heavy sim/game interaction specs are flaky at CI load, so they run
+      # advisory only. See docs/caveats/e2e.md → "Blocking smoke vs advisory
+      # full e2e". The `-- --grep` passthrough forwards to Playwright after
+      # nx arg parsing.
+      - name: E2E smoke (BLOCKING)
+        run: pnpm exec nx run-many -t e2e --parallel=1 -- --grep="@smoke"
+
+      # Advisory: the rest of the suite, non-blocking. Electron e2e
+      # (apps/desktop-e2e) is still a placeholder and rides along here.
+      - name: E2E full suite (ADVISORY — non-blocking)
         continue-on-error: true
-        run: pnpm exec nx run-many -t e2e --parallel=1
+        run: pnpm exec nx run-many -t e2e --parallel=1 -- --grep-invert="@smoke"
 
       - name: Upload Playwright artifacts on failure
         if: failure()

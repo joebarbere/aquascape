@@ -6,7 +6,7 @@ import { expect, test } from '@playwright/test';
  * visibility. Feature-specific specs (livestock rendering, document I/O,
  * etc.) land in their own files alongside this one.
  */
-test('home page loads with title Aquascape', async ({ page }) => {
+test('home page loads with title Aquascape @smoke', async ({ page }) => {
   await page.goto('/');
 
   await expect(page).toHaveTitle(/Aquascape/i);

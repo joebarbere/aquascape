@@ -123,8 +123,8 @@ pnpm exec nx build desktop                   # → dist/apps/desktop/{main,prelo
 
 CI workflows in `.github/workflows/`:
 
-- `pr.yml` — `nx affected -t lint test build` + the explicit coverage-gate job (runs `--configuration=ci` across `tag:scope:domain,scope:rendering,scope:platform-web,scope:platform-electron,scope:state` + each implemented `features-*` lib by name) + the `document-round-trip` job (`nx test testing -t document-round-trip`). Linux only. When a new feature lib lands, add it to the workflow selector.
-- `main.yml` — full `nx run-many` across the ubuntu / macos / windows matrix.
+- `pr.yml` — `nx affected -t lint test build` + the explicit coverage-gate job (runs `--configuration=ci` across `tag:scope:domain,scope:rendering,scope:platform-web,scope:platform-electron,scope:state` + each implemented `features-*` lib by name) + the `document-round-trip` job (`nx test testing -t document-round-trip`) + a two-tier Playwright e2e: a BLOCKING `e2e (web Playwright)` job running only the `@smoke` tests (`-- --grep="@smoke"` — boot + 3D pixel-variance) and an advisory `e2e-full (advisory)` job (`continue-on-error: true`, `-- --grep-invert="@smoke"`) carrying the flaky heavy sim/game specs for signal. Linux only. When a new feature lib lands, add it to the workflow selector.
+- `main.yml` — full `nx run-many` across the ubuntu / macos / windows matrix; e2e runs as a BLOCKING `@smoke` step + an advisory `--grep-invert=@smoke` step.
 
 The `document-round-trip` job is REQUIRED on main — a format/loader regression fails the PR.
 
