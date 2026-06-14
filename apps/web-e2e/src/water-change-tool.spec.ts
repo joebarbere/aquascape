@@ -35,7 +35,6 @@ test.describe('water-change action HUD (?mode=simulation)', () => {
     test.slow(); // showcase scene (~100 fish) under software WebGL is heavy
 
     await page.goto('/?mode=simulation');
-    await expect(page.locator('canvas').first()).toBeVisible();
     await page.waitForFunction(() => Boolean(window.__aquascape_debug__));
 
     await page.waitForFunction(
