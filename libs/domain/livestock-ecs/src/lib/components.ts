@@ -286,6 +286,33 @@ export const FeedingDrive = defineComponent({
 });
 
 /**
+ * Per-fish health / vitality state (Stage 14 F14.2 VitalitySystem).
+ *
+ * `health ∈ [0, 1]` — 0 = critical (a fish a future stage might remove on
+ * death), 1 = fully healthy. Decays under STARVATION (sustained high hunger,
+ * read from the co-located `FeedingDrive.hunger`) and under POOR WATER QUALITY
+ * (the world's injected ammonia / nitrite scalars); recovers slowly when the
+ * fish is well-fed AND the water is clean. Attached to every fish that carries
+ * a registered behaviour (alongside `FeedingDrive` / `Curiosity`); the
+ * NO_BEHAVIOR_HANDLE static-wiggle path skips it just like the other drives.
+ *
+ * Range choice (0..1, NOT 0..100): the snapshot slab + HUD read a normalised
+ * fraction so the F14.3 "hearts" UI can map it to N filled pips without a
+ * scale constant living in two places. Decay/recovery rates below are in
+ * health-units-per-second on this 0..1 scale.
+ *
+ * NOT a vertex attribute: vitality is surfaced via `WorldSnapshot.health` for
+ * the HUD/inspector (F14.3), never as a per-instance render attribute — the
+ * livestock fish shader sits exactly at the 16-attribute ANGLE ceiling, so a
+ * per-fish health bar would risk a zero-fish-render regression. See
+ * `docs/caveats/livestock-ecs.md` → "Vitality is HUD-surfaced".
+ */
+export const HealthDrive = defineComponent({
+  /** Health fraction in `[0, 1]`. 1 = healthy; 0 = critical. */
+  health: Types.f32,
+});
+
+/**
  * Sentinel stored in `Curiosity.interestX` when no interest point is
  * active. We use a large negative number (well outside any tank's
  * canonical mm bounds) so the check is a single < comparison instead of a
@@ -371,6 +398,16 @@ export const FoodSprite = defineComponent({
   floatRemaining: Types.f32,
   /** Monotonic 0-based spawn order — stable tickPrng key + snapshot sort key. */
   spawnIndex: Types.ui32,
+  /**
+   * F14.4 — modelled fraction `[0, 1]` of this sprite's nitrogen that becomes
+   * tank waste when it goes UNEATEN. Sourced from the catalog `food` row's
+   * `wasteFactor` (the host stamps it at spawn; default `DEFAULT_FOOD_WASTE_FACTOR`).
+   * `foodSpriteLifetimeSystem` reads it when a sprite expires without being eaten
+   * and folds it into the world's waste accumulator (uneaten food wastes more →
+   * ammonia source term). A sprite that's eaten contributes nothing here — its
+   * nitrogen left as fish bioload, not as decaying food.
+   */
+  wasteFactor: Types.f32,
 });
 
 /**

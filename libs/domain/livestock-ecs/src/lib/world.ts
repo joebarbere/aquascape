@@ -42,6 +42,7 @@ import {
   FOOD_TYPE,
   FoodSprite,
   Force,
+  HealthDrive,
   HARDSCAPE_CATEGORY,
   Hardscape,
   NippingDrive,
@@ -89,6 +90,12 @@ import {
   rebuildBubbleFluid,
   type BubbleFluidState,
 } from './bubble-fluid';
+import { vitalitySystem } from './vitality-system';
+import {
+  makeWasteAccumulator,
+  wasteSystem,
+  type WasteAccumulator,
+} from './waste-accumulator';
 
 /** Fixed simulation time-step, in seconds. 30 Hz — matches the plan. */
 export const SIM_DT = 1 / 30;
@@ -129,6 +136,31 @@ export interface TankAabb {
   minZ: number;
   maxZ: number;
 }
+
+/**
+ * Current water-quality scalars the VitalitySystem reads (Stage 14 F14.2).
+ * Concentrations in mg/L. The LIVE value comes from the future
+ * `WaterChemistryService` (Stage 13 F13.3 — deferred); for now it's an
+ * INJECTED input via `world.setWaterQuality`, defaulting to clean (0/0) so a
+ * world with no chemistry wired behaves benignly and replays byte-identically.
+ */
+export interface WaterQuality {
+  /** Total ammonia (NH3 + NH4+) in mg/L. 0 = clean. */
+  ammonia: number;
+  /** Nitrite (NO2-N) in mg/L. 0 = clean. */
+  nitrite: number;
+}
+
+/** Default (clean) water quality — the byte-identical-replay-preserving baseline. */
+const DEFAULT_WATER_QUALITY: WaterQuality = { ammonia: 0, nitrite: 0 };
+
+/**
+ * F14.4 — default modelled waste fraction stamped on a food sprite when the
+ * host doesn't supply the catalog row's `wasteFactor`. A mid value so an
+ * uneaten generic drop still contributes a sensible ammonia pulse; the
+ * service passes the real catalog figure for typed drops.
+ */
+export const DEFAULT_FOOD_WASTE_FACTOR = 0.3;
 
 /** Default AABB used when the caller didn't pass one (tests, mostly). */
 const DEFAULT_TANK_AABB: TankAabb = {
@@ -257,6 +289,23 @@ export interface WorldSnapshot {
   /** Body length per entity in mm. Length = `entityCount`. */
   scale: Float32Array;
   /**
+   * Stage 14 F14.2 — per-fish health fraction in `[0, 1]` (1 = healthy, 0 =
+   * critical). Length = `entityCount`. Parallel to `ids` (same fish order).
+   * Read by the F14.3 vitality HUD / inspector — NOT a render vertex attribute
+   * (the fish shader sits at the 16-attribute ANGLE ceiling; vitality is
+   * HUD-surfaced). Fish on the static-wiggle path (no registered behaviour, so
+   * no `HealthDrive`) report a neutral 1.0. Pooled — copy if retained past the
+   * next `snapshot()`.
+   */
+  health: Float32Array;
+  /**
+   * Stage 14 F14.2 — per-fish hunger accumulator in `[0, ∞)`. Length =
+   * `entityCount`. Parallel to `ids`. The HUD surfaces "% hungry" + a per-fish
+   * meter from this. Fish without a `FeedingDrive` (static-wiggle path) report
+   * 0. Additive + HUD-bound, like `health`. Pooled — copy if retained.
+   */
+  hunger: Float32Array;
+  /**
    * Fidelity pass — per-fish body colour, stride 3 (r,g,b in `[0,1]`).
    * Length = `entityCount * 3`. The renderer drives a per-instance colour
    * attribute from this so fish of the same archetype but different species
@@ -319,6 +368,19 @@ export interface LivestockWorld {
   readonly __internals: LivestockWorldInternals;
   /** @internal — parallel-typed-array store read by the bubble systems. */
   readonly __bubbleSources: BubbleSourceStore;
+  /**
+   * @internal — Stage 14 F14.4 waste accumulator (the ammonia source-term
+   * producer). Mutated by `wasteSystem` + `recordUneatenFood`; read via
+   * `getWasteSourceN()`. The future `WaterChemistryService` (Stage 13 F13.3 —
+   * deferred) is the consumer.
+   */
+  readonly __waste: WasteAccumulator;
+  /**
+   * Stage 14 F14.2 — current injected water-quality scalars (mg/L). Read by
+   * `vitalitySystem`. Defaults to clean (0/0); set via `setWaterQuality`. The
+   * default keeps a chemistry-less world's replay byte-identical.
+   */
+  readonly waterQuality: WaterQuality;
   /**
    * @internal — per-source Stam fluid slices that advect rising bubbles
    * (the "bubble fluid fidelity pass"). Mutated in place by
@@ -405,6 +467,7 @@ export interface LivestockWorld {
     lifetimeSec?: number,
     calories?: number,
     foodType?: number,
+    wasteFactor?: number,
   ): number;
   /** F11.4 — count of currently-live FoodSprite entities. Tests + debug. */
   getFoodSpriteCount(): number;
@@ -499,6 +562,23 @@ export interface LivestockWorld {
    * want the fish to stop scaring prey; the host's `leaveGameMode` does this.
    */
   setPlayerPredator(flag: boolean): void;
+  /**
+   * Stage 14 F14.2 — set the current water-quality scalars the VitalitySystem
+   * reads (ammonia + nitrite, mg/L). The LIVE value comes from the future
+   * `WaterChemistryService` (Stage 13 F13.3 — deferred); for now this is the
+   * injection seam. Defaults to clean (0/0): a world that never calls this
+   * behaves benignly and replays byte-identically (no health decay from water).
+   * Negative inputs are clamped to 0.
+   */
+  setWaterQuality(quality: { ammonia: number; nitrite: number }): void;
+  /**
+   * Stage 14 F14.4 — read the current ammonia source term (nitrogen MASS rate,
+   * mg-N/day) produced by the per-fish baseline + uneaten-food accumulator. A
+   * future `WaterChemistryService` (Stage 13 F13.3 — DEFERRED, not in this PR)
+   * feeds this into `simulateChemistry`'s `sourceN`. This PR lands the producer
+   * only; the consumer is documented as pending.
+   */
+  getWasteSourceN(): number;
   /** Run one sim tick of duration `dt` (callers pass `SIM_DT`). */
   step(dt: number): void;
   /**
@@ -526,6 +606,10 @@ interface SnapshotPool {
   phase: Float32Array;
   archetype: Uint8Array;
   scale: Float32Array;
+  /** Stage 14 F14.2 — per-fish health fraction `[0,1]`. Length = `capacity`. */
+  health: Float32Array;
+  /** Stage 14 F14.2 — per-fish hunger accumulator. Length = `capacity`. */
+  hunger: Float32Array;
   /** Fidelity pass — stride 3 (r,g,b per fish). Length = `capacity * 3`. */
   color: Float32Array;
   capacity: number;
@@ -551,6 +635,8 @@ function makeSnapshotPool(
     phase: new Float32Array(capacity),
     archetype: new Uint8Array(capacity),
     scale: new Float32Array(capacity),
+    health: new Float32Array(capacity),
+    hunger: new Float32Array(capacity),
     color: new Float32Array(capacity * 3),
     capacity,
     foodSpritePosition: new Float32Array(spriteCapacity * 3),
@@ -677,6 +763,18 @@ export function createLivestockWorld(
   // live source set. Quiescent + zero-allocation while no air-stone exists.
   const bubbleFluid: BubbleFluidState = makeEmptyBubbleFluidState();
 
+  // Stage 14 F14.4 — waste accumulator (the ammonia source-term producer).
+  // Zeroed at creation; `wasteSystem` folds the per-fish baseline + uneaten
+  // food into the smoothed rate each tick. Read via `getWasteSourceN`.
+  const waste: WasteAccumulator = makeWasteAccumulator();
+
+  // Stage 14 F14.2 — injected water-quality scalars the VitalitySystem reads.
+  // Mutable object so `vitalitySystem` reads the live value without a closure
+  // per tick. Defaults to clean (0/0): a world that never calls
+  // `setWaterQuality` sees no water-driven health decay → replay stays
+  // byte-identical vs. a chemistry-less baseline.
+  const waterQuality: WaterQuality = { ...DEFAULT_WATER_QUALITY };
+
   // Stage 16 F16.1 (game modes) — the single player-controlled fish, or
   // `NO_ENTITY_REF` when none is marked. The injected velocity is the ONE
   // live, non-deterministic signal entering the world; it's overwritten onto
@@ -695,6 +793,8 @@ export function createLivestockWorld(
     __internals: { pendingStartles },
     __bubbleSources: bubbleSources,
     __bubbleFluid: bubbleFluid,
+    __waste: waste,
+    waterQuality,
     seed: seed | 0,
     tickCounter: 0,
     paramStore,
@@ -810,6 +910,10 @@ export function createLivestockWorld(
         addComponent(ecs, FeedingDrive, eid);
         FeedingDrive.hunger[eid] = 0;
         FeedingDrive.lastFedAt[eid] = 0;
+        // F14.2 — every behaved fish starts at full health. VitalitySystem
+        // integrates decay/recovery from hunger + injected water quality.
+        addComponent(ecs, HealthDrive, eid);
+        HealthDrive.health[eid] = 1;
         addComponent(ecs, Curiosity, eid);
         Curiosity.interestX[eid] = NO_INTEREST;
         Curiosity.interestY[eid] = NO_INTEREST;
@@ -921,6 +1025,7 @@ export function createLivestockWorld(
       lifetimeSec = 30,
       calories = 1,
       foodType: number = FOOD_TYPE.FLAKE,
+      wasteFactor: number = DEFAULT_FOOD_WASTE_FACTOR,
     ): number {
       const eid = addEntity(ecs);
       addComponent(ecs, Position, eid);
@@ -932,6 +1037,10 @@ export function createLivestockWorld(
       FoodSprite.calories[eid] = calories;
       const ft = foodType & 0xff;
       FoodSprite.foodType[eid] = ft;
+      // F14.4 — clamp + stamp the modelled waste fraction so uneaten food
+      // contributes proportionally to the ammonia source term on rot.
+      const wf = wasteFactor < 0 ? 0 : wasteFactor > 1 ? 1 : wasteFactor;
+      FoodSprite.wasteFactor[eid] = wf;
       // Per-type initial sink state (flakes float briefly; others ease into
       // their terminal sink). See food-kinematics.ts.
       const k = initialFoodKinematics(ft);
@@ -1090,6 +1199,18 @@ export function createLivestockWorld(
       }
     },
 
+    setWaterQuality(quality: { ammonia: number; nitrite: number }): void {
+      // Mutate the live object in place (VitalitySystem reads it each tick).
+      // Clamp negatives to 0 so a bad input can't manufacture health recovery
+      // by going below the safe floor in the wrong direction.
+      waterQuality.ammonia = quality.ammonia > 0 ? quality.ammonia : 0;
+      waterQuality.nitrite = quality.nitrite > 0 ? quality.nitrite : 0;
+    },
+
+    getWasteSourceN(): number {
+      return waste.sourceNMgPerDay;
+    },
+
     step(dt: number): void {
       // Stage 16 F16.1 — player input injection. The ONE live,
       // non-deterministic write into the world. Done at the very TOP of the
@@ -1134,6 +1255,12 @@ export function createLivestockWorld(
       nippingSystem(this, dt);
       territorialSystem(this, dt);
       feedingSystem(this, dt);
+      // F14.2 — integrate per-fish health off the just-updated hunger +
+      // injected water quality. Slotted right after FeedingSystem (which
+      // produces this tick's hunger) and before the steering systems — it's a
+      // pure state-update, mode-agnostic, and reads no positions, so its seat
+      // is flexible; keeping it adjacent to feeding documents the coupling.
+      vitalitySystem(this, dt);
       curiositySystem(this, dt);
       schoolingSystem(this, dt);
       depthSystem(this, dt);
@@ -1159,6 +1286,11 @@ export function createLivestockWorld(
       // bubble reads is current to this tick.
       bubbleFluidStepSystem(this, dt);
       bubbleLifetimeSystem(this, dt);
+      // F14.4 — fold the per-fish baseline + this tick's uneaten-food impulse
+      // (recorded by foodSpriteLifetimeSystem above) into the smoothed ammonia
+      // source term. Runs in the tail seat alongside the bubble systems; pure
+      // scalar math, allocation-free.
+      wasteSystem(this, dt);
       this.tickCounter += 1;
     },
 
@@ -1189,6 +1321,15 @@ export function createLivestockWorld(
         pool.phase[i] = AnimationPhase.phase[eid] as number;
         pool.archetype[i] = Archetype.id[eid] as number;
         pool.scale[i] = BodyLength.mm[eid] as number;
+        // F14.2 — health + hunger. Behaved fish carry HealthDrive/FeedingDrive;
+        // static-wiggle fish (NO_BEHAVIOR_HANDLE) don't, so report a neutral
+        // full-health / zero-hunger so the HUD never reads a stale slab value.
+        pool.health[i] = hasComponent(ecs, HealthDrive, eid)
+          ? (HealthDrive.health[eid] as number)
+          : 1;
+        pool.hunger[i] = hasComponent(ecs, FeedingDrive, eid)
+          ? (FeedingDrive.hunger[eid] as number)
+          : 0;
         pool.color[i * 3 + 0] = BodyColor.r[eid] as number;
         pool.color[i * 3 + 1] = BodyColor.g[eid] as number;
         pool.color[i * 3 + 2] = BodyColor.b[eid] as number;
@@ -1268,6 +1409,8 @@ export function createLivestockWorld(
         phase: pool.phase.subarray(0, n),
         archetype: pool.archetype.subarray(0, n),
         scale: pool.scale.subarray(0, n),
+        health: pool.health.subarray(0, n),
+        hunger: pool.hunger.subarray(0, n),
         color: pool.color.subarray(0, n * 3),
         foodSpriteCount: m,
         foodSpritePosition: pool.foodSpritePosition.subarray(0, m * 3),
@@ -1285,6 +1428,13 @@ export function createLivestockWorld(
       // alias a stale species table.
       this.tickCounter = 0;
       nextFoodSpawnIndex = 0;
+      // F14.4 / F14.2 — reset the waste accumulator + restore clean water so a
+      // reused-then-disposed world doesn't carry a stale source term or a
+      // lingering toxic input into the next spawn cycle.
+      waste.sourceNMgPerDay = 0;
+      waste.pendingUneatenN = 0;
+      waterQuality.ammonia = DEFAULT_WATER_QUALITY.ammonia;
+      waterQuality.nitrite = DEFAULT_WATER_QUALITY.nitrite;
       paramStore.clear();
       this.spatialGrid.clear();
       pendingStartles.clear();

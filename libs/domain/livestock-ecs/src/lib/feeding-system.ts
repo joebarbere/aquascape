@@ -34,6 +34,7 @@
  */
 import { defineQuery, hasComponent, removeEntity } from 'bitecs';
 import type { FeedingCategory } from '@aquascape/domain/livestock-behaviors';
+import { recordUneatenFood } from './waste-accumulator';
 import {
   BehaviorMode,
   BEHAVIOR_MODE,
@@ -379,6 +380,15 @@ export function foodSpriteLifetimeSystem(world: LivestockWorld, dt: number): voi
   for (const eid of foodSpriteQuery(ecs)) {
     const next = (FoodSprite.lifetime[eid] as number) - dt;
     if (next <= 0) {
+      // F14.4 — a sprite that times out here was NEVER eaten (FeedingSystem
+      // removes a consumed sprite directly, so it's already gone from this
+      // query). Its remaining nitrogen rots into the tank: fold calories ×
+      // wasteFactor into the world's ammonia source term before despawning.
+      recordUneatenFood(
+        world,
+        FoodSprite.calories[eid] as number,
+        FoodSprite.wasteFactor[eid] as number,
+      );
       removeEntity(ecs, eid);
     } else {
       FoodSprite.lifetime[eid] = next;
