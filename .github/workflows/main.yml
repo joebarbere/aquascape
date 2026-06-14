@@ -23,7 +23,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    # Combined lint/test/build/e2e per OS. The serial software-WebGL Playwright
+    # suite grew with the Stage 14–16 simulation/game modes; bumped 40→55 for
+    # headroom (the PR e2e job hit its own 20-min cap — see pr.yml).
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
 

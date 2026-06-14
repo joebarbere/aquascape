@@ -179,7 +179,11 @@ jobs:
     # WebGL context in jsdom). See docs/caveats/livestock-ecs.md.
     name: e2e (web Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The Playwright suite runs serially under software WebGL (SwiftShader),
+    # and every game/sim spec is `test.slow()`. The suite has grown with the
+    # Stage 14–16 simulation/game modes; 20 min was hit exactly (a timeout,
+    # not a failure). 35 gives headroom as more `?mode=` specs land.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
