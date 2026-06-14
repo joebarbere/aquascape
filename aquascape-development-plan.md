@@ -122,8 +122,8 @@ Key format decisions:
 - **Everything is plain serializable data** — no class instances, so `JSON.parse(JSON.stringify(doc))` is lossless.
 - **Versioned + migratable** — a `schemaVersion` field drives a pure, total `Migration` chain (`from`→`to`) applied on load.
 - **Forward-compatible** — an `extensions` bag and per-object optional fields mean older readers preserve unknown data rather than dropping it.
-- **Container** — the on-disk `.aqua` file is a ZIP holding `document.json`, an `assets/` directory (imported tank photos, AI renders), and an optional `thumbnail.png`. Asset-free documents may be saved as bare JSON with the `.aqua` extension; readers sniff for ZIP magic and accept both.
-- **Reproducibility** — a document-level `seed` (plus optional per-scatter seed) makes scatter planting, growth jitter, and AI renders deterministic.
+- **Container** — the on-disk `.aqua` file is a ZIP holding `document.json`, an `assets/` directory (imported tank photos), and an optional `thumbnail.png`. Asset-free documents may be saved as bare JSON with the `.aqua` extension; readers sniff for ZIP magic and accept both.
+- **Reproducibility** — a document-level `seed` (plus optional per-scatter seed) makes scatter planting and growth jitter deterministic.
 - **AI render history** lives in the document as `renderHistory[]`, each record tagging whether a `local` or `hosted` provider produced it, the resolved request (prompt/seed/source), and the result asset.
 
 ---
@@ -133,7 +133,6 @@ Key format decisions:
 - **Language/UI:** TypeScript (strict), Angular (standalone components, signals where sensible), Nx.
 - **State:** NgRx.
 - **3D:** Three.js for the `renderer-3d` library (Stage 10).
-- **AI render:** dual `RenderProvider` implementations — a local/self-hosted model and a hosted bring-your-own-key API — behind one interface (Stage 9).
 - **Desktop:** Electron with context isolation, no `nodeIntegration` in renderer, all native access via a typed preload bridge.
 - **Unit tests:** Jest across all libs. Domain libs target ≥90% coverage; the pure logic (geometry, growth-sim, commands, document migrations) is exhaustively tested.
 - **Component tests:** Angular Testing Library + Jest for feature/ui libs.
@@ -145,7 +144,7 @@ Key format decisions:
 
 ## 4. Staged Roadmap
 
-Each stage ends with a demoable milestone. Features map back to the source-tool capabilities: tank setup, substrate shaping, drag-and-drop hardscape (+ categories, mirror), layered planting with growth, templates, precision guidelines, export, livestock/equipment, community gallery, AI render, and 3D.
+Each stage ends with a demoable milestone. Features map back to the source-tool capabilities: tank setup, substrate shaping, drag-and-drop hardscape (+ categories, mirror), layered planting with growth, templates, precision guidelines, export, livestock/equipment, community gallery, and 3D.
 
 ---
 
@@ -387,37 +386,6 @@ Each stage ends with a demoable milestone. Features map back to the source-tool 
 
 ---
 
-### Stage 9 — AI Photorealistic Render (local **and** hosted)
-
-**Goal:** Turn a layout into a realistic preview, via either a local model or a hosted provider — user's choice.
-
-**Features / work items**
-
-- F9.1 **AI render** of the finished design, conditioned on the scene description plus a flat 2D/3D render of the layout. _(MyAquariumBuilder's standout)_
-- F9.2 **Dual provider support** behind one `RenderProvider` interface:
-  - **Local provider** — runs an on-device/self-hosted model (e.g. a local Stable Diffusion-class endpoint). Fully offline; the desktop build can ship/point to a local runtime. No data leaves the machine.
-  - **Hosted provider** — calls a remote image API (bring-your-own-key). Multiple hosted backends are pluggable by name.
-  - The user selects and configures the active provider in settings; the document's `renderHistory` records which kind produced each image.
-- F9.3 Render history attached to the document (`renderHistory[]` in the schema).
-
-**Feature requirements (detail)**
-
-- One contract, two implementations: `RenderProvider.generate(request: RenderRequest): Promise<RenderResult>`; the editor never branches on provider kind beyond configuration.
-- `RenderRequest` is built purely from the scene + the flat render asset, so it's testable without any model.
-- **Local-first/offline:** with no network and no local runtime configured, the panel shows a clear "configure a provider" state rather than failing; a configured local runtime works with networking fully disabled.
-- **Security:** hosted API keys live in Electron main / OS secure storage (web: session-scoped, never persisted in plaintext); keys never reach the renderer process or the document.
-- Image-to-image conditioning uses the flat layout render as control input so output composition matches the design.
-
-**Testing**
-
-- Unit: `RenderRequest` builder from scenes; provider-selection/config logic; a fake provider implementing the interface; secure-key handling (keys absent from serialized doc).
-- Component: render panel states (idle / loading / result / error / provider-not-configured); provider switcher.
-- E2E: with a stub **local** provider, render fully offline → result saved to history; with a stub **hosted** provider (mock server), configure key → render → history records `kind: "hosted"`.
-
-**Milestone:** "Generate a photorealistic preview from a layout, via local or hosted AI."
-
----
-
 ### Stage 10 — 3D Renderer
 
 **Goal:** True three-dimensional hardscape composition (the Blender-tier capability, built in).
@@ -474,7 +442,6 @@ Each stage ends with a demoable milestone. Features map back to the source-tool 
 | Fish/livestock + stocking                   | 7     | F7.1–F7.2 |
 | Equipment browser                           | 7     | F7.3      |
 | Community gallery (plan/fish/gear per tank) | 8     | F8.1      |
-| AI photorealistic render (local + hosted)   | 9     | F9.1–F9.2 |
 | 3D modeling (Three.js, Blender-tier)        | 10    | F10.1     |
 
 ---

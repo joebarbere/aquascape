@@ -26,19 +26,10 @@ These settings must be configured at `BrowserWindow` creation and verified by an
 
 If a feature needs a capability that `platform-api` doesn't yet expose, **extend the interface first** — don't add an Electron-only shortcut. The same feature must work on the web build via `platform-web`.
 
-## Secure storage for AI render keys (Stage 9)
-
-Hosted AI provider API keys are sensitive credentials. Requirements:
-
-- Keys live in OS secure storage (`safeStorage` / Keychain / DPAPI / libsecret) accessed only by the main process.
-- Keys are **never** sent to the renderer process. The renderer asks main to "render with provider X"; main fetches the key, makes the API call, returns only the result.
-- Keys must **never** appear in the serialized `.aqua` document, in logs, in error messages surfaced to the renderer, or in crash reports.
-- A test must serialize a document containing a configured hosted provider and assert no key material is present.
-
 ## Offline-first
 
 - The desktop build must boot, open a document, edit it, and save it with networking fully disabled. Run a smoke test under a disabled-network condition for every release.
-- The community gallery (Stage 8) and hosted AI render (Stage 9) are the only features that may degrade — they degrade to a clear "configure / connect" state, never to a crash or a hang.
+- The community gallery (Stage 8) is the only feature that may degrade — it degrades to a clear "configure / connect" state, never to a crash or a hang.
 - Auto-update, telemetry (opt-in only), and crash reporting must all fail closed when offline — never block a feature flow.
 
 ## Packaging

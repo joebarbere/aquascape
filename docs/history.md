@@ -26,7 +26,6 @@ abstraction stabilized.
 | 6     | Image export, layout summary, photo backdrop, PWA install, packaged installers                                                                           | ✅ Shipped |
 | 7     | Livestock & equipment + stocking guidance + setup sheet                                                                                                  | ✅ Shipped |
 | 8     | Community gallery (browse + remix shared layouts) — [`plans/stage-8-community-gallery/`](../plans/stage-8-community-gallery/)                            | 📐 Planned |
-| 9     | AI photorealistic render (local + hosted) — [`plans/stage-9-ai-render/`](../plans/stage-9-ai-render/)                                                    | 📐 Planned |
 | 10    | 3D renderer (Three.js / WebGL — read-only)                                                                                                               | ✅ Shipped |
 | 11    | Animated livestock & ambient simulation (F11.1–F11.7) — [`plans/stage-11-animated-livestock.md`](../plans/stage-11-animated-livestock.md)                | ✅ Shipped |
 | 12    | Release pipeline — `pnpm release <version>`, installers, GitHub Releases — [`plans/stage-12-release-pipeline.md`](../plans/stage-12-release-pipeline.md) | 📐 Planned |

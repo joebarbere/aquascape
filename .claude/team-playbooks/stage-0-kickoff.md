@@ -93,5 +93,4 @@ flagging.
 Save the team pattern for stages where multiple specialists must agree on a fresh contract:
 
 - **Stage 4 — Planting + growth-sim + layers.** Four areas have to align on the growth API, scatter contract, layer semantics, and seeding scheme simultaneously. See [`stage-4-planting-and-growth.md`](stage-4-planting-and-growth.md).
-- **Stage 9 — AI render providers.** Designing one `RenderProvider` interface that fits both a local on-device model and a hosted bring-your-own-key API, with secure key handling in Electron and a stub-friendly Angular panel, is exactly the kind of cross-functional design problem a team handles well.
 - **Stage 10 — 3D renderer adoption test.** The renderer-engineer ⇄ scene-model-engineer ⇄ aqua-document-guardian negotiation is the final exam for the architecture's abstractions. Worth a team to flush out any leakage.

@@ -30,7 +30,6 @@ These are explicitly called out in the plan as CI gates:
 - **Stage 4**: plant a carpet, group a midground cluster, drag the growth slider, reorder layers, save/reopen — growth state and layer order preserved. **Seeded scatter must be reproducible** across runs.
 - **Stage 5**: overlays (golden ratio, thirds) don't serialize into the document.
 - **Stage 6**: export PNG to disk produces identical pixels on web and Electron at the same size.
-- **Stage 9**: with a stub local provider, render fully offline → result saved to `renderHistory`. With a stub hosted provider, key never appears in the serialized doc.
 - **Stage 10**: toggle 2D ⇄ 3D — document unchanged and consistent.
 
 ## Test discipline
