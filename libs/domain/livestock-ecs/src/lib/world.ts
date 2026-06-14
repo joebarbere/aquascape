@@ -39,6 +39,7 @@ import {
   Curiosity,
   FearState,
   FeedingDrive,
+  FOOD_TYPE,
   FoodSprite,
   Force,
   HARDSCAPE_CATEGORY,
@@ -78,6 +79,10 @@ import {
   bubbleLifetimeSystem,
   bubbleSourceSpawnSystem,
 } from './bubble-system';
+import {
+  foodSpriteKinematicSystem,
+  initialFoodKinematics,
+} from './food-kinematics';
 import {
   bubbleFluidStepSystem,
   makeEmptyBubbleFluidState,
@@ -269,6 +274,15 @@ export interface WorldSnapshot {
   /** Stride 3 — x,y,z per sprite. Length = `foodSpriteCount * 3`. */
   foodSpritePosition: Float32Array;
   /**
+   * F14.1 — per-sprite `FOOD_TYPE.*` code (flake/pellet/wafer/live), parallel
+   * to `foodSpritePosition` (one entry per sprite, same sorted order). Length
+   * = `foodSpriteCount`. Additive — lets the renderer vary the billboard per
+   * food form WITHOUT a new vertex attribute (food sprites are a separate
+   * billboard mesh, not the 16-attribute fish program). Pooled — copy if
+   * retained past the next `snapshot()`.
+   */
+  foodSpriteType: Uint8Array;
+  /**
    * F11.5 Wave 5 — number of currently-live bubble particles. Reset to 0
    * when no air-stone source is registered or every bubble has popped.
    *
@@ -372,16 +386,25 @@ export interface LivestockWorld {
    */
   injectStartle(eid: number, magnitude: number): void;
   /**
-   * F11.4 — spawn a transient food sprite at the given position.
+   * F11.4 / F14.1 — spawn a transient food sprite at the given position.
    * Returns the new bitECS entity id. Default lifetime 30 s; default
-   * calories 1 (enough to satiate a single fish to hunger = 0). The
-   * sprite is a separate entity from any fish — FeedingSystem queries
-   * `FoodSprite`-tagged entities, not the fish slab.
+   * calories 1 (enough to satiate a single fish to hunger = 0); default
+   * `foodType` = `FOOD_TYPE.FLAKE`. The sprite is a separate entity from
+   * any fish — FeedingSystem queries `FoodSprite`-tagged entities, not the
+   * fish slab.
+   *
+   * `foodType` drives the per-type sink kinematics (flakes float-then-sink,
+   * pellets sink fast, wafers settle on the substrate, live food darts —
+   * see `foodSpriteKinematicSystem`) AND the band-matching in `feedingSystem`.
+   * The sprite is stamped with a monotonic `spawnIndex` (separate from the
+   * fish counter) used as the stable `tickPrng` key for the live-food dart
+   * and the cross-world snapshot sort key.
    */
   spawnFoodSprite(
     position: { x: number; y: number; z: number },
     lifetimeSec?: number,
     calories?: number,
+    foodType?: number,
   ): number;
   /** F11.4 — count of currently-live FoodSprite entities. Tests + debug. */
   getFoodSpriteCount(): number;
@@ -508,6 +531,8 @@ interface SnapshotPool {
   capacity: number;
   /** F11.4 — food sprite slab. Grown independently of the fish slab. */
   foodSpritePosition: Float32Array;
+  /** F14.1 — per-sprite `FOOD_TYPE.*` code, parallel to `foodSpritePosition`. */
+  foodSpriteType: Uint8Array;
   foodSpriteCapacity: number;
   /** F11.5 Wave 5 — bubble particle slab. Grown independently of fish + sprites. */
   bubblePosition: Float32Array;
@@ -529,6 +554,7 @@ function makeSnapshotPool(
     color: new Float32Array(capacity * 3),
     capacity,
     foodSpritePosition: new Float32Array(spriteCapacity * 3),
+    foodSpriteType: new Uint8Array(spriteCapacity),
     foodSpriteCapacity: spriteCapacity,
     bubblePosition: new Float32Array(bubbleCapacity * 3),
     bubbleCapacity,
@@ -545,6 +571,7 @@ function growSpritePool(pool: SnapshotPool, needed: number): void {
   let cap = pool.foodSpriteCapacity;
   while (cap < needed) cap *= 2;
   pool.foodSpritePosition = new Float32Array(cap * 3);
+  pool.foodSpriteType = new Uint8Array(cap);
   pool.foodSpriteCapacity = cap;
 }
 
@@ -609,6 +636,12 @@ export function createLivestockWorld(
   // built in the same process get distinct id ranges. spawnIndex starts
   // at 0 in every fresh world.
   let nextSpawnIndex = 0;
+  // F14.1 — monotonic 0-based spawn counter for FOOD sprites, distinct from
+  // the fish `nextSpawnIndex`. Stamped on every `spawnFoodSprite` call; it's
+  // the stable `tickPrng` key for the live-food dart and the cross-world
+  // stable sort key for the snapshot's food slab. Starts at 0 in every fresh
+  // world (and resets on `dispose`).
+  let nextFoodSpawnIndex = 0;
 
   // Per-tick pending startle map. `injectStartle(eid, magnitude)` accumulates
   // into here; FearSystem drains it on the next step() and clears the map.
@@ -887,6 +920,7 @@ export function createLivestockWorld(
       position: { x: number; y: number; z: number },
       lifetimeSec = 30,
       calories = 1,
+      foodType: number = FOOD_TYPE.FLAKE,
     ): number {
       const eid = addEntity(ecs);
       addComponent(ecs, Position, eid);
@@ -896,6 +930,15 @@ export function createLivestockWorld(
       addComponent(ecs, FoodSprite, eid);
       FoodSprite.lifetime[eid] = lifetimeSec;
       FoodSprite.calories[eid] = calories;
+      const ft = foodType & 0xff;
+      FoodSprite.foodType[eid] = ft;
+      // Per-type initial sink state (flakes float briefly; others ease into
+      // their terminal sink). See food-kinematics.ts.
+      const k = initialFoodKinematics(ft);
+      FoodSprite.vy[eid] = k.vy;
+      FoodSprite.floatRemaining[eid] = k.floatRemaining;
+      FoodSprite.spawnIndex[eid] = nextFoodSpawnIndex;
+      nextFoodSpawnIndex = (nextFoodSpawnIndex + 1) >>> 0;
       return eid;
     },
 
@@ -1103,6 +1146,10 @@ export function createLivestockWorld(
       // nudge a fish a fraction of a mm outside the box.
       clampPositionToAabb(ecs, this.tankAabb);
       animationSystem(ecs, dt);
+      // F14.1 — advance per-type food-sprite sink kinematics BEFORE the
+      // lifetime drain so the position the snapshot reads this tick already
+      // reflects the fall, and an expired sprite is removed on the same tick.
+      foodSpriteKinematicSystem(this, dt);
       foodSpriteLifetimeSystem(this, dt);
       bubbleSourceSpawnSystem(this, dt);
       // Bubble fluid fidelity pass — advance the per-source Stam slices, then
@@ -1149,17 +1196,29 @@ export function createLivestockWorld(
       }
 
       // F11.4 — food sprite slab. Separate query, separate pooled
-      // Float32Array. The renderer reads `foodSpritePosition` to draw a
-      // billboard / sprite cue. Sprites have no orientation / archetype
-      // / scale — a single position is all the Wave 4 renderer needs.
+      // Float32Arrays. The renderer reads `foodSpritePosition` to draw a
+      // billboard / sprite cue + `foodSpriteType` to vary the billboard.
+      // Sprites have no orientation / archetype / scale — position + type is
+      // all the renderer needs.
+      //
+      // CROSS-WORLD DETERMINISM (F14.1): bitECS' query returns sprites in eid
+      // allocation order, but eids come from a module-global cursor — two cold
+      // worlds get distinct ranges, so raw iteration order would silently break
+      // the byte-identical replay once food slabs are compared. Sort by the
+      // stable `spawnIndex` stamped on each sprite at spawn time (same fix the
+      // bubble slab uses with `(sourceEid, spawnSeq)`).
       const sprites = FOOD_SPRITE_ENTITIES(ecs);
       const m = sprites.length;
       if (m > pool.foodSpriteCapacity) growSpritePool(pool, m);
+      const sortedSprites = Array.from(sprites).sort(
+        (a, c) => (FoodSprite.spawnIndex[a] as number) - (FoodSprite.spawnIndex[c] as number),
+      );
       let j = 0;
-      for (const sEid of sprites) {
+      for (const sEid of sortedSprites) {
         pool.foodSpritePosition[j * 3 + 0] = Position.x[sEid] as number;
         pool.foodSpritePosition[j * 3 + 1] = Position.y[sEid] as number;
         pool.foodSpritePosition[j * 3 + 2] = Position.z[sEid] as number;
+        pool.foodSpriteType[j] = FoodSprite.foodType[sEid] as number;
         j++;
       }
 
@@ -1212,6 +1271,7 @@ export function createLivestockWorld(
         color: pool.color.subarray(0, n * 3),
         foodSpriteCount: m,
         foodSpritePosition: pool.foodSpritePosition.subarray(0, m * 3),
+        foodSpriteType: pool.foodSpriteType.subarray(0, m),
         bubbleCount: b,
         bubblePosition: pool.bubblePosition.subarray(0, b * 3),
       };
@@ -1224,6 +1284,7 @@ export function createLivestockWorld(
       // the param store + grid so the next world doesn't accidentally
       // alias a stale species table.
       this.tickCounter = 0;
+      nextFoodSpawnIndex = 0;
       paramStore.clear();
       this.spatialGrid.clear();
       pendingStartles.clear();

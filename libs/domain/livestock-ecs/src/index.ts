@@ -41,11 +41,13 @@ export {
   Territory,
   FISH_ARCHETYPE,
   BEHAVIOR_MODE,
+  FOOD_TYPE,
   HARDSCAPE_CATEGORY,
   NO_ENTITY_REF,
   NO_INTEREST,
   type FishArchetypeId,
   type BehaviorModeId,
+  type FoodTypeId,
   type HardscapeCategoryId,
 } from './lib/components';
 
@@ -77,6 +79,7 @@ export {
   fearSystem,
   feedingSystem,
   flowFieldSystem,
+  foodSpriteKinematicSystem,
   foodSpriteLifetimeSystem,
   kinematicSystem,
   nippingSystem,
@@ -107,6 +110,17 @@ export {
   sampleBubbleFluid,
   type BubbleFluidState,
 } from './lib/bubble-fluid';
+
+// ─── Typed food sink kinematics (Stage 14 F14.1) ──────────────────────────
+export {
+  FLAKE_FLOAT_SECONDS,
+  FLAKE_FLOAT_VY_MM_PER_S,
+  FLAKE_SINK_VY_MM_PER_S,
+  PELLET_SINK_VY_MM_PER_S,
+  WAFER_SINK_VY_MM_PER_S,
+  LIVE_DRIFT_VY_MM_PER_S,
+  initialFoodKinematics,
+} from './lib/food-kinematics';
 
 // ─── Deterministic PRNG ──────────────────────────────────────────────────
 export { tickPrng } from './lib/prng';

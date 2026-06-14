@@ -41,6 +41,7 @@ import {
   BodyLength,
   Curiosity,
   FeedingDrive,
+  FOOD_TYPE,
   FoodSprite,
   Force,
   Hardscape,
@@ -111,6 +112,36 @@ const SUBSTRATE_BAND_MM = 50;
 /** Surface/substrate Y-band fractions for surface/substrate feeders. */
 const SURFACE_BAND_FRACTION = 0.7;
 const SUBSTRATE_BAND_FRACTION = 0.3;
+
+/**
+ * F14.1 — squared-distance penalty multiplier applied when a sprite's
+ * `foodType` doesn't match the feeder's preferred form. A fish still EATS
+ * any reachable food (the penalty only biases target SELECTION among
+ * candidates), but it prefers the food its mouth + station is built for —
+ * surface feeders go for drifting flakes, substrate feeders for settled
+ * wafers, midwater for pellets/flakes. >1 so a band-appropriate sprite at a
+ * given distance always out-ranks a mismatched sprite at the same distance;
+ * kept modest so a lone mismatched sprite is still chosen rather than ignored.
+ * The penalty is a pure scalar multiply on the squared distance — no random
+ * draw, no iteration-order dependence — so the 1000-tick replay holds.
+ */
+const FOOD_TYPE_MISMATCH_PENALTY = 4;
+
+/**
+ * Preferred `FOOD_TYPE.*` for a sprite-eating feeding category. Returns -1
+ * for categories with no preference (every food ranks equally — e.g.
+ * midwater, which happily takes flakes or pellets). Pure lookup.
+ */
+function preferredFoodType(category: FeedingCategory): number {
+  switch (category) {
+    case 'surface':
+      return FOOD_TYPE.FLAKE;
+    case 'substrate':
+      return FOOD_TYPE.WAFER;
+    default:
+      return -1;
+  }
+}
 
 /**
  * Run the FeedingSystem once per sim tick. Always runs, in the
@@ -233,6 +264,11 @@ export function feedingSystem(world: LivestockWorld, dt: number): void {
     const minYBand = category === 'substrate' ? aabb.minY : aabb.minY + tankHeight * SUBSTRATE_BAND_FRACTION;
     const maxYBand = category === 'surface' ? aabb.maxY : aabb.minY + tankHeight * SURFACE_BAND_FRACTION;
 
+    // F14.1 — preferred food form for this band (-1 = no preference). Drives
+    // a squared-distance penalty so the band's natural food out-ranks a
+    // mismatched form, without ever fully ignoring an only-reachable sprite.
+    const prefType = preferredFoodType(category);
+
     let bestSpriteEid = -1;
     let bestSpriteDistSq = Infinity;
     for (const spriteEid of spriteEids) {
@@ -246,7 +282,11 @@ export function feedingSystem(world: LivestockWorld, dt: number): void {
       const dx = (Position.x[spriteEid] as number) - sx;
       const dy = sySprite - sy;
       const dz = (Position.z[spriteEid] as number) - sz;
-      const d2 = dx * dx + dy * dy + dz * dz;
+      let d2 = dx * dx + dy * dy + dz * dz;
+      // F14.1 — type-preference bias (scalar multiply; order-independent).
+      if (prefType >= 0 && (FoodSprite.foodType[spriteEid] as number) !== prefType) {
+        d2 *= FOOD_TYPE_MISMATCH_PENALTY;
+      }
       if (d2 < bestSpriteDistSq) {
         bestSpriteDistSq = d2;
         bestSpriteEid = spriteEid;
@@ -259,7 +299,10 @@ export function feedingSystem(world: LivestockWorld, dt: number): void {
         const dx = (Position.x[spriteEid] as number) - sx;
         const dy = (Position.y[spriteEid] as number) - sy;
         const dz = (Position.z[spriteEid] as number) - sz;
-        const d2 = dx * dx + dy * dy + dz * dz;
+        let d2 = dx * dx + dy * dy + dz * dz;
+        if (prefType >= 0 && (FoodSprite.foodType[spriteEid] as number) !== prefType) {
+          d2 *= FOOD_TYPE_MISMATCH_PENALTY;
+        }
         if (d2 < bestSpriteDistSq) {
           bestSpriteDistSq = d2;
           bestSpriteEid = spriteEid;
@@ -268,7 +311,13 @@ export function feedingSystem(world: LivestockWorld, dt: number): void {
     }
 
     if (bestSpriteEid >= 0) {
-      const dist = Math.sqrt(bestSpriteDistSq);
+      // `bestSpriteDistSq` may carry the type-mismatch penalty (it's only a
+      // SELECTION bias), so recompute the TRUE distance to the chosen sprite
+      // for reach detection + the steering magnitude.
+      const tdx = (Position.x[bestSpriteEid] as number) - sx;
+      const tdy = (Position.y[bestSpriteEid] as number) - sy;
+      const tdz = (Position.z[bestSpriteEid] as number) - sz;
+      const dist = Math.sqrt(tdx * tdx + tdy * tdy + tdz * tdz);
       if (dist < reachSpriteMm) {
         // Consume — decrement sprite calories, reset hunger.
         const calories = FoodSprite.calories[bestSpriteEid] as number;
@@ -286,14 +335,11 @@ export function feedingSystem(world: LivestockWorld, dt: number): void {
           removeEntity(ecs, bestSpriteEid);
         }
       } else {
-        // Steer toward the sprite.
-        const tx = (Position.x[bestSpriteEid] as number) - sx;
-        const ty = (Position.y[bestSpriteEid] as number) - sy;
-        const tz = (Position.z[bestSpriteEid] as number) - sz;
+        // Steer toward the sprite (reuse the true-distance delta computed above).
         const k = FEED_FORCE_MAGNITUDE / dist;
-        Force.x[eid] = (Force.x[eid] as number) + tx * k;
-        Force.y[eid] = (Force.y[eid] as number) + ty * k;
-        Force.z[eid] = (Force.z[eid] as number) + tz * k;
+        Force.x[eid] = (Force.x[eid] as number) + tdx * k;
+        Force.y[eid] = (Force.y[eid] as number) + tdy * k;
+        Force.z[eid] = (Force.z[eid] as number) + tdz * k;
       }
     }
     FeedingDrive.hunger[eid] = hunger;

@@ -314,17 +314,63 @@ export const Curiosity = defineComponent({
 });
 
 /**
+ * Physical form of a food sprite (Stage 14 F14.1). Mirrors the catalog's
+ * `FoodEntry.type` ('flake' | 'pellet' | 'wafer' | 'live'); the host maps
+ * the string form to one of these integers before calling `spawnFoodSprite`.
+ * Drives the per-type sink kinematics in `foodSpriteKinematicSystem` and the
+ * band-matching in `feedingSystem` (surface feeders prefer drifting flakes,
+ * substrate feeders prefer settled wafers).
+ *
+ * Stored as a `ui8` on the FoodSprite slab so the renderer can branch a
+ * per-sprite billboard size/colour from a flat lookup WITHOUT a new vertex
+ * attribute — the livestock fish program sits at the 16-attribute ANGLE
+ * ceiling, but food sprites are a SEPARATE billboard mesh, so packing food
+ * type into the snapshot's existing sprite slab is free of that budget.
+ */
+export const FOOD_TYPE = {
+  FLAKE: 0,
+  PELLET: 1,
+  WAFER: 2,
+  LIVE: 3,
+} as const;
+
+export type FoodTypeId = (typeof FOOD_TYPE)[keyof typeof FOOD_TYPE];
+
+/**
  * Tag component — entity is a food sprite, not a fish or a hardscape.
  * Food sprites are spawned by `world.spawnFoodSprite`; FeedingSystem
  * picks them up as targets for surface / midwater / substrate feeders.
  * `lifetime` decrements each tick (FoodSpriteLifetimeSystem); when it
  * reaches 0 the sprite despawns.
+ *
+ * F14.1 adds typed-food fields:
+ *   - `foodType` is a `FOOD_TYPE.*` code driving the per-type sink model.
+ *   - `vy` is the sprite's current vertical velocity (mm/s), integrated by
+ *     `foodSpriteKinematicSystem` each tick. Initialised per type at spawn
+ *     (flakes start with a brief positive float, pellets a fast sink, …).
+ *   - `floatRemaining` counts down the seconds a flake stays buoyant before
+ *     it transitions from floating to slow-sinking. Zero for non-flakes.
+ *   - `spawnIndex` is the monotonic 0-based order the sprite was spawned in
+ *     (a separate counter from the fish spawnIndex). It's the STABLE
+ *     `tickPrng` key for the live-food erratic dart AND the cross-world
+ *     stable sort key for the snapshot's food slab — bitECS eids come from a
+ *     module-global cursor, so raw query order would break byte-identical
+ *     replay (same fix the fish slab uses with `BehaviorParamsRef.spawnIndex`
+ *     and the bubble slab uses with `(sourceEid, spawnSeq)`).
  */
 export const FoodSprite = defineComponent({
   /** Seconds remaining before the sprite auto-despawns. */
   lifetime: Types.f32,
   /** Satiation contribution per nibble. Decremented as the fish feeds. */
   calories: Types.f32,
+  /** Physical form — `FOOD_TYPE.*`. Drives sink kinematics + band-matching. */
+  foodType: Types.ui8,
+  /** Current vertical velocity in mm/s (signed; negative = sinking). */
+  vy: Types.f32,
+  /** Seconds a flake stays buoyant before transitioning to slow sink. */
+  floatRemaining: Types.f32,
+  /** Monotonic 0-based spawn order — stable tickPrng key + snapshot sort key. */
+  spawnIndex: Types.ui32,
 });
 
 /**

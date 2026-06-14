@@ -82,6 +82,8 @@ import type {
   Catalog,
   DecorEntry as CatalogDecorEntry,
   EquipmentEntry as CatalogEquipmentEntry,
+  FoodEntry as CatalogFoodEntry,
+  FoodType as CatalogFoodType,
   HardscapeEntry as CatalogHardscapeEntry,
   LivestockEntry as CatalogLivestockEntry,
 } from '@aquascape/domain/catalog';
@@ -102,11 +104,13 @@ import {
 import { seededHash01 } from '@aquascape/domain/geometry';
 import {
   FISH_ARCHETYPE,
+  FOOD_TYPE,
   HARDSCAPE_CATEGORY,
   NO_BEHAVIOR_HANDLE,
   createLivestockWorld,
   tickPrng,
   type BubbleSourceRegistration,
+  type FoodTypeId,
   type HardscapeRegistrationEntry,
   type LivestockWorld,
   type TankAabb,
@@ -142,6 +146,50 @@ const FOOD_SPRITE_SURFACE_OFFSET_MM = 20;
 /** F11.4 — bounds for the random sprite-count default (inclusive). */
 const FOOD_SPRITE_DEFAULT_MIN = 3;
 const FOOD_SPRITE_DEFAULT_MAX = 6;
+
+/**
+ * F14.1 — default per-sprite calories (satiation) when the caller doesn't
+ * supply a `food` catalog row. One unit fully satiates a single fish; the
+ * legacy "Feed tank" scatter keeps this value so its behaviour is unchanged.
+ */
+const FOOD_DEFAULT_CALORIES = 1;
+
+/**
+ * F14.1 — map a catalog `FoodEntry` to a per-sprite calorie figure. Higher-
+ * protein foods carry more satiation; the modelled `wasteFactor` shaves it
+ * down (a messier food delivers less of its mass as usable nutrition before
+ * the rest decays). Bounded to a sensible `[0.5, 3]` band so no single sprite
+ * trivially satiates a whole school or delivers nothing. Pure + deterministic
+ * — same catalog row always yields the same calories.
+ */
+function caloriesForFood(entry: CatalogFoodEntry): number {
+  // proteinPct is 0–100 when published; default to a mid 40 % when omitted
+  // (live/frozen foods often omit it). Normalise to a [0,1]-ish nutrition
+  // density, then discount by waste.
+  const proteinFraction = (entry.proteinPct ?? 40) / 100;
+  const usable = proteinFraction * (1 - entry.wasteFactor);
+  // Scale into the satiation band. A 46 %-protein, 0.4-waste flake →
+  // 0.46 * 0.6 = 0.276 → ~1.4 calories; a 48 %-protein, 0.25-waste pellet →
+  // 0.48 * 0.75 = 0.36 → ~1.8.
+  const calories = 0.5 + usable * 5;
+  return calories < 0.5 ? 0.5 : calories > 3 ? 3 : calories;
+}
+
+/** F14.1 — map a catalog `FoodType` string to the ECS `FOOD_TYPE` integer. */
+function foodTypeCode(type: CatalogFoodType): FoodTypeId {
+  switch (type) {
+    case 'flake':
+      return FOOD_TYPE.FLAKE;
+    case 'pellet':
+      return FOOD_TYPE.PELLET;
+    case 'wafer':
+      return FOOD_TYPE.WAFER;
+    case 'live':
+      return FOOD_TYPE.LIVE;
+    default:
+      return FOOD_TYPE.FLAKE;
+  }
+}
 
 /**
  * F11.5 — fallback sphere radius for the hardscape SDF bake (mm). The
@@ -293,6 +341,52 @@ export class LivestockSimulationService implements OnDestroy {
    * Sprite despawn is owned by `foodSpriteLifetimeSystem` (already running
    * in `world.step`); we don't track sprites here.
    */
+  /**
+   * F14.1 — TYPED food-drop primitive. Drop a single food sprite of a given
+   * form at a point in the tank. This is the seam Stage 15's feeding-action
+   * tool drives (place a drop at a click point); the legacy "Feed tank"
+   * scatter (`onFeedTank`) is built on top of it.
+   *
+   * `position` is in canonical tank-mm coords. `foodType` is one of the
+   * `FOOD_TYPE.*` codes (default FLAKE). `calories` overrides the satiation
+   * (default `FOOD_DEFAULT_CALORIES`); `lifetimeSec` overrides the despawn
+   * window (default the world's 30 s). No-op (returns null) when the world
+   * isn't built (no livestock in the scene).
+   *
+   * The per-type sink behaviour (flake float→sink, pellet fast-sink, wafer
+   * settle, live dart) is owned by the ECS `foodSpriteKinematicSystem` — the
+   * service just places the drop; the sim animates it deterministically.
+   */
+  spawnFood(
+    position: { x: number; y: number; z: number },
+    foodType: number = FOOD_TYPE.FLAKE,
+    calories: number = FOOD_DEFAULT_CALORIES,
+    lifetimeSec?: number,
+  ): number | null {
+    const world = this.world;
+    if (world === null) return null;
+    return world.spawnFoodSprite(position, lifetimeSec, calories, foodType);
+  }
+
+  /**
+   * F14.1 — typed food-drop from a catalog `food` row. Resolves the catalog
+   * `type` → `FOOD_TYPE` code + the `proteinPct`/`wasteFactor` → calories,
+   * then drops at `position`. Convenience over `spawnFood` for callers that
+   * hold a catalog row (Stage 15's feed picker). No-op (null) without a world.
+   */
+  spawnFoodFromCatalog(
+    position: { x: number; y: number; z: number },
+    entry: CatalogFoodEntry,
+    lifetimeSec?: number,
+  ): number | null {
+    return this.spawnFood(
+      position,
+      foodTypeCode(entry.type),
+      caloriesForFood(entry),
+      lifetimeSec,
+    );
+  }
+
   private onFeedTank(spriteCount?: number): void {
     const world = this.world;
     if (world === null) return;
@@ -332,7 +426,9 @@ export class LivestockSimulationService implements OnDestroy {
       const rz = tickPrng(world, FEED_TANK_KEY, i, 2);
       const x = xLo + rx * (xHi - xLo);
       const z = zLo + rz * (zHi - zLo);
-      world.spawnFoodSprite({ x, y, z });
+      // The quick-feed scatter drops generic FLAKE food via the typed
+      // primitive — Stage 15's tool calls `spawnFood` with a specific form.
+      this.spawnFood({ x, y, z }, FOOD_TYPE.FLAKE);
     }
   }
 

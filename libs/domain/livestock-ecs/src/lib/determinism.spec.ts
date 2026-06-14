@@ -10,7 +10,7 @@
  */
 import { MID_PRESET, type ResolvedBehavior } from '@aquascape/domain/livestock-behaviors';
 import { bakeFlowField, bakeHardscapeSdf } from '@aquascape/domain/fluid-sim';
-import { FISH_ARCHETYPE, HARDSCAPE_CATEGORY, type LivestockWorld } from '../index';
+import { FISH_ARCHETYPE, FOOD_TYPE, HARDSCAPE_CATEGORY, type LivestockWorld } from '../index';
 import { createLivestockWorld, type TankAabb } from './world';
 
 const TANK: TankAabb = { minX: 0, maxX: 1000, minY: 0, maxY: 400, minZ: 0, maxZ: 400 };
@@ -272,6 +272,88 @@ describe('determinism: 1000 ticks × fixed fleet', () => {
     expect(byteEqual(r1.position, r2.position)).toBe(true);
     expect(byteEqual(r1.orientation, r2.orientation)).toBe(true);
     expect(byteEqual(r1.foodSpritePosition, r2.foodSpritePosition)).toBe(true);
+  });
+
+  it('F14.1 typed food — 1000-tick replay with all four food forms + mixed-band feeders is byte-identical (foodSpritePosition + type included)', () => {
+    // Exercises the F14.1 per-type sink kinematics (flake float→sink, pellet
+    // fast sink, wafer settle, live dart) AND the typed-food band-matching in
+    // feedingSystem, all inside the determinism contract. The live-food dart
+    // is the only random draw (tickPrng keyed by spawnIndex) — if it ever
+    // leaked Math.random / wall-clock, this fails on the next run.
+    const surfaceSpecies = 1;
+    const substrateSpecies = 2;
+    const midSpecies = 3;
+
+    const surfaceBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+    surfaceBehavior.feeding = { hungerRatePerSec: 1 / 8, threshold: 0.3, category: 'surface' };
+    surfaceBehavior.depth.preferredY = 0.85;
+    const substrateBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+    substrateBehavior.feeding = { hungerRatePerSec: 1 / 8, threshold: 0.3, category: 'substrate' };
+    substrateBehavior.depth.preferredY = 0.15;
+    const midBehavior: ResolvedBehavior = JSON.parse(JSON.stringify(MID_PRESET));
+    midBehavior.feeding = { hungerRatePerSec: 1 / 8, threshold: 0.3, category: 'midwater' };
+
+    function runTypedFood(): {
+      position: Float32Array;
+      foodSpriteCount: number;
+      foodSpritePosition: Float32Array;
+      foodSpriteType: Uint8Array;
+    } {
+      const w: LivestockWorld = createLivestockWorld(SEED, { tankAabb: TANK });
+      const surfaceHandle = w.registerSpeciesBehavior(surfaceSpecies, surfaceBehavior);
+      const substrateHandle = w.registerSpeciesBehavior(substrateSpecies, substrateBehavior);
+      const midHandle = w.registerSpeciesBehavior(midSpecies, midBehavior);
+      // 3 surface feeders near the top.
+      for (let i = 0; i < 3; i++) {
+        w.spawnFish({
+          archetype: FISH_ARCHETYPE.HATCHET_WEDGE,
+          speciesId: surfaceSpecies,
+          bodyLengthMm: 30,
+          position: { x: 200 + i * 30, y: 360, z: 180 },
+          behaviorHandleIdx: surfaceHandle,
+        });
+      }
+      // 3 substrate feeders near the floor.
+      for (let i = 0; i < 3; i++) {
+        w.spawnFish({
+          archetype: FISH_ARCHETYPE.CORY_CYLINDER,
+          speciesId: substrateSpecies,
+          bodyLengthMm: 40,
+          position: { x: 600 + i * 30, y: 30, z: 250 },
+          behaviorHandleIdx: substrateHandle,
+        });
+      }
+      // 3 midwater feeders.
+      for (let i = 0; i < 3; i++) {
+        w.spawnFish({
+          archetype: FISH_ARCHETYPE.SLIM_TETRA,
+          speciesId: midSpecies,
+          bodyLengthMm: 30,
+          position: { x: 400 + i * 30, y: 200, z: 200 },
+          behaviorHandleIdx: midHandle,
+        });
+      }
+      // One sprite of each form, long-lived so they persist through the run.
+      w.spawnFoodSprite({ x: 300, y: 380, z: 200 }, 120, 4, FOOD_TYPE.FLAKE);
+      w.spawnFoodSprite({ x: 500, y: 380, z: 220 }, 120, 4, FOOD_TYPE.PELLET);
+      w.spawnFoodSprite({ x: 650, y: 380, z: 250 }, 120, 4, FOOD_TYPE.WAFER);
+      w.spawnFoodSprite({ x: 450, y: 380, z: 180 }, 120, 4, FOOD_TYPE.LIVE);
+      for (let i = 0; i < TICKS; i++) w.step(SIM_DT);
+      const s = w.snapshot(0);
+      return {
+        position: new Float32Array(s.position),
+        foodSpriteCount: s.foodSpriteCount,
+        foodSpritePosition: new Float32Array(s.foodSpritePosition),
+        foodSpriteType: new Uint8Array(s.foodSpriteType),
+      };
+    }
+
+    const r1 = runTypedFood();
+    const r2 = runTypedFood();
+    expect(r1.foodSpriteCount).toBe(r2.foodSpriteCount);
+    expect(byteEqual(r1.position, r2.position)).toBe(true);
+    expect(byteEqual(r1.foodSpritePosition, r2.foodSpritePosition)).toBe(true);
+    expect(byteEqual(r1.foodSpriteType, r2.foodSpriteType)).toBe(true);
   });
 
   it('F11.5 Wave 5 full stack — 1000-tick replay with flow + SDF + bubble source + cave + ram + cardinals + betta + barbs + oto + sprites is byte-identical (bubblePosition included)', () => {
