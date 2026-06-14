@@ -226,6 +226,8 @@ arr[0]; if (x !== undefined) …` or `?? ''`). Specs can pass while
 
 ## Trying it
 
-- Browser / dev server: `http://localhost:4200/?mode=simulation`
+- Browser / dev server: `http://localhost:4200/?mode=simulation` (or
+  `?mode=game:predator` for a playable game — see [`game-modes.md`](game-modes.md)).
 - Desktop: `aquascape --mode simulation` (packaged) or, in dev, append `--mode simulation`
   to the electron invocation (`electron dist/apps/desktop/main/src/main/main.js --mode simulation`).
+  Swap for `--mode game:<submode>` to launch a game kiosk.

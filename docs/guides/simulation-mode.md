@@ -188,6 +188,61 @@ can disambiguate.
 
 ---
 
+## Game modes (Stage 16)
+
+Alongside `simulation`, the launch system has a **game** family —
+`?mode=game:<submode>` in a browser, `--mode game:<submode>` on the desktop —
+where you **control a fish** instead of just watching the tank. The four
+sub-modes are `survival`, `feeding`, `predator`, and `cleaner`. They share one
+shell (`@aquascape/features/game`): an objective/score HUD, a state machine
+(objective → playing → paused → won/lost → results), and a device-independent
+input layer. The **per-mode win/lose rules (Stage 16.2–16.5) are still pending**
+— F16.1b ships the activation + a generic playable loop (move around in
+fish-eye; the objective/score HUD is visible; Esc exits).
+
+### Trying it
+
+- Browser / dev server: `http://localhost:4200/?mode=game:predator`
+- Desktop: `aquascape --mode game:predator` (or the **Mode → Game** menu).
+
+### What activation does (the flow)
+
+`AppComponent.enterGameMode(<submode>)` mirrors the showcase activation, plus
+the player seam:
+
+```
+enterGameMode('predator')
+  ├─ load createShowcaseScene()         deterministic tank + fish (reused, not a fork)
+  ├─ ViewModeService.forceMode('fish-eye')   3D, camera rides the player
+  ├─ store.dispatch(setScene)           → LivestockSimulationService re-spawns the world
+  ├─ pickPlayerEntity(world) → world.setPlayer(eid)   one fish becomes YOU (snapshot index 0)
+  ├─ GameModeService.startGame() + dispatch('start')  → live "playing" loop
+  └─ GameInputService.start(sink)       per-frame keyboard → velocity → world
+```
+
+### Controls (keyboard)
+
+`WASD` / arrows strafe + ascend/descend, `Q`/`E` (or `PageUp`/`PageDown`) move
+into/out of the tank depth, `Space` / `Shift` are the (mode-specific) action
+buttons, `Esc` exits. Bindings are keyed by `KeyboardEvent.code` so they work on
+any layout. A **gamepad** backend plugs into the same input layer later (the
+separate "game-controller support" plan) — the shell + scoring are unchanged.
+
+### The input loop (where the player velocity is injected)
+
+`GameInputService` (app layer — `apps/web/src/app/game/`) owns the keyboard
+listener + a `requestAnimationFrame` loop. Each frame it: resolves held key
+codes → an `InputIntent` (`keysToIntent`) → pushes it onto `GameModeService`
+(which derives a world velocity via `intentToVelocity`, scaled by the sub-mode's
+player speed) → pushes that velocity onto `world.setPlayerVelocity(...)`. The
+velocity is only **stored** there; the world applies it at the very **top of
+`world.step()`**, before any AI system runs (the `SteeringIntegrator` skips the
+player so behaviours never fight the input). So the rAF rate (≈60 Hz) is
+independent of the sim step rate (30 Hz) — whatever velocity is current when
+`step()` runs is what the player integrates. The live velocity is the **one**
+non-deterministic input; the scene, player selection, and sim are all
+seed-deterministic.
+
 ## Exiting simulation mode
 
 **Esc** is the exit key, and what it does depends on how you got into simulation mode:
@@ -197,6 +252,7 @@ can disambiguate.
 | `--mode simulation` kiosk (desktop)      | **Quits the app** — there's nothing to return to.                                               |
 | Entered simulation via the **Mode** menu | **Returns to the editor** (and exits fullscreen).                                               |
 | `?mode=simulation` in a browser tab      | Tries to close the tab; if the browser refuses, reveals the editor with the scene still loaded. |
+| `--mode game:<submode>` / `?mode=game:…` | Same split: kiosk quits; menu-entered returns to the editor; browser tab tries to close then reveals the editor (the player tag is relinquished so the world replays clean again). |
 
 (If the console is open, the first Esc closes it; the second does the above.)
 

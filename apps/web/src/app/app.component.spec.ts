@@ -498,6 +498,118 @@ describe('AppComponent — Stage 3.x pointer drags', () => {
     }
   });
 
+  // ─── Stage 16 — game-mode activation wiring ────────────────────────────
+  //
+  // The full player-seam pipeline (key → velocity → world) is integration-
+  // tested in `game/game-input.service.spec.ts` against a real world. Here we
+  // assert the AppComponent-level wiring: a runtime switch into a game mode
+  // flips `gameMode`, mounts the game HUD + chrome-hiding class, marks the
+  // player on the sim world (when one exists), and Esc leaves to the editor.
+
+  it('a Mode-menu game switch enters game mode: HUD mounts + chrome hides', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer, sceneWithObject('a'));
+
+    let push: ((mode: string) => void) | null = null;
+    (window as unknown as { aquascape?: unknown }).aquascape = {
+      ipc: {},
+      onSetMode: (cb: (mode: string) => void) => {
+        push = cb;
+        return () => undefined;
+      },
+    };
+    try {
+      const fixture = TestBed.createComponent(AppComponent);
+      fixture.detectChanges();
+      const cmp = fixture.componentInstance;
+      expect(cmp.gameMode()).toBeNull();
+
+      push!('game:predator');
+      fixture.detectChanges();
+
+      expect(cmp.gameMode()).toBe('predator');
+      expect(fixture.nativeElement.querySelector('aquascape-game-hud')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('.app-shell.simulation-mode')).not.toBeNull();
+    } finally {
+      delete (window as unknown as { aquascape?: unknown }).aquascape;
+    }
+  });
+
+  it('forces the fish-eye view when entering a game mode', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer, sceneWithObject('a'));
+
+    let push: ((mode: string) => void) | null = null;
+    (window as unknown as { aquascape?: unknown }).aquascape = {
+      ipc: {},
+      onSetMode: (cb: (mode: string) => void) => {
+        push = cb;
+        return () => undefined;
+      },
+    };
+    try {
+      const fixture = TestBed.createComponent(AppComponent);
+      fixture.detectChanges();
+      const vm = TestBed.inject(ViewModeService);
+
+      push!('game:cleaner');
+      fixture.detectChanges();
+
+      expect(vm.mode()).toBe('fish-eye');
+    } finally {
+      delete (window as unknown as { aquascape?: unknown }).aquascape;
+    }
+  });
+
+  it('Esc in a browser tab exits game mode (tries window.close, falls back to editor)', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer, sceneWithObject('a'));
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const closeSpy = jest.spyOn(window, 'close').mockImplementation(() => undefined);
+    try {
+      const cmp = fixture.componentInstance;
+      // Drive through the real enter path so the player/input wiring runs.
+      (cmp as unknown as { enterGameMode(m: string): void }).enterGameMode('survival');
+      fixture.detectChanges();
+      expect(cmp.gameMode()).toBe('survival');
+      expect(fixture.nativeElement.querySelector('aquascape-game-hud')).not.toBeNull();
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      fixture.detectChanges();
+
+      expect(closeSpy).toHaveBeenCalled();
+      expect(cmp.gameMode()).toBeNull();
+      expect(fixture.nativeElement.querySelector('aquascape-game-hud')).toBeNull();
+    } finally {
+      closeSpy.mockRestore();
+    }
+  });
+
+  it('Esc under Electron leaves game exit to the main process (no in-renderer reveal)', () => {
+    const renderer = new MockSceneRenderer();
+    configure(renderer, sceneWithObject('a'));
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    (window as unknown as { aquascape?: unknown }).aquascape = { ipc: {}, mode: 'game:predator' };
+    try {
+      const cmp = fixture.componentInstance;
+      (cmp as unknown as { enterGameMode(m: string): void }).enterGameMode('predator');
+      fixture.detectChanges();
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      fixture.detectChanges();
+
+      // Still in game mode in the renderer — main owns the quit.
+      expect(cmp.gameMode()).toBe('predator');
+      expect(fixture.nativeElement.querySelector('aquascape-game-hud')).not.toBeNull();
+    } finally {
+      delete (window as unknown as { aquascape?: unknown }).aquascape;
+    }
+  });
+
   it('pointerdown on empty space starts a marquee drag (overlay div appears)', () => {
     const renderer = new MockSceneRenderer();
     configure(renderer, sceneWithObject('a'));
