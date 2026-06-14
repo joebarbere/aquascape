@@ -314,6 +314,43 @@ dose them in simulation mode. Landed across three PRs:
   Command pipeline — the UI never mutates the scene directly. Dosing is
   surfaced as recorded-only, with the chemistry effect explicitly deferred.
 
+## Stage 14 — fish vitality & feeding
+
+Made feeding meaningful: typed food, a health/hunger model, and a vitality
+surface — without touching the renderer's per-instance data.
+
+- **F14.1 — typed food + per-type sink.** `FoodSprite` gained a `foodType`
+  (flake / pellet / wafer / live) with distinct sink behaviour (flakes float
+  then sink, pellets drop fast, wafers settle on the substrate, live food
+  darts), a deterministic `food-kinematics` system, and a typed-spawn primitive
+  on the simulation service. The legacy "Feed tank" pulse became a quick random
+  flake scatter on top of it. Additive `WorldSnapshot.foodSpriteType`; no new
+  fish vertex attribute (food is a separate billboard mesh).
+- **F14.2 — health + hunger.** A `HealthDrive { health: f32 }` in `[0,1]` and a
+  `vitalitySystem` (after `feedingSystem`) that decays health under sustained
+  starvation + injected bad water quality and slowly recovers it when fed +
+  clean — deterministic, mode-agnostic. `world.setWaterQuality(...)` defaults to
+  clean, so a chemistry-less world replays byte-identically. A `wasteSystem`
+  (F14.4 producer) folds per-fish baseline + uneaten-food waste into a smoothed
+  ammonia source term (`world.getWasteSourceN()`). `WorldSnapshot` gained
+  `health` + `hunger` slabs (parallel to the fish slab) — **HUD-surfaced, not a
+  vertex attribute** (the fish shader is at the 16-attribute ANGLE ceiling).
+- **F14.3 — vitality HUD + click-to-inspect.** A read-only fish-vitality HUD
+  (`apps/web/src/app/simulation/vitality-hud.*`) mounts in simulation mode
+  (left-middle), polling the snapshot's `health`/`hunger` slabs ~12× a second:
+  **school avg / min health + % hungry** (a pure `computeVitalityAggregate`
+  helper; "hungry" = the feeding seek-threshold 0.7, with an f32-tolerant
+  compare) plus a **selectable fish list** and a **click-to-inspect inspector**
+  (per-fish health hearts + hunger meter). Picking is a selectable list, not a
+  canvas raycast — the 3D `hitTest` returns null (read-only view) and the
+  renderer doesn't expose its live camera, so there's no reliable world→screen
+  projection; the inspector is camera-independent so a future picker can feed
+  the same selection. The per-fish readout (`fishVitalityAt` / `healthToHearts`)
+  is the **game-mode reuse seam** — Stage 16's game HUD renders the same hearts
+  for `world.getPlayerEntity()`. Console `hud … vitality` toggles it. The
+  **waste → chemistry live loop** still awaits Stage 13 F13.3's
+  `WaterChemistryService` consumer (the producer side is in place).
+
 ## Document & catalog version history
 
 | Version         | Change                                                                                                                                                                                                                                                                                                                                     |

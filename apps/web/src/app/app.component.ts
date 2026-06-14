@@ -153,6 +153,7 @@ import { SimulationControlsComponent } from './simulation/simulation-controls.co
 import { SimulationHudComponent } from './simulation/simulation-hud.component';
 import { SimulationPerfService } from './simulation/simulation-perf.service';
 import { SimulationUiService } from './simulation/simulation-ui.service';
+import { VitalityHudComponent } from './simulation/vitality-hud.component';
 import { createShowcaseScene } from './simulation/showcase-scene';
 import { defaultViewport } from './default-viewport';
 import { applyMoveDrag, applyRotateDrag, applyScaleDrag } from './drag-math';
@@ -217,6 +218,7 @@ type DragState =
     SimulationConsoleComponent,
     SimulationControlsComponent,
     SimulationHudComponent,
+    VitalityHudComponent,
     GameHudComponent,
     EditorShellComponent,
     EquipmentToolComponent,
@@ -476,6 +478,13 @@ type DragState =
                 [showClock]="simUi.clockVisible()"
                 [showPerf]="simUi.perfVisible()"
               ></aquascape-simulation-hud>
+            }
+            <!-- Stage 14 F14.3 — fish-vitality HUD + click-to-inspect
+                 (left-middle). Self-mounting: it polls the live world's
+                 WorldSnapshot health/hunger slabs and stays hidden until a
+                 fish world exists. -->
+            @if (simUi.vitalityVisible()) {
+              <aquascape-vitality-hud></aquascape-vitality-hud>
             }
             <aquascape-simulation-console></aquascape-simulation-console>
           }
