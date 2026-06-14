@@ -17,7 +17,7 @@ These come directly from `aquascape-development-plan.md` §2.7 and the file-leve
 5. **Versioned + migratable**: every breaking change increments `schemaVersion` and ships with a pure, total `Migration` entry from the previous version. **Once v1 is published with Stage 1, you may not edit v1 in place** — write v2 and a migration.
 6. **Forward-compatible**: keep the `extensions` bag and per-object optional fields working. Older readers must preserve unknown data, not drop it.
 7. **Container**: on-disk `.aqua` is a ZIP holding `document.json`, `assets/`, and optional `thumbnail.png`. Asset-free documents may be bare JSON with the `.aqua` extension; readers sniff for ZIP magic and accept both.
-8. **Reproducibility**: the document-level `seed` and per-scatter seeds make scatter planting, growth jitter, and AI renders deterministic. Do not introduce un-seeded randomness into anything that lands in the document.
+8. **Reproducibility**: the document-level `seed` and per-scatter seeds make scatter planting and growth jitter deterministic. Do not introduce un-seeded randomness into anything that lands in the document.
 
 ## The lock-step rule
 

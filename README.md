@@ -38,7 +38,6 @@ The hobbyist tools that exist today either focus on layout (Scape It, Aquasketch
 - 🌱 **Deterministic plant-growth simulation** — scrub a time slider to preview weeks 0–52 of growth
 - 🐟 **A living 3D preview** — schooling, feeding, territorial fish simulated in real time over the same document you edit in 2D
 - 📸 **Composite onto a real tank photo** — design against the actual shelf the tank will live on
-- 🤖 **Local + hosted AI render** behind one interface — planned, see [TODO](#todo--whats-next)
 - 💾 **Lossless `.aqua` document format** with a locked schema (now v3) + pure migration chain
 - 🆓 **Truly open-source**, MIT-licensed, no telemetry, no cloud lock-in
 
@@ -224,7 +223,6 @@ Everything above is shipped. Remaining work, roughly in priority order:
 - [ ] **Release pipeline** — `pnpm release <version>`, electron-builder installers published to GitHub Releases. The version scheme is an open maintainer decision (ADR-0005 pending). See [`plans/stage-12-release-pipeline.md`](plans/stage-12-release-pipeline.md).
 - [ ] **3D fidelity: screen-space water-surface refraction** — deferred (not blocked): the transmissive glass already supplies the dominant refraction read, so distorting the water plane is low marginal value for an extra render-target pre-pass. Revisit if the glass read proves insufficient. See [`plans/3d-fidelity-followups.md`](plans/3d-fidelity-followups.md).
 - [ ] **Community gallery** — browse + remix shared layouts. See [`plans/stage-8-community-gallery/`](plans/stage-8-community-gallery/).
-- [ ] **AI photorealistic render** — local + hosted providers behind one interface; keys live in OS secure storage, never in the document. See [`plans/stage-9-ai-render/`](plans/stage-9-ai-render/).
 - [ ] **Image tank backgrounds** — solid + gradient ship today.
 - [ ] **Per-species fish textures** — deferred; fights per-archetype instancing and the WebGL 16-attribute budget.
 - [ ] **Code signing** — Apple Developer ID + Windows EV certificate for production installers.

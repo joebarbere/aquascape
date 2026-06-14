@@ -120,10 +120,6 @@ Plan §"Stage <N>" F<X.Y>; <relevant architecture sections>.
   - [F8.2 — Publish & import](stage-8-community-gallery/F8.2-publish-and-import.md)
   - [F8.3 — Backend contract](stage-8-community-gallery/F8.3-backend-contract.md)
 
-- **Stage 9 — AI Photorealistic Render** ([dir](stage-9-ai-render/))
-  - [F9.1 — AI render core](stage-9-ai-render/F9.1-ai-render-core.md)
-  - [F9.2 — Dual provider support](stage-9-ai-render/F9.2-dual-providers.md)
-  - [F9.3 — Render history](stage-9-ai-render/F9.3-render-history.md)
 
 - **Stage 10 — 3D Renderer** ([dir](stage-10-3d-renderer/))
   - [F10.1 — Three.js renderer](stage-10-3d-renderer/F10.1-threejs-renderer.md)
