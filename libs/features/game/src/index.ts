@@ -92,6 +92,24 @@ export {
   type FoodCandidate,
 } from './lib/feeding-rules';
 
+// ─── Cleaner rules (pure; Stage 16 F16.5) ────────────────────────────────
+export {
+  DEFAULT_CLEANER_PARAMS,
+  cleanerTimeRemainingSec,
+  cleanlinessFraction,
+  cleanlinessScore,
+  evaluateCleanerOutcome,
+  raspAmountPerType,
+  surfacesInReach,
+  toolAlgaeTargets,
+  type CleanPoint,
+  type CleanerOutcome,
+  type CleanerRuleParams,
+  type CleanerSurface,
+  type CleanerToolProfile,
+  type SurfaceCandidate,
+} from './lib/cleaner-rules';
+
 // ─── Angular glue ────────────────────────────────────────────────────────
 export { GameModeService, type PlayerVitality } from './lib/game-mode.service';
 export { GameHudComponent } from './lib/game-hud.component';

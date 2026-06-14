@@ -149,7 +149,8 @@ import { GameInputService } from './game/game-input.service';
 import { PredatorGameService } from './game/predator-game.service';
 import { SurvivalGameService } from './game/survival-game.service';
 import { FeedingGameService } from './game/feeding-game.service';
-import { pickPlayerEntity } from './game/game-activation';
+import { CleanerGameService } from './game/cleaner-game.service';
+import { pickPlayerEntity, readEntityPosition } from './game/game-activation';
 import { BehaviorDebugOverlayComponent } from './behavior-debug-overlay.component';
 import { BehaviorDebugService } from './behavior-debug.service';
 import { attachDebugHook, detachDebugHook } from './debug-hook';
@@ -538,6 +539,15 @@ type DragState =
           @if (gameMode() !== null) {
             <aquascape-game-hud></aquascape-game-hud>
           }
+          <!-- Cleaner tool-select indicator (F16.5). Shows the active cleaning
+               tool + the cycle hint; press T to switch scraper/brush/siphon.
+               Hold the use key (Space) to scrub. -->
+          @if (gameMode() === 'cleaner' && cleanerGame.activeTool() !== null) {
+            <div class="cleaner-tool-hud" role="status" aria-live="polite">
+              <span class="cleaner-tool-name">{{ cleanerGame.activeTool()!.name }}</span>
+              <span class="cleaner-tool-hint">Press T to switch tool · hold Space to clean</span>
+            </div>
+          }
         </main>
 
         @if (!railCollapsed() && breakpoint() !== 'phone') {
@@ -666,6 +676,29 @@ type DragState =
         flex-direction: column;
         align-items: flex-end;
         gap: 6px;
+      }
+      .cleaner-tool-hud {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        z-index: 4;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 8px 12px;
+        background: rgba(32, 35, 42, 0.82);
+        color: #f0f2f5;
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+      }
+      .cleaner-tool-name {
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .cleaner-tool-hint {
+        font-size: 11px;
+        opacity: 0.78;
       }
       .empty-hint {
         position: absolute;
@@ -987,6 +1020,12 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Feeding-mode rules (eat falling food, fill the meter) — F16.3. */
   private readonly feedingGame = inject(FeedingGameService);
 
+  /**
+   * Cleaner-mode rules (scrub algae, siphon waste, clean the tank) — F16.5.
+   * PUBLIC because the template's tool-select indicator reads `activeTool()`.
+   */
+  readonly cleanerGame = inject(CleanerGameService);
+
   /** Live performance sampler feeding the HUD's metrics strip (simulation only). */
   readonly simPerf = inject(SimulationPerfService);
 
@@ -1252,6 +1291,22 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
         // affects score/health.
         this.feedingGame.start(world, playerEid);
         frameHook = (dt) => void this.feedingGame.frame(dt);
+      } else if (mode === 'cleaner') {
+        // F16.5 — wield a cleaning tool (T cycles scraper/brush/siphon), scrub
+        // the per-type algae off hardscape in reach while holding the use
+        // button, and the siphon dilutes the live chemistry waste. The siphon
+        // nozzle (a renderer imperative call) is driven from the effect below,
+        // NOT here (NG0600). Cleanliness drives the win/lose + score.
+        this.cleanerGame.start(world, playerEid);
+        this.syncCleanerSiphon();
+        frameHook = (dt) => {
+          this.cleanerGame.frame(dt);
+          // Drive the shared siphon nozzle from the player's live position while
+          // the siphon tool is active + the use button is held (an event-path
+          // call from the input loop's frame hook — NOT the render effect, so
+          // NG0600-safe). The nozzle hovers where the player is + suctions OUT.
+          this.driveCleanerSiphon();
+        };
       }
     }
 
@@ -1279,6 +1334,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.predatorGame.stop();
     this.survivalGame.stop();
     this.feedingGame.stop();
+    // F16.5 — park the siphon nozzle + un-mount it BEFORE the cleaner stops so
+    // the renderer drops it on the next render (NG0600-safe: an event-path call).
+    this.simulationInteractionRenderer?.setSiphonMode('idle');
+    this.cleanerGame.stop();
     this.livestockSim.getWorld()?.clearPlayer();
     this.gameMode.set(null);
     this.game.dispatch({ type: 'quit' });
@@ -1479,6 +1538,65 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.lastSiphonMode = mode;
     this.simulationInteractionRenderer?.setSiphonMode(mode);
   });
+
+  // Stage 16 F16.5 — re-render when the CLEANER game's siphon tool mounts /
+  // unmounts (the player cycled to / away from the siphon with `T`) so
+  // `renderCurrent` flips `RenderOptions.siphonTool` on/off. Mirrors
+  // `siphonActiveEffect` exactly — reads ONE signal + calls renderCurrent; the
+  // imperative nozzle position/mode pushes live in the cleaner frame hook +
+  // `syncCleanerSiphon` (event-path calls), never a signal write (NG0600-safe).
+  private cleanerSiphonFirstRun = true;
+  private readonly cleanerSiphonEffect = effect(() => {
+    const active = this.cleanerGame.siphonActive();
+    if (this.cleanerSiphonFirstRun) {
+      this.cleanerSiphonFirstRun = false;
+      return;
+    }
+    if (!active && this.lastSiphonMode !== 'idle') {
+      this.simulationInteractionRenderer?.setSiphonMode('idle');
+      this.lastSiphonMode = 'idle';
+    }
+    if (this.currentScene !== null) {
+      this.renderCurrent();
+    }
+  });
+
+  /**
+   * Stage 16 F16.5 — set the siphon nozzle's suction mode for the cleaner game:
+   * `out` while the siphon tool is active (it's vacuuming), `idle` otherwise.
+   * An explicit renderer call from an event path (the tool-cycle key / game
+   * enter), NOT the render effect — NG0600-safe. The mount toggle itself is the
+   * `cleanerSiphonEffect` above; this only sets the visual suction state.
+   */
+  private syncCleanerSiphon(): void {
+    const renderer = this.simulationInteractionRenderer;
+    if (renderer === null) return;
+    const mode = this.cleanerGame.siphonActive() ? 'out' : 'idle';
+    if (mode !== this.lastSiphonMode) {
+      this.lastSiphonMode = mode;
+      renderer.setSiphonMode(mode);
+    }
+    this.renderCurrent();
+  }
+
+  /**
+   * Stage 16 F16.5 — hover the shared siphon nozzle at the player's live world
+   * position while the cleaner siphon is active. Called from the cleaner frame
+   * hook (the input loop's per-frame beat, an event path — NOT the render
+   * effect, so NG0600-safe). No-op when the siphon isn't active / no world /
+   * no player. Reuses Stage 15's `setSiphonPosition` (no fork).
+   */
+  private driveCleanerSiphon(): void {
+    if (!this.cleanerGame.siphonActive()) return;
+    const renderer = this.simulationInteractionRenderer;
+    if (renderer === null) return;
+    const world = this.livestockSim.getWorld();
+    if (world === null) return;
+    const eid = world.getPlayerEntity();
+    const pos = readEntityPosition(world, eid);
+    if (pos === null) return;
+    renderer.setSiphonPosition(pos);
+  }
 
   // Stage 10 F10.3 — when the user flips 2D ↔ 3D, dispose the previously-
   // active renderer (so it releases its GL / 2D context) and trigger a
@@ -1954,6 +2072,15 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     if (event.code === 'Backquote' && this.simulationMode()) {
       event.preventDefault();
       this.simUi.toggleConsole();
+    }
+    // Stage 16 F16.5 — the cleaner game's tool-select: `T` cycles the active
+    // cleaning tool (scraper → brush → siphon → …). The active tool drives
+    // which algae the player can scrub + whether the siphon nozzle mounts (the
+    // siphon wiring reacts to `cleanerGame.siphonActive()` in the effect below).
+    if (event.code === 'KeyT' && this.gameMode() === 'cleaner') {
+      event.preventDefault();
+      this.cleanerGame.cycleTool();
+      this.syncCleanerSiphon();
     }
   }
 
@@ -2552,6 +2679,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       // renderer keeps the nozzle disposed + renders are bit-identical to the
       // pre-Stage-15 path. The mount toggle is driven by `siphonActiveEffect`.
       ...(is3d && this.simAction.siphonActive() ? { siphonTool: true as const } : {}),
+      // Stage 16 F16.5 — the cleaner game mounts the SAME shared siphon nozzle
+      // (no fork) while the player's active tool is the siphon. Driven by
+      // `cleanerSiphonEffect` (a signal read + renderCurrent), with the nozzle
+      // position/mode pushed from the cleaner frame hook (NG0600-safe).
+      ...(is3d && this.cleanerGame.siphonActive() ? { siphonTool: true as const } : {}),
     });
   }
 
