@@ -9,18 +9,22 @@
 
 import type {
   BackdropImage,
+  CanvasRaycastPoint,
   HitResult,
   HitTestOptions,
   OverlayOptions,
+  RaycastTargetPlane,
   RenderOptions,
   RenderSurface,
   SceneRenderer,
+  SimulationInteractionRenderer,
+  SiphonRenderMode,
   SnapGuides,
   Viewport,
   WallBackground,
 } from './index';
 import type { LayerId, ObjectId, Scene } from '@aquascape/domain/scene-model';
-import type { Vec2 } from '@aquascape/domain/geometry';
+import type { Vec2, Vec3 } from '@aquascape/domain/geometry';
 
 describe('@aquascape/rendering/renderer-api', () => {
   it('exports the SceneRenderer contract with a stable shape', () => {
@@ -211,6 +215,37 @@ describe('@aquascape/rendering/renderer-api', () => {
       // @ts-expect-error overlays don't participate in hit-test
       const bad: HitTestOptions = { overlayOptions: {} as OverlayOptions };
       void bad;
+    });
+  });
+
+  describe('Stage 15 simulation-interaction surface', () => {
+    it('RenderOptions.siphonTool is an optional boolean (opt-in)', () => {
+      const on: RenderOptions = { siphonTool: true };
+      const off: RenderOptions = {};
+      expect(on.siphonTool).toBe(true);
+      expect(off.siphonTool).toBeUndefined();
+    });
+
+    it('SimulationInteractionRenderer exposes raycast + siphon controls', () => {
+      const fake: SimulationInteractionRenderer = {
+        raycastTankPoint(point: CanvasRaycastPoint, options?): Vec3 | null {
+          void point;
+          void options;
+          return { x: 1, y: 0, z: 2 };
+        },
+        setSiphonPosition(pos: Vec3): void {
+          void pos;
+        },
+        setSiphonMode(mode: SiphonRenderMode): void {
+          void mode;
+        },
+      };
+      const point: CanvasRaycastPoint = { x: 10, y: 20, width: 800, height: 600 };
+      const plane: RaycastTargetPlane = 'water';
+      const mode: SiphonRenderMode = 'out';
+      expect(fake.raycastTankPoint(point, { plane })).toEqual({ x: 1, y: 0, z: 2 });
+      fake.setSiphonMode(mode);
+      fake.setSiphonPosition({ x: 0, y: 0, z: 0 });
     });
   });
 });

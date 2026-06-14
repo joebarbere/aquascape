@@ -1875,3 +1875,137 @@ describe('Three3DRenderer — decor wiring', () => {
     raf.uninstall();
   });
 });
+
+// ─── Stage 15 — simulation-interaction surface (siphon + raycast) ─────────
+
+describe('Three3DRenderer — Stage 15 siphon tool (opt-in)', () => {
+  function findSiphon(content: Object3D | null): Object3D | undefined {
+    return content?.getObjectByName('aquascape:siphon-tool') ?? undefined;
+  }
+
+  it('does NOT mount the siphon nozzle when the flag is absent (byte-identical)', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport);
+    const rAny = r as unknown as { currentContent: Object3D | null };
+    expect(findSiphon(rAny.currentContent)).toBeUndefined();
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('mounts the siphon nozzle into the content group when siphonTool is true', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport, { siphonTool: true });
+    const rAny = r as unknown as { currentContent: Object3D | null };
+    expect(findSiphon(rAny.currentContent)).toBeDefined();
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('re-parents the SAME cached nozzle across renders (not rebuilt)', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport, { siphonTool: true });
+    const rAny = r as unknown as { currentContent: Object3D | null };
+    const first = findSiphon(rAny.currentContent);
+    r.render(sceneOf(600, 360, 300), viewport, { siphonTool: true });
+    const second = findSiphon(rAny.currentContent);
+    expect(first).toBeDefined();
+    expect(second).toBe(first);
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('unmounts + disposes the nozzle when a later render drops the flag', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport, { siphonTool: true });
+    r.render(sceneOf(600, 360, 300), viewport); // flag dropped
+    const rAny = r as unknown as { currentContent: Object3D | null; siphonTool: unknown };
+    expect(findSiphon(rAny.currentContent)).toBeUndefined();
+    expect(rAny.siphonTool).toBeNull();
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('setSiphonPosition / setSiphonMode drive the nozzle in place', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport, { siphonTool: true });
+    r.setSiphonPosition({ x: 300, y: 0, z: 150 });
+    r.setSiphonMode('out');
+    const rAny = r as unknown as {
+      currentContent: Object3D | null;
+    };
+    const nozzle = findSiphon(rAny.currentContent);
+    expect(nozzle?.position.x).toBe(300);
+    expect(nozzle?.position.z).toBe(150);
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('setSiphonPosition / setSiphonMode are safe no-ops when the tool is unmounted', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport);
+    expect(() => {
+      r.setSiphonPosition({ x: 1, y: 2, z: 3 });
+      r.setSiphonMode('in');
+    }).not.toThrow();
+    r.dispose();
+    raf.uninstall();
+  });
+});
+
+describe('Three3DRenderer — Stage 15 raycastTankPoint', () => {
+  it('returns null before any render (no tank framed yet)', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    expect(r.raycastTankPoint({ x: 400, y: 300, width: 800, height: 600 })).toBeNull();
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('returns an in-tank floor coordinate for a centre pixel after rendering', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport);
+    const hit = r.raycastTankPoint({ x: 400, y: 300, width: 800, height: 600 });
+    expect(hit).not.toBeNull();
+    expect(hit?.y).toBe(0);
+    expect(hit?.x).toBeGreaterThanOrEqual(0);
+    expect(hit?.x).toBeLessThanOrEqual(600);
+    expect(hit?.z).toBeGreaterThanOrEqual(0);
+    expect(hit?.z).toBeLessThanOrEqual(300);
+    r.dispose();
+    raf.uninstall();
+  });
+
+  it('returns null after dispose', () => {
+    const raf = stubRaf();
+    const stub = new StubRenderer();
+    const r = new Three3DRenderer(makeFactory(stub));
+    r.attach(makeSurface());
+    r.render(sceneOf(600, 360, 300), viewport);
+    r.dispose();
+    expect(r.raycastTankPoint({ x: 400, y: 300, width: 800, height: 600 })).toBeNull();
+    raf.uninstall();
+  });
+});

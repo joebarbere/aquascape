@@ -15,6 +15,23 @@
 // a host (web canvas, headless export pipeline) can drop it in.
 
 export { Three3DRenderer, type Orbital3DControls } from './three-3d-renderer';
+// Stage 15 (husbandry interactions) — the canvas→tank raycast math + the
+// shared siphon nozzle. The renderer wires these into the
+// `SimulationInteractionRenderer` surface (`raycastTankPoint` /
+// `setSiphonPosition` / `setSiphonMode`); these exports are for direct
+// unit-testing + any host that wants the building blocks.
+export {
+  raycastTankPlane,
+  canvasPointToNdc,
+  type RaycastPlane,
+  type RaycastTankGeometry,
+  type CanvasPoint,
+} from './raycast';
+export {
+  buildSiphonTool,
+  type SiphonToolHandle,
+  type SiphonMode,
+} from './scene-builder/siphon-tool';
 // NOTE: the waterline's single source of truth is
 // `effectiveWaterLevelMm(tank)` from `@aquascape/domain/scene-model` —
 // authored `tank.waterLevelMm` or the default fill. This lib consumes it;

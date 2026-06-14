@@ -61,7 +61,7 @@
  */
 
 import type { Catalog } from '@aquascape/domain/catalog';
-import type { Vec2 } from '@aquascape/domain/geometry';
+import type { Vec2, Vec3 } from '@aquascape/domain/geometry';
 import { SIM_DT, type LivestockWorld, type WorldSnapshot } from '@aquascape/domain/livestock-ecs';
 import { effectiveWaterLevelMm } from '@aquascape/domain/scene-model';
 import type { Scene } from '@aquascape/domain/scene-model';
@@ -71,12 +71,16 @@ import {
 } from '@aquascape/rendering/livestock-renderer-3d';
 import {
   NEUTRAL_DAY_NIGHT_LOOKUP,
+  type CanvasRaycastPoint,
   type DayNightLookupValues,
   type HitResult,
   type HitTestOptions,
+  type RaycastTargetPlane,
   type RenderOptions,
   type RenderSurface,
   type SceneRenderer,
+  type SimulationInteractionRenderer,
+  type SiphonRenderMode,
   type Viewport,
 } from '@aquascape/rendering/renderer-api';
 import {
@@ -226,6 +230,8 @@ import {
 import { buildSubstrateMeshes } from './scene-builder/substrate-mesh';
 import { buildTankMesh } from './scene-builder/tank-mesh';
 import { buildWaterMesh, type WaterMeshHandle } from './scene-builder/water-mesh';
+import { buildSiphonTool, type SiphonToolHandle } from './scene-builder/siphon-tool';
+import { raycastTankPlane } from './raycast';
 import { ModelCache, type ModelLoadFn } from './model-cache';
 import { TextureCache } from './texture-cache';
 
@@ -316,7 +322,9 @@ function getRaf(): RafLike | null {
   return null;
 }
 
-export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
+export class Three3DRenderer
+  implements SceneRenderer, Orbital3DControls, SimulationInteractionRenderer
+{
   private surface: RenderSurface | null = null;
   private renderer: RendererLike | null = null;
   private threeScene: ThreeScene | null = null;
@@ -391,6 +399,24 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
    * plane stays sized to the new tank footprint.
    */
   private waterMeshTag: string | null = null;
+  /**
+   * Stage 15 F15.2 — the shared siphon nozzle tool. Built lazily the first
+   * time `render()` sees `options.siphonTool === true` and reused across
+   * renders (re-parented into each freshly-built content group, NOT rebuilt
+   * — same persistent-handle discipline as the water mesh). Null when the
+   * tool isn't mounted (the opt-in flag is absent/false ⇒ byte-identical to
+   * the pre-Stage-15 render). Driven in place via `setSiphonPosition` /
+   * `setSiphonMode` (the `SimulationInteractionRenderer` surface). Disposed
+   * on tool-exit (a render WITHOUT the flag) and on renderer `dispose()`.
+   */
+  private siphonTool: SiphonToolHandle | null = null;
+  /**
+   * Effective water level (mm above floor) of the last-rendered tank — the
+   * `raycastTankPoint` water-plane height. Captured each render alongside
+   * `lastRenderedTank` so the raycast can intersect the water surface without
+   * re-deriving the selector.
+   */
+  private lastWaterLevelMm = 0;
   /**
    * Stage 11 F11.7 — handle on the plant group built by `buildPlantMeshes`
    * during the last `render()`. The RAF tick uses it to advance the sway
@@ -1019,6 +1045,12 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       if (this.waterMesh !== null) {
         this.currentContent.remove(this.waterMesh.mesh);
       }
+      // Stage 15 F15.2 — same detach-before-dispose dance: the siphon tool
+      // is cached + re-parented, so don't let `disposeNode` release its
+      // geometry/material on a content rebuild.
+      if (this.siphonTool !== null) {
+        this.currentContent.remove(this.siphonTool.group);
+      }
       disposeNode(this.currentContent);
       this.currentContent = null;
       // Stage 11 F11.7 — the plant group's materials were just disposed
@@ -1116,6 +1148,16 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       this.waterMesh.setCausticStrength(this.causticStrengthCurrent);
     }
 
+    // Stage 15 F15.2 — the shared siphon nozzle. Opt-in: built (once) +
+    // re-parented into the content group only when the host requests it.
+    // Absent/false ⇒ no nozzle (byte-identical to pre-Stage-15). The handle
+    // is cached + driven in place (setSiphonPosition / setSiphonMode); it is
+    // re-parented here like the water mesh, never disposed on a rebuild.
+    this.ensureSiphonTool(options.siphonTool === true);
+    if (this.siphonTool !== null) {
+      content.add(this.siphonTool.group);
+    }
+
     // Stage 11 F11.1 — livestock InstancedMesh bundle. The world is owned
     // by the host (apps/web's `LivestockSimulationService`); the renderer
     // just reads it each frame in the RAF loop and parents the bundle's
@@ -1159,6 +1201,9 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       height: scene.tank.height,
       depth: scene.tank.depth,
     };
+    // Stage 15 — capture the water-plane height for `raycastTankPoint`'s
+    // `'water'` mode (the floor plane is y = 0).
+    this.lastWaterLevelMm = effectiveWaterLevelMm(scene.tank);
 
     // 4) Apply the latched lighting once synchronously, then paint one frame
     //    so render() has a visible effect even when no animation tick is
@@ -1445,6 +1490,84 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
     }
     this.waterMesh = buildWaterMesh(scene);
     this.waterMeshTag = tag;
+  }
+
+  /**
+   * Stage 15 F15.2 — mount / unmount the shared siphon nozzle tool based on
+   * the opt-in `RenderOptions.siphonTool` flag. Mounting builds the handle
+   * ONCE (cached, re-parented per render — not rebuilt). Unmounting (a render
+   * without the flag) disposes the handle so the tool's geometry/material are
+   * released on tool-exit, matching the "absent ⇒ byte-identical" contract.
+   * The handle's `group` is re-parented into the freshly-built content group
+   * by the caller after this returns.
+   */
+  private ensureSiphonTool(wanted: boolean): void {
+    if (wanted) {
+      if (this.siphonTool === null) {
+        this.siphonTool = buildSiphonTool();
+      }
+      return;
+    }
+    if (this.siphonTool !== null) {
+      // Detach from the (about-to-be-replaced) content group is handled by
+      // the rebuild path; here we just release + drop the handle so a render
+      // without the flag leaves no nozzle behind.
+      if (this.currentContent !== null) this.currentContent.remove(this.siphonTool.group);
+      this.siphonTool.dispose();
+      this.siphonTool = null;
+    }
+  }
+
+  // ─── simulation-interaction surface (Stage 15) ────────────────────────
+
+  /**
+   * Stage 15 F15.1 — canvas → tank raycast. Casts a ray from the LIVE active
+   * camera (orbit or fish-eye — the renderer holds one `PerspectiveCamera`
+   * either way) through the canvas pixel and returns the canonical tank
+   * coordinate where it meets the floor (default) or water plane. The doc↔world
+   * X-mirror is undone in `raycastTankPlane` so the result is in `.aqua` space.
+   * Returns `null` when detached / un-rendered / un-sized / the ray misses.
+   */
+  raycastTankPoint(
+    point: CanvasRaycastPoint,
+    options: { plane?: RaycastTargetPlane; clamp?: boolean } = {},
+  ): Vec3 | null {
+    const camera = this.camera;
+    const tank = this.lastRenderedTank;
+    if (camera === null || tank === null) return null;
+    // The camera's world matrices must be current for unprojection. The RAF
+    // tick keeps them fresh, but a host call between frames (or the no-RAF
+    // test path) may not have — refresh defensively (cheap, idempotent).
+    camera.updateMatrixWorld();
+    return raycastTankPlane(
+      camera,
+      point,
+      {
+        width: tank.width,
+        depth: tank.depth,
+        floorY: 0,
+        waterY: this.lastWaterLevelMm,
+      },
+      options,
+    );
+  }
+
+  /**
+   * Stage 15 F15.2 — move the shared siphon nozzle to a canonical tank
+   * position (mm). No-op when the tool isn't mounted (`siphonTool` flag falsy)
+   * or the renderer is detached. The nozzle lives inside the mirrored content
+   * group, so the doc position is set directly — the parent mirror flips X.
+   */
+  setSiphonPosition(pos: Vec3): void {
+    this.siphonTool?.setPosition(pos);
+  }
+
+  /**
+   * Stage 15 F15.2 — toggle the siphon nozzle's OUT/IN/idle visual state.
+   * No-op when the tool isn't mounted or the renderer is detached.
+   */
+  setSiphonMode(mode: SiphonRenderMode): void {
+    this.siphonTool?.setMode(mode);
   }
 
   /**
@@ -1768,6 +1891,11 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       if (this.waterMesh !== null) {
         this.currentContent.remove(this.waterMesh.mesh);
       }
+      // Stage 15 F15.2 — detach the siphon tool before the dispose walk; its
+      // dedicated dispose below releases its GPU resources exactly once.
+      if (this.siphonTool !== null) {
+        this.currentContent.remove(this.siphonTool.group);
+      }
       disposeNode(this.currentContent);
       this.currentContent = null;
     }
@@ -1800,6 +1928,16 @@ export class Three3DRenderer implements SceneRenderer, Orbital3DControls {
       this.waterMesh = null;
     }
     this.waterMeshTag = null;
+
+    // Stage 15 F15.2 — release the siphon nozzle's geometry + materials.
+    // Already detached from the content tree above; idempotent at the handle
+    // level. Clearing it here keeps a subsequent attach() + render(siphonTool)
+    // rebuilding from scratch.
+    if (this.siphonTool !== null) {
+      this.siphonTool.dispose();
+      this.siphonTool = null;
+    }
+    this.lastWaterLevelMm = 0;
 
     if (this.lighting !== null) {
       if (this.threeScene !== null) this.threeScene.remove(this.lighting);
