@@ -26,7 +26,7 @@
 
 import type { Catalog } from '@aquascape/domain/catalog';
 import type { FlowField } from '@aquascape/domain/fluid-sim';
-import type { Vec2 } from '@aquascape/domain/geometry';
+import type { Vec2, Vec3 } from '@aquascape/domain/geometry';
 import type { LivestockWorld } from '@aquascape/domain/livestock-ecs';
 import type { Scene, ObjectId, LayerId } from '@aquascape/domain/scene-model';
 
@@ -359,6 +359,22 @@ export interface RenderOptions {
    */
   readonly catalogModelBaseUrl?: string;
   /**
+   * Stage 15 (husbandry interactions) — opt-in flag that mounts the shared
+   * `SiphonTool` nozzle into the 3D scene. When `true`, the 3D renderer builds
+   * (once) + parents a persistent siphon nozzle handle, driveable through the
+   * `SimulationInteractionRenderer` surface (`setSiphonPosition` /
+   * `setSiphonMode`). The HUD's water-change tool (F15.2) and the Stage 16
+   * cleaner mode (F16.5) share this ONE nozzle — they place/move it via canvas
+   * drags (resolved through `raycastTankPoint`) and toggle its OUT/IN suction
+   * state.
+   *
+   * **Omitted / `false` ⇒ no nozzle is built — byte-identical to the
+   * pre-Stage-15 render** (no extra geometry, no draw call). The 2D renderer
+   * ignores this field (the siphon is a 3D simulation-interaction tool; there
+   * is no canvas raycast in 2D).
+   */
+  readonly siphonTool?: boolean;
+  /**
    * Fish-eye view — 3D camera mode. `'orbit'` (default when omitted) is
    * the standard OrbitControls camera. `'fish-eye'` parks the camera at a
    * live fish's eye, looking along the fish's heading with a wide
@@ -475,4 +491,81 @@ export interface SceneRenderer {
    * remain on the surface.
    */
   dispose(): void;
+}
+
+/**
+ * Stage 15 (husbandry interactions) — a canvas CSS-pixel point plus the
+ * canvas's logical (CSS) size. Fed to `raycastTankPoint`. Plain numbers only —
+ * the renderer libs take a pixel + a size, not a DOM `MouseEvent` (the
+ * dependency budget forbids importing DOM event types beyond `HTMLCanvasElement`).
+ */
+export interface CanvasRaycastPoint {
+  /** Pointer X in CSS pixels, from the canvas's left edge. */
+  readonly x: number;
+  /** Pointer Y in CSS pixels, from the canvas's top edge. */
+  readonly y: number;
+  /** Canvas logical (CSS) width in pixels. */
+  readonly width: number;
+  /** Canvas logical (CSS) height in pixels. */
+  readonly height: number;
+}
+
+/** Which horizontal tank plane a `raycastTankPoint` call intersects. */
+export type RaycastTargetPlane = 'floor' | 'water';
+
+/**
+ * Stage 15 (husbandry interactions) — the suction state of the shared siphon
+ * nozzle. `idle` = parked; `out` = draining water + waste OUT of the tank;
+ * `in` = adding clean replacement water. Drives the nozzle's visual cue.
+ */
+export type SiphonRenderMode = 'idle' | 'out' | 'in';
+
+/**
+ * Stage 15 (husbandry interactions) — the **simulation-interaction** surface of
+ * the 3D renderer. SEPARATE from `SceneRenderer` (which stays read-only in 3D:
+ * `hitTest` returns `null`). This is the explicit, opt-in API the feeding +
+ * water-change HUD (F15.1 / F15.2) and the Stage 16 cleaner mode (F16.5) use to
+ * (a) turn a canvas click/drag into a canonical tank coordinate, and (b) drive
+ * the shared siphon nozzle.
+ *
+ * Implemented by the concrete `Three3DRenderer` (the 2D renderer does not
+ * implement it — there is no camera / canvas raycast in 2D). The host resolves
+ * it via the same DI token it uses for the 3D `SceneRenderer`; features that
+ * only need read-only rendering keep depending on `SceneRenderer`.
+ */
+export interface SimulationInteractionRenderer {
+  /**
+   * Cast a ray from the renderer's LIVE active camera (orbit or fish-eye)
+   * through the canvas pixel `point` and return the canonical `.aqua` tank
+   * coordinate (mm, origin front-bottom-left, +x right / +y up / +z back) where
+   * it meets the requested horizontal plane — the substrate floor by default
+   * (for a food drop's XZ), or the water surface.
+   *
+   * Returns `null` when the renderer isn't attached / hasn't rendered a tank,
+   * the canvas is un-sized, or the ray misses the plane entirely. An
+   * out-of-footprint hit is CLAMPED to the tank interior (so a drag past the
+   * glass still yields an in-tank point) unless `clamp: false` is passed, in
+   * which case it returns `null`.
+   *
+   * The returned coordinate is in the SAME space `spawnFood` / scene objects
+   * use — the renderer applies its internal doc↔world X-mirror so the caller
+   * never deals with Three.js world coordinates.
+   */
+  raycastTankPoint(
+    point: CanvasRaycastPoint,
+    options?: { plane?: RaycastTargetPlane; clamp?: boolean },
+  ): Vec3 | null;
+
+  /**
+   * Move the shared siphon nozzle to a canonical tank position (mm). No-op when
+   * the siphon tool isn't mounted (`RenderOptions.siphonTool` falsy) or the
+   * renderer is detached.
+   */
+  setSiphonPosition(pos: Vec3): void;
+
+  /**
+   * Toggle the siphon nozzle's OUT/IN/idle visual state. No-op when the siphon
+   * tool isn't mounted or the renderer is detached.
+   */
+  setSiphonMode(mode: SiphonRenderMode): void;
 }

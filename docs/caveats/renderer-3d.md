@@ -4,7 +4,7 @@
 
 ## Scope of v1 (Stage 10 F10.1–F10.3)
 
-- **Read-only / simulation-only.** `hitTest()` returns `null` unconditionally. No selection handles in 3D. No participation in the drag / marquee / inspector pipeline. Editing always happens in 2D; flipping to 3D is for visualisation.
+- **Read-only / simulation-only.** `hitTest()` returns `null` unconditionally — and STILL does after Stage 15. No selection handles in 3D. No participation in the drag / marquee / inspector pipeline. Editing always happens in 2D; flipping to 3D is for visualisation. (Stage 15's canvas→tank raycast for food drops + the siphon is a SEPARATE `SimulationInteractionRenderer` surface, not editor hit-testing — see "Simulation-interaction surface" below.)
 - **Shipped since v1:** dynamic lighting (day/night cycle — F11.7 Wave 3), an animated water surface + plant sway (F11.7), ECS-driven animated fish (F11.1+), and — as of the **fidelity pass** — filmic tone mapping + colour management, image-based lighting (IBL), soft shadows, and physically-based transmissive glass (see "Lighting, tone mapping, IBL & shadows" below).
 - **Shipped in the fidelity pass:** tone mapping + IBL + soft shadows + transmissive glass (PR1); animated **caustics** (below — substrate + hardscape, plus a water-surface shimmer from the follow-up pass); **bloom** via EffectComposer (below); **flow-coupled plant sway** (`RenderOptions.flowField` from `LivestockSimulationService.getFlowField()` scales each plant's sway **amplitude AND oscillation frequency** by the local current — `flowAmpAt` → `uFlowAmp` / `aFlowAmp`; frequency is damped through `FLOW_FREQ_COUPLING = 0.5` so it shifts half as hard as amplitude; opt-in — no field ⇒ both identical to pre-fidelity); an iridescent **fish sheen** (`livestock-renderer-3d`); plus the ECS-side **bubble wobble** + **startle-wave / predator** behaviour (see `livestock-ecs.md`). The fidelity FOLLOW-UP pass added the **render-target capability gate** (below), **water-surface caustics**, and the **scenic gradient backdrop** (below).
 - **Shipped behind the capability gate:** **SSAO** (screen-space ambient occlusion) — render-target effect, real-GPU only (see "Screen-space ambient occlusion" below).
@@ -163,6 +163,30 @@ Attaching a `category: 'light'` equipment entry to the scene builds one **SpotLi
 - **`controls.update()` MUST be skipped while the follow-cam drives** — OrbitControls re-derives the camera from its own spherical state and would yank the camera back every frame. The tick disables `controls.enabled` on enter; exit restores `FOV_DEGREES`, re-enables controls, and calls `resetView()` (the camera was left inside the tank — OrbitControls needs a sane pose resync).
 - **Graceful degradation:** no `livestockWorld` / no fish ⇒ the orbit camera stays in charge. Fish-eye over an empty tank is just plain 3D.
 - **Host wiring:** `ViewMode` gained `'fish-eye'` (a 3D _sub-mode_ — same canvas, same renderer; `apps/web` treats every non-`'2d'` mode as 3D for canvas/renderer/dispose decisions, and a 3d ↔ fish-eye flip disposes NOTHING). The zoom pill disables in fish-eye (the follow-cam owns the camera); the orbit pad stays `'3d'`-only.
+
+## Simulation-interaction surface — canvas raycast + SiphonTool (Stage 15)
+
+**`hitTest` STAYS NULL in 3D.** Stage 15 does NOT make the 3D renderer editor-pickable. The feeding (F15.1) + water-change (F15.2) HUD — and the Stage 16 cleaner mode (F16.5) — interact with the tank through a SEPARATE, explicit **`SimulationInteractionRenderer`** interface (in `renderer-api`), not through `SceneRenderer.hitTest`. `Three3DRenderer` implements `SceneRenderer`, `Orbital3DControls`, AND `SimulationInteractionRenderer`; features that only render keep depending on `SceneRenderer`.
+
+### Canvas → tank raycast (`raycastTankPoint`)
+
+`raycastTankPlane` (`src/raycast.ts`) is **pure-ish math — no GL context** (camera unproject + ray/plane + AABB clamp), so it's unit-tested with a plain `PerspectiveCamera` and runs on the headless test-stub path. The renderer method `raycastTankPoint(point, { plane?, clamp? })`:
+
+- Casts from the **LIVE active camera** — orbit OR fish-eye (the renderer holds one `PerspectiveCamera` either way; it calls `camera.updateMatrixWorld()` defensively before casting so a between-frames host call still unprojects correctly).
+- Intersects the **substrate floor (`y = 0`, default)** for the food-drop XZ, or the **water surface** (`y = effectiveWaterLevelMm`, captured per-render into `lastWaterLevelMm`) when `plane: 'water'`.
+- **Undoes the doc↔world X-mirror on output** (`docX = tank.width − worldX`; Z + Y unmirrored). The camera lives OUTSIDE the mirrored content group, so a world-space hit is X-mirrored relative to the document; the helper reconciles it so the returned `Vec3` is in canonical `.aqua` space (the same space `spawnFood` / scene objects use). **This is the inverse of `applyDocToWorldMirror` — don't double-apply it.**
+- Returns `null` when detached / un-rendered / un-sized / the ray misses the plane. An **out-of-footprint hit is CLAMPED** into the tank interior by default (a drag past the glass still yields a usable in-tank point); pass `clamp: false` to get `null` instead. A ray that never meets the plane returns `null` even with clamp (nothing to clamp).
+
+### SiphonTool (`scene-builder/siphon-tool.ts`)
+
+A procedural nozzle (core `three` `CylinderGeometry` only — no addon, no GLB, no texture): tapered body + flared intake mouth at local `y = 0` + riser stem, plus a reused flow-indicator cone. **One shared implementation** for the water-change HUD AND the cleaner mode — no fork.
+
+- **Opt-in + persistent.** `RenderOptions.siphonTool === true` mounts it; **absent/false ⇒ byte-identical pre-Stage-15 render** (no geometry, no draw call). Like the water mesh, it's a CACHED handle built once + **re-parented** into each freshly-built content group, NOT rebuilt — and detached before `disposeNode` on every rebuild so its geometry/material aren't released on a content churn. A render that DROPS the flag disposes + unmounts it (`ensureSiphonTool`).
+- **Driven in place** via `setSiphonPosition(docXYZ)` / `setSiphonMode('idle'|'out'|'in')`. The nozzle is parented INSIDE the mirrored content group, so `setSiphonPosition` takes RAW doc coordinates — the parent mirror flips X (matching every other scene-builder). `setMode` recolours the body (grey idle / amber OUT / blue IN) + flips the flow-indicator cone's orientation + visibility. Both no-op when the tool isn't mounted or after dispose.
+- **Dispose** releases body + stem + indicator geometry/material exactly once (idempotent handle). The renderer disposes it on tool-exit AND in `dispose()`.
+- The mouth sits at the group's local origin, so `setSiphonPosition(p)` lands the intake exactly at `p` — the natural "this is where I'm vacuuming" point a host raycast returns.
+
+**Visual validation:** confirmed headlessly (SwiftShader, the empty default tank + `siphonTool: true` + `setSiphonMode('out')`): the amber nozzle renders resting on the substrate at the requested tank centre and orbits with the tank. The raycast is covered by unit + renderer-integration tests (no GPU needed for the math).
 
 ## Hardscape + plant placement pipeline (Stage 10 v1.1)
 
