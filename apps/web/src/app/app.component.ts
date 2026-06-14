@@ -88,6 +88,7 @@ import {
   StatusBarComponent,
   Orbit3DControlsComponent,
   TimeSliderComponent,
+  CycleIndicatorComponent,
   ViewModeService,
   ViewportService,
   WallBackgroundComponent,
@@ -158,6 +159,7 @@ import { createShowcaseScene } from './simulation/showcase-scene';
 import { defaultViewport } from './default-viewport';
 import { applyMoveDrag, applyRotateDrag, applyScaleDrag } from './drag-math';
 import { LivestockSimulationService } from './livestock-simulation.service';
+import { WaterChemistryService } from './water-chemistry.service';
 import { SCENE_RENDERER_2D, SCENE_RENDERER_3D } from './renderer.token';
 import {
   boundsFor,
@@ -233,6 +235,7 @@ type DragState =
     SubstrateToolComponent,
     TankSetupComponent,
     TimeSliderComponent,
+    CycleIndicatorComponent,
     WallBackgroundComponent,
     ZoomControlComponent,
   ],
@@ -459,6 +462,11 @@ type DragState =
           </div>
           <div class="app-timeslider">
             <aquascape-time-slider></aquascape-time-slider>
+            <!-- F13.3 — tank-cycling indicator. Scrubbing the time slider
+                 moves the chemistry through its cycle; this badge reflects it
+                 (hidden when the tank carries no bioload source). The full
+                 test-kit readout is F13.5. -->
+            <aquascape-cycle-indicator></aquascape-cycle-indicator>
           </div>
           <!-- Showcase-demo HUDs — read-only tank spec (upper-right) + the
                interactive scene controls (upper-left) + the tilde-toggled
@@ -745,6 +753,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   // the 3D view. The service persists across 2D↔3D toggles; the renderer
   // just reads its `getWorld()` each render and steps it in the RAF tick.
   private readonly livestockSim = inject(LivestockSimulationService);
+  // Stage 13 F13.3 — live water-chemistry tick. Started when the showcase /
+  // simulation mode activates, stopped on exit. Reads the world's waste source
+  // term + pushes water quality back so the feed→waste→ammonia→health loop
+  // runs end-to-end in real time.
+  private readonly waterChemistry = inject(WaterChemistryService);
   // Stage 11 F11.6 Wave 4 — toggle flag for the behavior debug overlay.
   // Flipped by the Ctrl+Shift+D HostListener below. The overlay component
   // reads `enabled()` itself; the AppComponent just owns the chord.
@@ -1035,6 +1048,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.viewMode.forceMode('3d');
     this.store.dispatch(SceneActions.setScene({ scene }));
     this.simPerf.start();
+    // F13.3 — start the live chemistry tick for the showcase tank. Reads the
+    // world's waste source term + pushes ammonia/nitrite into the world so
+    // fish health responds to the cycle in real time.
+    this.waterChemistry.start(scene);
   }
 
   /**
@@ -1047,6 +1064,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.simulationMode.set(false);
     this.simulationScene.set(null);
     this.simPerf.stop();
+    // F13.3 — stop the live chemistry tick. The world's water quality stays at
+    // its last injected value until the next start re-seeds; a world that's
+    // never ticked again is benign (VitalitySystem just reads a static value).
+    this.waterChemistry.stop();
   }
 
   /**
@@ -1096,6 +1117,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.game.startGame(mode);
     this.game.dispatch({ type: 'start' });
 
+    // F13.3 — run the live chemistry tick during gameplay too, so the
+    // feed→waste→ammonia→health loop is live in game mode (the player's tank
+    // can foul if overfed). Same scene the world was seeded from.
+    this.waterChemistry.start(scene);
+
     // F16.4 — predator is the first mode with real rules: flag the player a
     // predator (prey flee via FearSystem) + run catch detection each frame. The
     // rules ride the input loop's per-frame hook (decoupled from world.step, so
@@ -1131,6 +1157,8 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.livestockSim.getWorld()?.clearPlayer();
     this.gameMode.set(null);
     this.game.dispatch({ type: 'quit' });
+    // F13.3 — stop the live chemistry tick on leaving gameplay.
+    this.waterChemistry.stop();
   }
 
   ngAfterViewInit(): void {

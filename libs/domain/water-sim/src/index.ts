@@ -31,3 +31,17 @@ export { type CycleStage, cycleProgress, SAFE_NITROGEN_MG_L } from './cycle';
 export { type AlgaeType, ALGAE_TYPES, algaeGrowth } from './algae';
 
 export { freeAmmonia, freeAmmoniaFraction } from './ammonia';
+
+// F13.3 — bioload → source term + preview-time / tank-param adapters. The two
+// driver paths (editor preview-time + the live WaterChemistryService) share
+// these so they agree on bioload and tank params by construction.
+export { FISH_BASELINE_WASTE_N_MG_PER_DAY, bioloadSourceN } from './bioload';
+
+export {
+  DEFAULT_KH_DKH,
+  DEFAULT_TEMPERATURE_C,
+  waterParamsFromTank,
+  initialWaterState,
+  evaluateChemistryAtWeek,
+  evaluateSceneChemistryAtWeek,
+} from './preview';

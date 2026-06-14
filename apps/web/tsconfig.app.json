@@ -16,6 +16,7 @@
       "@aquascape/domain/livestock-ecs": ["libs/domain/livestock-ecs/src/index.ts"],
       "@aquascape/domain/scene-model": ["libs/domain/scene-model/src/index.ts"],
       "@aquascape/domain/stocking": ["libs/domain/stocking/src/index.ts"],
+      "@aquascape/domain/water-sim": ["libs/domain/water-sim/src/index.ts"],
       "@aquascape/features/decorations-tool": ["libs/features/decorations-tool/src/index.ts"],
       "@aquascape/features/editor-shell": ["libs/features/editor-shell/src/index.ts"],
       "@aquascape/features/export": ["libs/features/export/src/index.ts"],

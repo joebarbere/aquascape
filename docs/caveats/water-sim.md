@@ -4,7 +4,7 @@
 
 ## What this lib is (ADR-0006)
 
-The **model lives in the lib; the state lives in the document.** `domain/water-sim` is the pure deterministic sibling of `domain/growth-sim`: framework-free (no Angular/DOM/Electron, no `Date.now()`, no `Math.random()`), time is an INPUT (`elapsedWeeks` / `dt`), and the same `(params, state, inputs, seed)` evolves byte-identically everywhere. The persistent `WaterState` snapshot round-trips through the `.aqua` schema (F13.2, v3 → v4); the live tick is a thin runtime service (F13.3). This PR (F13.1) is the **model only** — no document field, no Angular, no catalog.
+The **model lives in the lib; the state lives in the document.** `domain/water-sim` is the pure deterministic sibling of `domain/growth-sim`: framework-free (no Angular/DOM/Electron, no `Date.now()`, no `Math.random()`), time is an INPUT (`elapsedWeeks` / `dt`), and the same `(params, state, inputs, seed)` evolves byte-identically everywhere. The persistent `WaterState` snapshot round-trips through the `.aqua` schema (F13.2, v3 → v4); the live tick + the editor preview-time integration are thin runtime services (F13.3 — see "the two driver paths" below). The **model itself** stays framework-free in the lib; the Angular services live in `features/editor-shell` + `apps/web`.
 
 ## Public API
 
@@ -17,7 +17,33 @@ The **model lives in the lib; the state lives in the document.** `domain/water-s
 
 `sourceN` is the **ammonia source as a nitrogen MASS rate, mg-N/day** — supplied by the caller from `domain/stocking` bioload (+ a Stage-14 feeding-waste hook, default 0). The model **does not recompute bioload**; it takes it as an input. Internally `sourceN / volumeLitres` converts it to a concentration rate.
 
-**Stage 14 F14.4 — the feeding-waste hook now has a PRODUCER (consumer still pending).** `domain/livestock-ecs`'s world exposes `getWasteSourceN()` returning a smoothed ammonia source term (nitrogen mass rate, mg-N/day) built from a per-fish baseline + uneaten-food decay (uneaten `FoodSprite`s fold `calories × wasteFactor` in on lifetime expiry). That value is the shape `simulateChemistry`'s `sourceN` argument expects — add it to the `domain/stocking` bioload when wiring chemistry. **The live chemistry tick that reads `getWasteSourceN()` and calls `simulateChemistry` is the deferred F13.3 `WaterChemistryService` — it does NOT exist yet.** F14.4 landed the producer only; until F13.3 lands, the term is computed but unconsumed. See `docs/caveats/livestock-ecs.md` → "Health + hunger + waste".
+**Stage 14 F14.4 — the feeding-waste hook PRODUCER.** `domain/livestock-ecs`'s world exposes `getWasteSourceN()` returning a smoothed ammonia source term (nitrogen mass rate, mg-N/day) built from a per-fish baseline + uneaten-food decay (uneaten `FoodSprite`s fold `calories × wasteFactor` in on lifetime expiry). That value is the shape `simulateChemistry`'s `sourceN` argument expects. **Stage 13 F13.3 lands the CONSUMER — the loop is now closed end-to-end.** See the next section.
+
+## F13.3 — the two driver paths (editor preview-time + live tick)
+
+The model is driven two ways; both flow from the document `seed` and a stocking-derived source term, and they **agree on bioload → sourceN by construction** (they call the same `water-sim` helpers):
+
+- **Shared helpers (in `water-sim`):**
+  - `bioloadSourceN(scene, catalog)` → the editor's source term (mg-N/day). Anchors a `medium`-bioload-class fish to **exactly `FISH_BASELINE_WASTE_N_MG_PER_DAY = 0.6`** — the SAME constant `livestock-ecs`'s `waste-accumulator.ts` uses for its flat per-fish baseline (the two are MIRRORED — keep them in lock-step; a `water-sim` dep on bitECS just to import a number isn't worth it). `low`/`high` classes scale ×0.5 / ×2.0 (the `domain/stocking` weights). So a medium-class community tank previewed in the editor and ticked live tell the same story.
+  - `waterParamsFromTank(tank)` → `{ volumeLitres, kh, temperatureC }`. Volume is the WATER volume at the effective fill line (`width × depth × effectiveWaterLevelMm`), floored at 1 L. KH (4 dKH) + temperature (25 °C) are **labelled defaults** — the scene model carries no per-tank KH/temperature today.
+  - `initialWaterState(persisted)` → lifts `Tank.waterChemistry.chemistry` back into a `WaterState`, or `freshWaterState()` when absent.
+  - `evaluateChemistryAtWeek(params, initial, targetWeek, sourceN, seed)` / `evaluateSceneChemistryAtWeek(scene, targetWeek, sourceN)` → the editor's pure per-week evaluation. `elapsed = targetWeek − initial.ageWeeks` clamped ≥ 0 (the model is **monotonic-forward** — scrubbing back below the persisted age returns the initial state; you can't un-cycle by scrubbing).
+
+- **(a) Editor preview-time** (`features/editor-shell` → `PreviewChemistryService`): a `computed` signal folds the store scene + the `PreviewTimeService` week into a `WaterState` + `CycleStage`. Scrubbing the time slider previews the cycle (the same axis growth-sim uses). "Now" (slider `null`) shows the persisted/initial age. **Nothing is written to the document** — like the time slider, scrubbing must not dirty undo/autosave. A minimal `CycleIndicatorComponent` surfaces it beside the slider (the full test-kit readout is F13.5).
+
+- **(b) Live tick** (`apps/web` → `WaterChemistryService`): started when the showcase / game mode activates, stopped on exit. Each tick reads `world.getWasteSourceN()` as the source term (per-fish baseline **plus** uneaten-food decay — the editor's `bioloadSourceN` is the warm-up fallback until the renderer lazily builds the world), advances `simulateChemistry`, and pushes `world.setWaterQuality({ammonia, nitrite})` so `vitalitySystem` reacts. **This closes feed → waste → ammonia → fish-health end-to-end.**
+
+### Time-acceleration (live tick only)
+
+A real tank cycles over **weeks**; the showcase must show it in **minutes**. The tick fires on a fixed wall-clock interval (`TICK_INTERVAL_MS = 250` ms, 4 Hz) but **never advances by the measured wall-clock delta** — each tick advances the model by a FIXED `WEEKS_PER_TICK = 0.0125`. At 4 Hz that's `0.05 weeks/real-second`, so the ~6-week hobby cycle window elapses in ~2 real minutes. The acceleration lives ONLY in the service (the model stays honest per simulated week). Because the per-tick advance is fixed, after N ticks the chemistry is a **pure function of (initial state, the source-term trace, N)** — replay-stable given the tick count (a dropped/late frame just means one fewer tick, never a smeared dt). Mirrors the livestock fixed-dt scheduler.
+
+### Determinism + the livestock replay boundary
+
+Same seed + same scene + same elapsed (week N, or N ticks with a fixed source trace) ⇒ identical `WaterState`. The live tick never reads a clock inside the model, never calls `Math.random`. **The 1000-tick livestock replay still holds**: `world.setWaterQuality` defaults clean (0/0), so a world with NO `WaterChemistryService` running is byte-identical. Only an ACTIVE service injects non-zero water quality, and it injects BETWEEN sim ticks via a host-driven scalar (`getWasteSourceN`) — it never perturbs the ECS PRNG streams.
+
+### Persistence decision (F13.3)
+
+Initial state is **read** from `Tank.waterChemistry` (the persisted snapshot, F13.2); the live tick state is **runtime-only** and is NOT written back per-tick (that would spam the undo stack + churn autosave). The current `WaterState` is exposed as a signal for the HUD. Persisting live chemistry back to the document (a non-undoable save-time snapshot) is left to save-time code — F13.3 prefers runtime-state + read-initial over continuous document writes.
 
 ## Engine version (replay / migration)
 

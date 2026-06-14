@@ -53,6 +53,8 @@ If a shortcut is eaten because focus is in an INPUT / TEXTAREA / SELECT, the han
 
 `sharp` (already a workspace dev dep) handles the PNG decode + variance math; no new deps were added for pixelmatch / pngjs.
 
+**Text-readout specs** (`vitality-hud.spec.ts`, `water-chemistry.spec.ts`) don't measure pixels — they boot `?mode=simulation`, wait for the live world (`getEntityCount() > 0`), and assert on **HUD DOM** that updates as the sim ticks. `water-chemistry.spec.ts` (Stage 13 F13.3) asserts the simulation HUD's **water-chemistry block** mounts (cycle badge + nitrogen readout) and that the **nitrate value CHANGES** over a few seconds — proving the live chemistry tick is advancing the nitrogen cycle over the showcase's (time-accelerated) time axis. (In simulation mode the editor time slider is hidden; the live tick IS the time axis. The editor-slider preview path is unit-tested in `features-editor-shell`.)
+
 ## CI integration
 
 **`.github/workflows/pr.yml#e2e` job.** Cached Playwright browsers keyed on `@playwright/test` version (re-downloads only on bump); `nx affected -t e2e` so the suite runs only when `web-e2e` or its implicit dep on `web` changed. Per-run timeout 20 min; reports uploaded as artifacts on always (7-day retention).

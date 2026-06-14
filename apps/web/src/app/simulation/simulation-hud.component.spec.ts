@@ -1,8 +1,18 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+
+import { freshWaterState } from '@aquascape/domain/water-sim';
 
 import { createShowcaseScene } from './showcase-scene';
 import { buildSimulationHudModel } from './simulation-hud.model';
 import { SimulationHudComponent } from './simulation-hud.component';
+import { WaterChemistryService } from '../water-chemistry.service';
+
+/** Stub the live chemistry service so the HUD spec doesn't pull in the world
+ *  + Store dependency chain. Exposes a static `live()` signal. */
+const stubChemistry = {
+  live: signal({ state: freshWaterState(), cycle: 'uncycled' as const, ticks: 0 }),
+};
 
 describe('buildSimulationHudModel', () => {
   it('summarises the showcase tank spec', () => {
@@ -41,6 +51,9 @@ describe('SimulationHudComponent', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date(2026, 5, 13, 13, 9, 5)); // Sat Jun 13 2026, 1:09:05 PM
+    TestBed.configureTestingModule({
+      providers: [{ provide: WaterChemistryService, useValue: stubChemistry }],
+    });
   });
   afterEach(() => {
     jest.useRealTimers();
